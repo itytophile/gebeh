@@ -1,4 +1,4 @@
-use crate::state::{Instruction, State, WriteOnlyState, get_instructions};
+use crate::state::{Instruction, Register, State, WriteOnlyState, get_instructions};
 mod state;
 
 pub const DMG_BOOT: [u8; 256] = [
@@ -22,6 +22,7 @@ fn main() {
     //         .unwrap();
 
     let mut state = State::new(&DMG_BOOT);
+    // the machine should not be affected by the composition order
     let mut machine = OpCodeFetcher.compose(PipelineExecutor::default());
 
     loop {
@@ -47,24 +48,38 @@ struct PipelineExecutor {
     sp: u16,
     lsb: u8,
     msb: u8,
+    a: u8,
+    z: bool,
+    n: bool,
+    h: bool,
+    c: bool
 }
 
 impl PipelineExecutor {
     fn execute_instruction(&mut self, pc: u16, mut state: WriteOnlyState, inst: Instruction) {
         println!("Executing {inst:?}");
+        use Instruction::*;
         match inst {
-            Instruction::Nop => {}
-            Instruction::ReadLsb => {
+            Nop => {}
+            ReadLsb => {
                 self.lsb = state.get_rom()[usize::from(pc)];
                 state.set_pc(pc + 1);
             }
-            Instruction::ReadMsb => {
+            ReadMsb => {
                 self.msb = state.get_rom()[usize::from(pc)];
                 state.set_pc(pc + 1);
             }
-            Instruction::StoreInSP => {
+            StoreInSP => {
                 self.sp = u16::from_le_bytes([self.lsb, self.msb]);
-                println!("{:x} {:x} {:x}", self.lsb, self.msb, self.sp);
+            }
+            Xor(register) => {
+                self.a ^= match register {
+                    Register::A => self.a
+                };
+                self.z = self.a == 0;
+                self.n = false;
+                self.h = false;
+                self.c = false;
             }
         }
     }

@@ -1,5 +1,10 @@
 use arrayvec::ArrayVec;
 
+#[derive(Clone, Copy, Debug)]
+pub enum Register {
+    A
+}
+
 #[derive(Clone, Copy, Default, Debug)]
 pub enum Instruction {
     #[default]
@@ -7,6 +12,7 @@ pub enum Instruction {
     ReadLsb,
     ReadMsb,
     StoreInSP,
+    Xor(Register)
 }
 
 // always start with nop when cpu boots
@@ -19,6 +25,7 @@ pub fn get_instructions(opcode: u8) -> Instructions {
         0 => Default::default(),
         // instructions in arrayvec is reversed
         0x31 => (ReadLsb, ArrayVec::from_iter([StoreInSP, ReadMsb])),
+        0xaf => (Xor(Register::A), Default::default()),
         _ => panic!("Opcode not implemented: 0x{opcode:x}"),
     }
 }
