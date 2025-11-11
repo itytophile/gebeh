@@ -27,7 +27,7 @@ fn main() {
     let mut state = State::default();
     state.memory[0..DMG_BOOT.len()].copy_from_slice(&DMG_BOOT);
     // the machine should not be affected by the composition order
-    let mut machine = OpCodeFetcher.compose(PipelineExecutor::default());
+    let mut machine = OpCodeFetcher::default().compose(PipelineExecutor::default());
 
     loop {
         machine.execute(&state)(WriteOnlyState::new(&mut state));
@@ -45,7 +45,10 @@ trait StateMachine {
     }
 }
 
-struct OpCodeFetcher;
+#[derive(Default)]
+struct OpCodeFetcher {
+    is_cb_mode: bool,
+}
 
 #[derive(Default)]
 struct PipelineExecutor {
@@ -105,7 +108,6 @@ impl PipelineExecutor {
             }
             NoRead(LoadToMhlFromADec) => {
                 let hl = u16::from_be_bytes([self.h, self.l]);
-                println!("HL {:x} {:x} {:x}", self.h, self.l, hl);
                 state.write(hl, self.a);
                 [self.h, self.l] = (hl - 1).to_be_bytes();
             }
@@ -123,7 +125,8 @@ impl StateMachine for OpCodeFetcher {
         move |mut state| {
             if should_load_next_opcode {
                 println!("Read opcode at 0x{pc:x}");
-                state.set_instruction_register(dbg!(get_instructions(opcode)));
+                state.set_instruction_register(dbg!(get_instructions(opcode, self.is_cb_mode)));
+                self.is_cb_mode = opcode == 0xcb;
                 state.set_pc(pc + 1);
             }
         }

@@ -45,9 +45,14 @@ pub enum AfterReadInstruction {
 // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
 pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
 
-pub fn get_instructions(opcode: u8) -> Instructions {
+pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     use Instruction::*;
     use NoReadInstruction::*;
+
+    if is_cb_mode {
+        return get_instructions_cb_mode(opcode);
+    }
+
     match opcode {
         0 => Default::default(),
         // instructions in arrayvec is reversed
@@ -61,7 +66,14 @@ pub fn get_instructions(opcode: u8) -> Instructions {
         ),
         0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
+        0xcb => (NoRead(Nop), Default::default()),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
+    }
+}
+
+fn get_instructions_cb_mode(opcode: u8) -> Instructions {
+    match opcode {
+        _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
 }
 
