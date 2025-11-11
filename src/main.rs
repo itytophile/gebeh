@@ -1,6 +1,8 @@
+use arrayvec::ArrayVec;
+
 use crate::state::{
-    AfterReadInstruction, Instruction, NoReadInstruction, Register8Bit, Register16Bit, State,
-    WriteOnlyState, get_instructions,
+    AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, ReadInstruction,
+    Register8Bit, Register16Bit, State, WriteOnlyState, get_instructions,
 };
 mod state;
 
@@ -69,6 +71,27 @@ struct PipelineExecutor {
 }
 
 impl PipelineExecutor {
+    fn get_8bit_register(&self, register: Register8Bit) -> u8 {
+        match register {
+            Register8Bit::A => self.a,
+            Register8Bit::B => self.b,
+            Register8Bit::C => self.c,
+            Register8Bit::D => self.d,
+            Register8Bit::E => self.e,
+            Register8Bit::H => self.h,
+            Register8Bit::L => self.l,
+        }
+    }
+
+    fn get_flag(&self, flag: Flag) -> bool {
+        match flag {
+            Flag::Z => self.z_flag,
+            Flag::N => self.n_flag,
+            Flag::H => self.h_flag,
+            Flag::C => self.c_flag,
+        }
+    }
+
     fn execute_instruction(
         &mut self,
         pc: u16,
@@ -78,19 +101,31 @@ impl PipelineExecutor {
         println!("Executing {inst:?}");
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
+        use ReadInstruction::*;
+
         match inst {
+            Read(value, inst) => {
+                state.set_pc(pc + 1);
+                match inst {
+                    ReadLsb => self.lsb = value,
+                    ReadMsb => self.msb = value,
+                    RelativeJump(condition) => {
+                        self.lsb = value;
+                        if let Some(Condition { flag, not }) = condition
+                            && self.get_flag(flag) != not
+                        {
+                            state.set_instruction_register((
+                                Instruction::NoRead(CachePcOffset),
+                                ArrayVec::from_iter([Instruction::NoRead(Nop)]),
+                            ));
+                        }
+                    }
+                }
+            }
             NoRead(Nop) => {}
-            ReadLsb(value) => {
-                self.lsb = value;
-                state.set_pc(pc + 1);
-            }
-            ReadMsb(value) => {
-                self.msb = value;
-                state.set_pc(pc + 1);
-            }
             NoRead(Store16Bit(register)) => match register {
                 Register16Bit::SP => {
-                    self.sp = u16::from_le_bytes([self.lsb, self.msb]);
+                    self.sp = u16::from_be_bytes([self.msb, self.lsb]);
                 }
                 Register16Bit::HL => {
                     self.h = self.msb;
@@ -98,9 +133,7 @@ impl PipelineExecutor {
                 }
             },
             NoRead(Xor(register)) => {
-                self.a ^= match register {
-                    Register8Bit::A => self.a,
-                };
+                self.a ^= self.get_8bit_register(register);
                 self.z_flag = self.a == 0;
                 self.n_flag = false;
                 self.h_flag = false;
@@ -110,6 +143,15 @@ impl PipelineExecutor {
                 let hl = u16::from_be_bytes([self.h, self.l]);
                 state.write(hl, self.a);
                 [self.h, self.l] = (hl - 1).to_be_bytes();
+            }
+            NoRead(Bit(bit, register)) => {
+                self.z_flag = (self.get_8bit_register(register) & (1 << bit)) == 0;
+                self.n_flag = false;
+                self.h_flag = true;
+            }
+            NoRead(CachePcOffset) => {
+                [self.msb, self.lsb] =
+                    ((pc as i16).wrapping_add(self.lsb as i16) as u16).to_be_bytes()
             }
         }
     }
@@ -142,8 +184,9 @@ impl StateMachine for PipelineExecutor {
         let pc = state.pc;
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
-            Instruction::ReadLsb => AfterReadInstruction::ReadLsb(state.memory[usize::from(pc)]),
-            Instruction::ReadMsb => AfterReadInstruction::ReadMsb(state.memory[usize::from(pc)]),
+            Instruction::Read(read) => {
+                AfterReadInstruction::Read(state.memory[usize::from(pc)], read)
+            }
         };
 
         move |mut state| {

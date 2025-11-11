@@ -3,12 +3,32 @@ use arrayvec::ArrayVec;
 #[derive(Clone, Copy, Debug)]
 pub enum Register8Bit {
     A,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum Register16Bit {
     SP,
     HL,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Flag {
+    Z,
+    N,
+    H,
+    C,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Condition {
+    pub flag: Flag,
+    pub not: bool,
 }
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -19,13 +39,21 @@ pub enum NoReadInstruction {
     Xor(Register8Bit),
     // Load to memory HL from A, Decrement
     LoadToMhlFromADec,
+    Bit(u8, Register8Bit),
+    CachePcOffset
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ReadInstruction {
+    ReadLsb,
+    ReadMsb,
+    RelativeJump(Option<Condition>),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     NoRead(NoReadInstruction),
-    ReadLsb,
-    ReadMsb,
+    Read(ReadInstruction),
 }
 
 impl Default for Instruction {
@@ -37,8 +65,7 @@ impl Default for Instruction {
 #[derive(Debug)]
 pub enum AfterReadInstruction {
     NoRead(NoReadInstruction),
-    ReadLsb(u8),
-    ReadMsb(u8),
+    Read(u8, ReadInstruction),
 }
 
 // always start with nop when cpu boots
@@ -48,6 +75,7 @@ pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
 pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     use Instruction::*;
     use NoReadInstruction::*;
+    use ReadInstruction::*;
 
     if is_cb_mode {
         return get_instructions_cb_mode(opcode);
@@ -56,13 +84,22 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     match opcode {
         0 => Default::default(),
         // instructions in arrayvec is reversed
+        // When there is a jump we have to put a Nop even if the condition will be true
+        // or the next opcode will be fetched with the wrong pc
+        0x20 => (
+            Read(RelativeJump(Some(Condition {
+                flag: Flag::Z,
+                not: true,
+            }))),
+            ArrayVec::from_iter([NoRead(Nop)]),
+        ),
         0x21 => (
-            ReadLsb,
-            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::HL)), ReadMsb]),
+            Read(ReadLsb),
+            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::HL)), Read(ReadMsb)]),
         ),
         0x31 => (
-            ReadLsb,
-            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::SP)), ReadMsb]),
+            Read(ReadLsb),
+            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::SP)), Read(ReadMsb)]),
         ),
         0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
@@ -72,7 +109,11 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
 }
 
 fn get_instructions_cb_mode(opcode: u8) -> Instructions {
+    use Instruction::*;
+    use NoReadInstruction::*;
+
     match opcode {
+        0x7c => (NoRead(Bit(7, Register8Bit::H)), Default::default()),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
 }
