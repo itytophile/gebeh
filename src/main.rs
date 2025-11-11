@@ -1,16 +1,5 @@
-use std::collections::VecDeque;
-
-#[derive(Clone, Copy)]
-struct Instruction;
-struct OpCode;
-
-fn fetch_opcode() -> OpCode {
-    OpCode
-}
-fn execute(inst: Instruction) {}
-fn get_instructions(opcode: OpCode) -> &'static [Instruction] {
-    todo!()
-}
+use crate::state::{State, WriteOnlyState, execute, fetch_opcode, get_instructions};
+mod state;
 
 fn main() {
     let mut state = State::default();
@@ -19,20 +8,14 @@ fn main() {
         .compose(PipelineExecutor);
 
     loop {
-        machine.execute(&mut state);
+        machine.execute(&state)(WriteOnlyState::new(&mut state));
     }
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
 }
 
-#[derive(Default)]
-struct State {
-    last_read_opcode: Option<OpCode>,
-    pipeline: VecDeque<Instruction>,
-}
-
 trait StateMachine {
     /// must take one M-cycle
-    fn execute(&mut self, state: &mut State);
+    fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static;
     fn compose<T: StateMachine>(self, other: T) -> (Self, T)
     where
         Self: Sized,
@@ -46,34 +29,52 @@ struct PipelineFeeder;
 struct PipelineExecutor;
 
 impl StateMachine for OpCodeFetcher {
-    fn execute(&mut self, state: &mut State) {
-        if state.pipeline.len() <= 1 && state.last_read_opcode.is_none() {
-            state.last_read_opcode = Some(fetch_opcode());
+    fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
+        // Every read must be executed here
+        let pipeline_len = state.pipeline.len();
+        let is_opcode_none = state.last_read_opcode.is_none();
+        // Every write here
+        move |mut state| {
+            if pipeline_len <= 1 && is_opcode_none {
+                state.set_last_read_opcode(Some(fetch_opcode()));
+            }
         }
     }
 }
 
 impl StateMachine for PipelineFeeder {
-    fn execute(&mut self, state: &mut State) {
-        if state.pipeline.is_empty()
-            && let Some(opcode) = state.last_read_opcode.take()
-        {
-            state.pipeline.extend(get_instructions(opcode));
+    fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
+        let is_pipeline_empty = state.pipeline.is_empty();
+        let last_read_opcode = state.last_read_opcode;
+
+        move |mut state| {
+            if is_pipeline_empty && let Some(opcode) = last_read_opcode {
+                state.extend_pipeline(get_instructions(opcode).iter().copied());
+                state.set_last_read_opcode(None);
+            }
         }
     }
 }
 
 impl StateMachine for PipelineExecutor {
-    fn execute(&mut self, state: &mut State) {
-        if let Some(inst) = state.pipeline.pop_front() {
-            execute(inst);
+    fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
+        let inst = state.pipeline.front().copied();
+        move |mut state| {
+            if let Some(inst) = inst {
+                state.pipeline_pop_front();
+                execute(inst);
+            }
         }
     }
 }
 
 impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
-    fn execute(&mut self, state: &mut State) {
-        self.0.execute(state);
-        self.1.execute(state);
+    fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
+        let first = self.0.execute(state);
+        let second = self.1.execute(state);
+        move |mut state| {
+            first(state.reborrow());
+            second(state);
+        }
     }
 }
