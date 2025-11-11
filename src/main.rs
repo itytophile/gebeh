@@ -1,4 +1,4 @@
-use crate::state::{State, WriteOnlyState, execute, get_instructions};
+use crate::state::{Instruction, State, WriteOnlyState, get_instructions};
 mod state;
 
 pub const DMG_BOOT: [u8; 256] = [
@@ -21,8 +21,8 @@ fn main() {
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
     //         .unwrap();
 
-    let mut state = State::default();
-    let mut machine = OpCodeFetcher::new(&DMG_BOOT).compose(PipelineExecutor);
+    let mut state = State::new(&DMG_BOOT);
+    let mut machine = OpCodeFetcher.compose(PipelineExecutor::default());
 
     loop {
         machine.execute(&state)(WriteOnlyState::new(&mut state));
@@ -40,30 +40,49 @@ trait StateMachine {
     }
 }
 
-struct OpCodeFetcher<'a> {
-    pc: u16,
-    rom: &'a [u8],
+struct OpCodeFetcher;
+
+#[derive(Default)]
+struct PipelineExecutor {
+    sp: u16,
+    lsb: u8,
+    msb: u8,
 }
 
-impl<'a> OpCodeFetcher<'a> {
-    fn new(rom: &'a [u8]) -> Self {
-        Self { pc: 0, rom }
+impl PipelineExecutor {
+    fn execute_instruction(&mut self, pc: u16, mut state: WriteOnlyState, inst: Instruction) {
+        println!("Executing {inst:?}");
+        match inst {
+            Instruction::Nop => {}
+            Instruction::ReadLsb => {
+                self.lsb = state.get_rom()[usize::from(pc)];
+                state.set_pc(pc + 1);
+            }
+            Instruction::ReadMsb => {
+                self.msb = state.get_rom()[usize::from(pc)];
+                state.set_pc(pc + 1);
+            }
+            Instruction::StoreInSP => {
+                self.sp = u16::from_le_bytes([self.lsb, self.msb]);
+                println!("{:x} {:x} {:x}", self.lsb, self.msb, self.sp);
+            }
+        }
     }
 }
 
-struct PipelineExecutor;
-
-impl StateMachine for OpCodeFetcher<'_> {
+impl StateMachine for OpCodeFetcher {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         // we load the next opcode if there is only one instruction left in the pipeline
         let should_load_next_opcode = state.instruction_register.1.is_empty();
+        let pc = state.pc;
         // Every write here
         move |mut state| {
             if should_load_next_opcode {
+                println!("Read opcode at 0x{pc:x}");
                 state.set_instruction_register(dbg!(get_instructions(
-                    self.rom[usize::from(self.pc)]
+                    state.get_rom()[usize::from(pc)]
                 )));
-                self.pc += 1;
+                state.set_pc(pc + 1);
             }
         }
     }
@@ -72,9 +91,16 @@ impl StateMachine for OpCodeFetcher<'_> {
 impl StateMachine for PipelineExecutor {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         let inst = state.instruction_register.0;
+        // if it is the last instruction then the opcode fetcher will override the instruction
+        // register concurrently so the pipeline executor should not pop it.
+        let should_pop = !state.instruction_register.1.is_empty();
+        let pc = state.pc;
+
         move |mut state| {
-            state.pipeline_pop_front();
-            execute(inst);
+            if should_pop {
+                state.pipeline_pop_front();
+            }
+            self.execute_instruction(pc, state, inst);
         }
     }
 }
