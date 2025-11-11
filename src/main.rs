@@ -32,11 +32,11 @@ impl StateMachine for OpCodeFetcher {
     fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
         // Every read must be executed here
         let pipeline_len = state.pipeline.len();
-        let is_opcode_none = state.last_read_opcode.is_none();
+        let is_opcode_none = state.instruction_register.is_none();
         // Every write here
         move |mut state| {
             if pipeline_len <= 1 && is_opcode_none {
-                state.set_last_read_opcode(Some(fetch_opcode()));
+                state.set_instruction_register(Some(fetch_opcode()));
             }
         }
     }
@@ -45,12 +45,12 @@ impl StateMachine for OpCodeFetcher {
 impl StateMachine for PipelineFeeder {
     fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
         let is_pipeline_empty = state.pipeline.is_empty();
-        let last_read_opcode = state.last_read_opcode;
+        let last_read_opcode = state.instruction_register;
 
         move |mut state| {
             if is_pipeline_empty && let Some(opcode) = last_read_opcode {
                 state.extend_pipeline(get_instructions(opcode).iter().copied());
-                state.set_last_read_opcode(None);
+                state.set_instruction_register(None);
             }
         }
     }
