@@ -124,6 +124,17 @@ impl PipelineExecutor {
                 }
             }
             NoRead(Nop) => {}
+            NoRead(Store8Bit(register)) => {
+                *(match register {
+                    Register8Bit::A => &mut self.a,
+                    Register8Bit::B => &mut self.b,
+                    Register8Bit::C => &mut self.c,
+                    Register8Bit::D => &mut self.d,
+                    Register8Bit::E => &mut self.e,
+                    Register8Bit::H => &mut self.h,
+                    Register8Bit::L => &mut self.l,
+                }) = self.lsb;
+            }
             NoRead(Store16Bit(register)) => match register {
                 Register16Bit::SP => {
                     self.sp = u16::from_be_bytes([self.msb, self.lsb]);

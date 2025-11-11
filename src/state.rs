@@ -35,6 +35,7 @@ pub struct Condition {
 pub enum NoReadInstruction {
     #[default]
     Nop,
+    Store8Bit(Register8Bit),
     Store16Bit(Register16Bit),
     Xor(Register8Bit),
     // Load to memory HL from A, Decrement
@@ -72,6 +73,10 @@ pub enum AfterReadInstruction {
 // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
 pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
 
+pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 4> {
+    ArrayVec::from_iter(insts)
+}
+
 pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     use Instruction::*;
     use NoReadInstruction::*;
@@ -83,7 +88,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
 
     match opcode {
         0 => Default::default(),
-        // instructions in arrayvec is reversed
+        // instructions in arrayvec are reversed
+        0x0e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::C))])),
         // When there is a jump we have to put a Nop even if the condition will be true
         // or the next opcode will be fetched with the wrong pc
         0x20 => (
@@ -91,15 +97,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 flag: Flag::Z,
                 not: true,
             }))),
-            ArrayVec::from_iter([NoRead(Nop)]),
+            vec([NoRead(Nop)]),
         ),
         0x21 => (
             Read(ReadLsb),
-            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::HL)), Read(ReadMsb)]),
+            vec([NoRead(Store16Bit(Register16Bit::HL)), Read(ReadMsb)]),
         ),
         0x31 => (
             Read(ReadLsb),
-            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::SP)), Read(ReadMsb)]),
+            vec([NoRead(Store16Bit(Register16Bit::SP)), Read(ReadMsb)]),
         ),
         0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
