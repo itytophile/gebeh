@@ -10,9 +10,6 @@ pub enum Instruction {
 // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
 pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
 
-pub fn fetch_opcode() -> u8 {
-    0
-}
 pub fn execute(inst: Instruction) {}
 pub fn get_instructions(opcode: u8) -> Instructions {
     Default::default()
