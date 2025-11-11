@@ -12,13 +12,33 @@ pub enum Register16Bit {
 }
 
 #[derive(Clone, Copy, Default, Debug)]
-pub enum Instruction {
+pub enum NoReadInstruction {
     #[default]
     Nop,
-    ReadLsb,
-    ReadMsb,
     Store16Bit(Register16Bit),
     Xor(Register8Bit),
+    // Load to memory HL from A, Decrement
+    LoadToMhlFromADec,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Instruction {
+    NoRead(NoReadInstruction),
+    ReadLsb,
+    ReadMsb,
+}
+
+impl Default for Instruction {
+    fn default() -> Self {
+        Self::NoRead(NoReadInstruction::Nop)
+    }
+}
+
+#[derive(Debug)]
+pub enum AfterReadInstruction {
+    NoRead(NoReadInstruction),
+    ReadLsb(u8),
+    ReadMsb(u8),
 }
 
 // always start with nop when cpu boots
@@ -27,18 +47,20 @@ pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
 
 pub fn get_instructions(opcode: u8) -> Instructions {
     use Instruction::*;
+    use NoReadInstruction::*;
     match opcode {
         0 => Default::default(),
         // instructions in arrayvec is reversed
         0x21 => (
             ReadLsb,
-            ArrayVec::from_iter([Store16Bit(Register16Bit::HL), ReadMsb]),
+            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::HL)), ReadMsb]),
         ),
         0x31 => (
             ReadLsb,
-            ArrayVec::from_iter([Store16Bit(Register16Bit::SP), ReadMsb]),
+            ArrayVec::from_iter([NoRead(Store16Bit(Register16Bit::SP)), ReadMsb]),
         ),
-        0xaf => (Xor(Register8Bit::A), Default::default()),
+        0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
+        0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }
@@ -47,29 +69,29 @@ pub fn get_instructions(opcode: u8) -> Instructions {
 // l'opcode détermine quel instruction exécuter
 // À l'exécution du dernier M-cycle d'une instruction, le prochain opcode est chargé en parallèle
 
-pub struct State<'a> {
+pub struct State {
     pub instruction_register: Instructions,
     pub pc: u16,
-    pub rom: &'a [u8],
+    pub memory: [u8; 0x10000],
 }
 
-impl<'a> State<'a> {
-    pub fn new(rom: &'a [u8]) -> Self {
+impl Default for State {
+    fn default() -> Self {
         Self {
             instruction_register: Default::default(),
-            pc: 0,
-            rom,
+            pc: Default::default(),
+            memory: [0; 0x10000],
         }
     }
 }
 
-pub struct WriteOnlyState<'a, 'b>(&'a mut State<'b>);
+pub struct WriteOnlyState<'a>(&'a mut State);
 
-impl<'a, 'b> WriteOnlyState<'a, 'b> {
-    pub fn new(state: &'a mut State<'b>) -> Self {
+impl<'a> WriteOnlyState<'a> {
+    pub fn new(state: &'a mut State) -> Self {
         Self(state)
     }
-    pub fn reborrow<'c>(&'c mut self) -> WriteOnlyState<'c, 'b>
+    pub fn reborrow<'c>(&'c mut self) -> WriteOnlyState<'c>
     where
         'a: 'c,
     {
@@ -91,8 +113,7 @@ impl<'a, 'b> WriteOnlyState<'a, 'b> {
         self.0.pc = pc;
     }
 
-    // the rom can't be written over so it's safe to access it in write only mode
-    pub fn get_rom(&self) -> &'b [u8] {
-        self.0.rom
+    pub fn write(&mut self, address: u16, value: u8) {
+        self.0.memory[usize::from(address)] = value;
     }
 }

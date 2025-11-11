@@ -1,5 +1,6 @@
 use crate::state::{
-    Instruction, Register8Bit, Register16Bit, State, WriteOnlyState, get_instructions,
+    AfterReadInstruction, Instruction, NoReadInstruction, Register8Bit, Register16Bit, State,
+    WriteOnlyState, get_instructions,
 };
 mod state;
 
@@ -23,7 +24,8 @@ fn main() {
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
     //         .unwrap();
 
-    let mut state = State::new(&DMG_BOOT);
+    let mut state = State::default();
+    state.memory[0..DMG_BOOT.len()].copy_from_slice(&DMG_BOOT);
     // the machine should not be affected by the composition order
     let mut machine = OpCodeFetcher.compose(PipelineExecutor::default());
 
@@ -64,20 +66,26 @@ struct PipelineExecutor {
 }
 
 impl PipelineExecutor {
-    fn execute_instruction(&mut self, pc: u16, mut state: WriteOnlyState, inst: Instruction) {
+    fn execute_instruction(
+        &mut self,
+        pc: u16,
+        mut state: WriteOnlyState,
+        inst: AfterReadInstruction,
+    ) {
         println!("Executing {inst:?}");
-        use Instruction::*;
+        use AfterReadInstruction::*;
+        use NoReadInstruction::*;
         match inst {
-            Nop => {}
-            ReadLsb => {
-                self.lsb = state.get_rom()[usize::from(pc)];
+            NoRead(Nop) => {}
+            ReadLsb(value) => {
+                self.lsb = value;
                 state.set_pc(pc + 1);
             }
-            ReadMsb => {
-                self.msb = state.get_rom()[usize::from(pc)];
+            ReadMsb(value) => {
+                self.msb = value;
                 state.set_pc(pc + 1);
             }
-            Store16Bit(register) => match register {
+            NoRead(Store16Bit(register)) => match register {
                 Register16Bit::SP => {
                     self.sp = u16::from_le_bytes([self.lsb, self.msb]);
                 }
@@ -86,7 +94,7 @@ impl PipelineExecutor {
                     self.l = self.lsb;
                 }
             },
-            Xor(register) => {
+            NoRead(Xor(register)) => {
                 self.a ^= match register {
                     Register8Bit::A => self.a,
                 };
@@ -94,6 +102,12 @@ impl PipelineExecutor {
                 self.n_flag = false;
                 self.h_flag = false;
                 self.c_flag = false;
+            }
+            NoRead(LoadToMhlFromADec) => {
+                let hl = u16::from_be_bytes([self.h, self.l]);
+                println!("HL {:x} {:x} {:x}", self.h, self.l, hl);
+                state.write(hl, self.a);
+                [self.h, self.l] = (hl - 1).to_be_bytes();
             }
         }
     }
@@ -104,13 +118,12 @@ impl StateMachine for OpCodeFetcher {
         // we load the next opcode if there is only one instruction left in the pipeline
         let should_load_next_opcode = state.instruction_register.1.is_empty();
         let pc = state.pc;
+        let opcode = state.memory[usize::from(pc)];
         // Every write here
         move |mut state| {
             if should_load_next_opcode {
                 println!("Read opcode at 0x{pc:x}");
-                state.set_instruction_register(dbg!(get_instructions(
-                    state.get_rom()[usize::from(pc)]
-                )));
+                state.set_instruction_register(dbg!(get_instructions(opcode)));
                 state.set_pc(pc + 1);
             }
         }
@@ -124,6 +137,11 @@ impl StateMachine for PipelineExecutor {
         // register concurrently so the pipeline executor should not pop it.
         let should_pop = !state.instruction_register.1.is_empty();
         let pc = state.pc;
+        let inst = match inst {
+            Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
+            Instruction::ReadLsb => AfterReadInstruction::ReadLsb(state.memory[usize::from(pc)]),
+            Instruction::ReadMsb => AfterReadInstruction::ReadMsb(state.memory[usize::from(pc)]),
+        };
 
         move |mut state| {
             if should_pop {
