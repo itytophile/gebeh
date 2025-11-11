@@ -108,6 +108,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Store16Bit(Register16Bit::SP)), Read(ReadMsb)]),
         ),
         0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
+        0x3e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::A))])),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         0xcb => (NoRead(Nop), Default::default()),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
