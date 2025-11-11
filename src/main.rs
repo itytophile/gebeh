@@ -3,9 +3,7 @@ mod state;
 
 fn main() {
     let mut state = State::default();
-    let mut machine = OpCodeFetcher
-        .compose(PipelineFeeder)
-        .compose(PipelineExecutor);
+    let mut machine = OpCodeFetcher.compose(PipelineExecutor);
 
     loop {
         machine.execute(&state)(WriteOnlyState::new(&mut state));
@@ -25,32 +23,15 @@ trait StateMachine {
 }
 
 struct OpCodeFetcher;
-struct PipelineFeeder;
 struct PipelineExecutor;
 
 impl StateMachine for OpCodeFetcher {
     fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
-        // Every read must be executed here
-        let pipeline_len = state.pipeline.len();
-        let is_opcode_none = state.instruction_register.is_none();
+        let should_load_next_opcode = state.instruction_register.1.is_empty();
         // Every write here
         move |mut state| {
-            if pipeline_len <= 1 && is_opcode_none {
-                state.set_instruction_register(Some(fetch_opcode()));
-            }
-        }
-    }
-}
-
-impl StateMachine for PipelineFeeder {
-    fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
-        let is_pipeline_empty = state.pipeline.is_empty();
-        let last_read_opcode = state.instruction_register;
-
-        move |mut state| {
-            if is_pipeline_empty && let Some(opcode) = last_read_opcode {
-                state.extend_pipeline(get_instructions(opcode).iter().copied());
-                state.set_instruction_register(None);
+            if should_load_next_opcode {
+                state.set_instruction_register(get_instructions(fetch_opcode()));
             }
         }
     }
@@ -58,12 +39,10 @@ impl StateMachine for PipelineFeeder {
 
 impl StateMachine for PipelineExecutor {
     fn execute(&mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'static {
-        let inst = state.pipeline.front().copied();
+        let inst = state.instruction_register.0;
         move |mut state| {
-            if let Some(inst) = inst {
-                state.pipeline_pop_front();
-                execute(inst);
-            }
+            state.pipeline_pop_front();
+            execute(inst);
         }
     }
 }

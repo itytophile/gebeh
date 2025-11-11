@@ -1,33 +1,30 @@
-use std::collections::VecDeque;
+use arrayvec::ArrayVec;
 
-#[derive(Clone, Copy)]
-pub struct Instruction;
-#[derive(Clone, Copy)]
-pub enum OpCode {
+#[derive(Clone, Copy, Default)]
+pub enum Instruction {
+    #[default]
     Nop,
 }
 
-pub fn fetch_opcode() -> OpCode {
-    OpCode::Nop
+// always start with nop when cpu boots
+// https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
+pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
+
+pub fn fetch_opcode() -> u8 {
+    0
 }
 pub fn execute(inst: Instruction) {}
-pub fn get_instructions(opcode: OpCode) -> &'static [Instruction] {
-    todo!()
+pub fn get_instructions(opcode: u8) -> Instructions {
+    Default::default()
 }
 
+// une instruction prend plusieurs m-cycles
+// l'opcode détermine quel instruction exécuter
+// À l'exécution du dernier M-cycle d'une instruction, le prochain opcode est chargé en parallèle
+
+#[derive(Default)]
 pub struct State {
-    pub instruction_register: Option<OpCode>,
-    pub pipeline: VecDeque<Instruction>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
-            instruction_register: Some(OpCode::Nop),
-            pipeline: Default::default(),
-        }
-    }
+    pub instruction_register: Instructions,
 }
 
 pub struct WriteOnlyState<'a>(&'a mut State);
@@ -42,13 +39,15 @@ impl<'a> WriteOnlyState<'a> {
     {
         WriteOnlyState(&mut *self.0)
     }
-    pub fn set_instruction_register(&mut self, value: Option<OpCode>) {
-        self.0.instruction_register = value;
+    pub fn set_instruction_register(&mut self, instructions: Instructions) {
+        self.0.instruction_register = instructions;
     }
-    pub fn extend_pipeline<T: IntoIterator<Item = Instruction>>(&mut self, iter: T) {
-        self.0.pipeline.extend(iter);
-    }
+
     pub fn pipeline_pop_front(&mut self) {
-        self.0.pipeline.pop_front();
+        // does nothing if there is only one instruction inside the pipeline
+        // if there is only one instruction then the OpcodeFetcher will override the whole pipeline
+        if let Some(next_inst) = self.0.instruction_register.1.pop() {
+            self.0.instruction_register.0 = next_inst;
+        }
     }
 }
