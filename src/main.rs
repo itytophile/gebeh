@@ -1,4 +1,6 @@
-use crate::state::{Instruction, Register, State, WriteOnlyState, get_instructions};
+use crate::state::{
+    Instruction, Register8Bit, Register16Bit, State, WriteOnlyState, get_instructions,
+};
 mod state;
 
 pub const DMG_BOOT: [u8; 256] = [
@@ -49,10 +51,16 @@ struct PipelineExecutor {
     lsb: u8,
     msb: u8,
     a: u8,
-    z: bool,
-    n: bool,
-    h: bool,
-    c: bool
+    b: u8,
+    c: u8,
+    d: u8,
+    e: u8,
+    h: u8,
+    l: u8,
+    z_flag: bool,
+    n_flag: bool,
+    h_flag: bool,
+    c_flag: bool,
 }
 
 impl PipelineExecutor {
@@ -69,17 +77,23 @@ impl PipelineExecutor {
                 self.msb = state.get_rom()[usize::from(pc)];
                 state.set_pc(pc + 1);
             }
-            StoreInSP => {
-                self.sp = u16::from_le_bytes([self.lsb, self.msb]);
-            }
+            Store16Bit(register) => match register {
+                Register16Bit::SP => {
+                    self.sp = u16::from_le_bytes([self.lsb, self.msb]);
+                }
+                Register16Bit::HL => {
+                    self.h = self.msb;
+                    self.l = self.lsb;
+                }
+            },
             Xor(register) => {
                 self.a ^= match register {
-                    Register::A => self.a
+                    Register8Bit::A => self.a,
                 };
-                self.z = self.a == 0;
-                self.n = false;
-                self.h = false;
-                self.c = false;
+                self.z_flag = self.a == 0;
+                self.n_flag = false;
+                self.h_flag = false;
+                self.c_flag = false;
             }
         }
     }

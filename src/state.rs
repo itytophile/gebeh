@@ -1,8 +1,14 @@
 use arrayvec::ArrayVec;
 
 #[derive(Clone, Copy, Debug)]
-pub enum Register {
-    A
+pub enum Register8Bit {
+    A,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Register16Bit {
+    SP,
+    HL,
 }
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -11,8 +17,8 @@ pub enum Instruction {
     Nop,
     ReadLsb,
     ReadMsb,
-    StoreInSP,
-    Xor(Register)
+    Store16Bit(Register16Bit),
+    Xor(Register8Bit),
 }
 
 // always start with nop when cpu boots
@@ -24,9 +30,16 @@ pub fn get_instructions(opcode: u8) -> Instructions {
     match opcode {
         0 => Default::default(),
         // instructions in arrayvec is reversed
-        0x31 => (ReadLsb, ArrayVec::from_iter([StoreInSP, ReadMsb])),
-        0xaf => (Xor(Register::A), Default::default()),
-        _ => panic!("Opcode not implemented: 0x{opcode:x}"),
+        0x21 => (
+            ReadLsb,
+            ArrayVec::from_iter([Store16Bit(Register16Bit::HL), ReadMsb]),
+        ),
+        0x31 => (
+            ReadLsb,
+            ArrayVec::from_iter([Store16Bit(Register16Bit::SP), ReadMsb]),
+        ),
+        0xaf => (Xor(Register8Bit::A), Default::default()),
+        _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }
 
