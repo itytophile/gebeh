@@ -151,7 +151,7 @@ impl PipelineExecutor {
                 self.h_flag = true;
             }
             NoRead(OffsetPc) => {
-                state.set_pc((pc as i16).wrapping_add(self.lsb as i16) as u16);
+                state.set_pc((pc as i16).wrapping_add(i16::from(self.lsb as i8)) as u16);
             }
         }
     }
