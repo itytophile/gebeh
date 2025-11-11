@@ -167,7 +167,7 @@ impl StateMachine for OpCodeFetcher {
         move |mut state| {
             if should_load_next_opcode {
                 println!("Read opcode at 0x{pc:x}");
-                state.set_instruction_register(dbg!(get_instructions(opcode, self.is_cb_mode)));
+                state.set_instruction_register(get_instructions(opcode, self.is_cb_mode));
                 self.is_cb_mode = opcode == 0xcb;
                 state.set_pc(pc + 1);
             }

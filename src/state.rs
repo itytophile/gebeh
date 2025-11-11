@@ -167,6 +167,7 @@ impl<'a> WriteOnlyState<'a> {
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
+        println!("Writing at ${address:04x} with value 0x{value:02x}");
         self.0.memory[usize::from(address)] = value;
     }
 }
