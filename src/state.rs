@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub enum Instruction {
     #[default]
     Nop,
@@ -12,7 +12,10 @@ pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
 
 pub fn execute(inst: Instruction) {}
 pub fn get_instructions(opcode: u8) -> Instructions {
-    Default::default()
+    match opcode {
+        0 => Default::default(),
+        _ => panic!("Opcode not implemented: {opcode}")
+    }
 }
 
 // une instruction prend plusieurs m-cycles
