@@ -40,7 +40,7 @@ pub enum NoReadInstruction {
     // Load to memory HL from A, Decrement
     LoadToMhlFromADec,
     Bit(u8, Register8Bit),
-    CachePcOffset
+    OffsetPc,
 }
 
 #[derive(Clone, Copy, Debug)]

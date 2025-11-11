@@ -115,7 +115,8 @@ impl PipelineExecutor {
                             && self.get_flag(flag) != not
                         {
                             state.set_instruction_register((
-                                Instruction::NoRead(CachePcOffset),
+                                Instruction::NoRead(OffsetPc),
+                                // important to match the cycle and not conflict with the overlapping opcode fetch
                                 ArrayVec::from_iter([Instruction::NoRead(Nop)]),
                             ));
                         }
@@ -149,9 +150,8 @@ impl PipelineExecutor {
                 self.n_flag = false;
                 self.h_flag = true;
             }
-            NoRead(CachePcOffset) => {
-                [self.msb, self.lsb] =
-                    ((pc as i16).wrapping_add(self.lsb as i16) as u16).to_be_bytes()
+            NoRead(OffsetPc) => {
+                state.set_pc((pc as i16).wrapping_add(self.lsb as i16) as u16);
             }
         }
     }
