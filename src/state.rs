@@ -100,6 +100,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         // instructions in arrayvec are reversed
         0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
         0x0e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::C))])),
+        0x11 => (
+            Read(ReadLsb),
+            vec([NoRead(Store16Bit(Register16Bit::DE)), Read(ReadMsb)]),
+        ),
         // When there is a jump we have to put a Nop even if the condition will be true
         // or the next opcode will be fetched with the wrong pc
         0x20 => (
