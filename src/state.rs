@@ -93,6 +93,21 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
     ArrayVec::from_iter(insts)
 }
 
+mod opcodes {
+    use super::Instruction::*;
+    use super::Instructions;
+    use super::NoReadInstruction::*;
+    use super::ReadInstruction::*;
+    use super::Register8Bit;
+    use super::vec;
+
+    pub fn ld_r_n(register: Register8Bit) -> Instructions {
+        (Read(None, ReadIntoLsb), vec([NoRead(Store8Bit(register))]))
+    }
+}
+
+use opcodes::*;
+
 pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     use Instruction::*;
     use NoReadInstruction::*;
@@ -106,10 +121,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0 => Default::default(),
         // instructions in arrayvec are reversed
         0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
-        0x0e => (
-            Read(None, ReadIntoLsb),
-            vec([NoRead(Store8Bit(Register8Bit::C))]),
-        ),
+        0x0e => ld_r_n(Register8Bit::C),
+        0x06 => ld_r_n(Register8Bit::B),
         0x11 => (
             Read(None, ReadIntoLsb),
             vec([
@@ -117,6 +130,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(None, ReadIntoMsb),
             ]),
         ),
+        0x1e => ld_r_n(Register8Bit::E),
+        0x16 => ld_r_n(Register8Bit::D),
         0x1a => (
             Read(Some(Register16Bit::DE), ReadIntoLsb),
             vec([NoRead(Store8Bit(Register8Bit::A))]),
@@ -140,6 +155,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(None, ReadIntoMsb),
             ]),
         ),
+        0x26 => ld_r_n(Register8Bit::H),
+        0x2e => ld_r_n(Register8Bit::L),
         0x31 => (
             Read(None, ReadIntoLsb),
             vec([
@@ -148,10 +165,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
-        0x3e => (
-            Read(None, ReadIntoLsb),
-            vec([NoRead(Store8Bit(Register8Bit::A))]),
-        ),
+        0x3e => ld_r_n(Register8Bit::A),
         0x4f => (
             NoRead(Load {
                 to: Register8Bit::C,
