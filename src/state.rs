@@ -55,15 +55,15 @@ pub enum NoReadInstruction {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ReadInstruction {
-    ReadLsb,
-    ReadMsb,
+    ReadIntoLsb,
+    ReadIntoMsb,
     RelativeJump(Option<Condition>),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     NoRead(NoReadInstruction),
-    Read(ReadInstruction),
+    Read(Option<Register16Bit>, ReadInstruction),
 }
 
 impl Default for Instruction {
@@ -99,30 +99,52 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0 => Default::default(),
         // instructions in arrayvec are reversed
         0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
-        0x0e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::C))])),
+        0x0e => (
+            Read(None, ReadIntoLsb),
+            vec([NoRead(Store8Bit(Register8Bit::C))]),
+        ),
         0x11 => (
-            Read(ReadLsb),
-            vec([NoRead(Store16Bit(Register16Bit::DE)), Read(ReadMsb)]),
+            Read(None, ReadIntoLsb),
+            vec([
+                NoRead(Store16Bit(Register16Bit::DE)),
+                Read(None, ReadIntoMsb),
+            ]),
+        ),
+        0x1a => (
+            Read(Some(Register16Bit::DE), ReadIntoLsb),
+            vec([NoRead(Store8Bit(Register8Bit::A))]),
         ),
         // When there is a jump we have to put a Nop even if the condition will be true
         // or the next opcode will be fetched with the wrong pc
         0x20 => (
-            Read(RelativeJump(Some(Condition {
-                flag: Flag::Z,
-                not: true,
-            }))),
+            Read(
+                None,
+                RelativeJump(Some(Condition {
+                    flag: Flag::Z,
+                    not: true,
+                })),
+            ),
             vec([NoRead(Nop)]),
         ),
         0x21 => (
-            Read(ReadLsb),
-            vec([NoRead(Store16Bit(Register16Bit::HL)), Read(ReadMsb)]),
+            Read(None, ReadIntoLsb),
+            vec([
+                NoRead(Store16Bit(Register16Bit::HL)),
+                Read(None, ReadIntoMsb),
+            ]),
         ),
         0x31 => (
-            Read(ReadLsb),
-            vec([NoRead(Store16Bit(Register16Bit::SP)), Read(ReadMsb)]),
+            Read(None, ReadIntoLsb),
+            vec([
+                NoRead(Store16Bit(Register16Bit::SP)),
+                Read(None, ReadIntoMsb),
+            ]),
         ),
         0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
-        0x3e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::A))])),
+        0x3e => (
+            Read(None, ReadIntoLsb),
+            vec([NoRead(Store8Bit(Register8Bit::A))]),
+        ),
         0x77 => (
             NoRead(LoadToAddressFromRegister {
                 address: Register16Bit::HL,
@@ -133,7 +155,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         0xcb => (NoRead(Nop), Default::default()),
         0xe0 => (
-            Read(ReadLsb),
+            Read(None, ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
         ),
         0xe2 => (

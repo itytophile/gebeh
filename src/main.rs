@@ -134,10 +134,9 @@ impl PipelineExecutor {
 
         match inst {
             Read(value, inst) => {
-                state.set_pc(pc + 1);
                 match inst {
-                    ReadLsb => self.lsb = value,
-                    ReadMsb => self.msb = value,
+                    ReadIntoLsb => self.lsb = value,
+                    ReadIntoMsb => self.msb = value,
                     RelativeJump(condition) => {
                         self.lsb = value;
                         if let Some(Condition { flag, not }) = condition
@@ -248,16 +247,27 @@ impl StateMachine for PipelineExecutor {
         // register concurrently so the pipeline executor should not pop it.
         let should_pop = !state.instruction_register.1.is_empty();
         let pc = state.pc;
+
+        let should_increment_pc = matches!(inst, Instruction::Read(None, _));
+
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
-            Instruction::Read(read) => {
-                AfterReadInstruction::Read(state.memory[usize::from(pc)], read)
-            }
+            Instruction::Read(register, read) => AfterReadInstruction::Read(
+                state.memory[usize::from(
+                    register
+                        .map(|reg| self.get_16bit_register(reg))
+                        .unwrap_or(pc),
+                )],
+                read,
+            ),
         };
 
         move |mut state| {
             if should_pop {
                 state.pipeline_pop_front();
+            }
+            if should_increment_pc {
+                state.set_pc(pc + 1);
             }
             self.execute_instruction(pc, state, inst);
         }
