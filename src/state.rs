@@ -51,6 +51,9 @@ pub enum NoReadInstruction {
         address: Register16Bit,
         value: Register8Bit,
     },
+    PopStackPointer,
+    WriteMsbPcWhereSpPointsAndDecSp,
+    WriteLsbPcWhereSpPointsAndLoadCacheToPc,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -154,6 +157,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         ),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         0xcb => (NoRead(Nop), Default::default()),
+        0xcd => (
+            Read(None, ReadIntoLsb),
+            vec([
+                NoRead(Nop),
+                NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc),
+                NoRead(WriteMsbPcWhereSpPointsAndDecSp),
+                NoRead(PopStackPointer),
+                Read(None, ReadIntoMsb),
+            ]),
+        ),
         0xe0 => (
             Read(None, ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
