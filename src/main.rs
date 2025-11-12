@@ -229,6 +229,9 @@ impl PipelineExecutor {
                 state.write(self.sp, pc.to_be_bytes()[1]);
                 state.set_pc(u16::from_be_bytes([self.msb, self.lsb]));
             }
+            NoRead(Load { to, from }) => {
+                *self.get_8bit_register_mut(to) = self.get_8bit_register(from);
+            }
         }
     }
 }
