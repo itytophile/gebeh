@@ -164,6 +164,9 @@ impl PipelineExecutor {
             NoRead(OffsetPc) => {
                 state.set_pc((pc as i16).wrapping_add(i16::from(self.lsb as i8)) as u16);
             }
+            NoRead(LoadFromAccumulator) => {
+                state.write(0xff00 & u16::from(self.c), self.a);
+            }
         }
     }
 }

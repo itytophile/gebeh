@@ -42,6 +42,7 @@ pub enum NoReadInstruction {
     LoadToMhlFromADec,
     Bit(u8, Register8Bit),
     OffsetPc,
+    LoadFromAccumulator,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -111,6 +112,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x3e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::A))])),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         0xcb => (NoRead(Nop), Default::default()),
+        // it's two cycles, don't know why
+        0xe2 => (NoRead(LoadFromAccumulator), vec([NoRead(Nop)])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }
