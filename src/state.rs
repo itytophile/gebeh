@@ -83,9 +83,9 @@ pub enum AfterReadInstruction {
 
 // always start with nop when cpu boots
 // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
-pub type Instructions = (Instruction, ArrayVec<Instruction, 4>);
+pub type Instructions = (Instruction, ArrayVec<Instruction, 5>);
 
-pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 4> {
+pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> {
     ArrayVec::from_iter(insts)
 }
 
