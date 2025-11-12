@@ -9,6 +9,7 @@ pub enum Register8Bit {
     E,
     H,
     L,
+    F,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -18,6 +19,28 @@ pub enum Register16Bit {
     DE,
     SP,
     HL,
+}
+
+impl Register16Bit {
+    fn get_msb(self) -> Register8Bit {
+        match self {
+            Register16Bit::AF => Register8Bit::A,
+            Register16Bit::BC => Register8Bit::B,
+            Register16Bit::DE => Register8Bit::D,
+            Register16Bit::SP => unreachable!(),
+            Register16Bit::HL => Register8Bit::H,
+        }
+    }
+
+    fn get_lsb(self) -> Register8Bit {
+        match self {
+            Register16Bit::AF => Register8Bit::F,
+            Register16Bit::BC => Register8Bit::C,
+            Register16Bit::DE => Register8Bit::E,
+            Register16Bit::SP => unreachable!(),
+            Register16Bit::HL => Register8Bit::L,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -51,8 +74,8 @@ pub enum NoReadInstruction {
         address: Register16Bit,
         value: Register8Bit,
     },
-    PopStackPointer,
-    WriteMsbPcWhereSpPointsAndDecSp,
+    DecStackPointer,
+    WriteMsbOfRegisterWhereSpPointsAndDecSp(Option<Register16Bit>),
     WriteLsbPcWhereSpPointsAndLoadCacheToPc,
     Load {
         to: Register8Bit,
@@ -112,6 +135,20 @@ mod opcodes {
             vec([NoRead(Store16Bit(register)), Read(None, ReadIntoMsb)]),
         )
     }
+
+    pub fn push_rr(register: Register16Bit) -> Instructions {
+        (
+            NoRead(DecStackPointer),
+            vec([
+                NoRead(Nop),
+                NoRead(LoadToAddressFromRegister {
+                    address: Register16Bit::SP,
+                    value: register.get_lsb(),
+                }),
+                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(Some(register))),
+            ]),
+        )
+    }
 }
 
 use opcodes::*;
@@ -125,9 +162,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         return get_instructions_cb_mode(opcode);
     }
 
+    // instructions in arrayvec are reversed
     match opcode {
         0 => Default::default(),
-        // instructions in arrayvec are reversed
+        0x01 => ld_rr_n(Register16Bit::BC),
         0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
         0x0e => ld_r_n(Register8Bit::C),
         0x06 => ld_r_n(Register8Bit::B),
@@ -171,17 +209,19 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Nop)]),
         ),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
+        0xc5 => push_rr(Register16Bit::BC),
         0xcb => (NoRead(Nop), Default::default()),
         0xcd => (
             Read(None, ReadIntoLsb),
             vec([
                 NoRead(Nop),
                 NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc),
-                NoRead(WriteMsbPcWhereSpPointsAndDecSp),
-                NoRead(PopStackPointer),
+                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(None)),
+                NoRead(DecStackPointer),
                 Read(None, ReadIntoMsb),
             ]),
         ),
+        0xd5 => push_rr(Register16Bit::DE),
         0xe0 => (
             Read(None, ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
@@ -190,6 +230,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             NoRead(LoadFromAccumulator(Some(Register8Bit::C))),
             vec([NoRead(Nop)]),
         ),
+        0xe5 => push_rr(Register16Bit::HL),
+        0xf5 => push_rr(Register16Bit::AF),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }

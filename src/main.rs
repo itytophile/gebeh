@@ -80,6 +80,7 @@ impl PipelineExecutor {
             Register8Bit::E => self.e,
             Register8Bit::H => self.h,
             Register8Bit::L => self.l,
+            Register8Bit::F => self.get_flag_bits()
         }
     }
 
@@ -92,6 +93,7 @@ impl PipelineExecutor {
             Register8Bit::E => &mut self.e,
             Register8Bit::H => &mut self.h,
             Register8Bit::L => &mut self.l,
+            Register8Bit::F => unreachable!()
         }
     }
 
@@ -218,11 +220,17 @@ impl PipelineExecutor {
                     self.get_8bit_register(value),
                 );
             }
-            NoRead(PopStackPointer) => {
+            NoRead(DecStackPointer) => {
                 self.sp = self.sp.wrapping_sub(1);
             }
-            NoRead(WriteMsbPcWhereSpPointsAndDecSp) => {
-                state.write(self.sp, pc.to_be_bytes()[0]);
+            NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(register)) => {
+                state.write(
+                    self.sp,
+                    register
+                        .map(|reg| self.get_16bit_register(reg))
+                        .unwrap_or(pc)
+                        .to_be_bytes()[0],
+                );
                 self.sp = self.sp.wrapping_sub(1);
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
