@@ -95,6 +95,23 @@ impl PipelineExecutor {
         }
     }
 
+    fn get_16bit_register(&self, register: Register16Bit) -> u16 {
+        match register {
+            Register16Bit::AF => u16::from(self.a) << 8 | u16::from(self.get_flag_bits()),
+            Register16Bit::BC => u16::from(self.b) << 8 | u16::from(self.c),
+            Register16Bit::DE => u16::from(self.d) << 8 | u16::from(self.e),
+            Register16Bit::HL => u16::from(self.h) << 8 | u16::from(self.l),
+            Register16Bit::SP => self.sp,
+        }
+    }
+
+    fn get_flag_bits(&self) -> u8 {
+        (self.z_flag as u8) << 7
+            | (self.n_flag as u8) << 6
+            | (self.h_flag as u8) << 5
+            | (self.c_flag as u8) << 4
+    }
+
     fn get_flag(&self, flag: Flag) -> bool {
         match flag {
             Flag::Z => self.z_flag,
@@ -147,6 +164,15 @@ impl PipelineExecutor {
                     self.h = self.msb;
                     self.l = self.lsb;
                 }
+                Register16Bit::AF => unreachable!(),
+                Register16Bit::BC => {
+                    self.b = self.msb;
+                    self.c = self.lsb;
+                }
+                Register16Bit::DE => {
+                    self.d = self.msb;
+                    self.e = self.lsb;
+                }
             },
             NoRead(Xor(register)) => {
                 self.a ^= self.get_8bit_register(register);
@@ -178,6 +204,12 @@ impl PipelineExecutor {
                 self.z_flag = incremented == 0;
                 self.n_flag = false;
                 self.h_flag = (register_value & 0x0F) == 0x0F;
+            }
+            NoRead(LoadToAddressFromRegister { address, value }) => {
+                state.write(
+                    self.get_16bit_register(address),
+                    self.get_8bit_register(value),
+                );
             }
         }
     }

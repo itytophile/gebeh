@@ -13,6 +13,9 @@ pub enum Register8Bit {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Register16Bit {
+    AF,
+    BC,
+    DE,
     SP,
     HL,
 }
@@ -43,7 +46,11 @@ pub enum NoReadInstruction {
     Bit(u8, Register8Bit),
     OffsetPc,
     LoadFromAccumulator,
-    Inc(Register8Bit)
+    Inc(Register8Bit),
+    LoadToAddressFromRegister {
+        address: Register16Bit,
+        value: Register8Bit,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -112,9 +119,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         ),
         0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
         0x3e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::A))])),
+        0x77 => (
+            NoRead(LoadToAddressFromRegister {
+                address: Register16Bit::HL,
+                value: Register8Bit::A,
+            }),
+            vec([NoRead(Nop)]),
+        ),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         0xcb => (NoRead(Nop), Default::default()),
-        // it's two cycles, don't know why
         0xe2 => (NoRead(LoadFromAccumulator), vec([NoRead(Nop)])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
