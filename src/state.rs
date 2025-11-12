@@ -42,10 +42,10 @@ pub enum NoReadInstruction {
     Store16Bit(Register16Bit),
     Xor(Register8Bit),
     // Load to memory HL from A, Decrement
-    LoadToMhlFromADec,
+    LoadToAddressHlFromADec,
     Bit(u8, Register8Bit),
     OffsetPc,
-    LoadFromAccumulator,
+    LoadFromAccumulator(Option<Register8Bit>),
     Inc(Register8Bit),
     LoadToAddressFromRegister {
         address: Register16Bit,
@@ -117,7 +117,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             Read(ReadLsb),
             vec([NoRead(Store16Bit(Register16Bit::SP)), Read(ReadMsb)]),
         ),
-        0x32 => (NoRead(LoadToMhlFromADec), Default::default()),
+        0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
         0x3e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::A))])),
         0x77 => (
             NoRead(LoadToAddressFromRegister {
@@ -128,7 +128,14 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         ),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
         0xcb => (NoRead(Nop), Default::default()),
-        0xe2 => (NoRead(LoadFromAccumulator), vec([NoRead(Nop)])),
+        0xe0 => (
+            Read(ReadLsb),
+            vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
+        ),
+        0xe2 => (
+            NoRead(LoadFromAccumulator(Some(Register8Bit::C))),
+            vec([NoRead(Nop)]),
+        ),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }

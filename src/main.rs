@@ -181,7 +181,7 @@ impl PipelineExecutor {
                 self.h_flag = false;
                 self.c_flag = false;
             }
-            NoRead(LoadToMhlFromADec) => {
+            NoRead(LoadToAddressHlFromADec) => {
                 let hl = u16::from_be_bytes([self.h, self.l]);
                 state.write(hl, self.a);
                 [self.h, self.l] = (hl - 1).to_be_bytes();
@@ -194,8 +194,16 @@ impl PipelineExecutor {
             NoRead(OffsetPc) => {
                 state.set_pc((pc as i16).wrapping_add(i16::from(self.lsb as i8)) as u16);
             }
-            NoRead(LoadFromAccumulator) => {
-                state.write(0xff00 | u16::from(self.c), self.a);
+            NoRead(LoadFromAccumulator(register)) => {
+                state.write(
+                    0xff00
+                        | u16::from(
+                            register
+                                .map(|register| self.get_8bit_register(register))
+                                .unwrap_or(self.lsb),
+                        ),
+                    self.a,
+                );
             }
             NoRead(Inc(register)) => {
                 let register_value = self.get_8bit_register(register);
