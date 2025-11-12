@@ -83,6 +83,18 @@ impl PipelineExecutor {
         }
     }
 
+    fn get_8bit_register_mut(&mut self, register: Register8Bit) -> &mut u8 {
+        match register {
+            Register8Bit::A => &mut self.a,
+            Register8Bit::B => &mut self.b,
+            Register8Bit::C => &mut self.c,
+            Register8Bit::D => &mut self.d,
+            Register8Bit::E => &mut self.e,
+            Register8Bit::H => &mut self.h,
+            Register8Bit::L => &mut self.l,
+        }
+    }
+
     fn get_flag(&self, flag: Flag) -> bool {
         match flag {
             Flag::Z => self.z_flag,
@@ -125,15 +137,7 @@ impl PipelineExecutor {
             }
             NoRead(Nop) => {}
             NoRead(Store8Bit(register)) => {
-                *(match register {
-                    Register8Bit::A => &mut self.a,
-                    Register8Bit::B => &mut self.b,
-                    Register8Bit::C => &mut self.c,
-                    Register8Bit::D => &mut self.d,
-                    Register8Bit::E => &mut self.e,
-                    Register8Bit::H => &mut self.h,
-                    Register8Bit::L => &mut self.l,
-                }) = self.lsb;
+                *self.get_8bit_register_mut(register) = self.lsb;
             }
             NoRead(Store16Bit(register)) => match register {
                 Register16Bit::SP => {
@@ -166,6 +170,14 @@ impl PipelineExecutor {
             }
             NoRead(LoadFromAccumulator) => {
                 state.write(0xff00 | u16::from(self.c), self.a);
+            }
+            NoRead(Inc(register)) => {
+                let register_value = self.get_8bit_register(register);
+                let incremented = register_value.wrapping_add(1);
+                *self.get_8bit_register_mut(register) = incremented;
+                self.z_flag = incremented == 0;
+                self.n_flag = false;
+                self.h_flag = (register_value & 0x0F) == 0x0F;
             }
         }
     }

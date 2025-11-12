@@ -43,6 +43,7 @@ pub enum NoReadInstruction {
     Bit(u8, Register8Bit),
     OffsetPc,
     LoadFromAccumulator,
+    Inc(Register8Bit)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -90,6 +91,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     match opcode {
         0 => Default::default(),
         // instructions in arrayvec are reversed
+        0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
         0x0e => (Read(ReadLsb), vec([NoRead(Store8Bit(Register8Bit::C))])),
         // When there is a jump we have to put a Nop even if the condition will be true
         // or the next opcode will be fetched with the wrong pc
