@@ -99,10 +99,18 @@ mod opcodes {
     use super::NoReadInstruction::*;
     use super::ReadInstruction::*;
     use super::Register8Bit;
+    use super::Register16Bit;
     use super::vec;
 
     pub fn ld_r_n(register: Register8Bit) -> Instructions {
         (Read(None, ReadIntoLsb), vec([NoRead(Store8Bit(register))]))
+    }
+
+    pub fn ld_rr_n(register: Register16Bit) -> Instructions {
+        (
+            Read(None, ReadIntoLsb),
+            vec([NoRead(Store16Bit(register)), Read(None, ReadIntoMsb)]),
+        )
     }
 }
 
@@ -123,13 +131,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
         0x0e => ld_r_n(Register8Bit::C),
         0x06 => ld_r_n(Register8Bit::B),
-        0x11 => (
-            Read(None, ReadIntoLsb),
-            vec([
-                NoRead(Store16Bit(Register16Bit::DE)),
-                Read(None, ReadIntoMsb),
-            ]),
-        ),
+        0x11 => ld_rr_n(Register16Bit::DE),
         0x1e => ld_r_n(Register8Bit::E),
         0x16 => ld_r_n(Register8Bit::D),
         0x1a => (
@@ -148,22 +150,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ),
             vec([NoRead(Nop)]),
         ),
-        0x21 => (
-            Read(None, ReadIntoLsb),
-            vec([
-                NoRead(Store16Bit(Register16Bit::HL)),
-                Read(None, ReadIntoMsb),
-            ]),
-        ),
+        0x21 => ld_rr_n(Register16Bit::HL),
         0x26 => ld_r_n(Register8Bit::H),
         0x2e => ld_r_n(Register8Bit::L),
-        0x31 => (
-            Read(None, ReadIntoLsb),
-            vec([
-                NoRead(Store16Bit(Register16Bit::SP)),
-                Read(None, ReadIntoMsb),
-            ]),
-        ),
+        0x31 => ld_rr_n(Register16Bit::SP),
         0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
         0x3e => ld_r_n(Register8Bit::A),
         0x4f => (
