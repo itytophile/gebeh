@@ -97,7 +97,7 @@ pub enum ReadInstruction {
     ReadIntoMsb,
     PopStackIntoLsb,
     PopStackIntoMsb,
-    RelativeJump(Option<Condition>),
+    ConditionalRelativeJump(Condition),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -196,7 +196,10 @@ mod opcodes {
     // When there is a jump we have to put a Nop even if the condition will be true
     // or the next opcode will be fetched with the wrong pc
     pub fn jr_cc_e(condition: Condition) -> Instructions {
-        (Read(PC, RelativeJump(Some(condition))), vec([NoRead(Nop)]))
+        (
+            Read(PC, ConditionalRelativeJump(condition)),
+            vec([NoRead(Nop)]),
+        )
     }
 }
 
@@ -229,6 +232,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x14 => inc_r(D),
         0x15 => dec_r(D),
         0x17 => (NoRead(Rla), Default::default()),
+        0x18 => (Read(PC, ReadIntoLsb), vec([NoRead(Nop), NoRead(OffsetPc)])),
         0x1c => inc_r(E),
         0x1d => dec_r(E),
         0x1e => ld_r_n(E),

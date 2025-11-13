@@ -1,3 +1,5 @@
+use core::panic;
+
 use arrayvec::ArrayVec;
 
 use crate::state::{
@@ -149,11 +151,9 @@ impl PipelineExecutor {
                 match inst {
                     ReadIntoLsb => self.lsb = value,
                     ReadIntoMsb => self.msb = value,
-                    RelativeJump(condition) => {
+                    ConditionalRelativeJump(Condition { flag, not }) => {
                         self.lsb = value;
-                        if let Some(Condition { flag, not }) = condition
-                            && self.get_flag(flag) != not
-                        {
+                        if self.get_flag(flag) != not {
                             state.set_instruction_register((
                                 Instruction::NoRead(OffsetPc),
                                 // important to match the cycle and not conflict with the overlapping opcode fetch
