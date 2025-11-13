@@ -127,6 +127,8 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
 }
 
 mod opcodes {
+    use crate::state::Condition;
+
     use super::Instruction::*;
     use super::Instructions;
     use super::NoReadInstruction::*;
@@ -190,6 +192,12 @@ mod opcodes {
     pub fn dec_r(register: Register8Bit) -> Instructions {
         (NoRead(Dec(register)), Default::default())
     }
+
+    // When there is a jump we have to put a Nop even if the condition will be true
+    // or the next opcode will be fetched with the wrong pc
+    pub fn jr_cc_e(condition: Condition) -> Instructions {
+        (Read(PC, RelativeJump(Some(condition))), vec([NoRead(Nop)]))
+    }
 }
 
 use opcodes::*;
@@ -226,24 +234,21 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x1e => ld_r_n(E),
         0x16 => ld_r_n(D),
         0x1a => (Read(DE, ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
-        // When there is a jump we have to put a Nop even if the condition will be true
-        // or the next opcode will be fetched with the wrong pc
-        0x20 => (
-            Read(
-                PC,
-                RelativeJump(Some(Condition {
-                    flag: Flag::Z,
-                    not: true,
-                })),
-            ),
-            vec([NoRead(Nop)]),
-        ),
+
+        0x20 => jr_cc_e(Condition {
+            flag: Flag::Z,
+            not: true,
+        }),
         0x21 => ld_rr_n(HL),
         0x22 => (NoRead(LoadToAddressHlFromAInc), vec([NoRead(Nop)])),
         0x23 => inc_rr(HL),
         0x24 => inc_r(H),
         0x25 => dec_r(H),
         0x26 => ld_r_n(H),
+        0x28 => jr_cc_e(Condition {
+            flag: Flag::Z,
+            not: false,
+        }),
         0x2c => inc_r(L),
         0x2d => dec_r(L),
         0x2e => ld_r_n(L),
