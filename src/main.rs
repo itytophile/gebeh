@@ -29,7 +29,7 @@ fn main() {
     let mut state = State::default();
     state.memory[0..DMG_BOOT.len()].copy_from_slice(&DMG_BOOT);
     // the machine should not be affected by the composition order
-    let mut machine = OpCodeFetcher::default().compose(PipelineExecutor::default());
+    let mut machine = PipelineExecutor::default();
 
     loop {
         machine.execute(&state)(WriteOnlyState::new(&mut state));
@@ -48,11 +48,6 @@ trait StateMachine {
 }
 
 #[derive(Default)]
-struct OpCodeFetcher {
-    is_cb_mode: bool,
-}
-
-#[derive(Default)]
 struct PipelineExecutor {
     sp: u16,
     lsb: u8,
@@ -68,6 +63,7 @@ struct PipelineExecutor {
     n_flag: bool,
     h_flag: bool,
     c_flag: bool,
+    is_cb_mode: bool,
 }
 
 impl PipelineExecutor {
@@ -295,31 +291,17 @@ impl PipelineExecutor {
     }
 }
 
-impl StateMachine for OpCodeFetcher {
+impl StateMachine for PipelineExecutor {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         // we load the next opcode if there is only one instruction left in the pipeline
         let should_load_next_opcode = state.instruction_register.1.is_empty();
         let pc = state.pc;
         let opcode = state.memory[usize::from(pc)];
-        // Every write here
-        move |mut state| {
-            if should_load_next_opcode {
-                println!("Read opcode at ${pc:04x} (0x{opcode:02x})");
-                state.set_instruction_register(get_instructions(opcode, self.is_cb_mode));
-                self.is_cb_mode = opcode == 0xcb;
-                state.set_pc(pc + 1);
-            }
-        }
-    }
-}
 
-impl StateMachine for PipelineExecutor {
-    fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         let inst = state.instruction_register.0;
         // if it is the last instruction then the opcode fetcher will override the instruction
         // register concurrently so the pipeline executor should not pop it.
         let should_pop = !state.instruction_register.1.is_empty();
-        let pc = state.pc;
 
         let should_increment_pc = matches!(inst, Instruction::Read(Register16Bit::PC, _));
 
@@ -338,6 +320,15 @@ impl StateMachine for PipelineExecutor {
             if should_increment_pc {
                 state.set_pc(pc + 1);
             }
+
+            // this code is never conflicting with a potential pc write during the execution, trust me
+            if should_load_next_opcode {
+                println!("Read opcode at ${pc:04x} (0x{opcode:02x})");
+                state.set_instruction_register(get_instructions(opcode, self.is_cb_mode));
+                self.is_cb_mode = opcode == 0xcb;
+                state.set_pc(pc + 1);
+            }
+
             self.execute_instruction(pc, state, inst);
         }
     }
