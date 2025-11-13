@@ -100,10 +100,23 @@ pub enum ReadInstruction {
     ConditionalRelativeJump(Condition),
 }
 
+impl From<Register16Bit> for ReadAddress {
+    fn from(value: Register16Bit) -> Self {
+        Self::Register(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ReadAddress {
+    Register(Register16Bit),
+    // LDH A, (n)
+    Accumulator,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     NoRead(NoReadInstruction),
-    Read(Register16Bit, ReadInstruction),
+    Read(ReadAddress, ReadInstruction),
 }
 
 impl Default for Instruction {
@@ -138,7 +151,10 @@ mod opcodes {
     use super::vec;
 
     pub fn ld_r_n(register: Register8Bit) -> Instructions {
-        (Read(PC, ReadIntoLsb), vec([NoRead(Store8Bit(register))]))
+        (
+            Read(PC.into(), ReadIntoLsb),
+            vec([NoRead(Store8Bit(register))]),
+        )
     }
 
     pub fn ld_r_r(to: Register8Bit, from: Register8Bit) -> Instructions {
@@ -147,8 +163,8 @@ mod opcodes {
 
     pub fn ld_rr_n(register: Register16Bit) -> Instructions {
         (
-            Read(PC, ReadIntoLsb),
-            vec([NoRead(Store16Bit(register)), Read(PC, ReadIntoMsb)]),
+            Read(PC.into(), ReadIntoLsb),
+            vec([NoRead(Store16Bit(register)), Read(PC.into(), ReadIntoMsb)]),
         )
     }
 
@@ -176,8 +192,11 @@ mod opcodes {
 
     pub fn pop_rr(register: Register16Bit) -> Instructions {
         (
-            Read(SP, PopStackIntoLsb),
-            vec([NoRead(Store16Bit(register)), Read(SP, PopStackIntoMsb)]),
+            Read(SP.into(), PopStackIntoLsb),
+            vec([
+                NoRead(Store16Bit(register)),
+                Read(SP.into(), PopStackIntoMsb),
+            ]),
         )
     }
 
@@ -197,7 +216,7 @@ mod opcodes {
     // or the next opcode will be fetched with the wrong pc
     pub fn jr_cc_e(condition: Condition) -> Instructions {
         (
-            Read(PC, ConditionalRelativeJump(condition)),
+            Read(PC.into(), ConditionalRelativeJump(condition)),
             vec([NoRead(Nop)]),
         )
     }
@@ -232,12 +251,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x14 => inc_r(D),
         0x15 => dec_r(D),
         0x17 => (NoRead(Rla), Default::default()),
-        0x18 => (Read(PC, ReadIntoLsb), vec([NoRead(Nop), NoRead(OffsetPc)])),
+        0x18 => (
+            Read(PC.into(), ReadIntoLsb),
+            vec([NoRead(Nop), NoRead(OffsetPc)]),
+        ),
         0x1c => inc_r(E),
         0x1d => dec_r(E),
         0x1e => ld_r_n(E),
         0x16 => ld_r_n(D),
-        0x1a => (Read(DE, ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
+        0x1a => (Read(DE.into(), ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
 
         0x20 => jr_cc_e(Condition {
             flag: Flag::Z,
@@ -277,44 +299,51 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),
         0xc9 => (
-            Read(SP, PopStackIntoLsb),
+            Read(SP.into(), PopStackIntoLsb),
             vec([
                 NoRead(Nop),
                 NoRead(Store16Bit(Register16Bit::PC)),
-                Read(SP, PopStackIntoMsb),
+                Read(SP.into(), PopStackIntoMsb),
             ]),
         ),
         0xcb => (NoRead(Nop), Default::default()),
         0xcd => (
-            Read(PC, ReadIntoLsb),
+            Read(PC.into(), ReadIntoLsb),
             vec([
                 NoRead(Nop),
                 NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc),
                 NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(PC)),
                 NoRead(DecStackPointer),
-                Read(PC, ReadIntoMsb),
+                Read(PC.into(), ReadIntoMsb),
             ]),
         ),
         0xd1 => pop_rr(DE),
         0xd5 => push_rr(DE),
         0xe0 => (
-            Read(PC, ReadIntoLsb),
+            Read(PC.into(), ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
         ),
         0xe1 => pop_rr(HL),
         0xe2 => (NoRead(LoadFromAccumulator(Some(C))), vec([NoRead(Nop)])),
         0xe5 => push_rr(HL),
         0xea => (
-            Read(PC, ReadIntoLsb),
+            Read(PC.into(), ReadIntoLsb),
             vec([
                 NoRead(Nop),
                 NoRead(LoadToCachedAddressFromA),
-                Read(PC, ReadIntoMsb),
+                Read(PC.into(), ReadIntoMsb),
+            ]),
+        ),
+        0xf0 => (
+            Read(PC.into(), ReadIntoLsb),
+            vec([
+                NoRead(Store8Bit(A)),
+                Read(ReadAddress::Accumulator, ReadIntoLsb),
             ]),
         ),
         0xf1 => pop_rr(AF),
         0xf5 => push_rr(AF),
-        0xfe => (Read(PC, ReadIntoLsb), vec([NoRead(Compare)])),
+        0xfe => (Read(PC.into(), ReadIntoLsb), vec([NoRead(Compare)])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }

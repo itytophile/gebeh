@@ -1,10 +1,8 @@
-use core::panic;
-
 use arrayvec::ArrayVec;
 
 use crate::state::{
-    AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, ReadInstruction,
-    Register8Bit, Register16Bit, State, WriteOnlyState, get_instructions,
+    AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, ReadAddress,
+    ReadInstruction, Register8Bit, Register16Bit, State, WriteOnlyState, get_instructions,
 };
 mod state;
 
@@ -299,11 +297,18 @@ impl StateMachine for PipelineExecutor {
         // register concurrently so the pipeline executor should not pop it.
         let should_pop = !state.instruction_register.1.is_empty();
 
-        let should_increment_pc = matches!(inst, Instruction::Read(Register16Bit::PC, _));
+        let should_increment_pc = matches!(
+            inst,
+            Instruction::Read(ReadAddress::Register(Register16Bit::PC), _)
+        );
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
-            Instruction::Read(register, read) => AfterReadInstruction::Read(
+            Instruction::Read(ReadAddress::Accumulator, read) => AfterReadInstruction::Read(
+                state.memory[usize::from(0xff00 | (self.lsb as u16))],
+                read,
+            ),
+            Instruction::Read(ReadAddress::Register(register), read) => AfterReadInstruction::Read(
                 state.memory[usize::from(self.get_16bit_register(register))],
                 read,
             ),
