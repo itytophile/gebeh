@@ -66,6 +66,7 @@ pub enum NoReadInstruction {
     Xor(Register8Bit),
     // Load to memory HL from A, Decrement
     LoadToAddressHlFromADec,
+    LoadToAddressHlFromAInc,
     Bit(u8, Register8Bit),
     OffsetPc,
     LoadFromAccumulator(Option<Register8Bit>),
@@ -228,6 +229,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Nop)]),
         ),
         0x21 => ld_rr_n(Register16Bit::HL),
+        0x22 => (NoRead(LoadToAddressHlFromAInc), vec([NoRead(Nop)])),
         0x24 => inc_r(Register8Bit::H),
         0x25 => dec_r(Register8Bit::H),
         0x26 => ld_r_n(Register8Bit::H),

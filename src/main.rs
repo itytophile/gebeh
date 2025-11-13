@@ -80,7 +80,7 @@ impl PipelineExecutor {
             Register8Bit::E => self.e,
             Register8Bit::H => self.h,
             Register8Bit::L => self.l,
-            Register8Bit::F => self.get_flag_bits()
+            Register8Bit::F => self.get_flag_bits(),
         }
     }
 
@@ -93,7 +93,7 @@ impl PipelineExecutor {
             Register8Bit::E => &mut self.e,
             Register8Bit::H => &mut self.h,
             Register8Bit::L => &mut self.l,
-            Register8Bit::F => unreachable!()
+            Register8Bit::F => unreachable!(),
         }
     }
 
@@ -191,9 +191,14 @@ impl PipelineExecutor {
                 self.c_flag = false;
             }
             NoRead(LoadToAddressHlFromADec) => {
-                let hl = u16::from_be_bytes([self.h, self.l]);
+                let hl = self.get_16bit_register(Register16Bit::HL);
                 state.write(hl, self.a);
-                [self.h, self.l] = (hl - 1).to_be_bytes();
+                [self.h, self.l] = hl.wrapping_sub(1).to_be_bytes();
+            }
+            NoRead(LoadToAddressHlFromAInc) => {
+                let hl = self.get_16bit_register(Register16Bit::HL);
+                state.write(hl, self.a);
+                [self.h, self.l] = hl.wrapping_add(1).to_be_bytes();
             }
             NoRead(Bit(bit, register)) => {
                 self.z_flag = (self.get_8bit_register(register) & (1 << bit)) == 0;
