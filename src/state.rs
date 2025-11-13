@@ -137,6 +137,10 @@ mod opcodes {
         (Read(PC, ReadIntoLsb), vec([NoRead(Store8Bit(register))]))
     }
 
+    pub fn ld_r_r(to: Register8Bit, from: Register8Bit) -> Instructions {
+        (NoRead(Load { to, from }), Default::default())
+    }
+
     pub fn ld_rr_n(register: Register16Bit) -> Instructions {
         (
             Read(PC, ReadIntoLsb),
@@ -247,7 +251,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x3c => inc_r(A),
         0x3d => dec_r(A),
         0x3e => ld_r_n(A),
-        0x4f => (NoRead(Load { to: C, from: A }), Default::default()),
+        0x4f => ld_r_r(C, A),
         0x77 => (
             NoRead(LoadToAddressFromRegister {
                 address: HL,
@@ -255,6 +259,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             }),
             vec([NoRead(Nop)]),
         ),
+        0x7b => ld_r_r(A, E),
         0xaf => (NoRead(Xor(A)), Default::default()),
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),
