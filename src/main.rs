@@ -151,6 +151,14 @@ impl PipelineExecutor {
                             ));
                         }
                     }
+                    PopStackIntoLsb => {
+                        self.lsb = value;
+                        self.sp = self.sp.wrapping_add(1);
+                    }
+                    PopStackIntoMsb => {
+                        self.msb = value;
+                        self.sp = self.sp.wrapping_add(1);
+                    }
                 }
             }
             NoRead(Nop) => {}
@@ -253,7 +261,7 @@ impl PipelineExecutor {
             NoRead(Rla) => {
                 let new_carry = (self.a & 0x80) != 0;
                 self.a = (self.a << 1) | (self.c_flag as u8);
-                self.z_flag = false;
+                self.z_flag = false; // difference with rl r
                 self.n_flag = false;
                 self.h_flag = false;
                 self.c_flag = new_carry;

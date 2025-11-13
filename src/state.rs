@@ -82,13 +82,15 @@ pub enum NoReadInstruction {
         from: Register8Bit,
     },
     Rl(Register8Bit),
-    Rla
+    Rla,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum ReadInstruction {
     ReadIntoLsb,
     ReadIntoMsb,
+    PopStackIntoLsb,
+    PopStackIntoMsb,
     RelativeJump(Option<Condition>),
 }
 
@@ -159,6 +161,16 @@ mod opcodes {
     pub fn rl_r(register: Register8Bit) -> Instructions {
         (NoRead(Rl(register)), Default::default())
     }
+
+    pub fn pop_rr(register: Register16Bit) -> Instructions {
+        (
+            Read(Some(Register16Bit::SP), PopStackIntoLsb),
+            vec([
+                NoRead(Store16Bit(register)),
+                Read(Some(Register16Bit::SP), PopStackIntoMsb),
+            ]),
+        )
+    }
 }
 
 use opcodes::*;
@@ -220,6 +232,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Nop)]),
         ),
         0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
+        0xc1 => pop_rr(Register16Bit::BC),
         0xc5 => push_rr(Register16Bit::BC),
         0xcb => (NoRead(Nop), Default::default()),
         0xcd => (
@@ -232,16 +245,19 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(None, ReadIntoMsb),
             ]),
         ),
+        0xd1 => pop_rr(Register16Bit::DE),
         0xd5 => push_rr(Register16Bit::DE),
         0xe0 => (
             Read(None, ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
         ),
+        0xe1 => pop_rr(Register16Bit::HL),
         0xe2 => (
             NoRead(LoadFromAccumulator(Some(Register8Bit::C))),
             vec([NoRead(Nop)]),
         ),
         0xe5 => push_rr(Register16Bit::HL),
+        0xf1 => pop_rr(Register16Bit::AF),
         0xf5 => push_rr(Register16Bit::AF),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
