@@ -263,6 +263,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x3d => dec_r(A),
         0x3e => ld_r_n(A),
         0x4f => ld_r_r(C, A),
+        0x57 => ld_r_r(D, A),
         0x67 => ld_r_r(H, A),
         0x77 => (
             NoRead(LoadToAddressFromRegister {
