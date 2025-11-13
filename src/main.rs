@@ -266,6 +266,14 @@ impl PipelineExecutor {
                 self.h_flag = false;
                 self.c_flag = new_carry;
             }
+            NoRead(Dec(register)) => {
+                let register_value = self.get_8bit_register(register);
+                let decremented = register_value.wrapping_sub(1);
+                *self.get_8bit_register_mut(register) = decremented;
+                self.z_flag = decremented == 0;
+                self.n_flag = true;
+                self.h_flag = (register_value & 0x0F) == 0x0F;
+            }
         }
     }
 }

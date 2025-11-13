@@ -83,6 +83,7 @@ pub enum NoReadInstruction {
     },
     Rl(Register8Bit),
     Rla,
+    Dec(Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -171,6 +172,14 @@ mod opcodes {
             ]),
         )
     }
+
+    pub fn inc_r(register: Register8Bit) -> Instructions {
+        (NoRead(Inc(register)), Default::default())
+    }
+
+    pub fn dec_r(register: Register8Bit) -> Instructions {
+        (NoRead(Dec(register)), Default::default())
+    }
 }
 
 use opcodes::*;
@@ -188,11 +197,18 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     match opcode {
         0 => Default::default(),
         0x01 => ld_rr_n(Register16Bit::BC),
-        0x0c => (NoRead(Inc(Register8Bit::C)), Default::default()),
+        0x04 => inc_r(Register8Bit::B),
+        0x05 => dec_r(Register8Bit::B),
+        0x0c => inc_r(Register8Bit::C),
+        0x0d => dec_r(Register8Bit::C),
         0x0e => ld_r_n(Register8Bit::C),
         0x06 => ld_r_n(Register8Bit::B),
         0x11 => ld_rr_n(Register16Bit::DE),
+        0x14 => inc_r(Register8Bit::D),
+        0x15 => dec_r(Register8Bit::D),
         0x17 => (NoRead(Rla), Default::default()),
+        0x1c => inc_r(Register8Bit::E),
+        0x1d => dec_r(Register8Bit::E),
         0x1e => ld_r_n(Register8Bit::E),
         0x16 => ld_r_n(Register8Bit::D),
         0x1a => (
@@ -212,10 +228,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Nop)]),
         ),
         0x21 => ld_rr_n(Register16Bit::HL),
+        0x24 => inc_r(Register8Bit::H),
+        0x25 => dec_r(Register8Bit::H),
         0x26 => ld_r_n(Register8Bit::H),
+        0x2c => inc_r(Register8Bit::L),
+        0x2d => dec_r(Register8Bit::L),
         0x2e => ld_r_n(Register8Bit::L),
         0x31 => ld_rr_n(Register16Bit::SP),
         0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
+        0x3c => inc_r(Register8Bit::A),
+        0x3d => dec_r(Register8Bit::A),
         0x3e => ld_r_n(Register8Bit::A),
         0x4f => (
             NoRead(Load {
