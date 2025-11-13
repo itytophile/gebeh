@@ -87,6 +87,7 @@ pub enum NoReadInstruction {
     Rl(Register8Bit),
     Rla,
     Dec(Register8Bit),
+    Compare,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -293,6 +294,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xe5 => push_rr(HL),
         0xf1 => pop_rr(AF),
         0xf5 => push_rr(AF),
+        0xfe => (Read(PC, ReadIntoLsb), vec([NoRead(Compare)])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }

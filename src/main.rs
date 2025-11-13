@@ -250,7 +250,7 @@ impl PipelineExecutor {
             }
             NoRead(Rl(register)) => {
                 let register_value = self.get_8bit_register(register);
-                let new_carry = (register_value & 0x80) != 0;
+                let new_carry = (register_value & 0x80) == 0x80;
                 let new_value = (register_value << 1) | (self.c_flag as u8);
                 *self.get_8bit_register_mut(register) = new_value;
                 self.z_flag = new_value == 0;
@@ -259,7 +259,7 @@ impl PipelineExecutor {
                 self.c_flag = new_carry;
             }
             NoRead(Rla) => {
-                let new_carry = (self.a & 0x80) != 0;
+                let new_carry = (self.a & 0x80) == 0x80;
                 self.a = (self.a << 1) | (self.c_flag as u8);
                 self.z_flag = false; // difference with rl r
                 self.n_flag = false;
@@ -272,7 +272,14 @@ impl PipelineExecutor {
                 *self.get_8bit_register_mut(register) = decremented;
                 self.z_flag = decremented == 0;
                 self.n_flag = true;
-                self.h_flag = (register_value & 0x0F) == 0x0F;
+                self.h_flag = (register_value & 0x0F) == 0;
+            }
+            NoRead(Compare) => {
+                let (result, carry) = self.a.overflowing_sub(self.lsb);
+                self.z_flag = result == 0;
+                self.n_flag = true;
+                self.h_flag = (self.a ^ self.lsb ^ result) & 0x10 == 0x10;
+                self.c_flag = carry;
             }
         }
     }
