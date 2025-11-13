@@ -88,6 +88,7 @@ pub enum NoReadInstruction {
     Rla,
     Dec(Register8Bit),
     Compare,
+    LoadToCachedAddressFromA,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -292,6 +293,14 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xe1 => pop_rr(HL),
         0xe2 => (NoRead(LoadFromAccumulator(Some(C))), vec([NoRead(Nop)])),
         0xe5 => push_rr(HL),
+        0xea => (
+            Read(PC, ReadIntoLsb),
+            vec([
+                NoRead(Nop),
+                NoRead(LoadToCachedAddressFromA),
+                Read(PC, ReadIntoMsb),
+            ]),
+        ),
         0xf1 => pop_rr(AF),
         0xf5 => push_rr(AF),
         0xfe => (Read(PC, ReadIntoLsb), vec([NoRead(Compare)])),

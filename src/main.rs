@@ -281,6 +281,9 @@ impl PipelineExecutor {
                 self.h_flag = (self.a ^ self.lsb ^ result) & 0x10 == 0x10;
                 self.c_flag = carry;
             }
+            NoRead(LoadToCachedAddressFromA) => {
+                state.write(u16::from_be_bytes([self.msb, self.lsb]), self.a);
+            }
         }
     }
 }
