@@ -22,7 +22,7 @@ pub enum Register16Bit {
 }
 
 impl Register16Bit {
-    fn get_msb(self) -> Register8Bit {
+    pub fn get_msb(self) -> Register8Bit {
         match self {
             Register16Bit::AF => Register8Bit::A,
             Register16Bit::BC => Register8Bit::B,
@@ -32,7 +32,7 @@ impl Register16Bit {
         }
     }
 
-    fn get_lsb(self) -> Register8Bit {
+    pub fn get_lsb(self) -> Register8Bit {
         match self {
             Register16Bit::AF => Register8Bit::F,
             Register16Bit::BC => Register8Bit::C,
@@ -71,6 +71,7 @@ pub enum NoReadInstruction {
     OffsetPc,
     LoadFromAccumulator(Option<Register8Bit>),
     Inc(Register8Bit),
+    Inc16Bit(Register16Bit),
     LoadToAddressFromRegister {
         address: Register16Bit,
         value: Register8Bit,
@@ -178,6 +179,10 @@ mod opcodes {
         (NoRead(Inc(register)), Default::default())
     }
 
+    pub fn inc_rr(register: Register16Bit) -> Instructions {
+        (NoRead(Inc16Bit(register)), vec([NoRead(Nop)]))
+    }
+
     pub fn dec_r(register: Register8Bit) -> Instructions {
         (NoRead(Dec(register)), Default::default())
     }
@@ -189,6 +194,8 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     use Instruction::*;
     use NoReadInstruction::*;
     use ReadInstruction::*;
+    use Register8Bit::*;
+    use Register16Bit::*;
 
     if is_cb_mode {
         return get_instructions_cb_mode(opcode);
@@ -197,25 +204,24 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     // instructions in arrayvec are reversed
     match opcode {
         0 => Default::default(),
-        0x01 => ld_rr_n(Register16Bit::BC),
-        0x04 => inc_r(Register8Bit::B),
-        0x05 => dec_r(Register8Bit::B),
-        0x0c => inc_r(Register8Bit::C),
-        0x0d => dec_r(Register8Bit::C),
-        0x0e => ld_r_n(Register8Bit::C),
-        0x06 => ld_r_n(Register8Bit::B),
-        0x11 => ld_rr_n(Register16Bit::DE),
-        0x14 => inc_r(Register8Bit::D),
-        0x15 => dec_r(Register8Bit::D),
+        0x01 => ld_rr_n(BC),
+        0x03 => inc_rr(BC),
+        0x04 => inc_r(B),
+        0x05 => dec_r(B),
+        0x0c => inc_r(C),
+        0x0d => dec_r(C),
+        0x0e => ld_r_n(C),
+        0x06 => ld_r_n(B),
+        0x11 => ld_rr_n(DE),
+        0x13 => inc_rr(DE),
+        0x14 => inc_r(D),
+        0x15 => dec_r(D),
         0x17 => (NoRead(Rla), Default::default()),
-        0x1c => inc_r(Register8Bit::E),
-        0x1d => dec_r(Register8Bit::E),
-        0x1e => ld_r_n(Register8Bit::E),
-        0x16 => ld_r_n(Register8Bit::D),
-        0x1a => (
-            Read(Some(Register16Bit::DE), ReadIntoLsb),
-            vec([NoRead(Store8Bit(Register8Bit::A))]),
-        ),
+        0x1c => inc_r(E),
+        0x1d => dec_r(E),
+        0x1e => ld_r_n(E),
+        0x16 => ld_r_n(D),
+        0x1a => (Read(Some(DE), ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
         // When there is a jump we have to put a Nop even if the condition will be true
         // or the next opcode will be fetched with the wrong pc
         0x20 => (
@@ -228,36 +234,32 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ),
             vec([NoRead(Nop)]),
         ),
-        0x21 => ld_rr_n(Register16Bit::HL),
+        0x21 => ld_rr_n(HL),
         0x22 => (NoRead(LoadToAddressHlFromAInc), vec([NoRead(Nop)])),
-        0x24 => inc_r(Register8Bit::H),
-        0x25 => dec_r(Register8Bit::H),
-        0x26 => ld_r_n(Register8Bit::H),
-        0x2c => inc_r(Register8Bit::L),
-        0x2d => dec_r(Register8Bit::L),
-        0x2e => ld_r_n(Register8Bit::L),
-        0x31 => ld_rr_n(Register16Bit::SP),
+        0x23 => inc_rr(HL),
+        0x24 => inc_r(H),
+        0x25 => dec_r(H),
+        0x26 => ld_r_n(H),
+        0x2c => inc_r(L),
+        0x2d => dec_r(L),
+        0x2e => ld_r_n(L),
+        0x31 => ld_rr_n(SP),
         0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
-        0x3c => inc_r(Register8Bit::A),
-        0x3d => dec_r(Register8Bit::A),
-        0x3e => ld_r_n(Register8Bit::A),
-        0x4f => (
-            NoRead(Load {
-                to: Register8Bit::C,
-                from: Register8Bit::A,
-            }),
-            Default::default(),
-        ),
+        0x33 => inc_rr(SP),
+        0x3c => inc_r(A),
+        0x3d => dec_r(A),
+        0x3e => ld_r_n(A),
+        0x4f => (NoRead(Load { to: C, from: A }), Default::default()),
         0x77 => (
             NoRead(LoadToAddressFromRegister {
-                address: Register16Bit::HL,
-                value: Register8Bit::A,
+                address: HL,
+                value: A,
             }),
             vec([NoRead(Nop)]),
         ),
-        0xaf => (NoRead(Xor(Register8Bit::A)), Default::default()),
-        0xc1 => pop_rr(Register16Bit::BC),
-        0xc5 => push_rr(Register16Bit::BC),
+        0xaf => (NoRead(Xor(A)), Default::default()),
+        0xc1 => pop_rr(BC),
+        0xc5 => push_rr(BC),
         0xcb => (NoRead(Nop), Default::default()),
         0xcd => (
             Read(None, ReadIntoLsb),
@@ -269,20 +271,17 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(None, ReadIntoMsb),
             ]),
         ),
-        0xd1 => pop_rr(Register16Bit::DE),
-        0xd5 => push_rr(Register16Bit::DE),
+        0xd1 => pop_rr(DE),
+        0xd5 => push_rr(DE),
         0xe0 => (
             Read(None, ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
         ),
-        0xe1 => pop_rr(Register16Bit::HL),
-        0xe2 => (
-            NoRead(LoadFromAccumulator(Some(Register8Bit::C))),
-            vec([NoRead(Nop)]),
-        ),
-        0xe5 => push_rr(Register16Bit::HL),
-        0xf1 => pop_rr(Register16Bit::AF),
-        0xf5 => push_rr(Register16Bit::AF),
+        0xe1 => pop_rr(HL),
+        0xe2 => (NoRead(LoadFromAccumulator(Some(C))), vec([NoRead(Nop)])),
+        0xe5 => push_rr(HL),
+        0xf1 => pop_rr(AF),
+        0xf5 => push_rr(AF),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }

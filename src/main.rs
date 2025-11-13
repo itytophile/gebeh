@@ -107,6 +107,12 @@ impl PipelineExecutor {
         }
     }
 
+    fn set_16bit_register(&mut self, register: Register16Bit, value: u16) {
+        let [msb, lsb] = value.to_be_bytes();
+        *self.get_8bit_register_mut(register.get_msb()) = msb;
+        *self.get_8bit_register_mut(register.get_lsb()) = lsb;
+    }
+
     fn get_flag_bits(&self) -> u8 {
         (self.z_flag as u8) << 7
             | (self.n_flag as u8) << 6
@@ -226,6 +232,12 @@ impl PipelineExecutor {
                 self.z_flag = incremented == 0;
                 self.n_flag = false;
                 self.h_flag = (register_value & 0x0F) == 0x0F;
+            }
+            NoRead(Inc16Bit(register)) => {
+                self.set_16bit_register(
+                    register,
+                    self.get_16bit_register(register).wrapping_sub(1),
+                );
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {
                 state.write(
