@@ -250,6 +250,14 @@ impl PipelineExecutor {
                 self.h_flag = false;
                 self.c_flag = new_carry;
             }
+            NoRead(Rla) => {
+                let new_carry = (self.a & 0x80) != 0;
+                self.a = (self.a << 1) | (self.c_flag as u8);
+                self.z_flag = false;
+                self.n_flag = false;
+                self.h_flag = false;
+                self.c_flag = new_carry;
+            }
         }
     }
 }

@@ -82,6 +82,7 @@ pub enum NoReadInstruction {
         from: Register8Bit,
     },
     Rl(Register8Bit),
+    Rla
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -179,6 +180,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x0e => ld_r_n(Register8Bit::C),
         0x06 => ld_r_n(Register8Bit::B),
         0x11 => ld_rr_n(Register16Bit::DE),
+        0x17 => (NoRead(Rla), Default::default()),
         0x1e => ld_r_n(Register8Bit::E),
         0x16 => ld_r_n(Register8Bit::D),
         0x1a => (
