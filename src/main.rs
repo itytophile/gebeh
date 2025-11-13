@@ -104,10 +104,27 @@ impl PipelineExecutor {
             Register16Bit::DE => u16::from(self.d) << 8 | u16::from(self.e),
             Register16Bit::HL => u16::from(self.h) << 8 | u16::from(self.l),
             Register16Bit::SP => self.sp,
+            Register16Bit::PC => unreachable!(),
         }
     }
 
-    fn set_16bit_register(&mut self, register: Register16Bit, value: u16) {
+    fn set_16bit_register(
+        &mut self,
+        register: Register16Bit,
+        value: u16,
+        mut state: WriteOnlyState,
+    ) {
+        match register {
+            Register16Bit::SP => {
+                self.sp = value;
+                return;
+            }
+            Register16Bit::PC => {
+                state.set_pc(value);
+                return;
+            }
+            _ => {}
+        }
         let [msb, lsb] = value.to_be_bytes();
         *self.get_8bit_register_mut(register.get_msb()) = msb;
         *self.get_8bit_register_mut(register.get_lsb()) = lsb;
@@ -171,24 +188,9 @@ impl PipelineExecutor {
             NoRead(Store8Bit(register)) => {
                 *self.get_8bit_register_mut(register) = self.lsb;
             }
-            NoRead(Store16Bit(register)) => match register {
-                Register16Bit::SP => {
-                    self.sp = u16::from_be_bytes([self.msb, self.lsb]);
-                }
-                Register16Bit::HL => {
-                    self.h = self.msb;
-                    self.l = self.lsb;
-                }
-                Register16Bit::AF => unreachable!(),
-                Register16Bit::BC => {
-                    self.b = self.msb;
-                    self.c = self.lsb;
-                }
-                Register16Bit::DE => {
-                    self.d = self.msb;
-                    self.e = self.lsb;
-                }
-            },
+            NoRead(Store16Bit(register)) => {
+                self.set_16bit_register(register, u16::from_be_bytes([self.msb, self.lsb]), state);
+            }
             NoRead(Xor(register)) => {
                 self.a ^= self.get_8bit_register(register);
                 self.z_flag = self.a == 0;
@@ -237,6 +239,7 @@ impl PipelineExecutor {
                 self.set_16bit_register(
                     register,
                     self.get_16bit_register(register).wrapping_sub(1),
+                    state,
                 );
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {

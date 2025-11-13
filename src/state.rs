@@ -19,6 +19,7 @@ pub enum Register16Bit {
     DE,
     SP,
     HL,
+    PC,
 }
 
 impl Register16Bit {
@@ -27,8 +28,8 @@ impl Register16Bit {
             Register16Bit::AF => Register8Bit::A,
             Register16Bit::BC => Register8Bit::B,
             Register16Bit::DE => Register8Bit::D,
-            Register16Bit::SP => unreachable!(),
             Register16Bit::HL => Register8Bit::H,
+            Register16Bit::SP | Register16Bit::PC => unreachable!(),
         }
     }
 
@@ -37,8 +38,8 @@ impl Register16Bit {
             Register16Bit::AF => Register8Bit::F,
             Register16Bit::BC => Register8Bit::C,
             Register16Bit::DE => Register8Bit::E,
-            Register16Bit::SP => unreachable!(),
             Register16Bit::HL => Register8Bit::L,
+            Register16Bit::SP | Register16Bit::PC => unreachable!(),
         }
     }
 }
@@ -260,6 +261,14 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xaf => (NoRead(Xor(A)), Default::default()),
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),
+        0xc9 => (
+            Read(Some(SP), PopStackIntoLsb),
+            vec([
+                NoRead(Nop),
+                NoRead(Store16Bit(Register16Bit::PC)),
+                Read(Some(SP), PopStackIntoMsb),
+            ]),
+        ),
         0xcb => (NoRead(Nop), Default::default()),
         0xcd => (
             Read(None, ReadIntoLsb),
