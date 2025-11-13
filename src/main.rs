@@ -97,14 +97,14 @@ impl PipelineExecutor {
         }
     }
 
-    fn get_16bit_register(&self, register: Register16Bit) -> u16 {
+    fn get_16bit_register(&self, register: Register16Bit, pc: u16) -> u16 {
         match register {
             Register16Bit::AF => u16::from(self.a) << 8 | u16::from(self.get_flag_bits()),
             Register16Bit::BC => u16::from(self.b) << 8 | u16::from(self.c),
             Register16Bit::DE => u16::from(self.d) << 8 | u16::from(self.e),
             Register16Bit::HL => u16::from(self.h) << 8 | u16::from(self.l),
             Register16Bit::SP => self.sp,
-            Register16Bit::PC => unreachable!(),
+            Register16Bit::PC => pc,
         }
     }
 
@@ -199,12 +199,12 @@ impl PipelineExecutor {
                 self.c_flag = false;
             }
             NoRead(LoadToAddressHlFromADec) => {
-                let hl = self.get_16bit_register(Register16Bit::HL);
+                let hl = self.get_16bit_register(Register16Bit::HL, pc);
                 state.write(hl, self.a);
                 [self.h, self.l] = hl.wrapping_sub(1).to_be_bytes();
             }
             NoRead(LoadToAddressHlFromAInc) => {
-                let hl = self.get_16bit_register(Register16Bit::HL);
+                let hl = self.get_16bit_register(Register16Bit::HL, pc);
                 state.write(hl, self.a);
                 [self.h, self.l] = hl.wrapping_add(1).to_be_bytes();
             }
@@ -238,13 +238,13 @@ impl PipelineExecutor {
             NoRead(Inc16Bit(register)) => {
                 self.set_16bit_register(
                     register,
-                    self.get_16bit_register(register).wrapping_sub(1),
+                    self.get_16bit_register(register, pc).wrapping_sub(1),
                     state,
                 );
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {
                 state.write(
-                    self.get_16bit_register(address),
+                    self.get_16bit_register(address, pc),
                     self.get_8bit_register(value),
                 );
             }
@@ -254,10 +254,7 @@ impl PipelineExecutor {
             NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(register)) => {
                 state.write(
                     self.sp,
-                    register
-                        .map(|reg| self.get_16bit_register(reg))
-                        .unwrap_or(pc)
-                        .to_be_bytes()[0],
+                    self.get_16bit_register(register, pc).to_be_bytes()[0],
                 );
                 self.sp = self.sp.wrapping_sub(1);
             }
@@ -324,16 +321,12 @@ impl StateMachine for PipelineExecutor {
         let should_pop = !state.instruction_register.1.is_empty();
         let pc = state.pc;
 
-        let should_increment_pc = matches!(inst, Instruction::Read(None, _));
+        let should_increment_pc = matches!(inst, Instruction::Read(Register16Bit::PC, _));
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(register, read) => AfterReadInstruction::Read(
-                state.memory[usize::from(
-                    register
-                        .map(|reg| self.get_16bit_register(reg))
-                        .unwrap_or(pc),
-                )],
+                state.memory[usize::from(self.get_16bit_register(register, pc))],
                 read,
             ),
         };

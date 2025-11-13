@@ -78,7 +78,7 @@ pub enum NoReadInstruction {
         value: Register8Bit,
     },
     DecStackPointer,
-    WriteMsbOfRegisterWhereSpPointsAndDecSp(Option<Register16Bit>),
+    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit),
     WriteLsbPcWhereSpPointsAndLoadCacheToPc,
     Load {
         to: Register8Bit,
@@ -101,7 +101,7 @@ pub enum ReadInstruction {
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     NoRead(NoReadInstruction),
-    Read(Option<Register16Bit>, ReadInstruction),
+    Read(Register16Bit, ReadInstruction),
 }
 
 impl Default for Instruction {
@@ -130,17 +130,17 @@ mod opcodes {
     use super::NoReadInstruction::*;
     use super::ReadInstruction::*;
     use super::Register8Bit;
-    use super::Register16Bit;
+    use super::Register16Bit::{self, *};
     use super::vec;
 
     pub fn ld_r_n(register: Register8Bit) -> Instructions {
-        (Read(None, ReadIntoLsb), vec([NoRead(Store8Bit(register))]))
+        (Read(PC, ReadIntoLsb), vec([NoRead(Store8Bit(register))]))
     }
 
     pub fn ld_rr_n(register: Register16Bit) -> Instructions {
         (
-            Read(None, ReadIntoLsb),
-            vec([NoRead(Store16Bit(register)), Read(None, ReadIntoMsb)]),
+            Read(PC, ReadIntoLsb),
+            vec([NoRead(Store16Bit(register)), Read(PC, ReadIntoMsb)]),
         )
     }
 
@@ -153,7 +153,7 @@ mod opcodes {
                     address: Register16Bit::SP,
                     value: register.get_lsb(),
                 }),
-                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(Some(register))),
+                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(register)),
             ]),
         )
     }
@@ -168,11 +168,8 @@ mod opcodes {
 
     pub fn pop_rr(register: Register16Bit) -> Instructions {
         (
-            Read(Some(Register16Bit::SP), PopStackIntoLsb),
-            vec([
-                NoRead(Store16Bit(register)),
-                Read(Some(Register16Bit::SP), PopStackIntoMsb),
-            ]),
+            Read(SP, PopStackIntoLsb),
+            vec([NoRead(Store16Bit(register)), Read(SP, PopStackIntoMsb)]),
         )
     }
 
@@ -222,12 +219,12 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x1d => dec_r(E),
         0x1e => ld_r_n(E),
         0x16 => ld_r_n(D),
-        0x1a => (Read(Some(DE), ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
+        0x1a => (Read(DE, ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
         // When there is a jump we have to put a Nop even if the condition will be true
         // or the next opcode will be fetched with the wrong pc
         0x20 => (
             Read(
-                None,
+                PC,
                 RelativeJump(Some(Condition {
                     flag: Flag::Z,
                     not: true,
@@ -262,28 +259,28 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),
         0xc9 => (
-            Read(Some(SP), PopStackIntoLsb),
+            Read(SP, PopStackIntoLsb),
             vec([
                 NoRead(Nop),
                 NoRead(Store16Bit(Register16Bit::PC)),
-                Read(Some(SP), PopStackIntoMsb),
+                Read(SP, PopStackIntoMsb),
             ]),
         ),
         0xcb => (NoRead(Nop), Default::default()),
         0xcd => (
-            Read(None, ReadIntoLsb),
+            Read(PC, ReadIntoLsb),
             vec([
                 NoRead(Nop),
                 NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc),
-                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(None)),
+                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(PC)),
                 NoRead(DecStackPointer),
-                Read(None, ReadIntoMsb),
+                Read(PC, ReadIntoMsb),
             ]),
         ),
         0xd1 => pop_rr(DE),
         0xd5 => push_rr(DE),
         0xe0 => (
-            Read(None, ReadIntoLsb),
+            Read(PC, ReadIntoLsb),
             vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
         ),
         0xe1 => pop_rr(HL),
