@@ -306,7 +306,6 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
 
 pub struct State {
     pub instruction_register: Instructions,
-    pub pc: u16,
     pub memory: [u8; 0x10000],
 }
 
@@ -314,7 +313,6 @@ impl Default for State {
     fn default() -> Self {
         Self {
             instruction_register: Default::default(),
-            pc: Default::default(),
             memory: [0; 0x10000],
         }
     }
@@ -342,10 +340,6 @@ impl<'a> WriteOnlyState<'a> {
         if let Some(next_inst) = self.0.instruction_register.1.pop() {
             self.0.instruction_register.0 = next_inst;
         }
-    }
-
-    pub fn set_pc(&mut self, pc: u16) {
-        self.0.pc = pc;
     }
 
     pub fn write(&mut self, address: u16, value: u8) {

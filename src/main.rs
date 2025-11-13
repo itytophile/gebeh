@@ -64,6 +64,7 @@ struct PipelineExecutor {
     h_flag: bool,
     c_flag: bool,
     is_cb_mode: bool,
+    pc: u16,
 }
 
 impl PipelineExecutor {
@@ -93,30 +94,25 @@ impl PipelineExecutor {
         }
     }
 
-    fn get_16bit_register(&self, register: Register16Bit, pc: u16) -> u16 {
+    fn get_16bit_register(&self, register: Register16Bit) -> u16 {
         match register {
             Register16Bit::AF => u16::from(self.a) << 8 | u16::from(self.get_flag_bits()),
             Register16Bit::BC => u16::from(self.b) << 8 | u16::from(self.c),
             Register16Bit::DE => u16::from(self.d) << 8 | u16::from(self.e),
             Register16Bit::HL => u16::from(self.h) << 8 | u16::from(self.l),
             Register16Bit::SP => self.sp,
-            Register16Bit::PC => pc,
+            Register16Bit::PC => self.pc,
         }
     }
 
-    fn set_16bit_register(
-        &mut self,
-        register: Register16Bit,
-        value: u16,
-        mut state: WriteOnlyState,
-    ) {
+    fn set_16bit_register(&mut self, register: Register16Bit, value: u16) {
         match register {
             Register16Bit::SP => {
                 self.sp = value;
                 return;
             }
             Register16Bit::PC => {
-                state.set_pc(value);
+                self.pc = value;
                 return;
             }
             _ => {}
@@ -142,12 +138,7 @@ impl PipelineExecutor {
         }
     }
 
-    fn execute_instruction(
-        &mut self,
-        pc: u16,
-        mut state: WriteOnlyState,
-        inst: AfterReadInstruction,
-    ) {
+    fn execute_instruction(&mut self, mut state: WriteOnlyState, inst: AfterReadInstruction) {
         println!("Executing {inst:?}");
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
@@ -185,7 +176,7 @@ impl PipelineExecutor {
                 *self.get_8bit_register_mut(register) = self.lsb;
             }
             NoRead(Store16Bit(register)) => {
-                self.set_16bit_register(register, u16::from_be_bytes([self.msb, self.lsb]), state);
+                self.set_16bit_register(register, u16::from_be_bytes([self.msb, self.lsb]));
             }
             NoRead(Xor(register)) => {
                 self.a ^= self.get_8bit_register(register);
@@ -195,12 +186,12 @@ impl PipelineExecutor {
                 self.c_flag = false;
             }
             NoRead(LoadToAddressHlFromADec) => {
-                let hl = self.get_16bit_register(Register16Bit::HL, pc);
+                let hl = self.get_16bit_register(Register16Bit::HL);
                 state.write(hl, self.a);
                 [self.h, self.l] = hl.wrapping_sub(1).to_be_bytes();
             }
             NoRead(LoadToAddressHlFromAInc) => {
-                let hl = self.get_16bit_register(Register16Bit::HL, pc);
+                let hl = self.get_16bit_register(Register16Bit::HL);
                 state.write(hl, self.a);
                 [self.h, self.l] = hl.wrapping_add(1).to_be_bytes();
             }
@@ -210,7 +201,7 @@ impl PipelineExecutor {
                 self.h_flag = true;
             }
             NoRead(OffsetPc) => {
-                state.set_pc((pc as i16).wrapping_add(i16::from(self.lsb as i8)) as u16);
+                self.pc = (self.pc as i16).wrapping_add(i16::from(self.lsb as i8)) as u16;
             }
             NoRead(LoadFromAccumulator(register)) => {
                 state.write(
@@ -234,13 +225,12 @@ impl PipelineExecutor {
             NoRead(Inc16Bit(register)) => {
                 self.set_16bit_register(
                     register,
-                    self.get_16bit_register(register, pc).wrapping_sub(1),
-                    state,
+                    self.get_16bit_register(register).wrapping_sub(1),
                 );
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {
                 state.write(
-                    self.get_16bit_register(address, pc),
+                    self.get_16bit_register(address),
                     self.get_8bit_register(value),
                 );
             }
@@ -248,15 +238,12 @@ impl PipelineExecutor {
                 self.sp = self.sp.wrapping_sub(1);
             }
             NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(register)) => {
-                state.write(
-                    self.sp,
-                    self.get_16bit_register(register, pc).to_be_bytes()[0],
-                );
+                state.write(self.sp, self.get_16bit_register(register).to_be_bytes()[0]);
                 self.sp = self.sp.wrapping_sub(1);
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
-                state.write(self.sp, pc.to_be_bytes()[1]);
-                state.set_pc(u16::from_be_bytes([self.msb, self.lsb]));
+                state.write(self.sp, self.pc.to_be_bytes()[1]);
+                self.pc = u16::from_be_bytes([self.msb, self.lsb]);
             }
             NoRead(Load { to, from }) => {
                 *self.get_8bit_register_mut(to) = self.get_8bit_register(from);
@@ -295,8 +282,7 @@ impl StateMachine for PipelineExecutor {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         // we load the next opcode if there is only one instruction left in the pipeline
         let should_load_next_opcode = state.instruction_register.1.is_empty();
-        let pc = state.pc;
-        let opcode = state.memory[usize::from(pc)];
+        let opcode = state.memory[usize::from(self.pc)];
 
         let inst = state.instruction_register.0;
         // if it is the last instruction then the opcode fetcher will override the instruction
@@ -308,7 +294,7 @@ impl StateMachine for PipelineExecutor {
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(register, read) => AfterReadInstruction::Read(
-                state.memory[usize::from(self.get_16bit_register(register, pc))],
+                state.memory[usize::from(self.get_16bit_register(register))],
                 read,
             ),
         };
@@ -318,18 +304,20 @@ impl StateMachine for PipelineExecutor {
                 state.pipeline_pop_front();
             }
             if should_increment_pc {
-                state.set_pc(pc + 1);
+                self.pc = self.pc.wrapping_add(1);
             }
 
+            // parallel opcode fetching logic
             // this code is never conflicting with a potential pc write during the execution, trust me
             if should_load_next_opcode {
-                println!("Read opcode at ${pc:04x} (0x{opcode:02x})");
+                println!("Read opcode at ${:04x} (0x{opcode:02x})", self.pc);
                 state.set_instruction_register(get_instructions(opcode, self.is_cb_mode));
                 self.is_cb_mode = opcode == 0xcb;
-                state.set_pc(pc + 1);
+                self.pc = self.pc.wrapping_add(1);
             }
 
-            self.execute_instruction(pc, state, inst);
+            // actual execution
+            self.execute_instruction(state, inst);
         }
     }
 }
