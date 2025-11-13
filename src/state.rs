@@ -81,6 +81,7 @@ pub enum NoReadInstruction {
         to: Register8Bit,
         from: Register8Bit,
     },
+    Rl(Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -148,6 +149,14 @@ mod opcodes {
                 NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(Some(register))),
             ]),
         )
+    }
+
+    pub fn bit_b_r(bit: u8, register: Register8Bit) -> Instructions {
+        (NoRead(Bit(bit, register)), Default::default())
+    }
+
+    pub fn rl_r(register: Register8Bit) -> Instructions {
+        (NoRead(Rl(register)), Default::default())
     }
 }
 
@@ -237,11 +246,9 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
 }
 
 fn get_instructions_cb_mode(opcode: u8) -> Instructions {
-    use Instruction::*;
-    use NoReadInstruction::*;
-
     match opcode {
-        0x7c => (NoRead(Bit(7, Register8Bit::H)), Default::default()),
+        0x7c => bit_b_r(7, Register8Bit::H),
+        0x11 => rl_r(Register8Bit::C),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
 }

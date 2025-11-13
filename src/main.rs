@@ -240,6 +240,16 @@ impl PipelineExecutor {
             NoRead(Load { to, from }) => {
                 *self.get_8bit_register_mut(to) = self.get_8bit_register(from);
             }
+            NoRead(Rl(register)) => {
+                let register_value = self.get_8bit_register(register);
+                let new_carry = (register_value & 0x80) != 0;
+                let new_value = (register_value << 1) | (self.c_flag as u8);
+                *self.get_8bit_register_mut(register) = new_value;
+                self.z_flag = new_value == 0;
+                self.n_flag = false;
+                self.h_flag = false;
+                self.c_flag = new_carry;
+            }
         }
     }
 }
