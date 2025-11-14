@@ -139,7 +139,6 @@ impl PipelineExecutor {
     }
 
     fn execute_instruction(&mut self, mut state: WriteOnlyState, inst: AfterReadInstruction) {
-        println!("Executing {inst:?}");
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
@@ -302,6 +301,8 @@ impl StateMachine for PipelineExecutor {
             Instruction::Read(ReadAddress::Register(Register16Bit::PC), _)
         );
 
+        print!("Executing {inst:?}");
+
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, read) => AfterReadInstruction::Read(
@@ -313,6 +314,12 @@ impl StateMachine for PipelineExecutor {
                 read,
             ),
         };
+
+        if let AfterReadInstruction::Read(value, _) = inst {
+            print!(", read: 0x{value:x}");
+        }
+
+        println!();
 
         move |mut state| {
             if should_pop {
