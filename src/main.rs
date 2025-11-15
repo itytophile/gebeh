@@ -1,4 +1,5 @@
 use arrayvec::ArrayVec;
+use my_lib::HeapSize;
 
 use crate::state::{
     AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, ReadAddress,
@@ -47,7 +48,7 @@ trait StateMachine {
     }
 }
 
-#[derive(Default)]
+#[derive(HeapSize, Default)]
 struct PipelineExecutor {
     sp: u16,
     lsb: u8,

@@ -1,3 +1,6 @@
+[workspace]
+members = ["macros", "my-lib"]
+
 [package]
 name = "testouille-emulator-future"
 version = "0.1.0"
@@ -6,3 +9,4 @@ edition = "2024"
 [dependencies]
 arrayvec = "0.7.6"
 futures-util = "0.3.31"
+my-lib = { path = "./my-lib" }
