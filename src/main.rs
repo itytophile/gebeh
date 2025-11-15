@@ -1,33 +1,20 @@
 use arrayvec::ArrayVec;
 use my_lib::HeapSize;
 
-use crate::{opcodes::{
-    AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
-    ReadAddress, ReadInstruction, Register8Bit, Register16Bit, 
-    get_instructions,
-}, state::{State, WriteOnlyState}};
-mod opcodes;
-mod ppu;
-mod gpu;
+use crate::{
+    opcodes::{
+        AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
+        ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
+    },
+    state::{MmuWrite, State, WriteOnlyState},
+};
 mod dma;
+mod gpu;
 mod hardware;
 mod ic;
+mod opcodes;
+mod ppu;
 mod state;
-
-pub const DMG_BOOT: [u8; 256] = [
-    49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
-    12, 62, 243, 50, 226, 12, 62, 119, 50, 226, 17, 4, 1, 33, 16, 128, 26, 205, 184, 0, 26, 203,
-    55, 205, 184, 0, 19, 123, 254, 52, 32, 240, 17, 204, 0, 6, 8, 26, 19, 34, 35, 5, 32, 249, 33,
-    4, 153, 1, 12, 1, 205, 177, 0, 62, 25, 119, 33, 36, 153, 14, 12, 205, 177, 0, 62, 145, 224, 64,
-    6, 16, 17, 212, 0, 120, 224, 67, 5, 123, 254, 216, 40, 4, 26, 224, 71, 19, 14, 28, 205, 167, 0,
-    175, 144, 224, 67, 5, 14, 28, 205, 167, 0, 175, 176, 32, 224, 224, 67, 62, 131, 205, 159, 0,
-    14, 39, 205, 167, 0, 62, 193, 205, 159, 0, 17, 138, 1, 240, 68, 254, 144, 32, 250, 27, 122,
-    179, 32, 245, 24, 73, 14, 19, 226, 12, 62, 135, 226, 201, 240, 68, 254, 144, 32, 250, 13, 32,
-    247, 201, 120, 34, 4, 13, 32, 250, 201, 71, 14, 4, 175, 197, 203, 16, 23, 193, 203, 16, 23, 13,
-    32, 245, 34, 35, 34, 35, 201, 60, 66, 185, 165, 185, 165, 66, 60, 0, 84, 168, 252, 66, 79, 79,
-    84, 73, 88, 46, 68, 77, 71, 32, 118, 49, 46, 50, 0, 62, 255, 198, 1, 11, 30, 216, 33, 77, 1, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
-];
 
 fn main() {
     // let rom =
@@ -35,7 +22,6 @@ fn main() {
     //         .unwrap();
 
     let mut state = State::default();
-    state.memory[0..DMG_BOOT.len()].copy_from_slice(&DMG_BOOT);
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default();
 
@@ -154,7 +140,7 @@ impl PipelineExecutorWriteOnce<'_> {
 
     fn execute_instruction(
         &mut self,
-        mut state: WriteOnlyState,
+        mut mmu: MmuWrite,
         inst: AfterReadInstruction,
     ) -> PipelineAction {
         use AfterReadInstruction::*;
@@ -205,12 +191,12 @@ impl PipelineExecutorWriteOnce<'_> {
             }
             NoRead(LoadToAddressHlFromADec) => {
                 let hl = self.get_16bit_register(Register16Bit::HL);
-                state.write(hl, self.a.get());
+                mmu.write(hl, self.a.get());
                 [*self.h.get_mut(), *self.l.get_mut()] = hl.wrapping_sub(1).to_be_bytes();
             }
             NoRead(LoadToAddressHlFromAInc) => {
                 let hl = self.get_16bit_register(Register16Bit::HL);
-                state.write(hl, self.a.get());
+                mmu.write(hl, self.a.get());
                 [*self.h.get_mut(), *self.l.get_mut()] = hl.wrapping_add(1).to_be_bytes();
             }
             NoRead(Bit(bit, register)) => {
@@ -223,7 +209,7 @@ impl PipelineExecutorWriteOnce<'_> {
                     (self.pc.get() as i16).wrapping_add(i16::from(self.lsb.get() as i8)) as u16;
             }
             NoRead(LoadFromAccumulator(register)) => {
-                state.write(
+                mmu.write(
                     0xff00
                         | u16::from(
                             register
@@ -248,7 +234,7 @@ impl PipelineExecutorWriteOnce<'_> {
                 );
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {
-                state.write(
+                mmu.write(
                     self.get_16bit_register(address),
                     self.get_8bit_register(value),
                 );
@@ -257,14 +243,14 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.sp.get_mut() = self.sp.get().wrapping_sub(1);
             }
             NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(register)) => {
-                state.write(
+                mmu.write(
                     self.sp.get(),
                     self.get_16bit_register(register).to_be_bytes()[0],
                 );
                 *self.sp.get_mut() = self.sp.get().wrapping_sub(1);
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
-                state.write(self.sp.get(), self.pc.get().to_be_bytes()[1]);
+                mmu.write(self.sp.get(), self.pc.get().to_be_bytes()[1]);
                 *self.pc.get_mut() = u16::from_be_bytes([self.msb.get(), self.lsb.get()]);
             }
             NoRead(Load { to, from }) => {
@@ -304,7 +290,7 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.c_flag.get_mut() = carry;
             }
             NoRead(LoadToCachedAddressFromA) => {
-                state.write(
+                mmu.write(
                     u16::from_be_bytes([self.msb.get(), self.lsb.get()]),
                     self.a.get(),
                 );
@@ -330,7 +316,8 @@ impl StateMachine for PipelineExecutor {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         // we load the next opcode if there is only one instruction left in the pipeline
         let should_load_next_opcode = self.instruction_register.1.is_empty();
-        let opcode = state.memory[usize::from(self.pc)];
+        let mmu = state.mmu();
+        let opcode = mmu[self.pc];
 
         let inst = self.instruction_register.0;
 
@@ -345,14 +332,12 @@ impl StateMachine for PipelineExecutor {
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
-            Instruction::Read(ReadAddress::Accumulator, read) => AfterReadInstruction::Read(
-                state.memory[usize::from(0xff00 | (write_once.lsb.get() as u16))],
-                read,
-            ),
-            Instruction::Read(ReadAddress::Register(register), read) => AfterReadInstruction::Read(
-                state.memory[usize::from(write_once.get_16bit_register(register))],
-                read,
-            ),
+            Instruction::Read(ReadAddress::Accumulator, read) => {
+                AfterReadInstruction::Read(mmu[0xff00 | (write_once.lsb.get() as u16)], read)
+            }
+            Instruction::Read(ReadAddress::Register(register), read) => {
+                AfterReadInstruction::Read(mmu[write_once.get_16bit_register(register)], read)
+            }
         };
 
         if let AfterReadInstruction::Read(value, _) = inst {
@@ -361,12 +346,12 @@ impl StateMachine for PipelineExecutor {
 
         println!();
 
-        move |state| {
+        move |mut state| {
             if should_increment_pc {
                 *write_once.pc.get_mut() = write_once.pc.get().wrapping_add(1);
             }
 
-            match write_once.execute_instruction(state, inst) {
+            match write_once.execute_instruction(state.mmu(), inst) {
                 PipelineAction::Pop => write_once.pipeline_pop_front(),
                 PipelineAction::Replace(instructions) => {
                     *write_once.instruction_register.get_mut() = instructions

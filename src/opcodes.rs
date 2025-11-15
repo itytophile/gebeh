@@ -359,4 +359,3 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
 // une instruction prend plusieurs m-cycles
 // l'opcode détermine quel instruction exécuter
 // À l'exécution du dernier M-cycle d'une instruction, le prochain opcode est chargé en parallèle
-

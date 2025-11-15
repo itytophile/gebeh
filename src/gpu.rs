@@ -282,11 +282,7 @@ impl LcdControl {
     }
 
     fn get_spsize(self) -> u8 {
-        if self.contains(Self::OBJ_SIZE) {
-            16
-        } else {
-            8
-        }
+        if self.contains(Self::OBJ_SIZE) { 16 } else { 8 }
     }
 }
 
@@ -454,11 +450,7 @@ impl Color {
 fn color_adjust(v: u8) -> u32 {
     let v = u32::from(v);
 
-    if v >= 0x10 {
-        0xff - (0x1f - v)
-    } else {
-        v
-    }
+    if v >= 0x10 { 0xff - (0x1f - v) } else { v }
 }
 
 impl From<Color> for u32 {
@@ -787,11 +779,7 @@ impl Gpu {
             let ti = oam[2];
 
             let ti = if self.lcd_control.get_spsize() == 16 {
-                if tyoff >= 8 {
-                    ti | 1
-                } else {
-                    ti & 0xfe
-                }
+                if tyoff >= 8 { ti | 1 } else { ti & 0xfe }
             } else {
                 ti
             };
