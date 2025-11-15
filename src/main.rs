@@ -7,6 +7,11 @@ use crate::state::{
     get_instructions,
 };
 mod state;
+mod ppu;
+mod gpu;
+mod dma;
+mod hardware;
+mod ic;
 
 pub const DMG_BOOT: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,

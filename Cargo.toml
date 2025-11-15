@@ -8,5 +8,6 @@ edition = "2024"
 
 [dependencies]
 arrayvec = "0.7.6"
+bitflags = "2.10.0"
 futures-util = "0.3.31"
 my-lib = { path = "./my-lib" }
