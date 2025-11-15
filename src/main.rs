@@ -367,8 +367,6 @@ impl StateMachine for PipelineExecutor {
                 }
             }
 
-            // parallel opcode fetching logic
-            // this code is never conflicting with a potential pc write during the execution, trust me
             if should_load_next_opcode {
                 println!(
                     "Read opcode at ${:04x} (0x{opcode:02x})",
