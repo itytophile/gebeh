@@ -1,6 +1,5 @@
 use core::convert::TryInto;
 
-use crate::dma::DmaRequest;
 use crate::hardware::{VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::{Ints, Irq};
 
@@ -104,90 +103,6 @@ impl Dmg {
             priority: attr & 0x80 != 0,
             vram_bank: vram_bank0,
         }
-    }
-
-    fn read_vram(&self, addr: u16, vram_bank0: &[u8; 0x2000]) -> u8 {
-        read_vram_bank(addr, vram_bank0)
-    }
-
-    fn write_vram(&mut self, addr: u16, v: u8, vram_bank0: &mut [u8; 0x2000]) {
-        write_vram_bank(addr, v, vram_bank0)
-    }
-
-    /// Read BGP register (0xff47)
-    fn read_bg_palette(&self) -> u8 {
-        println!("Read Bg palette");
-        from_palette(self.bg_palette)
-    }
-
-    /// Write BGP register (0xff47)
-    fn write_bg_palette(&mut self, v: u8) {
-        self.bg_palette = to_palette(v);
-        println!("Bg palette updated: {:?}", self.bg_palette);
-    }
-
-    /// Read OBP0 register (0xff48)
-    fn read_obj_palette0(&self) -> u8 {
-        println!("Read Object palette 0");
-        from_palette(self.obj_palette0)
-    }
-
-    /// Write OBP0 register (0xff48)
-    fn write_obj_palette0(&mut self, v: u8) {
-        self.obj_palette0 = to_palette(v);
-        println!("Object palette 0 updated: {:?}", self.obj_palette0);
-    }
-
-    /// Read OBP1 register (0xff49)
-    fn read_obj_palette1(&self) -> u8 {
-        println!("Read Object palette 1");
-        from_palette(self.obj_palette1)
-    }
-
-    /// Write OBP1 register (0xff49)
-    fn write_obj_palette1(&mut self, v: u8) {
-        self.obj_palette1 = to_palette(v);
-        println!("Object palette 1 updated: {:?}", self.obj_palette1);
-    }
-
-    /// Read VBK register (0xff4f)
-    fn read_vram_bank_select(&self) -> u8 {
-        panic!("Read VRAM bank select in DMG mode");
-    }
-
-    /// Write VBK register (0xff4f)
-    fn select_vram_bank(&mut self, _: u8) {
-        panic!("Write VRAM bank select in DMG mode");
-    }
-
-    /// Write BCPS/BGPI register (0xff68)
-    fn select_bg_color_palette(&mut self, _: u8) {
-        panic!("Select BG Color palette in DMG mode");
-    }
-
-    /// Read BCPD/BGPD register (0xff69)
-    fn read_bg_color_palette(&self) -> u8 {
-        panic!("Read BG Color palette in DMG mode");
-    }
-
-    /// Write BCPD/BGPD register (0xff69)
-    fn write_bg_color_palette(&mut self, _: u8) {
-        panic!("Write BG Color palette in DMG mode");
-    }
-
-    /// Write OCPS/OBPI register (0xff6a)
-    fn select_obj_color_palette(&mut self, _: u8) {
-        panic!("Select Obj Color palette in DMG mode");
-    }
-
-    /// Read OCPD/OBPD register (0xff6b)
-    fn read_obj_color_palette(&self) -> u8 {
-        panic!("Read Obj Color palette in DMG mode");
-    }
-
-    /// Write OCPD/OBPD register (0xff6b)
-    fn write_obj_color_palette(&mut self, _: u8) {
-        panic!("Write BG Color palette in DMG mode");
     }
 
     fn get_scanline_after_offset(
@@ -312,74 +227,12 @@ pub struct Gpu {
     pub draw_line: [DmgColor; VRAM_WIDTH as usize],
 }
 
-fn to_palette(p: u8) -> [DmgColor; 4] {
-    [
-        (p & 0x3).into(),
-        ((p >> 2) & 0x3).into(),
-        ((p >> 4) & 0x3).into(),
-        ((p >> 6) & 0x3).into(),
-    ]
-}
-
-fn from_palette(p: [DmgColor; 4]) -> u8 {
-    assert_eq!(p.len(), 4);
-
-    u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
-}
-
 pub struct MapAttribute<'a, C> {
     palette: [C; 4],
     vram_bank: &'a [u8; 0x2000],
     xflip: bool,
     yflip: bool,
     priority: bool,
-}
-
-struct ColorPalette {
-    cols: [[Color; 4]; 8],
-    index: usize,
-    auto_inc: bool,
-}
-
-impl ColorPalette {
-    fn new() -> Self {
-        Self {
-            cols: [[Color::rgb(); 4]; 8],
-            index: 0,
-            auto_inc: false,
-        }
-    }
-
-    fn select(&mut self, value: u8) {
-        self.auto_inc = value & 0x80 != 0;
-        self.index = usize::from(value) & 0x3f;
-    }
-
-    fn read(&self) -> u8 {
-        let idx = self.index / 8;
-        let off = self.index % 8;
-
-        if off % 2 == 0 {
-            self.cols[idx][off / 2].get_low()
-        } else {
-            self.cols[idx][off / 2].get_high()
-        }
-    }
-
-    fn write(&mut self, value: u8) {
-        let idx = self.index / 8;
-        let off = self.index % 8;
-
-        if off % 2 == 0 {
-            self.cols[idx][off / 2].set_low(value)
-        } else {
-            self.cols[idx][off / 2].set_high(value)
-        }
-
-        if self.auto_inc {
-            self.index = (self.index + 1) % 0x40;
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -400,48 +253,6 @@ pub enum Color {
 impl Default for Color {
     fn default() -> Self {
         Color::Dmg(DmgColor::default())
-    }
-}
-
-impl Color {
-    fn rgb() -> Self {
-        Color::Rgb(0, 0, 0)
-    }
-
-    fn set_low(&mut self, low: u8) {
-        match *self {
-            Color::Rgb(_, g, b) => {
-                let nr = low & 0x1f;
-                let ng = g & !0x7 | low >> 5;
-                *self = Color::Rgb(nr, ng, b);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn set_high(&mut self, high: u8) {
-        match *self {
-            Color::Rgb(r, g, _) => {
-                let ng = g & !0x18 | (high & 0x3) << 3;
-                let nb = (high >> 2) & 0x1f;
-                *self = Color::Rgb(r, ng, nb);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn get_low(&self) -> u8 {
-        match *self {
-            Color::Rgb(r, g, _) => (r & 0x1f) | (g & 0x7) << 5,
-            _ => unreachable!(),
-        }
-    }
-
-    fn get_high(&self) -> u8 {
-        match *self {
-            Color::Rgb(_, g, b) => ((g >> 3) & 0x3) | (b & 0x1f) << 2,
-            _ => unreachable!(),
-        }
     }
 }
 
@@ -515,8 +326,6 @@ impl From<u8> for DmgColor {
     }
 }
 
-pub type LineToDraw<C> = (u8, [C; VRAM_WIDTH as usize]);
-
 impl Default for Gpu {
     fn default() -> Self {
         Self {
@@ -545,6 +354,8 @@ impl Gpu {
         let clocks = self.clocks + time;
 
         let mut drawn_ly = None;
+        
+        println!("{clocks} {:?}", self.mode);
 
         let (clocks, mode) = match (self.mode, clocks) {
             (Mode::OamScan, 80..) => (clocks - 80, Mode::Drawing),
@@ -598,8 +409,6 @@ impl Gpu {
         if self.lcd_status.contains(LcdStatus::LYC_INT) && self.lyc == self.ly {
             irq.request |= Ints::LCD;
         }
-
-        let enter_hblank = self.mode != Mode::HBlank && mode == Mode::HBlank;
 
         self.clocks = clocks;
         self.mode = mode;
@@ -763,191 +572,6 @@ impl Gpu {
             }
         }
     }
-
-    /// Write CTRL register (0xff40)
-    pub(crate) fn write_ctrl(&mut self, value: u8, irq: &mut Irq) {
-        let value = LcdControl::from_bits_retain(value);
-
-        if !self.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
-            && value.contains(LcdControl::LCD_PPU_ENABLE)
-        {
-            println!("LCD enabled");
-            self.clocks = 0;
-            self.mode = Mode::HBlank;
-        } else if self.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
-            && !value.contains(LcdControl::LCD_PPU_ENABLE)
-        {
-            println!("LCD disabled");
-            self.mode = Mode::None;
-        }
-
-        self.lcd_control = value;
-
-        irq.request.remove(Ints::VBLANK);
-    }
-
-    /// Write STAT register (0xff41)
-    pub(crate) fn write_status(&mut self, value: u8) {
-        self.lcd_status = LcdStatus::from_bits_truncate(value);
-    }
-
-    // Read CTRL register (0xff40)
-    pub(crate) fn read_ctrl(&self) -> u8 {
-        self.lcd_control.bits()
-    }
-
-    // Write STAT register (0xff41)
-    pub(crate) fn read_status(&self) -> u8 {
-        self.lcd_status.bits() | u8::from(self.mode)
-    }
-
-    /// Read OAM region (0xfe00 - 0xfe9f)
-    pub(crate) fn read_oam(&self, addr: u16) -> u8 {
-        self.oam[usize::from(addr) - 0xfe00]
-    }
-
-    /// Write OAM region (0xfe00 - 0xfe9f)
-    pub(crate) fn write_oam(&mut self, addr: u16, v: u8) {
-        self.oam[usize::from(addr) - 0xfe00] = v;
-    }
-
-    /// Read SCY register (0xff42)
-    pub(crate) fn read_scy(&self) -> u8 {
-        self.scy
-    }
-
-    /// Write SCY register (0xff42)
-    pub(crate) fn write_scy(&mut self, v: u8) {
-        self.scy = v;
-    }
-
-    /// Read SCX register (0xff43)
-    pub(crate) fn read_scx(&self) -> u8 {
-        self.scx
-    }
-
-    /// Write SCX register (0xff43)
-    pub(crate) fn write_scx(&mut self, v: u8) {
-        self.scx = v;
-    }
-
-    /// Read LY register (0xff44)
-    pub(crate) fn read_ly(&self) -> u8 {
-        self.ly
-    }
-
-    /// Clear LY register (0xff44)
-    pub(crate) fn clear_ly(&mut self) {
-        self.ly = 0;
-    }
-
-    /// Read LYC register (0xff45)
-    pub(crate) fn read_lyc(&self) -> u8 {
-        self.lyc
-    }
-
-    /// Write LYC register (0xff45)
-    pub(crate) fn write_lyc(&mut self, v: u8) {
-        self.lyc = v;
-    }
-
-    /// Read WY register (0xff4a)
-    pub(crate) fn read_wy(&self) -> u8 {
-        self.wy
-    }
-
-    /// Write WY register (0xff4a)
-    pub(crate) fn write_wy(&mut self, v: u8) {
-        self.wy = v;
-    }
-
-    /// Read WX register (0xff4b)
-    pub(crate) fn read_wx(&self) -> u8 {
-        self.wx
-    }
-
-    /// Write WX register (0xff4b)
-    pub(crate) fn write_wx(&mut self, v: u8) {
-        self.wx = v;
-    }
-
-    /// Read BGP register (0xff47)
-    pub(crate) fn read_bg_palette(&self) -> u8 {
-        self.cgb_ext.read_bg_palette()
-    }
-
-    /// Write BGP register (0xff47)
-    pub(crate) fn write_bg_palette(&mut self, v: u8) {
-        self.cgb_ext.write_bg_palette(v)
-    }
-
-    /// Read OBP0 register (0xff48)
-    pub(crate) fn read_obj_palette0(&self) -> u8 {
-        self.cgb_ext.read_obj_palette0()
-    }
-
-    /// Write OBP0 register (0xff48)
-    pub(crate) fn write_obj_palette0(&mut self, v: u8) {
-        self.cgb_ext.write_obj_palette0(v)
-    }
-
-    /// Read OBP1 register (0xff49)
-    pub(crate) fn read_obj_palette1(&self) -> u8 {
-        self.cgb_ext.read_obj_palette1()
-    }
-
-    /// Write OBP1 register (0xff49)
-    pub(crate) fn write_obj_palette1(&mut self, v: u8) {
-        self.cgb_ext.write_obj_palette1(v)
-    }
-
-    /// Read VBK register (0xff4f)
-    pub(crate) fn read_vram_bank_select(&self) -> u8 {
-        self.cgb_ext.read_vram_bank_select()
-    }
-
-    /// Write VBK register (0xff4f)
-    pub(crate) fn select_vram_bank(&mut self, v: u8) {
-        self.cgb_ext.select_vram_bank(v)
-    }
-
-    /// Write BCPS/BGPI register (0xff68)
-    pub(crate) fn select_bg_color_palette(&mut self, v: u8) {
-        self.cgb_ext.select_bg_color_palette(v)
-    }
-
-    /// Read BCPD/BGPD register (0xff69)
-    pub(crate) fn read_bg_color_palette(&self) -> u8 {
-        self.cgb_ext.read_bg_color_palette()
-    }
-
-    /// Write BCPD/BGPD register (0xff69)
-    pub(crate) fn write_bg_color_palette(&mut self, v: u8) {
-        self.cgb_ext.write_bg_color_palette(v)
-    }
-
-    /// Write OCPS/OBPI register (0xff6a)
-    pub(crate) fn select_obj_color_palette(&mut self, v: u8) {
-        self.cgb_ext.select_obj_color_palette(v)
-    }
-
-    /// Read OCPD/OBPD register (0xff6b)
-    pub(crate) fn read_obj_color_palette(&self) -> u8 {
-        self.cgb_ext.read_obj_color_palette()
-    }
-
-    /// Write OCPD/OBPD register (0xff6b)
-    pub(crate) fn write_obj_color_palette(&mut self, v: u8) {
-        self.cgb_ext.write_obj_color_palette(v)
-    }
-
-    pub(crate) fn read_vram(&self, addr: u16) -> u8 {
-        self.cgb_ext.read_vram(addr, &self.vram)
-    }
-
-    pub(crate) fn write_vram(&mut self, addr: u16, v: u8) {
-        self.cgb_ext.write_vram(addr, v, &mut self.vram)
-    }
 }
 
 fn get_tile_base(tiles: u16, mapbase: u16, tile: Point, vram_bank0: &[u8; 0x2000]) -> u16 {
@@ -972,8 +596,4 @@ fn get_tile_line(tilebase: u16, y_offset: u8, bank: &[u8; 0x2000]) -> [u8; 2] {
 fn read_vram_bank(addr: u16, bank: &[u8; 0x2000]) -> u8 {
     let off = addr - 0x8000;
     bank[usize::from(off)]
-}
-fn write_vram_bank(addr: u16, value: u8, bank: &mut [u8; 0x2000]) {
-    let off = addr - 0x8000;
-    bank[usize::from(off)] = value;
 }

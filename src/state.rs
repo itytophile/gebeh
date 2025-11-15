@@ -1,4 +1,15 @@
-const RAM_START: u16 = 0x8000;
+const VIDEO_RAM: u16 = 0x8000;
+const EXTERNAL_RAM: u16 = 0xa000;
+const AUDIO: u16 = 0xff10;
+const WAVE: u16 = 0xff30;
+const LCD: u16 = 0xff40;
+const SCY: u16 = 0xff42;
+const SCX: u16 = 0xff43;
+const LY: u16 = 0xff44; // LCD Y
+const DMA: u16 = 0xff46;
+const BGP: u16 = 0xff47;
+const HRAM: u16 = 0xff80;
+const INTERRUPT: u16 = 0xffff;
 
 const DMG_BOOT: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
@@ -17,26 +28,36 @@ const DMG_BOOT: [u8; 256] = [
 
 pub struct State {
     boot_rom: &'static [u8],
-    ram: [u8; 0x10000 - RAM_START as usize],
+    video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     hram: [u8; (INTERRUPT - HRAM) as usize],
     dma_register: u8,
     dma_request: bool,
     bgp_register: u8,
     interrupt_enable: Ints,
     interrupt_flag: Ints,
+    audio: [u8; (WAVE - AUDIO) as usize],
+    scy: u8,
+    scx: u8,
+    lcd: u8,
+    ly: u8,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             boot_rom: &DMG_BOOT,
-            ram: [0; 0x10000 - RAM_START as usize],
+            video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
             hram: [0; (INTERRUPT - HRAM) as usize],
             dma_register: 0,
             dma_request: false,
             bgp_register: 0,
             interrupt_enable: Ints::empty(),
             interrupt_flag: Ints::empty(),
+            audio: [0; (WAVE - AUDIO) as usize],
+            scx: 0,
+            scy: 0,
+            lcd: 0,
+            ly: 0,
         }
     }
 }
@@ -82,18 +103,18 @@ impl<'a> WriteOnlyState<'a> {
 
 pub struct MmuRead<'a>(&'a State);
 
-const DMA: u16 = 0xff46;
-const BGP: u16 = 0xff47;
-const HRAM: u16 = 0xff80;
-const INTERRUPT: u16 = 0xffff;
-
 impl Index<u16> for MmuRead<'_> {
     type Output = u8;
 
     fn index(&self, index: u16) -> &Self::Output {
         match index {
-            0..RAM_START => self.0.boot_rom.get(usize::from(index)).unwrap_or(&0),
-            RAM_START..DMA => &self.0.ram[usize::from(index - RAM_START)],
+            0..VIDEO_RAM => self.0.boot_rom.get(usize::from(index)).unwrap_or(&0),
+            VIDEO_RAM..EXTERNAL_RAM => &self.0.video_ram[usize::from(index - VIDEO_RAM)],
+            AUDIO..WAVE => &self.0.audio[usize::from(index - AUDIO)],
+            LCD => &self.0.lcd,
+            SCY => &self.0.scy,
+            SCX => &self.0.scx,
+            LY => &self.0.ly,
             DMA => &self.0.dma_register,
             BGP => &self.0.bgp_register,
             HRAM..INTERRUPT => &self.0.hram[usize::from(index - HRAM)],
@@ -108,8 +129,13 @@ pub struct MmuWrite<'a>(&'a mut State);
 impl MmuWrite<'_> {
     pub fn write(&mut self, index: u16, value: u8) {
         match index {
-            0..RAM_START => panic!("Trying to write to ROM"),
-            RAM_START..DMA => self.0.ram[usize::from(index - RAM_START)] = value,
+            0..VIDEO_RAM => panic!("Trying to write to ROM"),
+            VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)] = value,
+            AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
+            LCD => self.0.lcd = value,
+            SCY => self.0.scy = value,
+            SCX => self.0.scx = value,
+            LY => {} // read only
             DMA => {
                 self.0.dma_register = value;
                 self.0.dma_request = true;
