@@ -2,7 +2,7 @@ const VIDEO_RAM: u16 = 0x8000;
 const EXTERNAL_RAM: u16 = 0xa000;
 const AUDIO: u16 = 0xff10;
 const WAVE: u16 = 0xff30;
-const LCD: u16 = 0xff40;
+const LCD_CONTROL: u16 = 0xff40;
 const SCY: u16 = 0xff42;
 const SCX: u16 = 0xff43;
 const LY: u16 = 0xff44; // LCD Y
@@ -27,19 +27,25 @@ const DMG_BOOT: [u8; 256] = [
 ];
 
 pub struct State {
-    boot_rom: &'static [u8],
-    video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-    hram: [u8; (INTERRUPT - HRAM) as usize],
-    dma_register: u8,
-    dma_request: bool,
-    bgp_register: u8,
-    interrupt_enable: Ints,
-    interrupt_flag: Ints,
-    audio: [u8; (WAVE - AUDIO) as usize],
-    scy: u8,
-    scx: u8,
-    lcd: u8,
-    ly: u8,
+    pub boot_rom: &'static [u8],
+    pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+    pub hram: [u8; (INTERRUPT - HRAM) as usize],
+    pub dma_register: u8,
+    pub dma_request: bool,
+    pub bgp_register: u8,
+    pub interrupt_enable: Ints,
+    pub interrupt_flag: Ints,
+    pub audio: [u8; (WAVE - AUDIO) as usize],
+    pub scy: u8,
+    pub scx: u8,
+    pub lcd_control: LcdControl,
+    pub ly: u8,
+}
+
+impl State {
+    pub fn mmu(&self) -> MmuRead<'_> {
+        MmuRead(self)
+    }
 }
 
 impl Default for State {
@@ -56,27 +62,13 @@ impl Default for State {
             audio: [0; (WAVE - AUDIO) as usize],
             scx: 0,
             scy: 0,
-            lcd: 0,
+            lcd_control: LcdControl::empty(),
             ly: 0,
         }
     }
 }
 
-impl State {
-    pub fn mmu(&self) -> MmuRead<'_> {
-        MmuRead(self)
-    }
-    pub fn interrupt_enable(&self) -> Ints {
-        self.interrupt_enable
-    }
-    pub fn interrupt_flag(&self) -> Ints {
-        self.interrupt_flag
-    }
-}
-
-use std::ops::Index;
-
-use crate::ic::Ints;
+use crate::{gpu::LcdControl, ic::Ints};
 
 pub struct WriteOnlyState<'a>(&'a mut State);
 
@@ -99,25 +91,26 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_if(&mut self, i: Ints) {
         self.0.interrupt_flag = i;
     }
+    pub fn set_ly(&mut self, value: u8) {
+        self.0.ly = value;
+    }
 }
 
 pub struct MmuRead<'a>(&'a State);
 
-impl Index<u16> for MmuRead<'_> {
-    type Output = u8;
-
-    fn index(&self, index: u16) -> &Self::Output {
+impl MmuRead<'_> {
+    pub fn read(&self, index: u16) -> u8 {
         match index {
-            0..VIDEO_RAM => self.0.boot_rom.get(usize::from(index)).unwrap_or(&0),
-            VIDEO_RAM..EXTERNAL_RAM => &self.0.video_ram[usize::from(index - VIDEO_RAM)],
-            AUDIO..WAVE => &self.0.audio[usize::from(index - AUDIO)],
-            LCD => &self.0.lcd,
-            SCY => &self.0.scy,
-            SCX => &self.0.scx,
-            LY => &self.0.ly,
-            DMA => &self.0.dma_register,
-            BGP => &self.0.bgp_register,
-            HRAM..INTERRUPT => &self.0.hram[usize::from(index - HRAM)],
+            0..VIDEO_RAM => self.0.boot_rom.get(usize::from(index)).copied().unwrap_or(0),
+            VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
+            AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
+            LCD_CONTROL => self.0.lcd_control.bits(),
+            SCY => self.0.scy,
+            SCX => self.0.scx,
+            LY => self.0.ly,
+            DMA => self.0.dma_register,
+            BGP => self.0.bgp_register,
+            HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)],
             INTERRUPT => todo!(),
             _ => todo!("{index:04x}"),
         }
@@ -132,7 +125,7 @@ impl MmuWrite<'_> {
             0..VIDEO_RAM => panic!("Trying to write to ROM"),
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)] = value,
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
-            LCD => self.0.lcd = value,
+            LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
             SCY => self.0.scy = value,
             SCX => self.0.scx = value,
             LY => {} // read only

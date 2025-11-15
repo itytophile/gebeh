@@ -2,6 +2,7 @@ use core::convert::TryInto;
 
 use crate::hardware::{VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::{Ints, Irq};
+use crate::state::WriteOnlyState;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
@@ -159,7 +160,7 @@ impl Dmg {
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
-    struct LcdControl: u8 {
+    pub struct LcdControl: u8 {
         const LCD_PPU_ENABLE = 1 << 7;
         const WINDOW_TILE_MAP = 1 << 6;
         const WINDOW_ENABLE = 1 << 5;
@@ -207,15 +208,10 @@ pub struct Gpu {
     lcd_status: LcdStatus,
     mode: Mode,
 
-    ly: u8,
     lyc: u8,
-    scy: u8,
-    scx: u8,
 
     wx: u8,
     wy: u8,
-
-    lcd_control: LcdControl,
 
     vram: [u8; 0x2000],
 
@@ -332,13 +328,9 @@ impl Default for Gpu {
             clocks: 0,
             lcd_status: LcdStatus::empty(),
             mode: Mode::None,
-            ly: 0,
             lyc: 0,
-            scy: 0,
-            scx: 0,
             wx: 0,
             wy: 0,
-            lcd_control: Default::default(),
 
             vram: [0; 0x2000],
 
@@ -350,17 +342,26 @@ impl Default for Gpu {
 }
 
 impl Gpu {
-    pub fn step(&mut self, time: usize, irq: &mut Irq) -> Option<u8> {
+    pub fn step(
+        &mut self,
+        time: usize,
+        mut irq: Irq,
+        mut ly: u8,
+        lcd_control: LcdControl,
+        scx: u8,
+        scy: u8,
+        mut state: WriteOnlyState,
+    ) -> Option<u8> {
         let clocks = self.clocks + time;
 
         let mut drawn_ly = None;
-        
+
         println!("{clocks} {:?}", self.mode);
 
         let (clocks, mode) = match (self.mode, clocks) {
             (Mode::OamScan, 80..) => (clocks - 80, Mode::Drawing),
             (Mode::Drawing, 172..) => {
-                drawn_ly = self.draw();
+                drawn_ly = self.draw(ly, lcd_control, scx, scy);
 
                 if self.lcd_status.contains(LcdStatus::HBLANK_INT) {
                     irq.request |= Ints::LCD
@@ -369,10 +370,10 @@ impl Gpu {
                 (clocks - 172, Mode::HBlank)
             }
             (Mode::HBlank, 204..) => {
-                self.ly += 1;
+                ly += 1;
 
                 // ly becomes 144 before vblank interrupt
-                if self.ly > 143 {
+                if ly > 143 {
                     irq.request |= Ints::VBLANK;
                     if self.lcd_status.contains(LcdStatus::VBLANK_INT) {
                         irq.request |= Ints::LCD
@@ -388,10 +389,10 @@ impl Gpu {
                 }
             }
             (Mode::VBlank, 456..) => {
-                self.ly += 1;
+                ly += 1;
 
-                if self.ly > 153 {
-                    self.ly = 0;
+                if ly > 153 {
+                    ly = 0;
 
                     if self.lcd_status.contains(LcdStatus::OAM_INT) {
                         irq.request |= Ints::LCD;
@@ -406,19 +407,22 @@ impl Gpu {
             (mode, clock) => (clock, mode),
         };
 
-        if self.lcd_status.contains(LcdStatus::LYC_INT) && self.lyc == self.ly {
+        if self.lcd_status.contains(LcdStatus::LYC_INT) && self.lyc == ly {
             irq.request |= Ints::LCD;
         }
 
         self.clocks = clocks;
         self.mode = mode;
+        state.set_ly(ly);
+        state.set_ie(irq.enable);
+        state.set_if(irq.request);
 
         drawn_ly
     }
 
     #[inline(never)]
-    fn draw(&mut self) -> Option<u8> {
-        if self.ly >= VRAM_HEIGHT {
+    fn draw(&mut self, ly: u8, lcd_control: LcdControl, scx: u8, scy: u8) -> Option<u8> {
+        if ly >= VRAM_HEIGHT {
             return None;
         }
 
@@ -426,62 +430,69 @@ impl Gpu {
 
         let mut bgbuf = [0u8; VRAM_WIDTH as usize];
 
-        if self.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-            self.when_bg_and_window_enable(&mut bgbuf);
+        if lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+            self.when_bg_and_window_enable(&mut bgbuf, scx, scy, ly, lcd_control);
             // https://gbdev.io/pandocs/LCDC.html#non-cgb-mode-dmg-sgb-and-cgb-in-compatibility-mode-bg-and-window-display
             // When Bit 0 [LcdControl::BG_AND_WINDOW_ENABLE] is cleared, both background and window become blank (white),
             // and the Window Display Bit [LcdControl::WINDOW_ENABLE] is ignored in that case.
             // Only objects may still be displayed (if enabled in Bit 1).
-            if self.lcd_control.contains(LcdControl::WINDOW_ENABLE) {
-                self.when_window_enable();
+            if lcd_control.contains(LcdControl::WINDOW_ENABLE) {
+                self.when_window_enable(ly, lcd_control);
             }
         }
 
-        if self.lcd_control.contains(LcdControl::OBJ_ENABLE) {
-            self.when_obj_enable(&bgbuf);
+        if lcd_control.contains(LcdControl::OBJ_ENABLE) {
+            self.when_obj_enable(&bgbuf, ly, lcd_control);
         }
 
-        Some(self.ly)
+        Some(ly)
     }
 
-    fn when_bg_and_window_enable(&mut self, bgbuf: &mut [u8; 160]) {
+    fn when_bg_and_window_enable(
+        &mut self,
+        bgbuf: &mut [u8; 160],
+        scx: u8,
+        scy: u8,
+        ly: u8,
+        lcd_control: LcdControl,
+    ) {
         self.cgb_ext.get_scanline_after_offset(
-            self.scx,
-            self.ly.wrapping_add(self.scy),
+            scx,
+            ly.wrapping_add(scy),
             &self.vram,
-            self.lcd_control.get_bg_and_window_tile_area(),
-            self.lcd_control.get_bgmap(),
+            lcd_control.get_bg_and_window_tile_area(),
+            lcd_control.get_bgmap(),
             &mut self.draw_line,
             Some(bgbuf),
         );
     }
 
-    fn when_window_enable(&mut self) {
-        if self.ly >= self.wy {
+    fn when_window_enable(&mut self, ly: u8, lcd_control: LcdControl) {
+        if ly >= self.wy {
             self.cgb_ext.get_scanline_after_offset(
                 self.wx.saturating_sub(7),
-                self.ly - self.wy,
+                ly - self.wy,
                 &self.vram,
-                self.lcd_control.get_bg_and_window_tile_area(),
-                self.lcd_control.get_winmap(),
+                lcd_control.get_bg_and_window_tile_area(),
+                lcd_control.get_winmap(),
                 &mut self.draw_line,
                 None,
             );
         }
     }
 
-    fn when_obj_enable(&mut self, bgbuf: &[u8; 160]) {
+    fn when_obj_enable(&mut self, bgbuf: &[u8; 160], ly: u8, lcd_control: LcdControl) {
         for oam in self.oam.chunks(4) {
             let ypos = oam[0];
 
-            if self.ly + 16 < ypos {
+            if ly + 16 < ypos {
                 // This sprite doesn't hit the current ly
                 continue;
             }
 
-            let tyoff = self.ly + 16 - ypos; // ly - (ypos - 16)
+            let tyoff = ly + 16 - ypos; // ly - (ypos - 16)
 
-            if tyoff >= self.lcd_control.get_spsize() {
+            if tyoff >= lcd_control.get_spsize() {
                 // This sprite doesn't hit the current ly
                 continue;
             }
@@ -489,14 +500,14 @@ impl Gpu {
             let attr = self.cgb_ext.get_sp_attr(oam[3], &self.vram);
 
             let tyoff = if attr.yflip {
-                self.lcd_control.get_spsize() - 1 - tyoff
+                lcd_control.get_spsize() - 1 - tyoff
             } else {
                 tyoff
             };
 
             let ti = oam[2];
 
-            let ti = if self.lcd_control.get_spsize() == 16 {
+            let ti = if lcd_control.get_spsize() == 16 {
                 if tyoff >= 8 { ti | 1 } else { ti & 0xfe }
             } else {
                 ti

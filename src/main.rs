@@ -318,7 +318,7 @@ impl StateMachine for PipelineExecutor {
         // we load the next opcode if there is only one instruction left in the pipeline
         let should_load_next_opcode = self.instruction_register.1.is_empty();
         let mmu = state.mmu();
-        let opcode = mmu[self.pc];
+        let opcode = mmu.read(self.pc);
 
         let inst = self.instruction_register.0;
 
@@ -334,10 +334,10 @@ impl StateMachine for PipelineExecutor {
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, read) => {
-                AfterReadInstruction::Read(mmu[0xff00 | (write_once.lsb.get() as u16)], read)
+                AfterReadInstruction::Read(mmu.read(0xff00 | (write_once.lsb.get() as u16)), read)
             }
             Instruction::Read(ReadAddress::Register(register), read) => {
-                AfterReadInstruction::Read(mmu[write_once.get_16bit_register(register)], read)
+                AfterReadInstruction::Read(mmu.read(write_once.get_16bit_register(register)), read)
             }
         };
 

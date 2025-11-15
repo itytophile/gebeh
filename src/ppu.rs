@@ -15,17 +15,26 @@ pub struct Ppu(Gpu);
 
 impl StateMachine for Ppu {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
-        let ie = state.interrupt_enable();
-        let ifl = state.interrupt_flag();
+        let ie = state.interrupt_enable;
+        let ifl = state.interrupt_flag;
+        let ly = state.ly;
+        let lcd_control = state.lcd_control;
+        let scx = state.scx;
+        let scy = state.scy;
 
-        move |mut state| {
-            let mut irq = Irq {
-                enable: ie,
-                request: ifl,
-            };
-            self.0.step(4, &mut irq);
-            state.set_ie(irq.enable);
-            state.set_if(irq.request);
+        move |state| {
+            self.0.step(
+                4,
+                Irq {
+                    enable: ie,
+                    request: ifl,
+                },
+                ly,
+                lcd_control,
+                scx,
+                scy,
+                state,
+            );
         }
     }
 }
