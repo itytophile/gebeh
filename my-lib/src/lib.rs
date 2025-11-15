@@ -14,3 +14,9 @@ impl<'a, T> WriteOnce<'a, T> {
         &mut *self.0
     }
 }
+
+impl<'a, T: Copy> WriteOnce<'a, T> {
+    pub fn get(&self) -> T {
+        *self.0
+    }
+}
