@@ -22,6 +22,8 @@ pub struct State {
     dma_register: u8,
     dma_request: bool,
     bgp_register: u8,
+    interrupt_enable: Ints,
+    interrupt_flag: Ints,
 }
 
 impl Default for State {
@@ -33,6 +35,8 @@ impl Default for State {
             dma_register: 0,
             dma_request: false,
             bgp_register: 0,
+            interrupt_enable: Ints::empty(),
+            interrupt_flag: Ints::empty(),
         }
     }
 }
@@ -41,9 +45,17 @@ impl State {
     pub fn mmu(&self) -> MmuRead<'_> {
         MmuRead(self)
     }
+    pub fn interrupt_enable(&self) -> Ints {
+        self.interrupt_enable
+    }
+    pub fn interrupt_flag(&self) -> Ints {
+        self.interrupt_flag
+    }
 }
 
 use std::ops::Index;
+
+use crate::ic::Ints;
 
 pub struct WriteOnlyState<'a>(&'a mut State);
 
@@ -59,6 +71,12 @@ impl<'a> WriteOnlyState<'a> {
     }
     pub fn mmu(&mut self) -> MmuWrite<'_> {
         MmuWrite(self.0)
+    }
+    pub fn set_ie(&mut self, i: Ints) {
+        self.0.interrupt_enable = i;
+    }
+    pub fn set_if(&mut self, i: Ints) {
+        self.0.interrupt_flag = i;
     }
 }
 
@@ -95,6 +113,7 @@ impl MmuWrite<'_> {
             DMA => {
                 self.0.dma_register = value;
                 self.0.dma_request = true;
+                todo!()
             }
             BGP => self.0.bgp_register = value,
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,

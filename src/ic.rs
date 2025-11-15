@@ -1,7 +1,7 @@
 /// Sharable handle for I/O devices to request/cancel interrupts
 #[derive(Default)]
 pub struct Irq {
-    enable: Ints,
+    pub enable: Ints,
     pub request: Ints,
 }
 

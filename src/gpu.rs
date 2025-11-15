@@ -306,8 +306,6 @@ pub struct Gpu {
 
     oam: [u8; 0xa0],
 
-    hdma: Hdma,
-
     pub cgb_ext: Dmg,
 
     // useful to keep the data here to avoid the CPU struct to catch some generic bounds
@@ -517,100 +515,10 @@ impl From<u8> for DmgColor {
     }
 }
 
-struct Hdma {
-    on: bool,
-    src_low: u8,
-    src_high: u8,
-    dst_low: u8,
-    dst_high: u8,
-    src_wip: u16,
-    dst_wip: u16,
-    len: u8,
-    hblank: bool,
-}
-
-impl Hdma {
-    fn new() -> Self {
-        Self {
-            on: false,
-            src_low: 0,
-            src_high: 0,
-            dst_low: 0,
-            dst_high: 0,
-            src_wip: 0,
-            dst_wip: 0,
-            len: 0,
-            hblank: false,
-        }
-    }
-
-    /// Write HDMA5 register (0xff55)
-    fn start(&mut self, value: u8) {
-        if self.on && self.hblank && value & 0x80 == 0 {
-            self.on = false;
-            self.hblank = false;
-
-            println!("Cancel HDMA transfer");
-        } else {
-            self.hblank = value & 0x80 != 0;
-            self.len = value & 0x7f;
-            self.src_wip = (u16::from(self.src_high) << 8 | u16::from(self.src_low)) & !0x000f;
-            self.dst_wip =
-                (u16::from(self.dst_high) << 8 | u16::from(self.dst_low)) & !0xe00f | 0x8000;
-            self.on = true;
-
-            println!(
-                "Start HDMA transfer: {:04x} -> {:04x} ({}) {}",
-                self.src_wip, self.dst_wip, self.len, self.hblank
-            );
-        }
-    }
-
-    /// Read HDMA5 register (0xff55)
-    fn status(&self) -> u8 {
-        self.len | if self.on { 0x80 } else { 0x00 }
-    }
-
-    fn run(&mut self, hblank: bool) -> Option<DmaRequest> {
-        if !self.on {
-            return None;
-        }
-
-        // H-blank mode runs only in hblank.
-        if self.hblank && !hblank {
-            return None;
-        }
-
-        let size = if self.hblank {
-            // H-blank mode copies 16 bytes.
-            0x10
-        } else {
-            // General mode copies all bytes at once.
-            (u16::from(self.len) + 1) * 0x10
-        };
-
-        println!(
-            "HDMA transfer: {:04x} -> {:04x} ({})",
-            self.src_wip, self.dst_wip, size
-        );
-
-        let req = DmaRequest::new(self.src_wip, self.dst_wip, size);
-
-        self.src_wip += size;
-        self.dst_wip += size;
-        let (rem, of) = self.len.overflowing_sub(1);
-
-        self.len = if self.hblank { rem } else { 0xff };
-        self.on = if self.hblank { !of } else { false };
-
-        Some(req)
-    }
-}
-
 pub type LineToDraw<C> = (u8, [C; VRAM_WIDTH as usize]);
 
-impl Gpu {
-    pub fn new() -> Self {
+impl Default for Gpu {
+    fn default() -> Self {
         Self {
             clocks: 0,
             lcd_status: LcdStatus::empty(),
@@ -626,13 +534,14 @@ impl Gpu {
             vram: [0; 0x2000],
 
             oam: [0; 0xa0],
-            hdma: Hdma::new(),
             cgb_ext: Default::default(),
             draw_line: [Default::default(); VRAM_WIDTH as usize],
         }
     }
+}
 
-    pub fn step(&mut self, time: usize, irq: &mut Irq) -> (Option<DmaRequest>, Option<u8>) {
+impl Gpu {
+    pub fn step(&mut self, time: usize, irq: &mut Irq) -> Option<u8> {
         let clocks = self.clocks + time;
 
         let mut drawn_ly = None;
@@ -695,7 +604,7 @@ impl Gpu {
         self.clocks = clocks;
         self.mode = mode;
 
-        (self.hdma.run(enter_hblank), drawn_ly)
+        drawn_ly
     }
 
     #[inline(never)]
@@ -960,56 +869,6 @@ impl Gpu {
     /// Write WX register (0xff4b)
     pub(crate) fn write_wx(&mut self, v: u8) {
         self.wx = v;
-    }
-
-    /// Read HDMA1 register (0xff51)
-    pub(crate) fn read_hdma_src_high(&self) -> u8 {
-        self.hdma.src_high
-    }
-
-    /// Write HDMA1 register (0xff51)
-    pub(crate) fn write_hdma_src_high(&mut self, v: u8) {
-        self.hdma.src_high = v;
-    }
-
-    /// Read HDMA2 register (0xff52)
-    pub(crate) fn read_hdma_src_low(&self) -> u8 {
-        self.hdma.src_low
-    }
-
-    /// Write HDMA2 register (0xff52)
-    pub(crate) fn write_hdma_src_low(&mut self, v: u8) {
-        self.hdma.src_low = v;
-    }
-
-    /// Read HDMA3 register (0xff53)
-    pub(crate) fn read_hdma_dst_high(&self) -> u8 {
-        self.hdma.dst_high
-    }
-
-    /// Write HDMA3 register (0xff53)
-    pub(crate) fn write_hdma_dst_high(&mut self, v: u8) {
-        self.hdma.dst_high = v;
-    }
-
-    /// Read HDMA4 register (0xff54)
-    pub(crate) fn read_hdma_dst_low(&self) -> u8 {
-        self.hdma.dst_low
-    }
-
-    /// Write HDMA4 register (0xff54)
-    pub(crate) fn write_hdma_dst_low(&mut self, v: u8) {
-        self.hdma.dst_low = v;
-    }
-
-    /// Read HDMA5 register (0xff55)
-    pub(crate) fn read_hdma_start(&self) -> u8 {
-        self.hdma.status()
-    }
-
-    /// Write HDMA5 register (0xff55)
-    pub(crate) fn write_hdma_start(&mut self, v: u8) {
-        self.hdma.start(v);
     }
 
     /// Read BGP register (0xff47)

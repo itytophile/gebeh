@@ -6,6 +6,7 @@ use crate::{
         AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
         ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
     },
+    ppu::Ppu,
     state::{MmuWrite, State, WriteOnlyState},
 };
 mod dma;
@@ -23,7 +24,7 @@ fn main() {
 
     let mut state = State::default();
     // the machine should not be affected by the composition order
-    let mut machine = PipelineExecutor::default();
+    let mut machine = PipelineExecutor::default().compose(Ppu::default());
 
     loop {
         machine.execute(&state)(WriteOnlyState::new(&mut state));
