@@ -54,247 +54,6 @@ pub struct Point {
     y: u8,
 }
 
-pub trait CgbExt: Default {
-    type Color: Default + Copy;
-
-    fn get_sp_attr<'a>(
-        &'a self,
-        attr: u8,
-        vram_bank0: &'a [u8; 0x2000],
-    ) -> MapAttribute<'a, Self::Color>;
-
-    /// Read VRAM region (0x8000 - 0x9fff)
-    fn read_vram(&self, addr: u16, vram_bank0: &[u8; 0x2000]) -> u8;
-
-    /// Write VRAM region (0x8000 - 0x9fff)
-    fn write_vram(&mut self, addr: u16, v: u8, vram_bank0: &mut [u8; 0x2000]);
-
-    /// Read BGP register (0xff47)
-    fn read_bg_palette(&self) -> u8;
-
-    /// Write BGP register (0xff47)
-    fn write_bg_palette(&mut self, v: u8);
-
-    /// Read OBP0 register (0xff48)
-    fn read_obj_palette0(&self) -> u8;
-
-    /// Write OBP0 register (0xff48)
-    fn write_obj_palette0(&mut self, v: u8);
-
-    /// Read OBP1 register (0xff49)
-    fn read_obj_palette1(&self) -> u8;
-
-    /// Write OBP1 register (0xff49)
-    fn write_obj_palette1(&mut self, v: u8);
-
-    /// Read VBK register (0xff4f)
-    fn read_vram_bank_select(&self) -> u8;
-
-    /// Write VBK register (0xff4f)
-    fn select_vram_bank(&mut self, v: u8);
-
-    /// Write BCPS/BGPI register (0xff68)
-    fn select_bg_color_palette(&mut self, v: u8);
-
-    /// Read BCPD/BGPD register (0xff69)
-    fn read_bg_color_palette(&self) -> u8;
-
-    /// Write BCPD/BGPD register (0xff69)
-    fn write_bg_color_palette(&mut self, v: u8);
-
-    /// Write OCPS/OBPI register (0xff6a)
-    fn select_obj_color_palette(&mut self, v: u8);
-
-    /// Read OCPD/OBPD register (0xff6b)
-    fn read_obj_color_palette(&self) -> u8;
-
-    /// Write OCPD/OBPD register (0xff6b)
-    fn write_obj_color_palette(&mut self, v: u8);
-
-    fn get_scanline_after_offset(
-        &self,
-        scx: u8,
-        y: u8,
-        vram_bank0: &[u8; 0x2000],
-        tiles: u16,
-        mapbase: u16,
-        buf: &mut [Self::Color; VRAM_WIDTH as usize],
-        bgbuf: Option<&mut [u8; VRAM_WIDTH as usize]>,
-    );
-}
-
-pub struct GpuCgbExtension {
-    vram: [u8; 0x2000],
-    vram_select: u8,
-    bg_color_palette: ColorPalette,
-    obj_color_palette: ColorPalette,
-}
-
-impl Default for GpuCgbExtension {
-    fn default() -> Self {
-        Self {
-            vram: [0; 0x2000],
-            bg_color_palette: ColorPalette::new(),
-            obj_color_palette: ColorPalette::new(),
-            vram_select: 0,
-        }
-    }
-}
-
-impl CgbExt for GpuCgbExtension {
-    type Color = Color;
-
-    fn get_sp_attr<'a>(
-        &'a self,
-        attr: u8,
-        vram_bank0: &'a [u8; 0x2000],
-    ) -> MapAttribute<'a, Self::Color> {
-        MapAttribute {
-            palette: self.obj_color_palette.cols[usize::from(attr & 0x7)],
-            vram_bank: if (attr >> 3) & 1 == 0 {
-                vram_bank0
-            } else {
-                &self.vram
-            },
-            xflip: attr & 0x20 != 0,
-            yflip: attr & 0x40 != 0,
-            priority: attr & 0x80 != 0,
-        }
-    }
-
-    fn read_vram(&self, addr: u16, vram_bank0: &[u8; 0x2000]) -> u8 {
-        read_vram_bank(
-            addr,
-            if self.vram_select == 0 {
-                vram_bank0
-            } else {
-                &self.vram
-            },
-        )
-    }
-
-    fn write_vram(&mut self, addr: u16, v: u8, vram_bank0: &mut [u8; 0x2000]) {
-        write_vram_bank(
-            addr,
-            v,
-            if self.vram_select == 0 {
-                vram_bank0
-            } else {
-                &mut self.vram
-            },
-        )
-    }
-
-    /// Read BGP register (0xff47)
-    fn read_bg_palette(&self) -> u8 {
-        panic!("Read bg palette in CGB mode")
-    }
-
-    /// Write BGP register (0xff47)
-    fn write_bg_palette(&mut self, _: u8) {
-        panic!("Write palette in CGB mode");
-    }
-
-    /// Read OBP0 register (0xff48)
-    fn read_obj_palette0(&self) -> u8 {
-        panic!("Read Object palette in CGB mode");
-    }
-
-    /// Write OBP0 register (0xff48)
-    fn write_obj_palette0(&mut self, _: u8) {
-        panic!("Write Object palette in CGB mode");
-    }
-
-    /// Read OBP1 register (0xff49)
-    fn read_obj_palette1(&self) -> u8 {
-        panic!("Read Object palette 1 in CGB mode");
-    }
-
-    /// Write OBP1 register (0xff49)
-    fn write_obj_palette1(&mut self, _: u8) {
-        panic!("Write Object palette in CGB mode");
-    }
-
-    /// Read VBK register (0xff4f)
-    fn read_vram_bank_select(&self) -> u8 {
-        self.vram_select & 0xfe
-    }
-
-    /// Write VBK register (0xff4f)
-    fn select_vram_bank(&mut self, v: u8) {
-        self.vram_select = v & 1;
-    }
-
-    /// Write BCPS/BGPI register (0xff68)
-    fn select_bg_color_palette(&mut self, v: u8) {
-        self.bg_color_palette.select(v);
-    }
-
-    /// Read BCPD/BGPD register (0xff69)
-    fn read_bg_color_palette(&self) -> u8 {
-        self.bg_color_palette.read()
-    }
-
-    /// Write BCPD/BGPD register (0xff69)
-    fn write_bg_color_palette(&mut self, v: u8) {
-        self.bg_color_palette.write(v);
-    }
-
-    /// Write OCPS/OBPI register (0xff6a)
-    fn select_obj_color_palette(&mut self, v: u8) {
-        self.obj_color_palette.select(v);
-    }
-
-    /// Read OCPD/OBPD register (0xff6b)
-    fn read_obj_color_palette(&self) -> u8 {
-        self.obj_color_palette.read()
-    }
-
-    /// Write OCPD/OBPD register (0xff6b)
-    fn write_obj_color_palette(&mut self, v: u8) {
-        self.obj_color_palette.write(v);
-    }
-
-    fn get_scanline_after_offset(
-        &self,
-        offset: u8,
-        y: u8,
-        vram_bank0: &[u8; 0x2000],
-        tiles: u16,
-        mapbase: u16,
-        buf: &mut [Self::Color; VRAM_WIDTH as usize],
-        bgbuf: Option<&mut [u8; VRAM_WIDTH as usize]>,
-    ) {
-        // (scx / 8..=u8::MAX / 8)
-        //     .chain(0..) // we don't care about the upper limit because we call take() later anyway
-        //     .flat_map(move |tx| {
-        //         let tbase = get_tile_base(tiles, mapbase, Point { x: tx, y: y / 8 }, vram_bank0);
-        //         let ti = u16::from(tx * 8) + u16::from(y) * 32;
-        //         let attr = read_vram_bank(mapbase + ti, &self.vram);
-
-        //         let palette = &self.bg_color_palette.cols[usize::from(attr & 0x7)][..];
-        //         let vram_bank = (attr >> 3) & 1;
-
-        //         let line = get_tile_line(
-        //             tbase,
-        //             y % 8,
-        //             if vram_bank == 0 {
-        //                 vram_bank0
-        //             } else {
-        //                 &self.vram
-        //             },
-        //         );
-        //         (0u8..8u8).map(move |pixel_in_line| {
-        //             let coli = get_color_id_from_tile_line(line, pixel_in_line);
-        //             (palette[usize::from(coli)], coli)
-        //         })
-        //     })
-        //     .skip(usize::from(scx % 8))
-        //     .take(usize::from(VRAM_WIDTH))
-        todo!()
-    }
-}
-
 pub struct Dmg {
     bg_palette: [DmgColor; 4],
     obj_palette0: [DmgColor; 4],
@@ -326,14 +85,12 @@ impl Default for Dmg {
     }
 }
 
-impl CgbExt for Dmg {
-    type Color = DmgColor;
-
+impl Dmg {
     fn get_sp_attr<'a>(
         &'a self,
         attr: u8,
         vram_bank0: &'a [u8; 0x2000],
-    ) -> MapAttribute<'a, Self::Color> {
+    ) -> MapAttribute<'a, DmgColor> {
         let palette = if attr & 0x10 != 0 {
             self.obj_palette1
         } else {
@@ -440,7 +197,7 @@ impl CgbExt for Dmg {
         vram_bank0: &[u8; 0x2000],
         tiles: u16,
         mapbase: u16,
-        buf: &mut [Self::Color; VRAM_WIDTH as usize],
+        buf: &mut [DmgColor; VRAM_WIDTH as usize],
         mut bgbuf: Option<&mut [u8; VRAM_WIDTH as usize]>,
     ) {
         // thanks https://github.com/deltabeard/Peanut-GB/blob/4596d56ddb85a1aa45b1197c77f05e236a23bd94/peanut_gb.h#L1465
@@ -533,7 +290,7 @@ impl LcdControl {
     }
 }
 
-pub struct Gpu<Ext: CgbExt> {
+pub struct Gpu {
     clocks: usize,
 
     lcd_status: LcdStatus,
@@ -555,10 +312,10 @@ pub struct Gpu<Ext: CgbExt> {
 
     hdma: Hdma,
 
-    pub cgb_ext: Ext,
+    pub cgb_ext: Dmg,
 
     // useful to keep the data here to avoid the CPU struct to catch some generic bounds
-    pub draw_line: [Ext::Color; VRAM_WIDTH as usize],
+    pub draw_line: [DmgColor; VRAM_WIDTH as usize],
 }
 
 fn to_palette(p: u8) -> [DmgColor; 4] {
@@ -858,15 +615,9 @@ impl Hdma {
     }
 }
 
-impl<Ext: CgbExt> Default for Gpu<Ext> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub type LineToDraw<C> = (u8, [C; VRAM_WIDTH as usize]);
 
-impl<Ext: CgbExt> Gpu<Ext> {
+impl Gpu {
     pub fn new() -> Self {
         Self {
             clocks: 0,
@@ -884,7 +635,7 @@ impl<Ext: CgbExt> Gpu<Ext> {
 
             oam: [0; 0xa0],
             hdma: Hdma::new(),
-            cgb_ext: Ext::default(),
+            cgb_ext: Default::default(),
             draw_line: [Default::default(); VRAM_WIDTH as usize],
         }
     }
