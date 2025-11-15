@@ -361,14 +361,12 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
 // À l'exécution du dernier M-cycle d'une instruction, le prochain opcode est chargé en parallèle
 
 pub struct State {
-    pub instruction_register: Instructions,
     pub memory: [u8; 0x10000],
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
-            instruction_register: Default::default(),
             memory: [0; 0x10000],
         }
     }
@@ -385,17 +383,6 @@ impl<'a> WriteOnlyState<'a> {
         'a: 'c,
     {
         WriteOnlyState(&mut *self.0)
-    }
-    pub fn set_instruction_register(&mut self, instructions: Instructions) {
-        self.0.instruction_register = instructions;
-    }
-
-    pub fn pipeline_pop_front(&mut self) {
-        // does nothing if there is only one instruction inside the pipeline
-        // if there is only one instruction then the OpcodeFetcher will override the whole pipeline
-        if let Some(next_inst) = self.0.instruction_register.1.pop() {
-            self.0.instruction_register.0 = next_inst;
-        }
     }
 
     pub fn write(&mut self, address: u16, value: u8) {

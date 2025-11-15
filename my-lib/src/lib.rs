@@ -13,6 +13,9 @@ impl<'a, T> WriteOnce<'a, T> {
         self.1 = true;
         &mut *self.0
     }
+    pub fn get_ref(&self) -> &T {
+        self.0
+    }
 }
 
 impl<'a, T: Copy> WriteOnce<'a, T> {

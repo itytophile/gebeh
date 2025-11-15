@@ -2,8 +2,9 @@ use arrayvec::ArrayVec;
 use my_lib::HeapSize;
 
 use crate::state::{
-    AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, ReadAddress,
-    ReadInstruction, Register8Bit, Register16Bit, State, WriteOnlyState, get_instructions,
+    AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
+    ReadAddress, ReadInstruction, Register8Bit, Register16Bit, State, WriteOnlyState,
+    get_instructions,
 };
 mod state;
 
@@ -66,6 +67,12 @@ struct PipelineExecutor {
     c_flag: bool,
     is_cb_mode: bool,
     pc: u16,
+    instruction_register: Instructions,
+}
+
+enum PipelineAction {
+    Pop,
+    Replace(Instructions),
 }
 
 impl PipelineExecutorWriteOnce<'_> {
@@ -139,7 +146,11 @@ impl PipelineExecutorWriteOnce<'_> {
         }
     }
 
-    fn execute_instruction(&mut self, mut state: WriteOnlyState, inst: AfterReadInstruction) {
+    fn execute_instruction(
+        &mut self,
+        mut state: WriteOnlyState,
+        inst: AfterReadInstruction,
+    ) -> PipelineAction {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
@@ -152,7 +163,7 @@ impl PipelineExecutorWriteOnce<'_> {
                     ConditionalRelativeJump(Condition { flag, not }) => {
                         *self.lsb.get_mut() = value;
                         if self.get_flag(flag) != not {
-                            state.set_instruction_register((
+                            return PipelineAction::Replace((
                                 Instruction::NoRead(OffsetPc),
                                 // important to match the cycle and not conflict with the overlapping opcode fetch
                                 ArrayVec::from_iter([Instruction::NoRead(Nop)]),
@@ -293,19 +304,31 @@ impl PipelineExecutorWriteOnce<'_> {
                 );
             }
         }
+
+        PipelineAction::Pop
+    }
+
+    pub fn pipeline_pop_front(&mut self) {
+        // does nothing if there is only one instruction inside the pipeline
+        // if there is only one instruction then the OpcodeFetcher will override the whole pipeline
+        if self.instruction_register.get_ref().1.is_empty() {
+            // we can't use pop because the WriteOnce will panic
+            return;
+        }
+        let instruction_register = self.instruction_register.get_mut();
+        instruction_register.0 = instruction_register.1.pop().unwrap();
     }
 }
 
 impl StateMachine for PipelineExecutor {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         // we load the next opcode if there is only one instruction left in the pipeline
-        let should_load_next_opcode = state.instruction_register.1.is_empty();
+        let should_load_next_opcode = self.instruction_register.1.is_empty();
         let opcode = state.memory[usize::from(self.pc)];
 
-        let inst = state.instruction_register.0;
-        // if it is the last instruction then the opcode fetcher will override the instruction
-        // register concurrently so the pipeline executor should not pop it.
-        let should_pop = !state.instruction_register.1.is_empty();
+        let inst = self.instruction_register.0;
+
+        let mut write_once = self.write_once();
 
         let should_increment_pc = matches!(
             inst,
@@ -313,8 +336,6 @@ impl StateMachine for PipelineExecutor {
         );
 
         print!("Executing {inst:?}");
-
-        let mut write_once = self.write_once();
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -334,12 +355,16 @@ impl StateMachine for PipelineExecutor {
 
         println!();
 
-        move |mut state| {
-            if should_pop {
-                state.pipeline_pop_front();
-            }
+        move |state| {
             if should_increment_pc {
                 *write_once.pc.get_mut() = write_once.pc.get().wrapping_add(1);
+            }
+
+            match write_once.execute_instruction(state, inst) {
+                PipelineAction::Pop => write_once.pipeline_pop_front(),
+                PipelineAction::Replace(instructions) => {
+                    *write_once.instruction_register.get_mut() = instructions
+                }
             }
 
             // parallel opcode fetching logic
@@ -349,16 +374,11 @@ impl StateMachine for PipelineExecutor {
                     "Read opcode at ${:04x} (0x{opcode:02x})",
                     write_once.pc.get()
                 );
-                state.set_instruction_register(get_instructions(
-                    opcode,
-                    write_once.is_cb_mode.get(),
-                ));
+                *write_once.instruction_register.get_mut() =
+                    get_instructions(opcode, write_once.is_cb_mode.get());
                 *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
                 *write_once.pc.get_mut() = write_once.pc.get().wrapping_add(1);
             }
-
-            // actual execution
-            write_once.execute_instruction(state, inst);
         }
     }
 }
