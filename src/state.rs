@@ -18,8 +18,10 @@ const DMG_BOOT: [u8; 256] = [
 pub struct State {
     boot_rom: &'static [u8],
     ram: [u8; 0x10000 - RAM_START as usize],
+    hram: [u8; (INTERRUPT - HRAM) as usize],
     dma_register: u8,
     dma_request: bool,
+    bgp_register: u8,
 }
 
 impl Default for State {
@@ -27,8 +29,10 @@ impl Default for State {
         Self {
             boot_rom: &DMG_BOOT,
             ram: [0; 0x10000 - RAM_START as usize],
+            hram: [0; (INTERRUPT - HRAM) as usize],
             dma_register: 0,
             dma_request: false,
+            bgp_register: 0,
         }
     }
 }
@@ -62,6 +66,8 @@ pub struct MmuRead<'a>(&'a State);
 
 const DMA: u16 = 0xff46;
 const BGP: u16 = 0xff47;
+const HRAM: u16 = 0xff80;
+const INTERRUPT: u16 = 0xffff;
 
 impl Index<u16> for MmuRead<'_> {
     type Output = u8;
@@ -71,7 +77,10 @@ impl Index<u16> for MmuRead<'_> {
             0..RAM_START => self.0.boot_rom.get(usize::from(index)).unwrap_or(&0),
             RAM_START..DMA => &self.0.ram[usize::from(index - RAM_START)],
             DMA => &self.0.dma_register,
-            BGP.. => todo!(),
+            BGP => &self.0.bgp_register,
+            HRAM..INTERRUPT => &self.0.hram[usize::from(index - HRAM)],
+            INTERRUPT => todo!(),
+            _ => todo!("{index:04x}"),
         }
     }
 }
@@ -87,7 +96,10 @@ impl MmuWrite<'_> {
                 self.0.dma_register = value;
                 self.0.dma_request = true;
             }
-            BGP.. => todo!(),
+            BGP => self.0.bgp_register = value,
+            HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,
+            INTERRUPT => todo!(),
+            _ => todo!("{index:04x}"),
         }
     }
 }
