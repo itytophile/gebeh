@@ -376,8 +376,6 @@ impl Gpu {
 
         let mut drawn_ly = None;
 
-        println!("{clocks} {:?}", self.mode);
-
         let (clocks, mode) = match (self.mode, clocks) {
             (Mode::OamScan, 80..) => (clocks - 80, Mode::Drawing),
             (Mode::Drawing, 172..) => {

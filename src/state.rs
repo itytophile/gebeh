@@ -8,6 +8,7 @@ const SCX: u16 = 0xff43;
 const LY: u16 = 0xff44; // LCD Y
 const DMA: u16 = 0xff46;
 const BGP: u16 = 0xff47;
+const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 const HRAM: u16 = 0xff80;
 const INTERRUPT: u16 = 0xffff;
 
@@ -28,6 +29,7 @@ const DMG_BOOT: [u8; 256] = [
 
 pub struct State {
     pub boot_rom: &'static [u8],
+    pub rom: &'static [u8],
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub hram: [u8; (INTERRUPT - HRAM) as usize],
     pub dma_register: u8,
@@ -40,16 +42,14 @@ pub struct State {
     pub scx: u8,
     pub lcd_control: LcdControl,
     pub ly: u8,
+    pub boot_rom_mapping_control: u8,
 }
 
 impl State {
     pub fn mmu(&self) -> MmuRead<'_> {
         MmuRead(self)
     }
-}
-
-impl Default for State {
-    fn default() -> Self {
+    pub fn new(rom: &'static [u8]) -> Self {
         Self {
             boot_rom: &DMG_BOOT,
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
@@ -64,6 +64,8 @@ impl Default for State {
             scy: 0,
             lcd_control: LcdControl::empty(),
             ly: 0,
+            rom,
+            boot_rom_mapping_control: 0,
         }
     }
 }
@@ -101,12 +103,17 @@ pub struct MmuRead<'a>(&'a State);
 impl MmuRead<'_> {
     pub fn read(&self, index: u16) -> u8 {
         match index {
-            0..VIDEO_RAM => self
-                .0
-                .boot_rom
-                .get(usize::from(index))
-                .copied()
-                .unwrap_or(0),
+            0..VIDEO_RAM => {
+                if self.0.boot_rom_mapping_control == 0 {
+                    self.0
+                        .boot_rom
+                        .get(usize::from(index))
+                        .copied()
+                        .unwrap_or(self.0.rom[usize::from(index)])
+                } else {
+                    self.0.rom[usize::from(index)]
+                }
+            }
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
@@ -115,6 +122,7 @@ impl MmuRead<'_> {
             LY => self.0.ly,
             DMA => self.0.dma_register,
             BGP => self.0.bgp_register,
+            BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)],
             INTERRUPT => todo!(),
             _ => todo!("{index:04x}"),
@@ -141,6 +149,7 @@ impl MmuWrite<'_> {
             }
             BGP => self.0.bgp_register = value,
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,
+            BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             INTERRUPT => todo!(),
             _ => todo!("{index:04x}"),
         }
