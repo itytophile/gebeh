@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use minifb::{Key, Scale, Window, WindowOptions};
 
 use crate::{

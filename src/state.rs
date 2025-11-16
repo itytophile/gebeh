@@ -28,7 +28,7 @@ const DMG_BOOT: [u8; 256] = [
 ];
 
 pub struct State {
-    pub boot_rom: &'static [u8],
+    pub boot_rom: &'static [u8; 256],
     pub rom: &'static [u8],
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub hram: [u8; (INTERRUPT - HRAM) as usize],
@@ -105,11 +105,13 @@ impl MmuRead<'_> {
         match index {
             0..VIDEO_RAM => {
                 if self.0.boot_rom_mapping_control == 0 {
-                    self.0
-                        .boot_rom
-                        .get(usize::from(index))
-                        .copied()
-                        .unwrap_or(self.0.rom[usize::from(index)])
+                    if let Some(value) = self.0.boot_rom.get(usize::from(index)).copied() {
+                        value
+                    } else {
+                        let value = self.0.rom[usize::from(index)];
+                        println!("ROM ${index:04x} => 0x{value:02x}");
+                        value
+                    }
                 } else {
                     self.0.rom[usize::from(index)]
                 }
@@ -139,7 +141,9 @@ impl MmuWrite<'_> {
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)] = value,
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
-            SCY => self.0.scy = value,
+            SCY => {
+                println!("SCY {value:x}");
+                self.0.scy = value},
             SCX => self.0.scx = value,
             LY => {} // read only
             DMA => {

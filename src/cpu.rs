@@ -198,7 +198,7 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(Inc16Bit(register)) => {
                 self.set_16bit_register(
                     register,
-                    self.get_16bit_register(register).wrapping_sub(1),
+                    self.get_16bit_register(register).wrapping_add(1),
                 );
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {
