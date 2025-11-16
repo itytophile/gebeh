@@ -301,6 +301,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Nop)]),
         ),
         0x7b => ld_r_r(A, E),
+        0x7d => ld_r_r(A, L),
         0x90 => sub_r(B),
         0x91 => sub_r(C),
         0x92 => sub_r(D),
