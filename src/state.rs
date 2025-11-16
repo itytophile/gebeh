@@ -152,7 +152,10 @@ impl MmuWrite<'_> {
                 self.0.dma_request = true;
                 todo!()
             }
-            BGP => self.0.bgp_register = value,
+            BGP => {
+                println!("BGP");
+                self.0.bgp_register = value
+            }
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             INTERRUPT => todo!(),

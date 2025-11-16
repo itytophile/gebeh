@@ -322,6 +322,14 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xaf => (Xor(A).into(), Default::default()),
         0xbe => (Read(HL.into(), ReadIntoLsb), vec([Compare.into()])),
         0xc1 => pop_rr(BC),
+        0xc3 => (
+            Read(PC.into(), ReadIntoLsb),
+            vec([
+                Nop.into(),
+                Store16Bit(PC).into(),
+                Read(PC.into(), ReadIntoMsb),
+            ]),
+        ),
         0xc5 => push_rr(BC),
         0xc9 => (
             Read(SP.into(), PopStackIntoLsb),
