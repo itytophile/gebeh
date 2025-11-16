@@ -89,7 +89,8 @@ pub enum NoReadInstruction {
     Dec(Register8Bit),
     Compare,
     LoadToCachedAddressFromA,
-    Sub(Register8Bit)
+    Sub(Register8Bit),
+    Add,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -118,6 +119,12 @@ pub enum ReadAddress {
 pub enum Instruction {
     NoRead(NoReadInstruction),
     Read(ReadAddress, ReadInstruction),
+}
+
+impl From<NoReadInstruction> for Instruction {
+    fn from(value: NoReadInstruction) -> Self {
+        Self::NoRead(value)
+    }
 }
 
 impl Default for Instruction {
@@ -212,7 +219,7 @@ mod opcodes {
     pub fn dec_r(register: Register8Bit) -> Instructions {
         (NoRead(Dec(register)), Default::default())
     }
-    
+
     pub fn sub_r(register: Register8Bit) -> Instructions {
         (NoRead(Sub(register)), Default::default())
     }
@@ -255,23 +262,23 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x13 => inc_rr(DE),
         0x14 => inc_r(D),
         0x15 => dec_r(D),
-        0x17 => (NoRead(Rla), Default::default()),
+        0x17 => (Rla.into(), Default::default()),
         0x18 => (
             Read(PC.into(), ReadIntoLsb),
-            vec([NoRead(Nop), NoRead(OffsetPc)]),
+            vec([Nop.into(), OffsetPc.into()]),
         ),
         0x1c => inc_r(E),
         0x1d => dec_r(E),
         0x1e => ld_r_n(E),
         0x16 => ld_r_n(D),
-        0x1a => (Read(DE.into(), ReadIntoLsb), vec([NoRead(Store8Bit(A))])),
+        0x1a => (Read(DE.into(), ReadIntoLsb), vec([Store8Bit(A).into()])),
 
         0x20 => jr_cc_e(Condition {
             flag: Flag::Z,
             not: true,
         }),
         0x21 => ld_rr_n(HL),
-        0x22 => (NoRead(LoadToAddressHlFromAInc), vec([NoRead(Nop)])),
+        0x22 => (LoadToAddressHlFromAInc.into(), vec([Nop.into()])),
         0x23 => inc_rr(HL),
         0x24 => inc_r(H),
         0x25 => dec_r(H),
@@ -284,7 +291,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x2d => dec_r(L),
         0x2e => ld_r_n(L),
         0x31 => ld_rr_n(SP),
-        0x32 => (NoRead(LoadToAddressHlFromADec), vec([NoRead(Nop)])),
+        0x32 => (LoadToAddressHlFromADec.into(), vec([Nop.into()])),
         0x33 => inc_rr(SP),
         0x3c => inc_r(A),
         0x3d => dec_r(A),
@@ -294,15 +301,17 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x67 => ld_r_r(H, A),
         0x7c => ld_r_r(A, H),
         0x77 => (
-            NoRead(LoadToAddressFromRegister {
+            LoadToAddressFromRegister {
                 address: HL,
                 value: A,
-            }),
-            vec([NoRead(Nop)]),
+            }
+            .into(),
+            vec([Nop.into()]),
         ),
         0x78 => ld_r_r(A, B),
         0x7b => ld_r_r(A, E),
         0x7d => ld_r_r(A, L),
+        0x86 => (Read(HL.into(), ReadIntoLsb), vec([Add.into()])),
         0x90 => sub_r(B),
         0x91 => sub_r(C),
         0x92 => sub_r(D),
@@ -310,26 +319,26 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x94 => sub_r(H),
         0x95 => sub_r(L),
         0x97 => sub_r(A),
-        0xaf => (NoRead(Xor(A)), Default::default()),
-        0xbe => (Read(ReadAddress::Register(Register16Bit::HL), ReadIntoLsb), vec([NoRead(Compare)])),
+        0xaf => (Xor(A).into(), Default::default()),
+        0xbe => (Read(HL.into(), ReadIntoLsb), vec([Compare.into()])),
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),
         0xc9 => (
             Read(SP.into(), PopStackIntoLsb),
             vec([
-                NoRead(Nop),
-                NoRead(Store16Bit(Register16Bit::PC)),
+                Nop.into(),
+                Store16Bit(Register16Bit::PC).into(),
                 Read(SP.into(), PopStackIntoMsb),
             ]),
         ),
-        0xcb => (NoRead(Nop), Default::default()),
+        0xcb => (Nop.into(), Default::default()),
         0xcd => (
             Read(PC.into(), ReadIntoLsb),
             vec([
-                NoRead(Nop),
-                NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc),
-                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(PC)),
-                NoRead(DecStackPointer),
+                Nop.into(),
+                WriteLsbPcWhereSpPointsAndLoadCacheToPc.into(),
+                WriteMsbOfRegisterWhereSpPointsAndDecSp(PC).into(),
+                DecStackPointer.into(),
                 Read(PC.into(), ReadIntoMsb),
             ]),
         ),
@@ -337,29 +346,29 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xd5 => push_rr(DE),
         0xe0 => (
             Read(PC.into(), ReadIntoLsb),
-            vec([NoRead(Nop), NoRead(LoadFromAccumulator(None))]),
+            vec([Nop.into(), LoadFromAccumulator(None).into()]),
         ),
         0xe1 => pop_rr(HL),
-        0xe2 => (NoRead(LoadFromAccumulator(Some(C))), vec([NoRead(Nop)])),
+        0xe2 => (LoadFromAccumulator(Some(C)).into(), vec([Nop.into()])),
         0xe5 => push_rr(HL),
         0xea => (
             Read(PC.into(), ReadIntoLsb),
             vec([
-                NoRead(Nop),
-                NoRead(LoadToCachedAddressFromA),
+                Nop.into(),
+                LoadToCachedAddressFromA.into(),
                 Read(PC.into(), ReadIntoMsb),
             ]),
         ),
         0xf0 => (
             Read(PC.into(), ReadIntoLsb),
             vec([
-                NoRead(Store8Bit(A)),
+                Store8Bit(A).into(),
                 Read(ReadAddress::Accumulator, ReadIntoLsb),
             ]),
         ),
         0xf1 => pop_rr(AF),
         0xf5 => push_rr(AF),
-        0xfe => (Read(PC.into(), ReadIntoLsb), vec([NoRead(Compare)])),
+        0xfe => (Read(PC.into(), ReadIntoLsb), vec([Compare.into()])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }

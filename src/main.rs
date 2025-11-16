@@ -1,10 +1,7 @@
-use std::time::Duration;
-
 use minifb::{Key, Scale, Window, WindowOptions};
 
 use crate::{
     cpu::PipelineExecutor,
-    gpu::Gpu,
     ppu::Ppu,
     state::{State, WriteOnlyState},
 };

@@ -221,7 +221,7 @@ pub struct Gpu {
 
     // useful to keep the data here to avoid the CPU struct to catch some generic bounds
     pub draw_line: [DmgColor; VRAM_WIDTH as usize],
-    lcd_control: LcdControl
+    lcd_control: LcdControl,
 }
 
 pub struct MapAttribute<'a, C> {
@@ -338,7 +338,7 @@ impl Default for Gpu {
             oam: [0; 0xa0],
             cgb_ext: Default::default(),
             draw_line: [Default::default(); VRAM_WIDTH as usize],
-            lcd_control: LcdControl::empty()
+            lcd_control: LcdControl::empty(),
         }
     }
 }
@@ -360,7 +360,7 @@ impl Gpu {
 
         irq.request.remove(Ints::VBLANK);
     }
-    
+
     pub fn step(
         &mut self,
         time: usize,

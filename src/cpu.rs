@@ -35,6 +35,20 @@ enum PipelineAction {
     Replace(Instructions),
 }
 
+pub fn set_h_add(arg1: u8, arg2: u8) -> bool {
+    let lo1 = arg1 & 0x0F;
+    let lo2 = arg2 & 0x0F;
+
+    ((lo1 + lo2) & (0x10)) == 0x10
+}
+
+pub fn set_h_sub(arg1: u8, arg2: u8) -> bool {
+    let lo1 = arg1 & 0x0F;
+    let lo2 = arg2 & 0x0F;
+
+    (lo1.wrapping_sub(lo2) & (0x10)) == 0x10
+}
+
 impl PipelineExecutorWriteOnce<'_> {
     fn get_8bit_register(&self, register: Register8Bit) -> u8 {
         match register {
@@ -188,12 +202,12 @@ impl PipelineExecutorWriteOnce<'_> {
                 );
             }
             NoRead(Inc(register)) => {
-                let register_value = self.get_8bit_register(register);
-                let incremented = register_value.wrapping_add(1);
+                let r = self.get_8bit_register(register);
+                let incremented = r.wrapping_add(1);
                 *self.get_8bit_register_mut(register) = incremented;
                 *self.z_flag.get_mut() = incremented == 0;
                 *self.n_flag.get_mut() = false;
-                *self.h_flag.get_mut() = (register_value & 0x0F) == 0x0F;
+                *self.h_flag.get_mut() = set_h_add(r, 1);
             }
             NoRead(Inc16Bit(register)) => {
                 self.set_16bit_register(
@@ -243,18 +257,20 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.c_flag.get_mut() = new_carry;
             }
             NoRead(Dec(register)) => {
-                let register_value = self.get_8bit_register(register);
-                let decremented = register_value.wrapping_sub(1);
+                let r = self.get_8bit_register(register);
+                let decremented = r.wrapping_sub(1);
                 *self.get_8bit_register_mut(register) = decremented;
                 *self.z_flag.get_mut() = decremented == 0;
                 *self.n_flag.get_mut() = true;
-                *self.h_flag.get_mut() = (register_value & 0x0F) == 0;
+                *self.h_flag.get_mut() = set_h_sub(r, 1);
             }
             NoRead(Compare) => {
-                let (result, carry) = self.a.get().overflowing_sub(self.lsb.get());
+                let a = self.a.get();
+                let lsb = self.lsb.get();
+                let (result, carry) = a.overflowing_sub(lsb);
                 *self.z_flag.get_mut() = result == 0;
                 *self.n_flag.get_mut() = true;
-                *self.h_flag.get_mut() = (self.a.get() ^ self.lsb.get() ^ result) & 0x10 == 0x10;
+                *self.h_flag.get_mut() = set_h_sub(a, lsb);
                 *self.c_flag.get_mut() = carry;
             }
             NoRead(LoadToCachedAddressFromA) => {
@@ -264,13 +280,22 @@ impl PipelineExecutorWriteOnce<'_> {
                 );
             }
             NoRead(Sub(register)) => {
-                let (result, carry) = self
-                    .a
-                    .get()
-                    .overflowing_sub(self.get_8bit_register(register));
+                let a = self.a.get();
+                let r = self.get_8bit_register(register);
+                let (result, carry) = a.overflowing_sub(r);
                 *self.z_flag.get_mut() = result == 0;
                 *self.n_flag.get_mut() = true;
-                *self.h_flag.get_mut() = (self.a.get() ^ self.lsb.get() ^ result) & 0x10 == 0x10;
+                *self.h_flag.get_mut() = set_h_sub(a, r);
+                *self.c_flag.get_mut() = carry;
+                *self.a.get_mut() = result;
+            }
+            NoRead(Add) => {
+                let a = self.a.get();
+                let lsb = self.lsb.get();
+                let (result, carry) = a.overflowing_add(lsb);
+                *self.z_flag.get_mut() = result == 0;
+                *self.n_flag.get_mut() = false;
+                *self.h_flag.get_mut() = set_h_add(a, lsb);
                 *self.c_flag.get_mut() = carry;
                 *self.a.get_mut() = result;
             }

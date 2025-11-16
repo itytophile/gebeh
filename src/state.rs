@@ -143,7 +143,8 @@ impl MmuWrite<'_> {
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
             SCY => {
                 println!("SCY {value:x}");
-                self.0.scy = value},
+                self.0.scy = value
+            }
             SCX => self.0.scx = value,
             LY => {} // read only
             DMA => {
