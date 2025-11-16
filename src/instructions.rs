@@ -89,6 +89,7 @@ pub enum NoReadInstruction {
     Dec(Register8Bit),
     Compare,
     LoadToCachedAddressFromA,
+    Sub(Register8Bit)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -211,6 +212,10 @@ mod opcodes {
     pub fn dec_r(register: Register8Bit) -> Instructions {
         (NoRead(Dec(register)), Default::default())
     }
+    
+    pub fn sub_r(register: Register8Bit) -> Instructions {
+        (NoRead(Sub(register)), Default::default())
+    }
 
     // When there is a jump we have to put a Nop even if the condition will be true
     // or the next opcode will be fetched with the wrong pc
@@ -296,6 +301,13 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([NoRead(Nop)]),
         ),
         0x7b => ld_r_r(A, E),
+        0x90 => sub_r(B),
+        0x91 => sub_r(C),
+        0x92 => sub_r(D),
+        0x93 => sub_r(E),
+        0x94 => sub_r(H),
+        0x95 => sub_r(L),
+        0x97 => sub_r(A),
         0xaf => (NoRead(Xor(A)), Default::default()),
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),

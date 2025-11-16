@@ -296,6 +296,14 @@ impl PipelineExecutorWriteOnce<'_> {
                     self.a.get(),
                 );
             }
+            NoRead(Sub(register)) => {
+                let (result, carry) = self.a.get().overflowing_sub(self.get_8bit_register(register));
+                *self.z_flag.get_mut() = result == 0;
+                *self.n_flag.get_mut() = true;
+                *self.h_flag.get_mut() = (self.a.get() ^ self.lsb.get() ^ result) & 0x10 == 0x10;
+                *self.c_flag.get_mut() = carry;
+                *self.a.get_mut() = result;
+            }
         }
 
         PipelineAction::Pop
