@@ -101,7 +101,12 @@ pub struct MmuRead<'a>(&'a State);
 impl MmuRead<'_> {
     pub fn read(&self, index: u16) -> u8 {
         match index {
-            0..VIDEO_RAM => self.0.boot_rom.get(usize::from(index)).copied().unwrap_or(0),
+            0..VIDEO_RAM => self
+                .0
+                .boot_rom
+                .get(usize::from(index))
+                .copied()
+                .unwrap_or(0),
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),

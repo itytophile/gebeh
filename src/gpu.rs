@@ -221,6 +221,7 @@ pub struct Gpu {
 
     // useful to keep the data here to avoid the CPU struct to catch some generic bounds
     pub draw_line: [DmgColor; VRAM_WIDTH as usize],
+    lcd_control: LcdControl
 }
 
 pub struct MapAttribute<'a, C> {
@@ -337,11 +338,29 @@ impl Default for Gpu {
             oam: [0; 0xa0],
             cgb_ext: Default::default(),
             draw_line: [Default::default(); VRAM_WIDTH as usize],
+            lcd_control: LcdControl::empty()
         }
     }
 }
 
 impl Gpu {
+    pub(crate) fn write_ctrl(&mut self, value: LcdControl, irq: &mut Irq) {
+        if !self.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && value.contains(LcdControl::LCD_PPU_ENABLE)
+        {
+            self.clocks = 0;
+            self.mode = Mode::HBlank;
+        } else if self.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && !value.contains(LcdControl::LCD_PPU_ENABLE)
+        {
+            self.mode = Mode::None;
+        }
+
+        self.lcd_control = value;
+
+        irq.request.remove(Ints::VBLANK);
+    }
+    
     pub fn step(
         &mut self,
         time: usize,
@@ -352,6 +371,7 @@ impl Gpu {
         scy: u8,
         mut state: WriteOnlyState,
     ) -> Option<u8> {
+        self.write_ctrl(lcd_control, &mut irq);
         let clocks = self.clocks + time;
 
         let mut drawn_ly = None;
