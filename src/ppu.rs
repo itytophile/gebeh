@@ -6,7 +6,10 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct Ppu(Gpu);
+pub struct Ppu {
+    pub gpu: Gpu,
+    pub drawn_ly: Option<u8>,
+}
 
 // 4 dots per Normal Speed M-cycle
 // One frame: 70224 dots
@@ -23,7 +26,7 @@ impl StateMachine for Ppu {
         let scy = state.scy;
 
         move |state| {
-            self.0.step(
+            self.drawn_ly = self.gpu.step(
                 4,
                 Irq {
                     enable: ie,

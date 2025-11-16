@@ -1,5 +1,8 @@
+use minifb::{Key, Scale, Window, WindowOptions};
+
 use crate::{
     cpu::PipelineExecutor,
+    gpu::Gpu,
     ppu::Ppu,
     state::{State, WriteOnlyState},
 };
@@ -12,6 +15,9 @@ mod instructions;
 mod ppu;
 mod state;
 
+const WIDTH: usize = 160;
+const HEIGHT: usize = 144;
+
 fn main() {
     // let rom =
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
@@ -21,8 +27,42 @@ fn main() {
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default().compose(Ppu::default());
 
-    loop {
-        machine.execute(&state)(WriteOnlyState::new(&mut state));
+    let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+
+    let mut window = Window::new(
+        "Test - ESC to exit",
+        WIDTH,
+        HEIGHT,
+        WindowOptions {
+            resize: false,
+            scale: Scale::X4,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    // Limit to max ~60 fps update rate
+    window.set_target_fps(60);
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        let (ly, line) = loop {
+            machine.execute(&state)(WriteOnlyState::new(&mut state));
+            let (
+                _,
+                ppu,
+            ) = &mut machine;
+            if let Some(ly) = ppu.drawn_ly.take() {
+                break (ly, &ppu.gpu.draw_line)
+            }
+        };
+        
+        let base = usize::from(ly) * WIDTH;
+        for (a, b) in buffer[base..].iter_mut().zip(line) {
+            *a = u32::from(*b);
+        }
+
+        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
 

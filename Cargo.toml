@@ -10,4 +10,5 @@ edition = "2024"
 arrayvec = "0.7.6"
 bitflags = "2.10.0"
 futures-util = "0.3.31"
+minifb = "0.28.0"
 my-lib = { path = "./my-lib" }
