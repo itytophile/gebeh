@@ -45,20 +45,18 @@ fn main() {
     window.set_target_fps(60);
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        let (ly, line) = loop {
+        loop {
             machine.execute(&state)(WriteOnlyState::new(&mut state));
-            let (
-                _,
-                ppu,
-            ) = &mut machine;
+            let (_, ppu) = &mut machine;
             if let Some(ly) = ppu.drawn_ly.take() {
-                break (ly, &ppu.gpu.draw_line)
+                let base = usize::from(ly) * WIDTH;
+                for (a, b) in buffer[base..].iter_mut().zip(&ppu.gpu.draw_line) {
+                    *a = u32::from(*b);
+                }
+                if usize::from(ly) == HEIGHT - 1 {
+                    break;
+                }
             }
-        };
-        
-        let base = usize::from(ly) * WIDTH;
-        for (a, b) in buffer[base..].iter_mut().zip(line) {
-            *a = u32::from(*b);
         }
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
