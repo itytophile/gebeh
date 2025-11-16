@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 use my_lib::HeapSize;
 
 use crate::{
-    opcodes::{
+    instructions::{
         AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
         ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
     },
@@ -13,7 +13,7 @@ mod dma;
 mod gpu;
 mod hardware;
 mod ic;
-mod opcodes;
+mod instructions;
 mod ppu;
 mod state;
 
