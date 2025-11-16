@@ -309,6 +309,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x95 => sub_r(L),
         0x97 => sub_r(A),
         0xaf => (NoRead(Xor(A)), Default::default()),
+        0xbe => (Read(ReadAddress::Register(Register16Bit::HL), ReadIntoLsb), vec([NoRead(Compare)])),
         0xc1 => pop_rr(BC),
         0xc5 => push_rr(BC),
         0xc9 => (
