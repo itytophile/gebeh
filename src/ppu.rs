@@ -1,6 +1,6 @@
 use crate::{
     StateMachine,
-    gpu::Gpu,
+    gpu::{Dmg, Gpu, to_palette},
     ic::Irq,
     state::{State, WriteOnlyState},
 };
@@ -25,6 +25,9 @@ impl StateMachine for Ppu {
         let scx = state.scx;
         let scy = state.scy;
         let vram = state.video_ram;
+        let bgp = state.bgp_register;
+        let obp0 = state.obp0;
+        let obp1 = state.obp1;
 
         move |state| {
             self.drawn_ly = self.gpu.step(
@@ -38,7 +41,12 @@ impl StateMachine for Ppu {
                 scx,
                 scy,
                 state,
-                &vram
+                &vram,
+                Dmg {
+                    bg_palette: to_palette(bgp),
+                    obj_palette0: to_palette(obp0),
+                    obj_palette1: to_palette(obp1),
+                },
             );
         }
     }

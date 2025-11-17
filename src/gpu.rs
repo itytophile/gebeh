@@ -54,10 +54,20 @@ pub struct Point {
     y: u8,
 }
 
+#[derive(Copy, Clone)]
 pub struct Dmg {
-    bg_palette: [DmgColor; 4],
-    obj_palette0: [DmgColor; 4],
-    obj_palette1: [DmgColor; 4],
+    pub bg_palette: [DmgColor; 4],
+    pub obj_palette0: [DmgColor; 4],
+    pub obj_palette1: [DmgColor; 4],
+}
+
+pub fn to_palette(p: u8) -> [DmgColor; 4] {
+    [
+        (p & 0x3).into(),
+        ((p >> 2) & 0x3).into(),
+        ((p >> 4) & 0x3).into(),
+        ((p >> 6) & 0x3).into(),
+    ]
 }
 
 impl Default for Dmg {
@@ -86,11 +96,7 @@ impl Default for Dmg {
 }
 
 impl Dmg {
-    fn get_sp_attr<'a>(
-        &'a self,
-        attr: u8,
-        vram_bank0: &'a [u8; 0x2000],
-    ) -> MapAttribute<'a, DmgColor> {
+    fn get_sp_attr(&self, attr: u8) -> MapAttribute {
         let palette = if attr & 0x10 != 0 {
             self.obj_palette1
         } else {
@@ -102,7 +108,6 @@ impl Dmg {
             xflip: attr & 0x20 != 0,
             yflip: attr & 0x40 != 0,
             priority: attr & 0x80 != 0,
-            vram_bank: vram_bank0,
         }
     }
 
@@ -215,16 +220,13 @@ pub struct Gpu {
 
     oam: [u8; 0xa0],
 
-    pub cgb_ext: Dmg,
-
     // useful to keep the data here to avoid the CPU struct to catch some generic bounds
     pub draw_line: [DmgColor; VRAM_WIDTH as usize],
     lcd_control: LcdControl,
 }
 
-pub struct MapAttribute<'a, C> {
-    palette: [C; 4],
-    vram_bank: &'a [u8; 0x2000],
+pub struct MapAttribute {
+    palette: [DmgColor; 4],
     xflip: bool,
     yflip: bool,
     priority: bool,
@@ -332,7 +334,6 @@ impl Default for Gpu {
             wy: 0,
 
             oam: [0; 0xa0],
-            cgb_ext: Default::default(),
             draw_line: [Default::default(); VRAM_WIDTH as usize],
             lcd_control: LcdControl::empty(),
         }
@@ -366,7 +367,8 @@ impl Gpu {
         scx: u8,
         scy: u8,
         mut state: WriteOnlyState,
-        vram: &[u8; 0x2000]
+        vram: &[u8; 0x2000],
+        palettes: Dmg,
     ) -> Option<u8> {
         self.write_ctrl(lcd_control, &mut irq);
         let clocks = self.clocks + time;
@@ -376,7 +378,7 @@ impl Gpu {
         let (clocks, mode) = match (self.mode, clocks) {
             (Mode::OamScan, 80..) => (clocks - 80, Mode::Drawing),
             (Mode::Drawing, 172..) => {
-                drawn_ly = self.draw(ly, lcd_control, scx, scy, vram);
+                drawn_ly = self.draw(ly, lcd_control, scx, scy, vram, palettes);
 
                 if self.lcd_status.contains(LcdStatus::HBLANK_INT) {
                     irq.request |= Ints::LCD
@@ -436,7 +438,15 @@ impl Gpu {
     }
 
     #[inline(never)]
-    fn draw(&mut self, ly: u8, lcd_control: LcdControl, scx: u8, scy: u8, vram: &[u8; 0x2000]) -> Option<u8> {
+    fn draw(
+        &mut self,
+        ly: u8,
+        lcd_control: LcdControl,
+        scx: u8,
+        scy: u8,
+        vram: &[u8; 0x2000],
+        palettes: Dmg,
+    ) -> Option<u8> {
         if ly >= VRAM_HEIGHT {
             return None;
         }
@@ -446,18 +456,18 @@ impl Gpu {
         let mut bgbuf = [0u8; VRAM_WIDTH as usize];
 
         if lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-            self.when_bg_and_window_enable(&mut bgbuf, scx, scy, ly, lcd_control, vram);
+            self.when_bg_and_window_enable(&mut bgbuf, scx, scy, ly, lcd_control, vram, palettes);
             // https://gbdev.io/pandocs/LCDC.html#non-cgb-mode-dmg-sgb-and-cgb-in-compatibility-mode-bg-and-window-display
             // When Bit 0 [LcdControl::BG_AND_WINDOW_ENABLE] is cleared, both background and window become blank (white),
             // and the Window Display Bit [LcdControl::WINDOW_ENABLE] is ignored in that case.
             // Only objects may still be displayed (if enabled in Bit 1).
             if lcd_control.contains(LcdControl::WINDOW_ENABLE) {
-                self.when_window_enable(ly, lcd_control, vram);
+                self.when_window_enable(ly, lcd_control, vram, palettes);
             }
         }
 
         if lcd_control.contains(LcdControl::OBJ_ENABLE) {
-            self.when_obj_enable(&bgbuf, ly, lcd_control, vram);
+            self.when_obj_enable(&bgbuf, ly, lcd_control, vram, palettes);
         }
 
         Some(ly)
@@ -470,9 +480,10 @@ impl Gpu {
         scy: u8,
         ly: u8,
         lcd_control: LcdControl,
-        vram: &[u8; 0x2000]
+        vram: &[u8; 0x2000],
+        palettes: Dmg,
     ) {
-        self.cgb_ext.get_scanline_after_offset(
+        palettes.get_scanline_after_offset(
             scx,
             ly.wrapping_add(scy),
             vram,
@@ -483,9 +494,15 @@ impl Gpu {
         );
     }
 
-    fn when_window_enable(&mut self, ly: u8, lcd_control: LcdControl, vram: &[u8; 0x2000]) {
+    fn when_window_enable(
+        &mut self,
+        ly: u8,
+        lcd_control: LcdControl,
+        vram: &[u8; 0x2000],
+        palettes: Dmg,
+    ) {
         if ly >= self.wy {
-            self.cgb_ext.get_scanline_after_offset(
+            palettes.get_scanline_after_offset(
                 self.wx.saturating_sub(7),
                 ly - self.wy,
                 vram,
@@ -497,7 +514,14 @@ impl Gpu {
         }
     }
 
-    fn when_obj_enable(&mut self, bgbuf: &[u8; 160], ly: u8, lcd_control: LcdControl, vram: &[u8; 0x2000]) {
+    fn when_obj_enable(
+        &mut self,
+        bgbuf: &[u8; 160],
+        ly: u8,
+        lcd_control: LcdControl,
+        vram: &[u8; 0x2000],
+        palettes: Dmg,
+    ) {
         for oam in self.oam.chunks(4) {
             let ypos = oam[0];
 
@@ -513,7 +537,7 @@ impl Gpu {
                 continue;
             }
 
-            let attr = self.cgb_ext.get_sp_attr(oam[3], vram);
+            let attr = palettes.get_sp_attr(oam[3]);
 
             let tyoff = if attr.yflip {
                 lcd_control.get_spsize() - 1 - tyoff
@@ -541,7 +565,7 @@ impl Gpu {
             }
 
             let tbase = tiles + u16::from(ti) * 16;
-            let mut line = get_tile_line(tbase, tyoff, attr.vram_bank);
+            let mut line = get_tile_line(tbase, tyoff, vram);
 
             if attr.xflip {
                 // we have to shift only if the sprite is partially off-screen (screen left side)

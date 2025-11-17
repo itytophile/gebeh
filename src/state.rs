@@ -8,6 +8,8 @@ const SCX: u16 = 0xff43;
 const LY: u16 = 0xff44; // LCD Y
 const DMA: u16 = 0xff46;
 const BGP: u16 = 0xff47;
+const OBP0: u16 = 0xff48;
+const OBP1: u16 = 0xff49;
 const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 const HRAM: u16 = 0xff80;
 const INTERRUPT: u16 = 0xffff;
@@ -35,6 +37,8 @@ pub struct State {
     pub dma_register: u8,
     pub dma_request: bool,
     pub bgp_register: u8,
+    pub obp0: u8,
+    pub obp1: u8,
     pub interrupt_enable: Ints,
     pub interrupt_flag: Ints,
     pub audio: [u8; (WAVE - AUDIO) as usize],
@@ -57,6 +61,8 @@ impl State {
             dma_register: 0,
             dma_request: false,
             bgp_register: 0,
+            obp0: 0,
+            obp1: 0,
             interrupt_enable: Ints::empty(),
             interrupt_flag: Ints::empty(),
             audio: [0; (WAVE - AUDIO) as usize],
@@ -124,6 +130,8 @@ impl MmuRead<'_> {
             LY => self.0.ly,
             DMA => self.0.dma_register,
             BGP => self.0.bgp_register,
+            OBP0 => self.0.obp0,
+            OBP1 => self.0.obp1,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)],
             INTERRUPT => todo!(),
@@ -159,6 +167,8 @@ impl MmuWrite<'_> {
                 println!("BGP");
                 self.0.bgp_register = value
             }
+            OBP0 => self.0.obp0 = value,
+            OBP1 => self.0.obp1 = value,
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             INTERRUPT => todo!(),
