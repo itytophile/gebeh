@@ -24,6 +24,7 @@ impl StateMachine for Ppu {
         let lcd_control = state.lcd_control;
         let scx = state.scx;
         let scy = state.scy;
+        let vram = state.video_ram;
 
         move |state| {
             self.drawn_ly = self.gpu.step(
@@ -37,6 +38,7 @@ impl StateMachine for Ppu {
                 scx,
                 scy,
                 state,
+                &vram
             );
         }
     }

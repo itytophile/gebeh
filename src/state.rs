@@ -138,7 +138,10 @@ impl MmuWrite<'_> {
     pub fn write(&mut self, index: u16, value: u8) {
         match index {
             0..VIDEO_RAM => panic!("Trying to write to ROM"),
-            VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)] = value,
+            VIDEO_RAM..EXTERNAL_RAM => {
+                println!("VRAM ${index:04x} => 0x{value:x}");
+                self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
+            }
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
             SCY => {
