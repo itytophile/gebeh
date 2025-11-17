@@ -24,30 +24,34 @@ impl StateMachine for Ppu {
         let lcd_control = state.lcd_control;
         let scx = state.scx;
         let scy = state.scy;
-        let vram = state.video_ram;
         let bgp = state.bgp_register;
         let obp0 = state.obp0;
         let obp1 = state.obp1;
+        
+        let (drawn_ly, ly, irq) = self.gpu.step(
+            4,
+            Irq {
+                enable: ie,
+                request: ifl,
+            },
+            ly,
+            lcd_control,
+            scx,
+            scy,
+            &state.video_ram,
+            Dmg {
+                bg_palette: to_palette(bgp),
+                obj_palette0: to_palette(obp0),
+                obj_palette1: to_palette(obp1),
+            },
+        );
+        
+        self.drawn_ly = drawn_ly;
 
-        move |state| {
-            self.drawn_ly = self.gpu.step(
-                4,
-                Irq {
-                    enable: ie,
-                    request: ifl,
-                },
-                ly,
-                lcd_control,
-                scx,
-                scy,
-                state,
-                &vram,
-                Dmg {
-                    bg_palette: to_palette(bgp),
-                    obj_palette0: to_palette(obp0),
-                    obj_palette1: to_palette(obp1),
-                },
-            );
+        move |mut state| {
+            state.set_ly(ly);
+            state.set_ie(irq.enable);
+            state.set_if(irq.request);
         }
     }
 }

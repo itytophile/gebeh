@@ -2,7 +2,6 @@ use core::convert::TryInto;
 
 use crate::hardware::{VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::{Ints, Irq};
-use crate::state::WriteOnlyState;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
@@ -366,10 +365,9 @@ impl Gpu {
         lcd_control: LcdControl,
         scx: u8,
         scy: u8,
-        mut state: WriteOnlyState,
         vram: &[u8; 0x2000],
         palettes: Dmg,
-    ) -> Option<u8> {
+    ) -> (Option<u8>, u8, Irq) {
         self.write_ctrl(lcd_control, &mut irq);
         let clocks = self.clocks + time;
 
@@ -430,11 +428,8 @@ impl Gpu {
 
         self.clocks = clocks;
         self.mode = mode;
-        state.set_ly(ly);
-        state.set_ie(irq.enable);
-        state.set_if(irq.request);
 
-        drawn_ly
+        (drawn_ly, ly, irq)
     }
 
     #[inline(never)]
