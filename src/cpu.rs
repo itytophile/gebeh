@@ -300,6 +300,16 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.c_flag.get_mut() = carry;
                 *self.a.get_mut() = result;
             }
+            NoRead(Add8Bit(register)) => {
+                let a = self.a.get();
+                let register_value = self.get_8bit_register(register);
+                let (result, carry) = a.overflowing_add(register_value);
+                *self.z_flag.get_mut() = result == 0;
+                *self.n_flag.get_mut() = false;
+                *self.h_flag.get_mut() = set_h_add(a, register_value);
+                *self.c_flag.get_mut() = carry;
+                *self.a.get_mut() = result;
+            }
             NoRead(Di) => {
                 *self.ime.get_mut() = false;
             }

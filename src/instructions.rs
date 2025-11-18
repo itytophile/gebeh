@@ -91,7 +91,8 @@ pub enum NoReadInstruction {
     LoadToCachedAddressFromA,
     Sub(Register8Bit),
     Add,
-    Di
+    Di,
+    Add8Bit(Register8Bit)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -222,7 +223,7 @@ mod opcodes {
     }
 
     pub fn sub_r(register: Register8Bit) -> Instructions {
-        (NoRead(Sub(register)), Default::default())
+        (Sub(register).into(), Default::default())
     }
 
     // When there is a jump we have to put a Nop even if the condition will be true
@@ -230,8 +231,11 @@ mod opcodes {
     pub fn jr_cc_e(condition: Condition) -> Instructions {
         (
             Read(PC.into(), ConditionalRelativeJump(condition)),
-            vec([NoRead(Nop)]),
+            vec([Nop.into()]),
         )
+    }
+    pub fn add_r(register: Register8Bit) -> Instructions {
+        (Add8Bit(register).into(), Default::default())
     }
 }
 
@@ -313,7 +317,14 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x78 => ld_r_r(A, B),
         0x7b => ld_r_r(A, E),
         0x7d => ld_r_r(A, L),
+        0x80 => add_r(B),
+        0x81 => add_r(C),
+        0x82 => add_r(D),
+        0x83 => add_r(E),
+        0x84 => add_r(H),
+        0x85 => add_r(L),
         0x86 => (Read(HL.into(), ReadIntoLsb), vec([Add.into()])),
+        0x87 => add_r(A),
         0x90 => sub_r(B),
         0x91 => sub_r(C),
         0x92 => sub_r(D),
