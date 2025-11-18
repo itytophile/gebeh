@@ -1,5 +1,7 @@
 const VIDEO_RAM: u16 = 0x8000;
 const EXTERNAL_RAM: u16 = 0xa000;
+const WORK_RAM: u16 = 0xc000;
+const ECHO_RAM: u16 = 0xe000;
 const AUDIO: u16 = 0xff10;
 const WAVE: u16 = 0xff30;
 const LCD_CONTROL: u16 = 0xff40;
@@ -34,6 +36,7 @@ pub struct State {
     pub rom: &'static [u8],
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub hram: [u8; (INTERRUPT - HRAM) as usize],
+    pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
     pub dma_request: bool,
     pub bgp_register: u8,
@@ -58,6 +61,7 @@ impl State {
             boot_rom: &DMG_BOOT,
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
             hram: [0; (INTERRUPT - HRAM) as usize],
+            wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,
             bgp_register: 0,
@@ -123,6 +127,7 @@ impl MmuRead<'_> {
                 }
             }
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
+            WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
             SCY => self.0.scy,
@@ -150,6 +155,7 @@ impl MmuWrite<'_> {
                 println!("VRAM ${index:04x} => 0x{value:x}");
                 self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
             }
+            WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
             SCY => {
@@ -172,7 +178,7 @@ impl MmuWrite<'_> {
             HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             INTERRUPT => todo!(),
-            _ => todo!("{index:04x}"),
+            _ => todo!("${index:04x}"),
         }
     }
 }

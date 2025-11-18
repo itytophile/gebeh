@@ -39,9 +39,6 @@ fn main() {
     )
     .unwrap();
 
-    // Limit to max ~60 fps update rate
-    window.set_target_fps(60);
-
     while window.is_open() && !window.is_key_down(Key::Escape) {
         loop {
             machine.execute(&state)(WriteOnlyState::new(&mut state));
