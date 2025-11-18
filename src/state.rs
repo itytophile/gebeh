@@ -4,6 +4,8 @@ const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
 const SB: u16 = 0xff01; // Serial transfer data
 const SC: u16 = 0xff02; // Serial transfer control
+const TIMER_MODULO: u16 = 0xff06; // TMA
+const TIMER_CONTROL: u16 = 0xff07; // TAC
 const INTERRUPT_FLAG: u16 = 0xff0f;
 const AUDIO: u16 = 0xff10;
 const WAVE: u16 = 0xff30;
@@ -59,6 +61,8 @@ pub struct State {
     pub sc: u8,
     pub wy: u8,
     pub wx: u8,
+    pub timer_modulo: u8,
+    pub timer_control: u8
 }
 
 impl State {
@@ -89,6 +93,8 @@ impl State {
             sc: 0,
             wy: 0,
             wx: 0,
+            timer_modulo: 0,
+            timer_control: 0
         }
     }
 }
@@ -143,6 +149,8 @@ impl MmuRead<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             SB => self.0.sb,
             SC => self.0.sc,
+            TIMER_MODULO => self.0.timer_modulo,
+            TIMER_CONTROL => self.0.timer_control,
             INTERRUPT_FLAG => self.0.interrupt_flag.bits(),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
@@ -176,6 +184,8 @@ impl MmuWrite<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             SB => self.0.sb = value,
             SC => self.0.sc = value,
+            TIMER_MODULO => self.0.timer_modulo = value,
+            TIMER_CONTROL => self.0.timer_control = value,
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_retain(value),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
