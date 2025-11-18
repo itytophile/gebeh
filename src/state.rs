@@ -2,6 +2,7 @@ const VIDEO_RAM: u16 = 0x8000;
 const EXTERNAL_RAM: u16 = 0xa000;
 const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
+const INTERRUPT_FLAG: u16 = 0xff0f;
 const AUDIO: u16 = 0xff10;
 const WAVE: u16 = 0xff30;
 const LCD_CONTROL: u16 = 0xff40;
@@ -14,7 +15,7 @@ const OBP0: u16 = 0xff48;
 const OBP1: u16 = 0xff49;
 const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 const HRAM: u16 = 0xff80;
-const INTERRUPT: u16 = 0xffff;
+const INTERRUPT_ENABLE: u16 = 0xffff;
 
 const DMG_BOOT: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
@@ -35,7 +36,7 @@ pub struct State {
     pub boot_rom: &'static [u8; 256],
     pub rom: &'static [u8],
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-    pub hram: [u8; (INTERRUPT - HRAM) as usize],
+    pub hram: [u8; (INTERRUPT_ENABLE - HRAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
     pub dma_request: bool,
@@ -60,7 +61,7 @@ impl State {
         Self {
             boot_rom: &DMG_BOOT,
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-            hram: [0; (INTERRUPT - HRAM) as usize],
+            hram: [0; (INTERRUPT_ENABLE - HRAM) as usize],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,
@@ -128,6 +129,7 @@ impl MmuRead<'_> {
             }
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
+            INTERRUPT_FLAG => self.0.interrupt_flag.bits(),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
             SCY => self.0.scy,
@@ -138,15 +140,15 @@ impl MmuRead<'_> {
             OBP0 => self.0.obp0,
             OBP1 => self.0.obp1,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
-            HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)],
-            INTERRUPT => todo!(),
+            HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)],
+            INTERRUPT_ENABLE => self.0.interrupt_enable.bits(),
             _ => todo!("{index:04x}"),
         }
     }
 }
 
 pub struct MmuWrite<'a>(&'a mut State);
-
+// TODO gérer les interrupts
 impl MmuWrite<'_> {
     pub fn write(&mut self, index: u16, value: u8) {
         match index {
@@ -156,6 +158,7 @@ impl MmuWrite<'_> {
                 self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
             }
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
+            INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_retain(value),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
             SCY => {
@@ -175,9 +178,9 @@ impl MmuWrite<'_> {
             }
             OBP0 => self.0.obp0 = value,
             OBP1 => self.0.obp1 = value,
-            HRAM..INTERRUPT => self.0.hram[usize::from(index - HRAM)] = value,
+            HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
-            INTERRUPT => todo!(),
+            INTERRUPT_ENABLE => self.0.interrupt_enable = Ints::from_bits_retain(value),
             _ => todo!("${index:04x}"),
         }
     }
