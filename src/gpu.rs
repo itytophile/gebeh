@@ -214,9 +214,6 @@ pub struct Gpu {
 
     lyc: u8,
 
-    wx: u8,
-    wy: u8,
-
     oam: [u8; 0xa0],
 
     // useful to keep the data here to avoid the CPU struct to catch some generic bounds
@@ -329,8 +326,6 @@ impl Default for Gpu {
             lcd_status: LcdStatus::empty(),
             mode: Mode::None,
             lyc: 0,
-            wx: 0,
-            wy: 0,
 
             oam: [0; 0xa0],
             draw_line: [Default::default(); VRAM_WIDTH as usize],
@@ -367,6 +362,8 @@ impl Gpu {
         scy: u8,
         vram: &[u8; 0x2000],
         palettes: Dmg,
+        wy: u8,
+        wx: u8
     ) -> (Option<u8>, u8, Irq) {
         self.write_ctrl(lcd_control, &mut irq);
         let clocks = self.clocks + time;
@@ -376,7 +373,7 @@ impl Gpu {
         let (clocks, mode) = match (self.mode, clocks) {
             (Mode::OamScan, 80..) => (clocks - 80, Mode::Drawing),
             (Mode::Drawing, 172..) => {
-                drawn_ly = self.draw(ly, lcd_control, scx, scy, vram, palettes);
+                drawn_ly = self.draw(ly, lcd_control, scx, scy, vram, palettes, wy, wx);
 
                 if self.lcd_status.contains(LcdStatus::HBLANK_INT) {
                     irq.request |= Ints::LCD
@@ -441,6 +438,8 @@ impl Gpu {
         scy: u8,
         vram: &[u8; 0x2000],
         palettes: Dmg,
+        wy: u8,
+        wx: u8
     ) -> Option<u8> {
         if ly >= VRAM_HEIGHT {
             return None;
@@ -457,7 +456,7 @@ impl Gpu {
             // and the Window Display Bit [LcdControl::WINDOW_ENABLE] is ignored in that case.
             // Only objects may still be displayed (if enabled in Bit 1).
             if lcd_control.contains(LcdControl::WINDOW_ENABLE) {
-                self.when_window_enable(ly, lcd_control, vram, palettes);
+                self.when_window_enable(ly, lcd_control, vram, palettes, wy, wx);
             }
         }
 
@@ -495,11 +494,13 @@ impl Gpu {
         lcd_control: LcdControl,
         vram: &[u8; 0x2000],
         palettes: Dmg,
+        wy: u8,
+        wx: u8
     ) {
-        if ly >= self.wy {
+        if ly >= wy {
             palettes.get_scanline_after_offset(
-                self.wx.saturating_sub(7),
-                ly - self.wy,
+                wx.saturating_sub(7),
+                ly - wy,
                 vram,
                 lcd_control.get_bg_and_window_tile_area(),
                 lcd_control.get_winmap(),

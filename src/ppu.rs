@@ -44,6 +44,8 @@ impl StateMachine for Ppu {
                 obj_palette0: to_palette(obp0),
                 obj_palette1: to_palette(obp1),
             },
+            state.wy,
+            state.wx
         );
         
         self.drawn_ly = drawn_ly;

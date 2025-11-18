@@ -15,6 +15,8 @@ const DMA: u16 = 0xff46;
 const BGP: u16 = 0xff47;
 const OBP0: u16 = 0xff48;
 const OBP1: u16 = 0xff49;
+const WY: u16 = 0xff4a;
+const WX: u16 = 0xff4b;
 const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 const HRAM: u16 = 0xff80;
 const INTERRUPT_ENABLE: u16 = 0xffff;
@@ -54,7 +56,9 @@ pub struct State {
     pub ly: u8,
     pub boot_rom_mapping_control: u8,
     pub sb: u8,
-    pub sc: u8
+    pub sc: u8,
+    pub wy: u8,
+    pub wx: u8,
 }
 
 impl State {
@@ -82,7 +86,9 @@ impl State {
             rom,
             boot_rom_mapping_control: 0,
             sb: 0,
-            sc: 0
+            sc: 0,
+            wy: 0,
+            wx: 0,
         }
     }
 }
@@ -147,6 +153,8 @@ impl MmuRead<'_> {
             BGP => self.0.bgp_register,
             OBP0 => self.0.obp0,
             OBP1 => self.0.obp1,
+            WY => self.0.wy,
+            WX => self.0.wx,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)],
             INTERRUPT_ENABLE => self.0.interrupt_enable.bits(),
@@ -182,14 +190,13 @@ impl MmuWrite<'_> {
                 self.0.dma_request = true;
                 todo!()
             }
-            BGP => {
-                println!("BGP");
-                self.0.bgp_register = value
-            }
+            BGP => self.0.bgp_register = value,
             OBP0 => self.0.obp0 = value,
             OBP1 => self.0.obp1 = value,
-            HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
+            WY => self.0.wy = value,
+            WX => self.0.wx = value,
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
+            HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => self.0.interrupt_enable = Ints::from_bits_retain(value),
             _ => todo!("${index:04x}"),
         }
