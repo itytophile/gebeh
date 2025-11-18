@@ -2,6 +2,8 @@ const VIDEO_RAM: u16 = 0x8000;
 const EXTERNAL_RAM: u16 = 0xa000;
 const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
+const SB: u16 = 0xff01; // Serial transfer data
+const SC: u16 = 0xff02; // Serial transfer control
 const INTERRUPT_FLAG: u16 = 0xff0f;
 const AUDIO: u16 = 0xff10;
 const WAVE: u16 = 0xff30;
@@ -51,6 +53,8 @@ pub struct State {
     pub lcd_control: LcdControl,
     pub ly: u8,
     pub boot_rom_mapping_control: u8,
+    pub sb: u8,
+    pub sc: u8
 }
 
 impl State {
@@ -77,6 +81,8 @@ impl State {
             ly: 0,
             rom,
             boot_rom_mapping_control: 0,
+            sb: 0,
+            sc: 0
         }
     }
 }
@@ -129,6 +135,8 @@ impl MmuRead<'_> {
             }
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
+            SB => self.0.sb,
+            SC => self.0.sc,
             INTERRUPT_FLAG => self.0.interrupt_flag.bits(),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
@@ -158,6 +166,8 @@ impl MmuWrite<'_> {
                 self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
             }
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
+            SB => self.0.sb = value,
+            SC => self.0.sc = value,
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_retain(value),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
