@@ -28,6 +28,7 @@ pub struct PipelineExecutor {
     is_cb_mode: bool,
     pc: u16,
     instruction_register: Instructions,
+    ime: bool
 }
 
 enum PipelineAction {
@@ -298,6 +299,9 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.h_flag.get_mut() = set_h_add(a, lsb);
                 *self.c_flag.get_mut() = carry;
                 *self.a.get_mut() = result;
+            }
+            NoRead(Di) => {
+                *self.ime.get_mut() = false;
             }
         }
 

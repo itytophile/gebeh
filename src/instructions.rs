@@ -91,6 +91,7 @@ pub enum NoReadInstruction {
     LoadToCachedAddressFromA,
     Sub(Register8Bit),
     Add,
+    Di
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -375,6 +376,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xf1 => pop_rr(AF),
+        0xf3 => (Di.into(), Default::default()),
         0xf5 => push_rr(AF),
         0xfe => (Read(PC.into(), ReadIntoLsb), vec([Compare.into()])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
