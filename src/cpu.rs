@@ -361,6 +361,7 @@ impl StateMachine for PipelineExecutor {
             .into_iter()
             .find(|(flag, _)| interrupts_to_execute.contains(*flag))
         {
+            println!("Interrupt handler: {interrupt:?}");
             interrupt_flag_to_reset = Some(interrupt);
             *write_once.ime.get_mut() = false;
             // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#isr-and-nmi
@@ -379,6 +380,13 @@ impl StateMachine for PipelineExecutor {
         let should_load_next_opcode = write_once.instruction_register.get_ref().1.is_empty();
 
         let opcode = mmu.read(write_once.pc.get());
+
+        // if should_load_next_opcode {
+        //     println!(
+        //         "Read opcode at ${:04x} (0x{opcode:02x})",
+        //         write_once.pc.get()
+        //     );
+        // }
 
         let inst = write_once.instruction_register.get_ref().0;
 
@@ -421,10 +429,6 @@ impl StateMachine for PipelineExecutor {
             }
 
             if should_load_next_opcode {
-                // println!(
-                //     "Read opcode at ${:04x} (0x{opcode:02x})",
-                //     write_once.pc.get()
-                // );
                 *write_once.instruction_register.get_mut() =
                     get_instructions(opcode, write_once.is_cb_mode.get());
                 *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
