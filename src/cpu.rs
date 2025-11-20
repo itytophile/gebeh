@@ -324,6 +324,14 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(Res(bit, register)) => {
                 *self.get_8bit_register_mut(register) &= !(1 << bit);
             }
+            NoRead(And) => {
+                let result = self.a.get() & self.lsb.get();
+                *self.a.get_mut() = result;
+                *self.z_flag.get_mut() = result == 0;
+                *self.n_flag.get_mut() = false;
+                *self.h_flag.get_mut() = true;
+                *self.c_flag.get_mut() = false;
+            }
         }
 
         PipelineAction::Pop

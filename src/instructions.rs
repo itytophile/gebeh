@@ -96,6 +96,7 @@ pub enum NoReadInstruction {
     Add8Bit(Register8Bit),
     DecPc,
     Res(u8, Register8Bit),
+    And,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -380,6 +381,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xe1 => pop_rr(HL),
         0xe2 => (LoadFromAccumulator(Some(C)).into(), vec([Nop.into()])),
         0xe5 => push_rr(HL),
+        0xe6 => (Read(PC.into(), ReadIntoLsb), vec([And.into()])),
         0xea => (
             Read(PC.into(), ReadIntoLsb),
             vec([
@@ -405,7 +407,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
 
 fn get_instructions_cb_mode(opcode: u8) -> Instructions {
     use Register8Bit::*;
-    
+
     match opcode {
         0x7c => bit_b_r(7, H),
         0x11 => rl_r(C),
