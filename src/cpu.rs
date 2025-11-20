@@ -3,7 +3,7 @@ use crate::{
     ic::Ints,
     instructions::{
         AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
-        ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
+        ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions, vec,
     },
     state::{MmuWrite, State, WriteOnlyState},
 };
@@ -314,6 +314,13 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(Di) => {
                 *self.ime.get_mut() = false;
             }
+            NoRead(DecPc) => {
+                *self.pc.get_mut() -= 1;
+            }
+            NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
+                mmu.write(self.sp.get(), self.pc.get().to_be_bytes()[1]);
+                *self.pc.get_mut() = address;
+            }
         }
 
         PipelineAction::Pop
@@ -342,19 +349,31 @@ impl StateMachine for PipelineExecutor {
 
         let mut write_once = self.write_once();
 
+        // https://gbdev.io/pandocs/Interrupt_Sources.html
         if write_once.ime.get()
-            && let Some(interrupt) = [
-                Ints::VBLANK,
-                Ints::LCD,
-                Ints::TIMER,
-                Ints::SERIAL,
-                Ints::JOYPAD,
+            && let Some((interrupt, address)) = [
+                (Ints::VBLANK, 0x40),
+                (Ints::LCD, 0x48),
+                (Ints::TIMER, 0x50),
+                (Ints::SERIAL, 0x58),
+                (Ints::JOYPAD, 0x60),
             ]
             .into_iter()
-            .find(|flag| interrupts_to_execute.contains(*flag))
+            .find(|(flag, _)| interrupts_to_execute.contains(*flag))
         {
             interrupt_flag_to_reset = Some(interrupt);
             *write_once.ime.get_mut() = false;
+            // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#isr-and-nmi
+            use NoReadInstruction::*;
+            *write_once.instruction_register.get_mut() = (
+                DecPc.into(),
+                vec([
+                    Nop.into(),
+                    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
+                    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
+                    DecStackPointer.into(),
+                ]),
+            );
         }
 
         let should_load_next_opcode = write_once.instruction_register.get_ref().1.is_empty();

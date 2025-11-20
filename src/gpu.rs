@@ -363,7 +363,7 @@ impl Gpu {
         vram: &[u8; 0x2000],
         palettes: Dmg,
         wy: u8,
-        wx: u8
+        wx: u8,
     ) -> (Option<u8>, u8, Irq) {
         self.write_ctrl(lcd_control, &mut irq);
         let clocks = self.clocks + time;
@@ -439,7 +439,7 @@ impl Gpu {
         vram: &[u8; 0x2000],
         palettes: Dmg,
         wy: u8,
-        wx: u8
+        wx: u8,
     ) -> Option<u8> {
         if ly >= VRAM_HEIGHT {
             return None;
@@ -495,7 +495,7 @@ impl Gpu {
         vram: &[u8; 0x2000],
         palettes: Dmg,
         wy: u8,
-        wx: u8
+        wx: u8,
     ) {
         if ly >= wy {
             palettes.get_scanline_after_offset(

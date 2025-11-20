@@ -62,7 +62,7 @@ pub struct State {
     pub wy: u8,
     pub wx: u8,
     pub timer_modulo: u8,
-    pub timer_control: u8
+    pub timer_control: u8,
 }
 
 impl State {
@@ -94,7 +94,7 @@ impl State {
             wy: 0,
             wx: 0,
             timer_modulo: 0,
-            timer_control: 0
+            timer_control: 0,
         }
     }
 }

@@ -27,7 +27,7 @@ impl StateMachine for Ppu {
         let bgp = state.bgp_register;
         let obp0 = state.obp0;
         let obp1 = state.obp1;
-        
+
         let (drawn_ly, ly, irq) = self.gpu.step(
             4,
             Irq {
@@ -45,9 +45,9 @@ impl StateMachine for Ppu {
                 obj_palette1: to_palette(obp1),
             },
             state.wy,
-            state.wx
+            state.wx,
         );
-        
+
         self.drawn_ly = drawn_ly;
 
         move |mut state| {

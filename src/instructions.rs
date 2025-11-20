@@ -80,6 +80,7 @@ pub enum NoReadInstruction {
     DecStackPointer,
     WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit),
     WriteLsbPcWhereSpPointsAndLoadCacheToPc,
+    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(u16),
     Load {
         to: Register8Bit,
         from: Register8Bit,
@@ -92,7 +93,8 @@ pub enum NoReadInstruction {
     Sub(Register8Bit),
     Add,
     Di,
-    Add8Bit(Register8Bit)
+    Add8Bit(Register8Bit),
+    DecPc,
 }
 
 #[derive(Clone, Copy, Debug)]
