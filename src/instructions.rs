@@ -99,6 +99,7 @@ pub enum NoReadInstruction {
     DecPc,
     Res(u8, Register8Bit),
     And,
+    Or(Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -232,7 +233,7 @@ mod opcodes {
     pub fn dec_r(register: Register8Bit) -> Instructions {
         (Dec(register).into(), Default::default())
     }
-    
+
     pub fn dec_rr(register: Register16Bit) -> Instructions {
         (Dec16Bit(register).into(), vec([Nop.into()]))
     }
@@ -249,8 +250,13 @@ mod opcodes {
             vec([Nop.into()]),
         )
     }
+    
     pub fn add_r(register: Register8Bit) -> Instructions {
         (Add8Bit(register).into(), Default::default())
+    }
+    
+    pub fn or_r(register: Register8Bit) -> Instructions {
+        (Or(register).into(), Default::default())
     }
 }
 
@@ -316,7 +322,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x31 => ld_rr_n(SP),
         0x32 => (LoadToAddressHlFromADec.into(), vec([Nop.into()])),
         0x33 => inc_rr(SP),
-        0x36 => (Read(PC.into(), ReadIntoLsb), vec([Nop.into(), LoadToAddressHlN.into()])),
+        0x36 => (
+            Read(PC.into(), ReadIntoLsb),
+            vec([Nop.into(), LoadToAddressHlN.into()]),
+        ),
         0x3b => dec_rr(SP),
         0x3c => inc_r(A),
         0x3d => dec_r(A),
@@ -353,6 +362,13 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x95 => sub_r(L),
         0x97 => sub_r(A),
         0xaf => (Xor(A).into(), Default::default()),
+        0xb0 => or_r(B),
+        0xb1 => or_r(C),
+        0xb2 => or_r(D),
+        0xb3 => or_r(E),
+        0xb4 => or_r(H),
+        0xb5 => or_r(L),
+        0xb7 => or_r(A),
         0xbe => (Read(HL.into(), ReadIntoLsb), vec([Compare.into()])),
         0xc1 => pop_rr(BC),
         0xc3 => (

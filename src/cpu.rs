@@ -341,6 +341,14 @@ impl PipelineExecutorWriteOnce<'_> {
                     self.get_16bit_register(register).wrapping_sub(1),
                 );
             }
+            NoRead(Or(register)) => {
+                let result = self.a.get() | self.get_8bit_register(register);
+                *self.a.get_mut() = result;
+                *self.z_flag.get_mut() = result == 0;
+                *self.n_flag.get_mut() = false;
+                *self.h_flag.get_mut() = false;
+                *self.c_flag.get_mut() = false;
+            }
         }
 
         PipelineAction::Pop
