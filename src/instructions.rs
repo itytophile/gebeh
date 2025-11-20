@@ -271,6 +271,17 @@ mod opcodes {
     pub fn or_r(register: Register8Bit) -> Instructions {
         (Or(register).into(), Default::default())
     }
+    
+    pub fn ld_rr_r(address: Register16Bit, value: Register8Bit) -> Instructions {
+        (
+            LoadToAddressFromRegister {
+                address,
+                value,
+            }
+            .into(),
+            vec([Nop.into()]),
+        )
+    }
 }
 
 use opcodes::*;
@@ -299,6 +310,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x0e => ld_r_n(C),
         0x06 => ld_r_n(B),
         0x11 => ld_rr_n(DE),
+        0x12 => ld_rr_r(DE, A),
         0x13 => inc_rr(DE),
         0x14 => inc_r(D),
         0x15 => dec_r(D),
@@ -372,14 +384,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x67 => ld_r_r(H, A),
         0x7a => ld_r_r(A, D),
         0x7c => ld_r_r(A, H),
-        0x77 => (
-            LoadToAddressFromRegister {
-                address: HL,
-                value: A,
-            }
-            .into(),
-            vec([Nop.into()]),
-        ),
+        0x77 => ld_rr_r(HL, A),
         0x78 => ld_r_r(A, B),
         0x7b => ld_r_r(A, E),
         0x7d => ld_r_r(A, L),
