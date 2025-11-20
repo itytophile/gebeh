@@ -334,6 +334,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x4f => ld_r_r(C, A),
         0x57 => ld_r_r(D, A),
         0x67 => ld_r_r(H, A),
+        0x7a => ld_r_r(A, D),
         0x7c => ld_r_r(A, H),
         0x77 => (
             LoadToAddressFromRegister {
