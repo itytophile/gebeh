@@ -18,9 +18,10 @@ const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
 
 fn main() {
-    let rom =
-        std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
-            .unwrap();
+    // let rom =
+    //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
+    //         .unwrap();
+    let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default().compose(Ppu::default());

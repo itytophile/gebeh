@@ -326,6 +326,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             Read(PC.into(), ReadIntoLsb),
             vec([Nop.into(), LoadToAddressHlN.into()]),
         ),
+        0x38 => jr_cc_e(Condition { flag: Flag::C, not: false }),
         0x3b => dec_rr(SP),
         0x3c => inc_r(A),
         0x3d => dec_r(A),
