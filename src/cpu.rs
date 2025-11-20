@@ -332,6 +332,9 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.h_flag.get_mut() = true;
                 *self.c_flag.get_mut() = false;
             }
+            NoRead(LoadToAddressHlN) => {
+                mmu.write(self.get_16bit_register(Register16Bit::HL), self.lsb.get());
+            }
         }
 
         PipelineAction::Pop
