@@ -137,9 +137,8 @@ impl MmuRead<'_> {
                     if let Some(value) = self.0.boot_rom.get(usize::from(index)).copied() {
                         value
                     } else {
-                        let value = self.0.rom[usize::from(index)];
-                        println!("ROM ${index:04x} => 0x{value:02x}");
-                        value
+                        // println!("ROM ${index:04x} => 0x{value:02x}");
+                        self.0.rom[usize::from(index)]
                     }
                 } else {
                     self.0.rom[usize::from(index)]
@@ -178,7 +177,7 @@ impl MmuWrite<'_> {
         match index {
             0..VIDEO_RAM => panic!("Trying to write to ROM"),
             VIDEO_RAM..EXTERNAL_RAM => {
-                println!("VRAM ${index:04x} => 0x{value:x}");
+                // println!("VRAM ${index:04x} => 0x{value:x}");
                 self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
             }
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
@@ -190,7 +189,7 @@ impl MmuWrite<'_> {
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
             SCY => {
-                println!("SCY {value:x}");
+                // println!("SCY {value:x}");
                 self.0.scy = value
             }
             SCX => self.0.scx = value,

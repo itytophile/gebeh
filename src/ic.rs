@@ -44,25 +44,25 @@ bitflags::bitflags! {
 /// Read IE register (0xffff)
 pub fn read_enabled(irq: &Irq) -> u8 {
     let v = irq.enable.bits();
-    println!("Read interrupt enable: {:02x}", v);
+    // println!("Read interrupt enable: {:02x}", v);
     v
 }
 
 /// Write IF register (0xff0f)
 pub fn read_flags(irq: &Irq) -> u8 {
     let v = irq.request.bits();
-    println!("Read interrupt: {:02x}", v);
+    // println!("Read interrupt: {:02x}", v);
     v | 0xe0
 }
 
 /// Write IE register (0xffff)
 pub fn write_enabled(value: u8, irq: &mut Irq) {
-    println!("Write interrupt enable: {:02x}", value);
+    // println!("Write interrupt enable: {:02x}", value);
     irq.enable = Ints::from_bits_retain(value);
 }
 
 /// Write IF register (0xff0f)
 pub fn write_flags(value: u8, irq: &mut Irq) {
-    println!("Write interrupt: {:02x}", value);
+    // println!("Write interrupt: {:02x}", value);
     irq.request = Ints::from_bits_retain(value);
 }

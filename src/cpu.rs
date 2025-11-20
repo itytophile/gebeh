@@ -346,7 +346,7 @@ impl StateMachine for PipelineExecutor {
             Instruction::Read(ReadAddress::Register(Register16Bit::PC), _)
         );
 
-        print!("Executing {inst:?}");
+        // print!("Executing {inst:?}");
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -358,11 +358,11 @@ impl StateMachine for PipelineExecutor {
             }
         };
 
-        if let AfterReadInstruction::Read(value, _) = inst {
-            print!(", read: 0x{value:x}");
-        }
+        // if let AfterReadInstruction::Read(value, _) = inst {
+        //     print!(", read: 0x{value:x}");
+        // }
 
-        println!();
+        // println!();
 
         move |mut state| {
             if should_increment_pc {
@@ -377,10 +377,10 @@ impl StateMachine for PipelineExecutor {
             }
 
             if should_load_next_opcode {
-                println!(
-                    "Read opcode at ${:04x} (0x{opcode:02x})",
-                    write_once.pc.get()
-                );
+                // println!(
+                //     "Read opcode at ${:04x} (0x{opcode:02x})",
+                //     write_once.pc.get()
+                // );
                 *write_once.instruction_register.get_mut() =
                     get_instructions(opcode, write_once.is_cb_mode.get());
                 *write_once.is_cb_mode.get_mut() = opcode == 0xcb;

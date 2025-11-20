@@ -63,7 +63,7 @@ impl Dma {
         self.cycles = 160 * 4; // 160 machine cycles (* 4 for cpu cycles)
         self.src = (value as u16) << 8;
         self.dst = 0xfe00;
-        println!("Start DMA transfer: {:02x} to {:02x}", self.src, self.dst);
+        // println!("Start DMA transfer: {:02x} to {:02x}", self.src, self.dst);
     }
 
     /// Read DMA register (0xff46)
