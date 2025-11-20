@@ -125,6 +125,9 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_ly(&mut self, value: u8) {
         self.0.ly = value;
     }
+    pub fn remove_if_bit(&mut self, bit: Ints) {
+        self.0.interrupt_flag.remove(bit);
+    }
 }
 
 pub struct MmuRead<'a>(&'a State);

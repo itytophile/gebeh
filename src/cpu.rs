@@ -1,5 +1,6 @@
 use crate::{
     StateMachine,
+    ic::Ints,
     instructions::{
         AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
         ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
@@ -28,7 +29,7 @@ pub struct PipelineExecutor {
     is_cb_mode: bool,
     pc: u16,
     instruction_register: Instructions,
-    ime: bool
+    ime: bool,
 }
 
 enum PipelineAction {
@@ -333,8 +334,29 @@ impl PipelineExecutorWriteOnce<'_> {
 impl StateMachine for PipelineExecutor {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
         // we load the next opcode if there is only one instruction left in the pipeline
-        let should_load_next_opcode = self.instruction_register.1.is_empty();
         let mmu = state.mmu();
+
+        let interrupts_to_execute = state.interrupt_enable & state.interrupt_flag;
+
+        let mut interrupt_flag_to_reset = Option::<Ints>::None;
+
+        if self.ime
+            && let Some(interrupt) = [
+                Ints::VBLANK,
+                Ints::LCD,
+                Ints::TIMER,
+                Ints::SERIAL,
+                Ints::JOYPAD,
+            ]
+            .into_iter()
+            .find(|flag| interrupts_to_execute.contains(*flag))
+        {
+            interrupt_flag_to_reset = Some(interrupt);
+            self.ime = false;
+        }
+
+        let should_load_next_opcode = self.instruction_register.1.is_empty();
+
         let opcode = mmu.read(self.pc);
 
         let inst = self.instruction_register.0;
@@ -365,6 +387,9 @@ impl StateMachine for PipelineExecutor {
         // println!();
 
         move |mut state| {
+            if let Some(flag) = interrupt_flag_to_reset {
+                state.remove_if_bit(flag);
+            }
             if should_increment_pc {
                 *write_once.pc.get_mut() = write_once.pc.get().wrapping_add(1);
             }
