@@ -3,7 +3,8 @@ use crate::{
     ic::Ints,
     instructions::{
         AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
-        ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions, vec,
+        OpAfterRead, ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
+        vec,
     },
     state::{MmuWrite, State, WriteOnlyState},
 };
@@ -145,14 +146,6 @@ impl PipelineExecutorWriteOnce<'_> {
                                 ArrayVec::from_iter([Instruction::NoRead(Nop)]),
                             ));
                         }
-                    }
-                    PopStackIntoLsb => {
-                        *self.lsb.get_mut() = value;
-                        *self.sp.get_mut() = self.sp.get().wrapping_add(1);
-                    }
-                    PopStackIntoMsb => {
-                        *self.msb.get_mut() = value;
-                        *self.sp.get_mut() = self.sp.get().wrapping_add(1);
                     }
                 }
             }
@@ -418,11 +411,6 @@ impl StateMachine for PipelineExecutor {
 
         let inst = write_once.instruction_register.get_ref().0;
 
-        let should_increment_pc = matches!(
-            inst,
-            Instruction::Read(ReadAddress::Register(Register16Bit::PC), _)
-        );
-
         // print!("Executing {inst:?}");
 
         let inst = match inst {
@@ -430,8 +418,18 @@ impl StateMachine for PipelineExecutor {
             Instruction::Read(ReadAddress::Accumulator, read) => {
                 AfterReadInstruction::Read(mmu.read(0xff00 | (write_once.lsb.get() as u16)), read)
             }
-            Instruction::Read(ReadAddress::Register(register), read) => {
-                AfterReadInstruction::Read(mmu.read(write_once.get_16bit_register(register)), read)
+            Instruction::Read(ReadAddress::Register { register, op }, read) => {
+                let register_value = write_once.get_16bit_register(register);
+                match op {
+                    OpAfterRead::None => {}
+                    OpAfterRead::Inc => {
+                        write_once.set_16bit_register(register, register_value.wrapping_add(1));
+                    }
+                    OpAfterRead::Dec => {
+                        write_once.set_16bit_register(register, register_value.wrapping_sub(1));
+                    }
+                }
+                AfterReadInstruction::Read(mmu.read(register_value), read)
             }
         };
 
@@ -444,9 +442,6 @@ impl StateMachine for PipelineExecutor {
         move |mut state| {
             if let Some(flag) = interrupt_flag_to_reset {
                 state.remove_if_bit(flag);
-            }
-            if should_increment_pc {
-                *write_once.pc.get_mut() = write_once.pc.get().wrapping_add(1);
             }
 
             match write_once.execute_instruction(state.mmu(), inst) {

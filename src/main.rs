@@ -21,7 +21,8 @@ fn main() {
     // let rom =
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
     //         .unwrap();
-    let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
+    let rom = std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb").unwrap();
+    println!("Cartridge type: 0x{}", rom[0x147]);
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default().compose(Ppu::default());
