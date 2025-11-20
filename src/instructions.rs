@@ -337,6 +337,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             flag: Flag::Z,
             not: false,
         }),
+        0x2a => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::Inc,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Store8Bit(A).into()]),
+        ),
         0x2b => dec_rr(HL),
         0x2c => inc_r(L),
         0x2d => dec_r(L),
