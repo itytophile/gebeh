@@ -444,6 +444,9 @@ impl StateMachine for PipelineExecutor {
                 state.remove_if_bit(flag);
             }
 
+            // TODO reétudier l'ordre d'exécution de l'opcode fetching.
+            // Il est préférable que ça marche tout le temps, mais quand on inverse les deux
+            // blocs cela ne marche plus
             match write_once.execute_instruction(state.mmu(), inst) {
                 PipelineAction::Pop => write_once.pipeline_pop_front(),
                 PipelineAction::Replace(instructions) => {
