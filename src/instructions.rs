@@ -95,6 +95,7 @@ pub enum NoReadInstruction {
     Di,
     Add8Bit(Register8Bit),
     DecPc,
+    Res(u8, Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -165,63 +166,68 @@ mod opcodes {
     pub fn ld_r_n(register: Register8Bit) -> Instructions {
         (
             Read(PC.into(), ReadIntoLsb),
-            vec([NoRead(Store8Bit(register))]),
+            vec([Store8Bit(register).into()]),
         )
     }
 
     pub fn ld_r_r(to: Register8Bit, from: Register8Bit) -> Instructions {
-        (NoRead(Load { to, from }), Default::default())
+        (Load { to, from }.into(), Default::default())
     }
 
     pub fn ld_rr_n(register: Register16Bit) -> Instructions {
         (
             Read(PC.into(), ReadIntoLsb),
-            vec([NoRead(Store16Bit(register)), Read(PC.into(), ReadIntoMsb)]),
+            vec([Store16Bit(register).into(), Read(PC.into(), ReadIntoMsb)]),
         )
     }
 
     pub fn push_rr(register: Register16Bit) -> Instructions {
         (
-            NoRead(DecStackPointer),
+            DecStackPointer.into(),
             vec([
-                NoRead(Nop),
-                NoRead(LoadToAddressFromRegister {
+                Nop.into(),
+                LoadToAddressFromRegister {
                     address: Register16Bit::SP,
                     value: register.get_lsb(),
-                }),
-                NoRead(WriteMsbOfRegisterWhereSpPointsAndDecSp(register)),
+                }
+                .into(),
+                WriteMsbOfRegisterWhereSpPointsAndDecSp(register).into(),
             ]),
         )
     }
 
     pub fn bit_b_r(bit: u8, register: Register8Bit) -> Instructions {
-        (NoRead(Bit(bit, register)), Default::default())
+        (Bit(bit, register).into(), Default::default())
     }
 
     pub fn rl_r(register: Register8Bit) -> Instructions {
-        (NoRead(Rl(register)), Default::default())
+        (Rl(register).into(), Default::default())
+    }
+
+    pub fn res_b_r(bit: u8, register: Register8Bit) -> Instructions {
+        (Res(bit, register).into(), Default::default())
     }
 
     pub fn pop_rr(register: Register16Bit) -> Instructions {
         (
             Read(SP.into(), PopStackIntoLsb),
             vec([
-                NoRead(Store16Bit(register)),
+                Store16Bit(register).into(),
                 Read(SP.into(), PopStackIntoMsb),
             ]),
         )
     }
 
     pub fn inc_r(register: Register8Bit) -> Instructions {
-        (NoRead(Inc(register)), Default::default())
+        (Inc(register).into(), Default::default())
     }
 
     pub fn inc_rr(register: Register16Bit) -> Instructions {
-        (NoRead(Inc16Bit(register)), vec([NoRead(Nop)]))
+        (Inc16Bit(register).into(), vec([Nop.into()]))
     }
 
     pub fn dec_r(register: Register8Bit) -> Instructions {
-        (NoRead(Dec(register)), Default::default())
+        (Dec(register).into(), Default::default())
     }
 
     pub fn sub_r(register: Register8Bit) -> Instructions {
@@ -398,9 +404,12 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
 }
 
 fn get_instructions_cb_mode(opcode: u8) -> Instructions {
+    use Register8Bit::*;
+    
     match opcode {
-        0x7c => bit_b_r(7, Register8Bit::H),
-        0x11 => rl_r(Register8Bit::C),
+        0x7c => bit_b_r(7, H),
+        0x11 => rl_r(C),
+        0x87 => res_b_r(0, A),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
 }

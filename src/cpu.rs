@@ -321,6 +321,9 @@ impl PipelineExecutorWriteOnce<'_> {
                 mmu.write(self.sp.get(), self.pc.get().to_be_bytes()[1]);
                 *self.pc.get_mut() = address;
             }
+            NoRead(Res(bit, register)) => {
+                *self.get_8bit_register_mut(register) &= !(1 << bit);
+            }
         }
 
         PipelineAction::Pop
