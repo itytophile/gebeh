@@ -340,7 +340,9 @@ impl StateMachine for PipelineExecutor {
 
         let mut interrupt_flag_to_reset = Option::<Ints>::None;
 
-        if self.ime
+        let mut write_once = self.write_once();
+
+        if write_once.ime.get()
             && let Some(interrupt) = [
                 Ints::VBLANK,
                 Ints::LCD,
@@ -352,16 +354,14 @@ impl StateMachine for PipelineExecutor {
             .find(|flag| interrupts_to_execute.contains(*flag))
         {
             interrupt_flag_to_reset = Some(interrupt);
-            self.ime = false;
+            *write_once.ime.get_mut() = false;
         }
 
-        let should_load_next_opcode = self.instruction_register.1.is_empty();
+        let should_load_next_opcode = write_once.instruction_register.get_ref().1.is_empty();
 
-        let opcode = mmu.read(self.pc);
+        let opcode = mmu.read(write_once.pc.get());
 
-        let inst = self.instruction_register.0;
-
-        let mut write_once = self.write_once();
+        let inst = write_once.instruction_register.get_ref().0;
 
         let should_increment_pc = matches!(
             inst,
