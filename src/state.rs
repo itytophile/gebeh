@@ -174,11 +174,11 @@ impl MmuRead<'_> {
 }
 
 pub struct MmuWrite<'a>(&'a mut State);
-// TODO gérer les interrupts
+
 impl MmuWrite<'_> {
     pub fn write(&mut self, index: u16, value: u8) {
         match index {
-            0..VIDEO_RAM => panic!("Trying to write to ROM"),
+            0..VIDEO_RAM => panic!("Trying to write to ROM at ${index:04x} with 0x{value:02x}"),
             VIDEO_RAM..EXTERNAL_RAM => {
                 // println!("VRAM ${index:04x} => 0x{value:x}");
                 self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
