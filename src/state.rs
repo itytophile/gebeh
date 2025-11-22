@@ -1,6 +1,8 @@
-const VIDEO_RAM: u16 = 0x8000;
-const EXTERNAL_RAM: u16 = 0xa000;
-const WORK_RAM: u16 = 0xc000;
+pub const ROM_BANK: u16 = 0x0000;
+pub const SWITCHABLE_ROM_BANK: u16 = 0x4000;
+pub const VIDEO_RAM: u16 = 0x8000;
+pub const EXTERNAL_RAM: u16 = 0xa000;
+pub const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
 const SB: u16 = 0xff01; // Serial transfer data
 const SC: u16 = 0xff02; // Serial transfer control
