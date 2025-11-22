@@ -26,6 +26,7 @@ fn main() {
     let rom =
         std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
             .unwrap();
+    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
     let title = &rom[0x134..0x143];
     let end_zero_pos = title
         .iter()
@@ -33,9 +34,13 @@ fn main() {
         .unwrap_or(title.len());
     let title = str::from_utf8(&title[..end_zero_pos]).unwrap();
     println!("Title: {title}");
+    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
     let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
-
     println!("Cartridge type: {cartridge_type:?}");
+    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0148--rom-size
+    let rom_size = rom[0x148];
+    println!("ROM size: {} KiB", 32 * (1 << rom_size));
+    
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default().compose(Ppu::default());
