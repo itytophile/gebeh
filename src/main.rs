@@ -26,7 +26,15 @@ fn main() {
     let rom =
         std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
             .unwrap();
+    let title = &rom[0x134..0x143];
+    let end_zero_pos = title
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(title.len());
+    let title = str::from_utf8(&title[..end_zero_pos]).unwrap();
+    println!("Title: {title}");
     let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
+
     println!("Cartridge type: {cartridge_type:?}");
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
