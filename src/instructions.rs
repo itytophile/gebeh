@@ -271,14 +271,10 @@ mod opcodes {
     pub fn or_r(register: Register8Bit) -> Instructions {
         (Or(register).into(), Default::default())
     }
-    
+
     pub fn ld_rr_r(address: Register16Bit, value: Register8Bit) -> Instructions {
         (
-            LoadToAddressFromRegister {
-                address,
-                value,
-            }
-            .into(),
+            LoadToAddressFromRegister { address, value }.into(),
             vec([Nop.into()]),
         )
     }

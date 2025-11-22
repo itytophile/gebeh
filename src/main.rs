@@ -1,10 +1,12 @@
 use minifb::{Key, Scale, Window, WindowOptions};
 
 use crate::{
+    cartridge::CartridgeType,
     cpu::PipelineExecutor,
     ppu::Ppu,
     state::{State, WriteOnlyState},
 };
+mod cartridge;
 mod cpu;
 mod dma;
 mod gpu;
@@ -21,8 +23,11 @@ fn main() {
     // let rom =
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
     //         .unwrap();
-    let rom = std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb").unwrap();
-    println!("Cartridge type: 0x{}", rom[0x147]);
+    let rom =
+        std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
+            .unwrap();
+    let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
+    println!("Cartridge type: {cartridge_type:?}");
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default().compose(Ppu::default());
