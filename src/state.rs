@@ -6,6 +6,7 @@ pub const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
 const SB: u16 = 0xff01; // Serial transfer data
 const SC: u16 = 0xff02; // Serial transfer control
+const TIMER_COUNTER: u16 = 0xff05; // TIMA
 const TIMER_MODULO: u16 = 0xff06; // TMA
 const TIMER_CONTROL: u16 = 0xff07; // TAC
 const INTERRUPT_FLAG: u16 = 0xff0f;
@@ -65,6 +66,7 @@ pub struct State {
     pub wx: u8,
     pub timer_modulo: u8,
     pub timer_control: u8,
+    pub timer_counter: u8
 }
 
 impl State {
@@ -97,6 +99,7 @@ impl State {
             wx: 0,
             timer_modulo: 0,
             timer_control: 0,
+            timer_counter: 0
         }
     }
 }
@@ -151,6 +154,8 @@ impl MmuRead<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             SB => self.0.sb,
             SC => self.0.sc,
+            // TODO gérer le timer
+            TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control,
             INTERRUPT_FLAG => self.0.interrupt_flag.bits(),
@@ -187,6 +192,7 @@ impl MmuWrite<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             SB => self.0.sb = value,
             SC => self.0.sc = value,
+            TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_retain(value),
