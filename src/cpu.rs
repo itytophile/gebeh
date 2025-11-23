@@ -278,6 +278,17 @@ impl PipelineExecutorWriteOnce<'_> {
                 flags.set(Flags::C, new_carry);
                 *self.f.get_mut() = flags;
             }
+            NoRead(Srl(register)) => {
+                let register_value = self.get_8bit_register(register);
+                let result = register_value >> 1;
+                self.set_8bit_register(register, result);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.set(Flags::C, (register_value & 0x1) == 0x1);
+                *self.f.get_mut() = flags;
+            }
             NoRead(Rla) => {
                 let new_carry = (self.a.get() & 0x80) == 0x80;
                 *self.a.get_mut() = (self.a.get() << 1) | (self.f.get().contains(Flags::C) as u8);

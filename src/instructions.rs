@@ -89,6 +89,7 @@ pub enum NoReadInstruction {
         from: Register8Bit,
     },
     Rl(Register8Bit),
+    Srl(Register8Bit),
     Rla,
     Dec(Register8Bit),
     Dec16Bit(Register16Bit),
@@ -241,6 +242,10 @@ mod opcodes {
 
     pub fn rl_r(register: Register8Bit) -> Instructions {
         (Rl(register).into(), Default::default())
+    }
+    
+    pub fn srl_r(register: Register8Bit) -> Instructions {
+        (Srl(register).into(), Default::default())
     }
 
     pub fn res_b_r(bit: u8, register: Register8Bit) -> Instructions {
@@ -572,7 +577,20 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
 
     match opcode {
         0x7c => bit_b_r(7, H),
+        0x10 => rl_r(B),
         0x11 => rl_r(C),
+        0x12 => rl_r(D),
+        0x13 => rl_r(E),
+        0x14 => rl_r(H),
+        0x15 => rl_r(L),
+        0x17 => rl_r(A),
+        0x38 => srl_r(B),
+        0x39 => srl_r(C),
+        0x3a => srl_r(D),
+        0x3b => srl_r(E),
+        0x3c => srl_r(H),
+        0x3d => srl_r(L),
+        0x3f => srl_r(A),
         0x87 => res_b_r(0, A),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
