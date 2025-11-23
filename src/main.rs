@@ -19,6 +19,22 @@ mod state;
 const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
 
+pub fn get_factor_32_kib_rom(rom: &[u8]) -> u8 {
+    1 << rom[0x148]
+}
+
+// https://gbdev.io/pandocs/The_Cartridge_Header.html#0149--ram-size
+pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
+    match rom[0x149] {
+        0 => 0,
+        2 => 1,
+        3 => 4,
+        4 => 16,
+        5 => 8,
+        _ => panic!(),
+    }
+}
+
 fn main() {
     // let rom =
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
@@ -38,9 +54,9 @@ fn main() {
     let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
     println!("Cartridge type: {cartridge_type:?}");
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0148--rom-size
-    let rom_size = rom[0x148];
-    println!("ROM size: {} KiB", 32 * (1 << rom_size));
-    
+    println!("ROM size: {} KiB", get_factor_32_kib_rom(&rom) * 32);
+    println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
+
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = PipelineExecutor::default().compose(Ppu::default());

@@ -1,4 +1,7 @@
-use crate::state::{EXTERNAL_RAM, ROM_BANK, SWITCHABLE_ROM_BANK, VIDEO_RAM, WORK_RAM};
+use crate::{
+    get_factor_8_kib_ram, get_factor_32_kib_rom,
+    state::{EXTERNAL_RAM, ROM_BANK, SWITCHABLE_ROM_BANK, VIDEO_RAM, WORK_RAM},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CartridgeType {
@@ -30,7 +33,7 @@ pub struct Mbc1 {
     rom: &'static [u8],
     rom_offset: u16,
     // 32 KiB
-    ram: [u8; 0x40000],
+    ram: [u8; 0x8000],
     ram_offset: u16,
     ram_enabled: bool,
     rom_bank_count: u8,
@@ -41,6 +44,17 @@ pub const ROM_BANK_SIZE: u16 = 16384;
 pub const RAM_BANK_SIZE: u16 = 8192;
 
 impl Mbc1 {
+    fn new(rom: &'static [u8]) -> Self {
+        Self {
+            rom,
+            rom_offset: SWITCHABLE_ROM_BANK,
+            ram_offset: 0,
+            rom_bank_count: get_factor_32_kib_rom(rom) * 2,
+            ram_bank_count: get_factor_8_kib_ram(rom),
+            ram: [0; 0x8000],
+            ram_enabled: false,
+        }
+    }
     fn read(&self, index: u16) -> u8 {
         match index {
             ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
