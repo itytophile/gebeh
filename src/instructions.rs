@@ -287,7 +287,7 @@ mod opcodes {
             vec([Nop.into(), Read(CONSUME_PC, ConditionalCall(condition))]),
         )
     }
-    
+
     pub fn xor_r(register: Register8Bit) -> Instructions {
         (Xor(register).into(), Default::default())
     }
@@ -459,6 +459,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             not: true,
         }),
         0xc5 => push_rr(BC),
+        0xc6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Add.into()])),
         0xc9 => (
             Read(POP_SP, ReadIntoLsb),
             vec([
