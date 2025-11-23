@@ -680,6 +680,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xf1 => pop_rr(AF),
         0xf3 => (Di.into(), Default::default()),
         0xf5 => push_rr(AF),
+        0xf6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Or.into()])),
         0xfa => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
