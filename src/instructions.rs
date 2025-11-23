@@ -113,6 +113,7 @@ pub enum NoReadInstruction {
     // besoin d'un refactoring pour lui
     JumpHl,
     Adc,
+    ConditionalReturn(Condition),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -146,7 +147,7 @@ const CONSUME_PC: ReadAddress = ReadAddress::Register {
     op: OpAfterRead::Inc,
 };
 
-const POP_SP: ReadAddress = ReadAddress::Register {
+pub const POP_SP: ReadAddress = ReadAddress::Register {
     register: Register16Bit::SP,
     op: OpAfterRead::Inc,
 };
@@ -331,6 +332,10 @@ mod opcodes {
             AddHlFirst(register.get_lsb()).into(),
             vec([AddHlSecond(register.get_msb()).into()]),
         )
+    }
+
+    pub fn ret_cc(condition: Condition) -> Instructions {
+        (ConditionalReturn(condition).into(), vec([Nop.into()]))
     }
 }
 
@@ -540,6 +545,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ),
             vec([Compare.into()]),
         ),
+        0xc0 => ret_cc(Condition { flag: Flag::Z, not: true }),
         0xc1 => pop_rr(BC),
         0xc3 => (
             Read(CONSUME_PC, ReadIntoLsb),
@@ -555,6 +561,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         }),
         0xc5 => push_rr(BC),
         0xc6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Add.into()])),
+        0xc8 => ret_cc(Condition { flag: Flag::Z, not: false }),
         0xc9 => (
             Read(POP_SP, ReadIntoLsb),
             vec([
@@ -579,6 +586,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xce => (Read(CONSUME_PC, ReadIntoLsb), vec([Adc.into()])),
+        0xd0 => ret_cc(Condition { flag: Flag::C, not: true }),
         0xd1 => pop_rr(DE),
         0xd4 => call_cc_nn(Condition {
             flag: Flag::C,
@@ -586,6 +594,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         }),
         0xd5 => push_rr(DE),
         0xd6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Sub.into()])),
+        0xd8 => ret_cc(Condition { flag: Flag::C, not: false }),
         0xdc => call_cc_nn(Condition {
             flag: Flag::C,
             not: false,

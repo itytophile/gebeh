@@ -3,8 +3,8 @@ use crate::{
     ic::Ints,
     instructions::{
         AfterReadInstruction, Condition, Flag, Instruction, Instructions, NoReadInstruction,
-        OpAfterRead, ReadAddress, ReadInstruction, Register8Bit, Register16Bit, get_instructions,
-        vec,
+        OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit, Register16Bit,
+        get_instructions, vec,
     },
     state::{MmuWrite, State, WriteOnlyState},
 };
@@ -515,6 +515,19 @@ impl PipelineExecutorWriteOnce<'_> {
                 flags.set(Flags::C, carry);
                 *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
+            }
+            NoRead(ConditionalReturn(Condition { flag, not })) => {
+                if self.get_flag(flag) != not {
+                    return PipelineAction::Replace((
+                        Instruction::Read(POP_SP, ReadIntoLsb),
+                        // important to match the cycle and not conflict with the overlapping opcode fetch
+                        vec([
+                            Nop.into(),
+                            Store16Bit(Register16Bit::PC).into(),
+                            Instruction::Read(POP_SP, ReadIntoMsb),
+                        ]),
+                    ));
+                }
             }
         }
 
