@@ -103,6 +103,8 @@ pub enum NoReadInstruction {
     Add,
     Di,
     Add8Bit(Register8Bit),
+    AddHlFirst(Register8Bit),
+    AddHlSecond(Register8Bit),
     DecPc,
     Res(u8, Register8Bit),
     And,
@@ -321,6 +323,13 @@ mod opcodes {
     pub fn xor_r(register: Register8Bit) -> Instructions {
         (Xor8Bit(register).into(), Default::default())
     }
+
+    pub fn add_hl_rr(register: Register16Bit) -> Instructions {
+        (
+            AddHlFirst(register.get_lsb()).into(),
+            vec([AddHlSecond(register.get_msb()).into()]),
+        )
+    }
 }
 
 use opcodes::*;
@@ -343,6 +352,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x03 => inc_rr(BC),
         0x04 => inc_r(B),
         0x05 => dec_r(B),
+        0x09 => add_hl_rr(BC),
         0x0b => dec_rr(BC),
         0x0c => inc_r(C),
         0x0d => dec_r(C),
@@ -358,6 +368,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), OffsetPc.into()]),
         ),
+        0x19 => add_hl_rr(DE),
         0x1b => dec_rr(DE),
         0x1c => inc_r(E),
         0x1d => dec_r(E),
@@ -388,6 +399,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             flag: Flag::Z,
             not: false,
         }),
+        0x29 => add_hl_rr(HL),
         0x2a => (
             Read(
                 ReadAddress::Register {
@@ -427,6 +439,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             flag: Flag::C,
             not: false,
         }),
+        0x39 => add_hl_rr(SP),
         0x3b => dec_rr(SP),
         0x3c => inc_r(A),
         0x3d => dec_r(A),

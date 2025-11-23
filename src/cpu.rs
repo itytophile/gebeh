@@ -42,6 +42,13 @@ pub fn set_h_add(arg1: u8, arg2: u8) -> bool {
     ((lo1 + lo2) & (0x10)) == 0x10
 }
 
+pub fn set_h_add_with_carry(arg1: u8, arg2: u8, carry: bool) -> bool {
+    let lo1 = arg1 & 0x0F;
+    let lo2 = arg2 & 0x0F;
+
+    ((lo1 + lo2 + carry as u8) & (0x10)) == 0x10
+}
+
 pub fn set_h_sub(arg1: u8, arg2: u8) -> bool {
     let lo1 = arg1 & 0x0F;
     let lo2 = arg2 & 0x0F;
@@ -459,6 +466,35 @@ impl PipelineExecutorWriteOnce<'_> {
                 flags.remove(Flags::H);
                 flags.remove(Flags::C);
                 *self.f.get_mut() = flags;
+            }
+            NoRead(AddHlFirst(register)) => {
+                let l = self.l.get();
+                let register_value = self.get_8bit_register(register);
+                let (result, carry) = l.overflowing_add(register_value);
+                let mut flags = self.f.get();
+                // no z
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(l, register_value));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.l.get_mut() = result;
+            }
+            NoRead(AddHlSecond(register)) => {
+                let h = self.h.get();
+                let register_value = self.get_8bit_register(register);
+                let (result, mut carry) = h.overflowing_add(register_value);
+                let mut flags = self.f.get();
+                let (result, carry1) = result.overflowing_add(flags.contains(Flags::C) as u8);
+                carry |= carry1;
+                // no z
+                flags.remove(Flags::N);
+                flags.set(
+                    Flags::H,
+                    set_h_add_with_carry(h, register_value, flags.contains(Flags::C)),
+                );
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.h.get_mut() = result;
             }
         }
 
