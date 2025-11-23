@@ -550,6 +550,12 @@ impl PipelineExecutorWriteOnce<'_> {
                     ));
                 }
             }
+            NoRead(SetHl(bit)) => {
+                mmu.write(
+                    self.get_16bit_register(Register16Bit::HL),
+                    self.lsb.get() | (1 << bit),
+                );
+            }
         }
 
         PipelineAction::Pop

@@ -114,6 +114,7 @@ pub enum NoReadInstruction {
     JumpHl,
     Adc,
     ConditionalReturn(Condition),
+    SetHl(u8)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -360,6 +361,19 @@ mod opcodes {
                 ReadIntoLsb,
             ),
             vec([Nop.into(), ResHl(bit).into()]),
+        )
+    }
+    
+    pub fn set_b_hl(bit: u8) -> Instructions {
+        (
+            Read(
+                ReadAddress::Register {
+                    register: Register16Bit::HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Nop.into(), SetHl(bit).into()]),
         )
     }
 }
@@ -737,6 +751,14 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0xae => res_b_hl(5),
         0xb6 => res_b_hl(6),
         0xbe => res_b_hl(7),
+        0xc6 => set_b_hl(0),
+        0xce => set_b_hl(1),
+        0xd6 => set_b_hl(2),
+        0xde => set_b_hl(3),
+        0xe6 => set_b_hl(4),
+        0xee => set_b_hl(5),
+        0xf6 => set_b_hl(6),
+        0xfe => set_b_hl(7),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
 }
