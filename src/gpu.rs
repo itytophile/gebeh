@@ -5,7 +5,7 @@ use crate::ic::{Ints, Irq};
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
-    struct LcdStatus: u8 {
+    pub struct LcdStatus: u8 {
         const LYC_INT = 1 << 6;
         const OAM_INT = 1 << 5;
         const VBLANK_INT = 1 << 4;
@@ -15,7 +15,7 @@ bitflags::bitflags! {
 
 // https://gbdev.io/pandocs/Rendering.html#ppu-modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mode {
+pub enum Mode {
     OamScan,
     Drawing,
     HBlank,
@@ -209,8 +209,8 @@ impl LcdControl {
 pub struct Gpu {
     clocks: usize,
 
-    lcd_status: LcdStatus,
-    mode: Mode,
+    pub lcd_status: LcdStatus,
+    pub mode: Mode,
 
     lyc: u8,
 

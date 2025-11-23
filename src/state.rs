@@ -13,9 +13,11 @@ const INTERRUPT_FLAG: u16 = 0xff0f;
 const AUDIO: u16 = 0xff10;
 const WAVE: u16 = 0xff30;
 const LCD_CONTROL: u16 = 0xff40;
+const LCD_STATUS: u16 = 0xff41;
 const SCY: u16 = 0xff42;
 const SCX: u16 = 0xff43;
 const LY: u16 = 0xff44; // LCD Y
+const LYC: u16 = 0xff45; // LY compare
 const DMA: u16 = 0xff46;
 const BGP: u16 = 0xff47;
 const OBP0: u16 = 0xff48;
@@ -58,7 +60,9 @@ pub struct State {
     pub scy: u8,
     pub scx: u8,
     pub lcd_control: LcdControl,
+    pub lcd_status: u8,
     pub ly: u8,
+    pub lyc: u8,
     pub boot_rom_mapping_control: u8,
     pub sb: u8,
     pub sc: u8,
@@ -91,6 +95,7 @@ impl State {
             scy: 0,
             lcd_control: LcdControl::empty(),
             ly: 0,
+            lyc: 0,
             mbc: Mbc::new(rom),
             boot_rom_mapping_control: 0,
             sb: 0,
@@ -100,11 +105,15 @@ impl State {
             timer_modulo: 0,
             timer_control: 0,
             timer_counter: 0,
+            lcd_status: 0,
         }
+    }
+    pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
+        self.lcd_status = (self.lcd_status & 0b111) | (value & 0b11111000)
     }
 }
 
-use crate::{cartridge::Mbc, gpu::LcdControl, ic::Ints};
+use crate::{cartridge::Mbc, gpu::{self, LcdControl}, ic::Ints};
 
 pub struct WriteOnlyState<'a>(&'a mut State);
 
@@ -137,6 +146,12 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_timer_counter(&mut self, timer_counter: u8) {
         self.0.timer_counter = timer_counter;
     }
+    pub fn set_ppu_mode(&mut self, mode: gpu::Mode) {
+        self.0.lcd_status = (self.0.lcd_status & 0b11111100) | u8::from(mode);
+    }
+    pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
+        self.0.set_interrupt_part_lcd_status(value);
+    }
 }
 
 pub struct MmuRead<'a>(&'a State);
@@ -164,9 +179,14 @@ impl MmuRead<'_> {
             INTERRUPT_FLAG => self.0.interrupt_flag.bits(),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
+            LCD_STATUS => {
+                // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
+                (self.0.lcd_status & 0b11111011) | (((self.0.ly == self.0.lyc) as u8) << 2)
+            }
             SCY => self.0.scy,
             SCX => self.0.scx,
             LY => self.0.ly,
+            LYC => self.0.lyc,
             DMA => self.0.dma_register,
             BGP => self.0.bgp_register,
             OBP0 => self.0.obp0,
@@ -201,12 +221,15 @@ impl MmuWrite<'_> {
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_retain(value),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
+            // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
+            LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
             SCY => {
                 // println!("SCY {value:x}");
                 self.0.scy = value
             }
             SCX => self.0.scx = value,
             LY => {} // read only
+            LYC => self.0.lyc = value,
             DMA => {
                 self.0.dma_register = value;
                 self.0.dma_request = true;

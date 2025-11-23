@@ -1,6 +1,6 @@
 use crate::{
     StateMachine,
-    gpu::{Dmg, Gpu, to_palette},
+    gpu::{Dmg, Gpu, LcdStatus, to_palette},
     ic::{Ints, Irq},
     state::{State, WriteOnlyState},
 };
@@ -27,6 +27,8 @@ impl StateMachine for Ppu {
         let bgp = state.bgp_register;
         let obp0 = state.obp0;
         let obp1 = state.obp1;
+        
+        self.gpu.lcd_status = LcdStatus::from_bits_retain(state.lcd_status);
 
         // TODO revoir comment ça gère les interruptions ici
         let (drawn_ly, ly, irq) = self.gpu.step(
@@ -67,6 +69,8 @@ impl StateMachine for Ppu {
                     state.get_ie_mut().insert(flag);
                 }
             }
+            state.set_ppu_mode(self.gpu.mode);
+            state.set_interrupt_part_lcd_status(self.gpu.lcd_status.bits());
         }
     }
 }
