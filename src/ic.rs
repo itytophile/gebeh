@@ -31,7 +31,7 @@ impl Irq {
 }
 
 bitflags::bitflags! {
-    #[derive(Debug, Clone, Default, Copy,  PartialEq, Eq)]
+    #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
     pub struct Ints: u8 {
         const VBLANK = 1;
         const LCD = 1 << 1;

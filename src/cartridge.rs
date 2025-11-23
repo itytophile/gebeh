@@ -119,7 +119,7 @@ impl Mbc1 {
                 if !self.ram_enabled {
                     panic!("Attempt to write to ERAM while write protect is active");
                 }
-                self.ram[usize::from(self.ram_offset - EXTERNAL_RAM + index)] = value;
+                self.ram[usize::from(self.ram_offset + index - EXTERNAL_RAM)] = value;
             }
             _ => panic!(),
         }
