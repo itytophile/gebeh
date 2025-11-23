@@ -42,7 +42,7 @@ const DMG_BOOT: [u8; 256] = [
 
 pub struct State {
     pub boot_rom: &'static [u8; 256],
-    pub rom: &'static [u8],
+    pub mbc: Mbc,
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub hram: [u8; (INTERRUPT_ENABLE - HRAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
@@ -89,7 +89,7 @@ impl State {
             scy: 0,
             lcd_control: LcdControl::empty(),
             ly: 0,
-            rom,
+            mbc: Mbc::new(rom),
             boot_rom_mapping_control: 0,
             sb: 0,
             sc: 0,
@@ -101,7 +101,7 @@ impl State {
     }
 }
 
-use crate::{gpu::LcdControl, ic::Ints};
+use crate::{cartridge::Mbc, gpu::LcdControl, ic::Ints};
 
 pub struct WriteOnlyState<'a>(&'a mut State);
 
@@ -138,18 +138,16 @@ impl MmuRead<'_> {
     pub fn read(&self, index: u16) -> u8 {
         match index {
             0..VIDEO_RAM => {
-                if self.0.boot_rom_mapping_control == 0 {
-                    if let Some(value) = self.0.boot_rom.get(usize::from(index)).copied() {
-                        value
-                    } else {
-                        // println!("ROM ${index:04x} => 0x{value:02x}");
-                        self.0.rom[usize::from(index)]
-                    }
+                if self.0.boot_rom_mapping_control == 0
+                    && let Some(value) = self.0.boot_rom.get(usize::from(index)).copied()
+                {
+                    value
                 } else {
-                    self.0.rom[usize::from(index)]
+                    self.0.mbc.read(index)
                 }
             }
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
+            EXTERNAL_RAM..WORK_RAM => self.0.mbc.read(index),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             SB => self.0.sb,
             SC => self.0.sc,
@@ -180,11 +178,12 @@ pub struct MmuWrite<'a>(&'a mut State);
 impl MmuWrite<'_> {
     pub fn write(&mut self, index: u16, value: u8) {
         match index {
-            0..VIDEO_RAM => panic!("Trying to write to ROM at ${index:04x} with 0x{value:02x}"),
+            0..VIDEO_RAM => self.0.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
                 // println!("VRAM ${index:04x} => 0x{value:x}");
                 self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
             }
+            EXTERNAL_RAM..WORK_RAM => self.0.mbc.write(index, value),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             SB => self.0.sb = value,
             SC => self.0.sc = value,
