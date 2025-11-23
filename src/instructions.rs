@@ -287,6 +287,10 @@ mod opcodes {
             vec([Nop.into(), Read(CONSUME_PC, ConditionalCall(condition))]),
         )
     }
+    
+    pub fn xor_r(register: Register8Bit) -> Instructions {
+        (Xor(register).into(), Default::default())
+    }
 }
 
 use opcodes::*;
@@ -417,7 +421,13 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x94 => sub_r(H),
         0x95 => sub_r(L),
         0x97 => sub_r(A),
-        0xaf => (Xor(A).into(), Default::default()),
+        0xa8 => xor_r(B),
+        0xa9 => xor_r(C),
+        0xaa => xor_r(D),
+        0xab => xor_r(E),
+        0xac => xor_r(H),
+        0xad => xor_r(L),
+        0xaf => xor_r(A),
         0xb0 => or_r(B),
         0xb1 => or_r(C),
         0xb2 => or_r(D),
