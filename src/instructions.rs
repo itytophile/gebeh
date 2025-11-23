@@ -106,6 +106,7 @@ pub enum NoReadInstruction {
     AddHlSecond(Register8Bit),
     DecPc,
     Res(u8, Register8Bit),
+    ResHl(u8),
     And,
     Or8Bit(Register8Bit),
     Or,
@@ -347,6 +348,19 @@ mod opcodes {
 
     pub fn bit_b_hl(bit: u8) -> Instructions {
         (Read(CONSUME_PC, ReadIntoLsb), vec([Bit(bit).into()]))
+    }
+
+    pub fn res_b_hl(bit: u8) -> Instructions {
+        (
+            Read(
+                ReadAddress::Register {
+                    register: Register16Bit::HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Nop.into(), ResHl(bit).into()]),
+        )
     }
 }
 
@@ -713,7 +727,15 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x6e => bit_b_hl(5),
         0x76 => bit_b_hl(6),
         0x7e => bit_b_hl(7),
+        0x86 => res_b_hl(0),
         0x87 => res_b_r(0, A),
+        0x8e => res_b_hl(1),
+        0x96 => res_b_hl(2),
+        0x9e => res_b_hl(3),
+        0xa6 => res_b_hl(4),
+        0xae => res_b_hl(5),
+        0xb6 => res_b_hl(6),
+        0xbe => res_b_hl(7),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }
 }

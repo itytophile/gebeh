@@ -229,10 +229,7 @@ impl PipelineExecutorWriteOnce<'_> {
             }
             NoRead(Bit(bit)) => {
                 let mut flags = self.f.get();
-                flags.set(
-                    Flags::Z,
-                    (self.lsb.get() & (1 << bit)) == 0,
-                );
+                flags.set(Flags::Z, (self.lsb.get() & (1 << bit)) == 0);
                 flags.remove(Flags::N);
                 flags.insert(Flags::H);
                 *self.f.get_mut() = flags;
@@ -445,6 +442,12 @@ impl PipelineExecutorWriteOnce<'_> {
             }
             NoRead(Res(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) & !(1 << bit));
+            }
+            NoRead(ResHl(bit)) => {
+                mmu.write(
+                    self.get_16bit_register(Register16Bit::HL),
+                    self.lsb.get() & !(1 << bit),
+                );
             }
             NoRead(And) => {
                 let result = self.a.get() & self.lsb.get();
