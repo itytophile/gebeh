@@ -64,7 +64,8 @@ pub enum NoReadInstruction {
     Nop,
     Store8Bit(Register8Bit),
     Store16Bit(Register16Bit),
-    Xor(Register8Bit),
+    Xor8Bit(Register8Bit),
+    Xor,
     // Load to memory HL from A, Decrement
     LoadToAddressHlFromADec,
     LoadToAddressHlFromAInc,
@@ -305,7 +306,7 @@ mod opcodes {
     }
 
     pub fn xor_r(register: Register8Bit) -> Instructions {
-        (Xor(register).into(), Default::default())
+        (Xor8Bit(register).into(), Default::default())
     }
 }
 
@@ -450,6 +451,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xab => xor_r(E),
         0xac => xor_r(H),
         0xad => xor_r(L),
+        0xae => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Xor.into()]),
+        ),
         0xaf => xor_r(A),
         0xb0 => or_r(B),
         0xb1 => or_r(C),

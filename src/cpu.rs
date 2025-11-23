@@ -174,8 +174,17 @@ impl PipelineExecutorWriteOnce<'_> {
                     u16::from_be_bytes([self.msb.get(), self.lsb.get()]),
                 );
             }
-            NoRead(Xor(register)) => {
+            NoRead(Xor8Bit(register)) => {
                 *self.a.get_mut() ^= self.get_8bit_register(register);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, self.a.get() == 0);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.remove(Flags::C);
+                *self.f.get_mut() = flags;
+            }
+            NoRead(Xor) => {
+                *self.a.get_mut() ^= self.lsb.get();
                 let mut flags = self.f.get();
                 flags.set(Flags::Z, self.a.get() == 0);
                 flags.remove(Flags::N);
