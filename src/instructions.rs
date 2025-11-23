@@ -245,11 +245,11 @@ mod opcodes {
     pub fn rl_r(register: Register8Bit) -> Instructions {
         (Rl(register).into(), Default::default())
     }
-    
+
     pub fn rr_r(register: Register8Bit) -> Instructions {
         (Rr(register).into(), Default::default())
     }
-    
+
     pub fn srl_r(register: Register8Bit) -> Instructions {
         (Srl(register).into(), Default::default())
     }
@@ -400,7 +400,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x2c => inc_r(L),
         0x2d => dec_r(L),
         0x2e => ld_r_n(L),
-        0x30 => jr_cc_e(Condition { flag: Flag::C, not: true }),
+        0x30 => jr_cc_e(Condition {
+            flag: Flag::C,
+            not: true,
+        }),
         0x31 => ld_rr_n(SP),
         0x32 => (LoadToAddressHlFromADec.into(), vec([Nop.into()])),
         0x33 => inc_rr(SP),
@@ -557,6 +560,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(CONSUME_PC, ReadIntoMsb),
             ]),
         ),
+        0xee => (Read(CONSUME_PC, ReadIntoLsb), vec([Xor.into()])),
         0xf0 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
