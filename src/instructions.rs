@@ -105,7 +105,8 @@ pub enum NoReadInstruction {
     DecPc,
     Res(u8, Register8Bit),
     And,
-    Or(Register8Bit),
+    Or8Bit(Register8Bit),
+    Or,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -299,7 +300,7 @@ mod opcodes {
     }
 
     pub fn or_r(register: Register8Bit) -> Instructions {
-        (Or(register).into(), Default::default())
+        (Or8Bit(register).into(), Default::default())
     }
 
     pub fn ld_rr_r(address: Register16Bit, value: Register8Bit) -> Instructions {
@@ -492,6 +493,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xb3 => or_r(E),
         0xb4 => or_r(H),
         0xb5 => or_r(L),
+        0xb6 => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Or.into()]),
+        ),
         0xb7 => or_r(A),
         0xbe => (
             Read(

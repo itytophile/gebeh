@@ -430,8 +430,18 @@ impl PipelineExecutorWriteOnce<'_> {
                     self.get_16bit_register(register).wrapping_sub(1),
                 );
             }
-            NoRead(Or(register)) => {
+            NoRead(Or8Bit(register)) => {
                 let result = self.a.get() | self.get_8bit_register(register);
+                *self.a.get_mut() = result;
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.remove(Flags::C);
+                *self.f.get_mut() = flags;
+            }
+            NoRead(Or) => {
+                let result = self.a.get() | self.lsb.get();
                 *self.a.get_mut() = result;
                 let mut flags = self.f.get();
                 flags.set(Flags::Z, result == 0);
