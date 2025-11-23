@@ -124,8 +124,6 @@ impl PipelineExecutorWriteOnce<'_> {
     fn get_flag(&self, flag: Flag) -> bool {
         match flag {
             Flag::Z => self.f.get().contains(Flags::Z),
-            Flag::N => self.f.get().contains(Flags::N),
-            Flag::H => self.f.get().contains(Flags::H),
             Flag::C => self.f.get().contains(Flags::C),
         }
     }
@@ -166,6 +164,16 @@ impl PipelineExecutorWriteOnce<'_> {
                                     WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC)
                                         .into(),
                                 ]),
+                            ));
+                        }
+                    }
+                    ConditionalJump(Condition { flag, not }) => {
+                        *self.msb.get_mut() = value; // msb not like jr
+                        if self.get_flag(flag) != not {
+                            return PipelineAction::Replace((
+                                Store16Bit(Register16Bit::PC).into(),
+                                // important to match the cycle and not conflict with the overlapping opcode fetch
+                                vec([Nop.into()]),
                             ));
                         }
                     }
