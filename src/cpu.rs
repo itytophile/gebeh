@@ -323,10 +323,20 @@ impl PipelineExecutorWriteOnce<'_> {
                 flags.set(Flags::C, new_carry);
                 *self.f.get_mut() = flags;
             }
-            NoRead(Dec(register)) => {
+            NoRead(Dec8Bit(register)) => {
                 let r = self.get_8bit_register(register);
                 let decremented = r.wrapping_sub(1);
                 self.set_8bit_register(register, decremented);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, decremented == 0);
+                flags.insert(Flags::N);
+                flags.set(Flags::H, set_h_sub(r, 1));
+                *self.f.get_mut() = flags;
+            }
+            NoRead(DecHl) => {
+                let r = self.lsb.get();
+                let decremented = r.wrapping_sub(1);
+                mmu.write(self.get_16bit_register(Register16Bit::HL), decremented);
                 let mut flags = self.f.get();
                 flags.set(Flags::Z, decremented == 0);
                 flags.insert(Flags::N);

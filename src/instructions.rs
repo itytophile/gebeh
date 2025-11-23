@@ -93,8 +93,9 @@ pub enum NoReadInstruction {
     Rr(Register8Bit),
     Rra,
     Rla,
-    Dec(Register8Bit),
+    Dec8Bit(Register8Bit),
     Dec16Bit(Register16Bit),
+    DecHl,
     Compare,
     LoadToCachedAddressFromA,
     Sub8Bit(Register8Bit),
@@ -275,7 +276,7 @@ mod opcodes {
     }
 
     pub fn dec_r(register: Register8Bit) -> Instructions {
-        (Dec(register).into(), Default::default())
+        (Dec8Bit(register).into(), Default::default())
     }
 
     pub fn dec_rr(register: Register16Bit) -> Instructions {
@@ -408,6 +409,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x31 => ld_rr_n(SP),
         0x32 => (LoadToAddressHlFromADec.into(), vec([Nop.into()])),
         0x33 => inc_rr(SP),
+        0x35 => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Nop.into(), DecHl.into()]),
+        ),
         0x36 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), LoadToAddressHlN.into()]),
