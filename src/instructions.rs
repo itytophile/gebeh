@@ -67,7 +67,8 @@ pub enum NoReadInstruction {
     // Load to memory HL from A, Decrement
     LoadToAddressHlFromADec,
     LoadToAddressHlFromAInc,
-    Bit(u8, Register8Bit),
+    Bit8Bit(u8, Register8Bit),
+    Bit(u8),
     OffsetPc,
     // prefix avec 0xff00
     LoadFromAccumulator(Option<Register8Bit>),
@@ -245,7 +246,7 @@ mod opcodes {
     }
 
     pub fn bit_b_r(bit: u8, register: Register8Bit) -> Instructions {
-        (Bit(bit, register).into(), Default::default())
+        (Bit8Bit(bit, register).into(), Default::default())
     }
 
     pub fn rl_r(register: Register8Bit) -> Instructions {
@@ -342,6 +343,10 @@ mod opcodes {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), Read(CONSUME_PC, ConditionalJump(condition))]),
         )
+    }
+
+    pub fn bit_b_hl(bit: u8) -> Instructions {
+        (Read(CONSUME_PC, ReadIntoLsb), vec([Bit(bit).into()]))
     }
 }
 
@@ -700,6 +705,14 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x3c => srl_r(H),
         0x3d => srl_r(L),
         0x3f => srl_r(A),
+        0x46 => bit_b_hl(0),
+        0x4e => bit_b_hl(1),
+        0x56 => bit_b_hl(2),
+        0x5e => bit_b_hl(3),
+        0x66 => bit_b_hl(4),
+        0x6e => bit_b_hl(5),
+        0x76 => bit_b_hl(6),
+        0x7e => bit_b_hl(7),
         0x87 => res_b_r(0, A),
         _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
     }

@@ -217,11 +217,21 @@ impl PipelineExecutorWriteOnce<'_> {
                 mmu.write(hl, self.a.get());
                 [*self.h.get_mut(), *self.l.get_mut()] = hl.wrapping_add(1).to_be_bytes();
             }
-            NoRead(Bit(bit, register)) => {
+            NoRead(Bit8Bit(bit, register)) => {
                 let mut flags = self.f.get();
                 flags.set(
                     Flags::Z,
                     (self.get_8bit_register(register) & (1 << bit)) == 0,
+                );
+                flags.remove(Flags::N);
+                flags.insert(Flags::H);
+                *self.f.get_mut() = flags;
+            }
+            NoRead(Bit(bit)) => {
+                let mut flags = self.f.get();
+                flags.set(
+                    Flags::Z,
+                    (self.lsb.get() & (1 << bit)) == 0,
                 );
                 flags.remove(Flags::N);
                 flags.insert(Flags::H);
