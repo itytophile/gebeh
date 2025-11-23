@@ -110,6 +110,8 @@ pub enum NoReadInstruction {
     And,
     Or8Bit(Register8Bit),
     Or,
+    // besoin d'un refactoring pour lui
+    JumpHl,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -167,7 +169,7 @@ impl Default for Instruction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum AfterReadInstruction {
     NoRead(NoReadInstruction),
     Read(u8, ReadInstruction),
@@ -595,6 +597,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xe2 => (LoadFromAccumulator(Some(C)).into(), vec([Nop.into()])),
         0xe5 => push_rr(HL),
         0xe6 => (Read(CONSUME_PC, ReadIntoLsb), vec([And.into()])),
+        0xe9 => (JumpHl.into(), Default::default()),
         0xea => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([

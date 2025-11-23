@@ -8,7 +8,7 @@ use crate::{
     },
     state::{MmuWrite, State, WriteOnlyState},
 };
-use arrayvec::ArrayVec;
+
 use my_lib::HeapSize;
 
 #[derive(HeapSize, Default)]
@@ -496,6 +496,9 @@ impl PipelineExecutorWriteOnce<'_> {
                 *self.f.get_mut() = flags;
                 *self.h.get_mut() = result;
             }
+            NoRead(JumpHl) => {
+                // cas spécial car il modifie PC en un seul cycle, il faut faire un refactoring pour lui
+            }
         }
 
         PipelineAction::Pop
@@ -552,9 +555,18 @@ impl StateMachine for PipelineExecutor {
             );
         }
 
-        let should_load_next_opcode = write_once.instruction_register.get_ref().1.is_empty();
+        let (inst, tail) = write_once.instruction_register.get_ref();
 
-        let opcode = mmu.read(write_once.pc.get());
+        let opcode_to_parse = if tail.is_empty() {
+            // la seule instruction qui fait un truc de zinzin avec PC et qui dure 1 cycle
+            if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
+                Some(mmu.read(write_once.get_16bit_register(Register16Bit::HL)))
+            } else {
+                Some(mmu.read(write_once.pc.get()))
+            }
+        } else {
+            None
+        };
 
         // if should_load_next_opcode {
         //     println!(
@@ -563,11 +575,9 @@ impl StateMachine for PipelineExecutor {
         //     );
         // }
 
-        let inst = write_once.instruction_register.get_ref().0;
-
         // print!("Executing {inst:?}");
 
-        let inst = match inst {
+        let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => {
                 AfterReadInstruction::Read(mmu.read(0xff00 | (write_once.lsb.get() as u16)), inst)
@@ -615,11 +625,18 @@ impl StateMachine for PipelineExecutor {
                 }
             }
 
-            if should_load_next_opcode {
+            if let Some(opcode) = opcode_to_parse {
                 *write_once.instruction_register.get_mut() =
                     get_instructions(opcode, write_once.is_cb_mode.get());
                 *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
-                *write_once.pc.get_mut() = write_once.pc.get().wrapping_add(1);
+                *write_once.pc.get_mut() =
+                    if let AfterReadInstruction::NoRead(NoReadInstruction::JumpHl) = inst {
+                        write_once
+                            .get_16bit_register(Register16Bit::HL)
+                            .wrapping_add(1)
+                    } else {
+                        write_once.pc.get().wrapping_add(1)
+                    };
             }
         }
     }
