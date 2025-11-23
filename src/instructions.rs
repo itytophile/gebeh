@@ -112,6 +112,7 @@ pub enum NoReadInstruction {
     Or,
     // besoin d'un refactoring pour lui
     JumpHl,
+    Adc,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -126,7 +127,6 @@ pub enum ReadInstruction {
 pub enum OpAfterRead {
     None,
     Inc,
-    Dec,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -578,6 +578,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(CONSUME_PC, ReadIntoMsb),
             ]),
         ),
+        0xce => (Read(CONSUME_PC, ReadIntoLsb), vec([Adc.into()])),
         0xd1 => pop_rr(DE),
         0xd4 => call_cc_nn(Condition {
             flag: Flag::C,

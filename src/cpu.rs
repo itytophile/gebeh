@@ -499,6 +499,23 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(JumpHl) => {
                 // cas spécial car il modifie PC en un seul cycle, il faut faire un refactoring pour lui
             }
+            NoRead(Adc) => {
+                let a = self.a.get();
+                let register_value = self.lsb.get();
+                let (result, mut carry) = a.overflowing_add(register_value);
+                let mut flags = self.f.get();
+                let (result, carry1) = result.overflowing_add(flags.contains(Flags::C) as u8);
+                carry |= carry1;
+                // no z
+                flags.remove(Flags::N);
+                flags.set(
+                    Flags::H,
+                    set_h_add_with_carry(a, register_value, flags.contains(Flags::C)),
+                );
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.a.get_mut() = result;
+            }
         }
 
         PipelineAction::Pop
@@ -595,9 +612,6 @@ impl StateMachine for PipelineExecutor {
                     OpAfterRead::None => {}
                     OpAfterRead::Inc => {
                         write_once.set_16bit_register(register, register_value.wrapping_add(1));
-                    }
-                    OpAfterRead::Dec => {
-                        write_once.set_16bit_register(register, register_value.wrapping_sub(1));
                     }
                 }
                 AfterReadInstruction::Read(mmu.read(register_value), inst)
