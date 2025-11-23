@@ -301,6 +301,18 @@ impl PipelineExecutorWriteOnce<'_> {
                 flags.remove(Flags::H);
                 *self.f.get_mut() = flags;
             }
+            NoRead(Rra) => {
+                let value = self.a.get();
+                let mut flags = self.f.get();
+                let carry = flags.contains(Flags::C);
+                flags.set(Flags::C, (value & 0x1) == 0x1);
+                let result = (value >> 1) | ((carry as u8) << 7);
+                *self.a.get_mut() = result;
+                flags.remove(Flags::N);
+                flags.remove(Flags::Z); // difference with rr_r
+                flags.remove(Flags::H);
+                *self.f.get_mut() = flags;
+            }
             NoRead(Rla) => {
                 let new_carry = (self.a.get() & 0x80) == 0x80;
                 *self.a.get_mut() = (self.a.get() << 1) | (self.f.get().contains(Flags::C) as u8);

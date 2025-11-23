@@ -91,6 +91,7 @@ pub enum NoReadInstruction {
     Rl(Register8Bit),
     Srl(Register8Bit),
     Rr(Register8Bit),
+    Rra,
     Rla,
     Dec(Register8Bit),
     Dec16Bit(Register16Bit),
@@ -370,7 +371,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ),
             vec([Store8Bit(A).into()]),
         ),
-
+        0x1f => (Rra.into(), Default::default()),
         0x20 => jr_cc_e(Condition {
             flag: Flag::Z,
             not: true,
