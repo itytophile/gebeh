@@ -444,10 +444,17 @@ impl StateMachine for PipelineExecutor {
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
-            Instruction::Read(ReadAddress::Accumulator, read) => {
-                AfterReadInstruction::Read(mmu.read(0xff00 | (write_once.lsb.get() as u16)), read)
+            Instruction::Read(ReadAddress::Accumulator, inst) => {
+                AfterReadInstruction::Read(mmu.read(0xff00 | (write_once.lsb.get() as u16)), inst)
             }
-            Instruction::Read(ReadAddress::Register { register, op }, read) => {
+            Instruction::Read(ReadAddress::Cache, inst) => AfterReadInstruction::Read(
+                mmu.read(u16::from_be_bytes([
+                    write_once.msb.get(),
+                    write_once.lsb.get(),
+                ])),
+                inst,
+            ),
+            Instruction::Read(ReadAddress::Register { register, op }, inst) => {
                 let register_value = write_once.get_16bit_register(register);
                 match op {
                     OpAfterRead::None => {}
@@ -458,7 +465,7 @@ impl StateMachine for PipelineExecutor {
                         write_once.set_16bit_register(register, register_value.wrapping_sub(1));
                     }
                 }
-                AfterReadInstruction::Read(mmu.read(register_value), read)
+                AfterReadInstruction::Read(mmu.read(register_value), inst)
             }
         };
 

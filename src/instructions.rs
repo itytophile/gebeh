@@ -70,6 +70,7 @@ pub enum NoReadInstruction {
     LoadToAddressHlFromAInc,
     Bit(u8, Register8Bit),
     OffsetPc,
+    // prefix avec 0xff00
     LoadFromAccumulator(Option<Register8Bit>),
     Inc(Register8Bit),
     Inc16Bit(Register16Bit),
@@ -124,6 +125,8 @@ pub enum ReadAddress {
     },
     // LDH A, (n)
     Accumulator,
+    // (nn)
+    Cache,
 }
 
 const CONSUME_PC: ReadAddress = ReadAddress::Register {
@@ -483,6 +486,14 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xf1 => pop_rr(AF),
         0xf3 => (Di.into(), Default::default()),
         0xf5 => push_rr(AF),
+        0xfa => (
+            Read(CONSUME_PC, ReadIntoLsb),
+            vec([
+                Store8Bit(A).into(),
+                Read(ReadAddress::Cache, ReadIntoLsb),
+                Read(CONSUME_PC, ReadIntoMsb),
+            ]),
+        ),
         0xfe => (Read(CONSUME_PC, ReadIntoLsb), vec([Compare.into()])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
