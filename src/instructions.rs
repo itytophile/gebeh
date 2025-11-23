@@ -176,7 +176,9 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
 mod opcodes {
     use crate::instructions::CONSUME_PC;
     use crate::instructions::Condition;
+    use crate::instructions::OpAfterRead;
     use crate::instructions::POP_SP;
+    use crate::instructions::ReadAddress;
 
     use super::Instruction::*;
     use super::Instructions;
@@ -201,6 +203,19 @@ mod opcodes {
         (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Store16Bit(register).into(), Read(CONSUME_PC, ReadIntoMsb)]),
+        )
+    }
+
+    pub fn ld_r_hl(register: Register8Bit) -> Instructions {
+        (
+            Read(
+                ReadAddress::Register {
+                    register: Register16Bit::HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Store8Bit(register).into()]),
         )
     }
 
@@ -388,16 +403,23 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x3c => inc_r(A),
         0x3d => dec_r(A),
         0x3e => ld_r_n(A),
+        0x46 => ld_r_hl(B),
         0x47 => ld_r_r(B, A),
+        0x4e => ld_r_hl(C),
         0x4f => ld_r_r(C, A),
+        0x56 => ld_r_hl(D),
         0x57 => ld_r_r(D, A),
+        0x5e => ld_r_hl(E),
+        0x66 => ld_r_hl(H),
         0x67 => ld_r_r(H, A),
+        0x6e => ld_r_hl(L),
         0x7a => ld_r_r(A, D),
         0x7c => ld_r_r(A, H),
         0x77 => ld_rr_r(HL, A),
         0x78 => ld_r_r(A, B),
         0x7b => ld_r_r(A, E),
         0x7d => ld_r_r(A, L),
+        0x7e => ld_r_hl(A),
         0x80 => add_r(B),
         0x81 => add_r(C),
         0x82 => add_r(D),
