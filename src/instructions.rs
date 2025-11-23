@@ -400,6 +400,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x2c => inc_r(L),
         0x2d => dec_r(L),
         0x2e => ld_r_n(L),
+        0x30 => jr_cc_e(Condition { flag: Flag::C, not: true }),
         0x31 => ld_rr_n(SP),
         0x32 => (LoadToAddressHlFromADec.into(), vec([Nop.into()])),
         0x33 => inc_rr(SP),
