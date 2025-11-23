@@ -8,7 +8,7 @@ use crate::{
 pub struct Timer(u8);
 
 impl StateMachine for Timer {
-    fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         self.0 = self.0.wrapping_add(1);
         let increment_frequency: u16 = match state.timer_control & 0b11 {
             0 => 256,
@@ -28,11 +28,11 @@ impl StateMachine for Timer {
             };
         }
 
-        move |mut state| {
+        Some(move |mut state: WriteOnlyState| {
             state.set_timer_counter(timer_counter);
             if overflow {
                 state.get_if_mut().insert(Ints::TIMER);
             }
-        }
+        })
     }
 }

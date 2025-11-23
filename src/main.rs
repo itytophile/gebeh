@@ -2,7 +2,7 @@ use minifb::{Key, Scale, Window, WindowOptions};
 
 use crate::{
     cartridge::CartridgeType,
-    cpu::PipelineExecutor,
+    cpu::Cpu,
     ppu::Ppu,
     state::{State, WriteOnlyState},
     timer::Timer,
@@ -63,7 +63,7 @@ fn main() {
 
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
-    let mut machine = PipelineExecutor::default()
+    let mut machine = Cpu::default()
         .compose(Ppu::default())
         .compose(Timer::default());
 
@@ -83,7 +83,7 @@ fn main() {
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         loop {
-            machine.execute(&state)(WriteOnlyState::new(&mut state));
+            machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
             let ((_, ppu), _) = &mut machine;
             if let Some(ly) = ppu.drawn_ly.take() {
                 let base = usize::from(ly) * WIDTH;
@@ -103,7 +103,7 @@ fn main() {
 
 trait StateMachine {
     /// must take one M-cycle
-    fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a;
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a>;
     fn compose<T: StateMachine>(self, other: T) -> (Self, T)
     where
         Self: Sized,
@@ -113,12 +113,16 @@ trait StateMachine {
 }
 
 impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
-    fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         let first = self.0.execute(state);
         let second = self.1.execute(state);
-        move |mut state| {
-            first(state.reborrow());
-            second(state);
-        }
+        Some(move |mut state: WriteOnlyState<'_>| {
+            if let Some(first) = first {
+                first(state.reborrow());
+            }
+            if let Some(second) = second {
+                second(state);
+            }
+        })
     }
 }

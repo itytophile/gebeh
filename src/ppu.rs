@@ -17,7 +17,7 @@ pub struct Ppu {
 // 456 dots per scanline
 
 impl StateMachine for Ppu {
-    fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         let interrupt_enable = state.interrupt_enable;
         let interrupt_flag = state.interrupt_flag;
         let ly = state.ly;
@@ -54,7 +54,7 @@ impl StateMachine for Ppu {
 
         self.drawn_ly = drawn_ly;
 
-        move |mut state| {
+        Some(move |mut state: WriteOnlyState<'_>| {
             state.set_ly(ly);
             for flag in [Ints::VBLANK, Ints::LCD] {
                 if interrupt_flag.contains(flag) && !irq.request.contains(flag) {
@@ -72,6 +72,6 @@ impl StateMachine for Ppu {
             }
             state.set_ppu_mode(self.gpu.mode);
             state.set_interrupt_part_lcd_status(self.gpu.lcd_status.bits());
-        }
+        })
     }
 }

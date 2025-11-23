@@ -116,6 +116,7 @@ pub enum NoReadInstruction {
     ConditionalReturn(Condition),
     SetHl(u8),
     Ei,
+    Halt,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -509,6 +510,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x73 => ld_rr_r(HL, E),
         0x74 => ld_rr_r(HL, H),
         0x75 => ld_rr_r(HL, L),
+        0x76 => (Halt.into(), Default::default()),
         0x77 => ld_rr_r(HL, A),
         0x78 => ld_r_r(A, B),
         0x7a => ld_r_r(A, D),

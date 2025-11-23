@@ -12,7 +12,7 @@ use crate::{
 use my_lib::HeapSize;
 
 #[derive(HeapSize, Default)]
-pub struct PipelineExecutor {
+pub struct Cpu {
     sp: u16,
     lsb: u8,
     msb: u8,
@@ -28,6 +28,7 @@ pub struct PipelineExecutor {
     pc: u16,
     instruction_register: Instructions,
     ime: bool,
+    is_halted: bool,
 }
 
 enum PipelineAction {
@@ -66,7 +67,7 @@ bitflags::bitflags! {
     }
 }
 
-impl PipelineExecutorWriteOnce<'_> {
+impl CpuWriteOnce<'_> {
     fn get_8bit_register(&self, register: Register8Bit) -> u8 {
         match register {
             Register8Bit::A => self.a.get(),
@@ -559,6 +560,9 @@ impl PipelineExecutorWriteOnce<'_> {
                     self.lsb.get() | (1 << bit),
                 );
             }
+            NoRead(Halt) => {
+                *self.is_halted.get_mut() = true;
+            }
         }
 
         PipelineAction::Pop
@@ -576,12 +580,20 @@ impl PipelineExecutorWriteOnce<'_> {
     }
 }
 
-impl StateMachine for PipelineExecutor {
-    fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
-        // we load the next opcode if there is only one instruction left in the pipeline
-        let mmu = state.mmu();
-
+impl StateMachine for Cpu {
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         let interrupts_to_execute = state.interrupt_enable & state.interrupt_flag;
+
+        // https://gbdev.io/pandocs/halt.html#halt
+        if self.is_halted && !interrupts_to_execute.is_empty() {
+            self.is_halted = false;
+        }
+
+        if self.is_halted {
+            return None;
+        }
+
+        let mmu = state.mmu();
 
         let mut interrupt_flag_to_reset = Option::<Ints>::None;
 
@@ -667,7 +679,7 @@ impl StateMachine for PipelineExecutor {
 
         // println!();
 
-        move |mut state| {
+        Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
                 state.remove_if_bit(flag);
             }
@@ -680,6 +692,14 @@ impl StateMachine for PipelineExecutor {
                 PipelineAction::Replace(instructions) => {
                     *write_once.instruction_register.get_mut() = instructions
                 }
+            }
+
+            // https://gbdev.io/pandocs/halt.html#halt-bug
+            if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
+                && !write_once.ime.get()
+                && !interrupts_to_execute.is_empty()
+            {
+                todo!("halt bug")
             }
 
             if let Some(opcode) = opcode_to_parse {
@@ -695,6 +715,6 @@ impl StateMachine for PipelineExecutor {
                         write_once.pc.get().wrapping_add(1)
                     };
             }
-        }
+        })
     }
 }
