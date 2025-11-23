@@ -93,7 +93,8 @@ pub enum NoReadInstruction {
     Dec16Bit(Register16Bit),
     Compare,
     LoadToCachedAddressFromA,
-    Sub(Register8Bit),
+    Sub8Bit(Register8Bit),
+    Sub,
     Add,
     Di,
     Add8Bit(Register8Bit),
@@ -254,7 +255,7 @@ mod opcodes {
     }
 
     pub fn sub_r(register: Register8Bit) -> Instructions {
-        (Sub(register).into(), Default::default())
+        (Sub8Bit(register).into(), Default::default())
     }
 
     // When there is a jump we have to put a Nop even if the condition will be true
@@ -489,6 +490,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             not: true,
         }),
         0xd5 => push_rr(DE),
+        0xd6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Sub.into()])),
         0xdc => call_cc_nn(Condition {
             flag: Flag::C,
             not: false,

@@ -306,9 +306,21 @@ impl PipelineExecutorWriteOnce<'_> {
                     self.a.get(),
                 );
             }
-            NoRead(Sub(register)) => {
+            NoRead(Sub8Bit(register)) => {
                 let a = self.a.get();
                 let r = self.get_8bit_register(register);
+                let (result, carry) = a.overflowing_sub(r);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.insert(Flags::N);
+                flags.set(Flags::H, set_h_sub(a, r));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.a.get_mut() = result;
+            }
+            NoRead(Sub) => {
+                let a = self.a.get();
+                let r = self.lsb.get();
                 let (result, carry) = a.overflowing_sub(r);
                 let mut flags = self.f.get();
                 flags.set(Flags::Z, result == 0);
