@@ -4,6 +4,8 @@ pub const VIDEO_RAM: u16 = 0x8000;
 pub const EXTERNAL_RAM: u16 = 0xa000;
 pub const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
+const OAM: u16 = 0xfe00;
+const NOT_USABLE: u16 = 0xfea0;
 const SB: u16 = 0xff01; // Serial transfer data
 const SC: u16 = 0xff02; // Serial transfer control
 const TIMER_COUNTER: u16 = 0xff05; // TIMA
@@ -71,6 +73,7 @@ pub struct State {
     pub timer_modulo: u8,
     pub timer_control: u8,
     pub timer_counter: u8,
+    pub oam: [u8; (NOT_USABLE - OAM) as usize],
 }
 
 impl State {
@@ -106,6 +109,7 @@ impl State {
             timer_control: 0,
             timer_counter: 0,
             lcd_status: 0,
+            oam: [0; (NOT_USABLE - OAM) as usize],
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
@@ -113,7 +117,11 @@ impl State {
     }
 }
 
-use crate::{cartridge::Mbc, gpu::{self, LcdControl}, ic::Ints};
+use crate::{
+    cartridge::Mbc,
+    gpu::{self, LcdControl},
+    ic::Ints,
+};
 
 pub struct WriteOnlyState<'a>(&'a mut State);
 
@@ -171,6 +179,7 @@ impl MmuRead<'_> {
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.read(index),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
+            OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)],
             SB => self.0.sb,
             SC => self.0.sc,
             TIMER_COUNTER => self.0.timer_counter,
@@ -213,6 +222,7 @@ impl MmuWrite<'_> {
             }
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.write(index, value),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
+            OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)] = value,
             SB => self.0.sb = value,
             SC => self.0.sc = value,
             TIMER_COUNTER => self.0.timer_counter = value,

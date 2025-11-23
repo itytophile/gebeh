@@ -27,7 +27,7 @@ impl StateMachine for Ppu {
         let bgp = state.bgp_register;
         let obp0 = state.obp0;
         let obp1 = state.obp1;
-        
+
         self.gpu.lcd_status = LcdStatus::from_bits_retain(state.lcd_status);
 
         // TODO revoir comment ça gère les interruptions ici
@@ -49,6 +49,7 @@ impl StateMachine for Ppu {
             },
             state.wy,
             state.wx,
+            &state.oam,
         );
 
         self.drawn_ly = drawn_ly;
