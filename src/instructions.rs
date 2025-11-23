@@ -90,6 +90,7 @@ pub enum NoReadInstruction {
     },
     Rl(Register8Bit),
     Srl(Register8Bit),
+    Rr(Register8Bit),
     Rla,
     Dec(Register8Bit),
     Dec16Bit(Register16Bit),
@@ -242,6 +243,10 @@ mod opcodes {
 
     pub fn rl_r(register: Register8Bit) -> Instructions {
         (Rl(register).into(), Default::default())
+    }
+    
+    pub fn rr_r(register: Register8Bit) -> Instructions {
+        (Rr(register).into(), Default::default())
     }
     
     pub fn srl_r(register: Register8Bit) -> Instructions {
@@ -584,6 +589,13 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x14 => rl_r(H),
         0x15 => rl_r(L),
         0x17 => rl_r(A),
+        0x18 => rr_r(B),
+        0x19 => rr_r(C),
+        0x1a => rr_r(D),
+        0x1b => rr_r(E),
+        0x1c => rr_r(H),
+        0x1d => rr_r(L),
+        0x1f => rr_r(A),
         0x38 => srl_r(B),
         0x39 => srl_r(C),
         0x3a => srl_r(D),
