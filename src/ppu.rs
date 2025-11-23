@@ -1,7 +1,7 @@
 use crate::{
     StateMachine,
     gpu::{Dmg, Gpu, to_palette},
-    ic::Irq,
+    ic::{Ints, Irq},
     state::{State, WriteOnlyState},
 };
 
@@ -18,8 +18,8 @@ pub struct Ppu {
 
 impl StateMachine for Ppu {
     fn execute<'a>(&'a mut self, state: &State) -> impl FnOnce(WriteOnlyState) + 'a {
-        let ie = state.interrupt_enable;
-        let ifl = state.interrupt_flag;
+        let interrupt_enable = state.interrupt_enable;
+        let interrupt_flag = state.interrupt_flag;
         let ly = state.ly;
         let lcd_control = state.lcd_control;
         let scx = state.scx;
@@ -28,11 +28,12 @@ impl StateMachine for Ppu {
         let obp0 = state.obp0;
         let obp1 = state.obp1;
 
+        // TODO revoir comment ça gère les interruptions ici
         let (drawn_ly, ly, irq) = self.gpu.step(
             4,
             Irq {
-                enable: ie,
-                request: ifl,
+                enable: interrupt_enable,
+                request: interrupt_flag,
             },
             ly,
             lcd_control,
@@ -52,8 +53,20 @@ impl StateMachine for Ppu {
 
         move |mut state| {
             state.set_ly(ly);
-            state.set_ie(irq.enable);
-            state.set_if(irq.request);
+            for flag in [Ints::VBLANK, Ints::LCD] {
+                if interrupt_flag.contains(flag) && !irq.request.contains(flag) {
+                    state.get_if_mut().remove(flag);
+                }
+                if !interrupt_flag.contains(flag) && irq.request.contains(flag) {
+                    state.get_if_mut().insert(flag);
+                }
+                if interrupt_enable.contains(flag) && !irq.enable.contains(flag) {
+                    state.get_ie_mut().remove(flag);
+                }
+                if !interrupt_enable.contains(flag) && irq.enable.contains(flag) {
+                    state.get_ie_mut().insert(flag);
+                }
+            }
         }
     }
 }

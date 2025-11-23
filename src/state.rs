@@ -121,17 +121,21 @@ impl<'a> WriteOnlyState<'a> {
     pub fn mmu(&mut self) -> MmuWrite<'_> {
         MmuWrite(self.0)
     }
-    pub fn set_ie(&mut self, i: Ints) {
-        self.0.interrupt_enable = i;
+    pub fn get_ie_mut(&mut self) -> &mut Ints {
+        &mut self.0.interrupt_enable
     }
-    pub fn set_if(&mut self, i: Ints) {
-        self.0.interrupt_flag = i;
+    pub fn get_if_mut(&mut self) -> &mut Ints {
+        &mut self.0.interrupt_flag
     }
+
     pub fn set_ly(&mut self, value: u8) {
         self.0.ly = value;
     }
     pub fn remove_if_bit(&mut self, bit: Ints) {
         self.0.interrupt_flag.remove(bit);
+    }
+    pub fn set_timer_counter(&mut self, timer_counter: u8) {
+        self.0.timer_counter = timer_counter;
     }
 }
 

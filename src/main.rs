@@ -5,6 +5,7 @@ use crate::{
     cpu::PipelineExecutor,
     ppu::Ppu,
     state::{State, WriteOnlyState},
+    timer::Timer,
 };
 mod cartridge;
 mod cpu;
@@ -15,6 +16,7 @@ mod ic;
 mod instructions;
 mod ppu;
 mod state;
+mod timer;
 
 const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
@@ -60,7 +62,9 @@ fn main() {
 
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
-    let mut machine = PipelineExecutor::default().compose(Ppu::default());
+    let mut machine = PipelineExecutor::default()
+        .compose(Ppu::default())
+        .compose(Timer::default());
 
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
@@ -79,7 +83,7 @@ fn main() {
     while window.is_open() && !window.is_key_down(Key::Escape) {
         loop {
             machine.execute(&state)(WriteOnlyState::new(&mut state));
-            let (_, ppu) = &mut machine;
+            let ((_, ppu), _) = &mut machine;
             if let Some(ly) = ppu.drawn_ly.take() {
                 let base = usize::from(ly) * WIDTH;
                 for (a, b) in buffer[base..].iter_mut().zip(&ppu.gpu.draw_line) {
