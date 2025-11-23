@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use crate::{
     StateMachine,
     ic::Ints,
@@ -145,7 +143,22 @@ impl PipelineExecutorWriteOnce<'_> {
                             return PipelineAction::Replace((
                                 Instruction::NoRead(OffsetPc),
                                 // important to match the cycle and not conflict with the overlapping opcode fetch
-                                ArrayVec::from_iter([Instruction::NoRead(Nop)]),
+                                vec([Instruction::NoRead(Nop)]),
+                            ));
+                        }
+                    }
+                    ConditionalCall(Condition { flag, not }) => {
+                        *self.msb.get_mut() = value; // msb not like jr
+                        if self.get_flag(flag) != not {
+                            return PipelineAction::Replace((
+                                DecStackPointer.into(),
+                                // important to match the cycle and not conflict with the overlapping opcode fetch
+                                vec([
+                                    Nop.into(),
+                                    WriteLsbPcWhereSpPointsAndLoadCacheToPc.into(),
+                                    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC)
+                                        .into(),
+                                ]),
                             ));
                         }
                     }

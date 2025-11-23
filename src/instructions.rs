@@ -108,6 +108,7 @@ pub enum ReadInstruction {
     ReadIntoLsb,
     ReadIntoMsb,
     ConditionalRelativeJump(Condition),
+    ConditionalCall(Condition),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -174,16 +175,14 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
 mod opcodes {
     use crate::instructions::CONSUME_PC;
     use crate::instructions::Condition;
-    use crate::instructions::OpAfterRead;
     use crate::instructions::POP_SP;
 
     use super::Instruction::*;
     use super::Instructions;
     use super::NoReadInstruction::*;
-    use super::ReadAddress;
     use super::ReadInstruction::*;
     use super::Register8Bit;
-    use super::Register16Bit::{self, *};
+    use super::Register16Bit;
     use super::vec;
 
     pub fn ld_r_n(register: Register8Bit) -> Instructions {
@@ -279,6 +278,13 @@ mod opcodes {
         (
             LoadToAddressFromRegister { address, value }.into(),
             vec([Nop.into()]),
+        )
+    }
+
+    pub fn call_cc_nn(condition: Condition) -> Instructions {
+        (
+            Read(CONSUME_PC, ReadIntoLsb),
+            vec([Nop.into(), Read(CONSUME_PC, ConditionalCall(condition))]),
         )
     }
 }
@@ -438,6 +444,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(CONSUME_PC, ReadIntoMsb),
             ]),
         ),
+        0xc4 => call_cc_nn(Condition {
+            flag: Flag::Z,
+            not: true,
+        }),
         0xc5 => push_rr(BC),
         0xc9 => (
             Read(POP_SP, ReadIntoLsb),
@@ -448,6 +458,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xcb => (Nop.into(), Default::default()),
+        0xcc => call_cc_nn(Condition {
+            flag: Flag::Z,
+            not: false,
+        }),
         0xcd => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
@@ -459,7 +473,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xd1 => pop_rr(DE),
+        0xd4 => call_cc_nn(Condition {
+            flag: Flag::C,
+            not: true,
+        }),
         0xd5 => push_rr(DE),
+        0xdc => call_cc_nn(Condition {
+            flag: Flag::C,
+            not: false,
+        }),
         0xe0 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), LoadFromAccumulator(None).into()]),
