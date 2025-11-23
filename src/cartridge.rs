@@ -25,26 +25,26 @@ impl TryFrom<u8> for CartridgeType {
 
 // Memory Bank Controller
 pub enum Mbc {
-    NoMbc,
+    NoMbc(&'static [u8]),
     Mbc1(Mbc1),
 }
 
 impl Mbc {
     pub fn new(rom: &'static [u8]) -> Self {
         match CartridgeType::try_from(rom[0x147]).unwrap() {
-            CartridgeType::RomOnly => Self::NoMbc,
+            CartridgeType::RomOnly => Self::NoMbc(rom),
             CartridgeType::Mbc1 | CartridgeType::Mbc1Ram => Self::Mbc1(Mbc1::new(rom)),
         }
     }
     pub fn read(&self, index: u16) -> u8 {
         match self {
-            Mbc::NoMbc => todo!(),
+            Mbc::NoMbc(rom) => rom[usize::from(index)],
             Mbc::Mbc1(mbc1) => mbc1.read(index),
         }
     }
     pub fn write(&mut self, index: u16, value: u8) {
         match self {
-            Mbc::NoMbc => todo!(),
+            Mbc::NoMbc(_) => panic!("Trying to write to rom"),
             Mbc::Mbc1(mbc1) => mbc1.write(index, value),
         }
     }

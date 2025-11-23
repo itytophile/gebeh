@@ -158,7 +158,6 @@ impl MmuRead<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             SB => self.0.sb,
             SC => self.0.sc,
-            // TODO gérer le timer
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control,
