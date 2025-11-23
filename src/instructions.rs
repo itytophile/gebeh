@@ -114,7 +114,8 @@ pub enum NoReadInstruction {
     JumpHl,
     Adc,
     ConditionalReturn(Condition),
-    SetHl(u8)
+    SetHl(u8),
+    Ei,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -363,7 +364,7 @@ mod opcodes {
             vec([Nop.into(), ResHl(bit).into()]),
         )
     }
-    
+
     pub fn set_b_hl(bit: u8) -> Instructions {
         (
             Read(
@@ -703,6 +704,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(CONSUME_PC, ReadIntoMsb),
             ]),
         ),
+        0xfb => (Ei.into(), Default::default()),
         0xfe => (Read(CONSUME_PC, ReadIntoLsb), vec([Compare.into()])),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }

@@ -433,6 +433,9 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(Di) => {
                 *self.ime.get_mut() = false;
             }
+            NoRead(Ei) => {
+                *self.ime.get_mut() = true;
+            }
             NoRead(DecPc) => {
                 *self.pc.get_mut() -= 1;
             }
