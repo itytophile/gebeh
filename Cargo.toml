@@ -9,9 +9,11 @@ edition = "2024"
 [dependencies]
 arrayvec = "0.7.6"
 bitflags = "2.10.0"
+color-eyre = "0.6.5"
 futures-util = "0.3.31"
 minifb = "0.28.0"
 my-lib = { path = "./my-lib" }
 
 [profile.release]
 overflow-checks = true
+debug = true

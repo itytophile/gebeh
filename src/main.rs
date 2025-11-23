@@ -36,6 +36,7 @@ pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
 }
 
 fn main() {
+    color_eyre::install().unwrap();
     // let rom =
     //     std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb")
     //         .unwrap();

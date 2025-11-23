@@ -163,10 +163,12 @@ impl PipelineExecutorWriteOnce<'_> {
             }
             NoRead(Xor(register)) => {
                 *self.a.get_mut() ^= self.get_8bit_register(register);
-                self.f.get_mut().set(Flags::Z, self.a.get() == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().remove(Flags::H);
-                self.f.get_mut().remove(Flags::C);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, self.a.get() == 0);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.remove(Flags::C);
+                *self.f.get_mut() = flags;
             }
             NoRead(LoadToAddressHlFromADec) => {
                 let hl = self.get_16bit_register(Register16Bit::HL);
@@ -207,9 +209,11 @@ impl PipelineExecutorWriteOnce<'_> {
                 let r = self.get_8bit_register(register);
                 let incremented = r.wrapping_add(1);
                 self.set_8bit_register(register, incremented);
-                self.f.get_mut().set(Flags::Z, incremented == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().set(Flags::H, set_h_add(r, 1));
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, incremented == 0);
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(r, 1));
+                *self.f.get_mut() = flags;
             }
             NoRead(Inc16Bit(register)) => {
                 self.set_16bit_register(
@@ -245,35 +249,43 @@ impl PipelineExecutorWriteOnce<'_> {
                 let new_carry = (register_value & 0x80) == 0x80;
                 let new_value = (register_value << 1) | (self.f.get().contains(Flags::C) as u8);
                 self.set_8bit_register(register, new_value);
-                self.f.get_mut().set(Flags::Z, new_value == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().remove(Flags::H);
-                self.f.get_mut().set(Flags::C, new_carry);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, new_value == 0);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.set(Flags::C, new_carry);
+                *self.f.get_mut() = flags;
             }
             NoRead(Rla) => {
                 let new_carry = (self.a.get() & 0x80) == 0x80;
                 *self.a.get_mut() = (self.a.get() << 1) | (self.f.get().contains(Flags::C) as u8);
-                self.f.get_mut().remove(Flags::Z); // difference with rl r
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().remove(Flags::H);
-                self.f.get_mut().set(Flags::C, new_carry);
+                let mut flags = self.f.get();
+                flags.remove(Flags::Z); // difference with rl r
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.set(Flags::C, new_carry);
+                *self.f.get_mut() = flags;
             }
             NoRead(Dec(register)) => {
                 let r = self.get_8bit_register(register);
                 let decremented = r.wrapping_sub(1);
                 self.set_8bit_register(register, decremented);
-                self.f.get_mut().set(Flags::Z, decremented == 0);
-                self.f.get_mut().insert(Flags::N);
-                self.f.get_mut().set(Flags::H, set_h_sub(r, 1));
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, decremented == 0);
+                flags.insert(Flags::N);
+                flags.set(Flags::H, set_h_sub(r, 1));
+                *self.f.get_mut() = flags;
             }
             NoRead(Compare) => {
                 let a = self.a.get();
                 let lsb = self.lsb.get();
                 let (result, carry) = a.overflowing_sub(lsb);
-                self.f.get_mut().set(Flags::Z, result == 0);
-                self.f.get_mut().insert(Flags::N);
-                self.f.get_mut().set(Flags::H, set_h_sub(a, lsb));
-                self.f.get_mut().set(Flags::C, carry);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.insert(Flags::N);
+                flags.set(Flags::H, set_h_sub(a, lsb));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
             }
             NoRead(LoadToCachedAddressFromA) => {
                 mmu.write(
@@ -285,30 +297,36 @@ impl PipelineExecutorWriteOnce<'_> {
                 let a = self.a.get();
                 let r = self.get_8bit_register(register);
                 let (result, carry) = a.overflowing_sub(r);
-                self.f.get_mut().set(Flags::Z, result == 0);
-                self.f.get_mut().insert(Flags::N);
-                self.f.get_mut().set(Flags::H, set_h_sub(a, r));
-                self.f.get_mut().set(Flags::C, carry);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.insert(Flags::N);
+                flags.set(Flags::H, set_h_sub(a, r));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
             }
             NoRead(Add) => {
                 let a = self.a.get();
                 let lsb = self.lsb.get();
                 let (result, carry) = a.overflowing_add(lsb);
-                self.f.get_mut().set(Flags::Z, result == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().set(Flags::H, set_h_add(a, lsb));
-                self.f.get_mut().set(Flags::C, carry);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(a, lsb));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
             }
             NoRead(Add8Bit(register)) => {
                 let a = self.a.get();
                 let register_value = self.get_8bit_register(register);
                 let (result, carry) = a.overflowing_add(register_value);
-                self.f.get_mut().set(Flags::Z, result == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().set(Flags::H, set_h_add(a, register_value));
-                self.f.get_mut().set(Flags::C, carry);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(a, register_value));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
             }
             NoRead(Di) => {
@@ -327,10 +345,12 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(And) => {
                 let result = self.a.get() & self.lsb.get();
                 *self.a.get_mut() = result;
-                self.f.get_mut().set(Flags::Z, result == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().insert(Flags::H);
-                self.f.get_mut().remove(Flags::C);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.insert(Flags::H);
+                flags.remove(Flags::C);
+                *self.f.get_mut() = flags;
             }
             NoRead(LoadToAddressHlN) => {
                 mmu.write(self.get_16bit_register(Register16Bit::HL), self.lsb.get());
@@ -344,10 +364,12 @@ impl PipelineExecutorWriteOnce<'_> {
             NoRead(Or(register)) => {
                 let result = self.a.get() | self.get_8bit_register(register);
                 *self.a.get_mut() = result;
-                self.f.get_mut().set(Flags::Z, result == 0);
-                self.f.get_mut().remove(Flags::N);
-                self.f.get_mut().remove(Flags::H);
-                self.f.get_mut().remove(Flags::C);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.remove(Flags::C);
+                *self.f.get_mut() = flags;
             }
         }
 
