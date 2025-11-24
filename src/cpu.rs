@@ -644,6 +644,8 @@ impl StateMachine for Cpu {
 
         let mut write_once = self.write_once();
 
+        let mut interrupt_to_execute = None;
+
         // https://gbdev.io/pandocs/Interrupt_Sources.html
         if write_once.ime.get()
             && let Some((interrupt, address)) = [
@@ -659,17 +661,11 @@ impl StateMachine for Cpu {
             println!("Interrupt handler: {interrupt:?}");
             interrupt_flag_to_reset = Some(interrupt);
             *write_once.ime.get_mut() = false;
+            // interrupt will be handled at next opcode
+            // Citation: and interrupt servicing happens after fetching the next opcode,
+            // so PC has to be adjusted to point to the next executed instruction
             // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#isr-and-nmi
-            use NoReadInstruction::*;
-            *write_once.instruction_register.get_mut() = (
-                DecPc.into(),
-                vec([
-                    Nop.into(),
-                    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
-                    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
-                    DecStackPointer.into(),
-                ]),
-            );
+            interrupt_to_execute = Some(address);
         }
 
         let (inst, tail) = write_once.instruction_register.get_ref();
@@ -748,17 +744,32 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                *write_once.instruction_register.get_mut() =
-                    get_instructions(opcode, write_once.is_cb_mode.get());
-                *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
-                *write_once.pc.get_mut() =
-                    if let AfterReadInstruction::NoRead(NoReadInstruction::JumpHl) = inst {
-                        write_once
-                            .get_16bit_register(Register16Bit::HL)
-                            .wrapping_add(1)
-                    } else {
-                        write_once.pc.get().wrapping_add(1)
-                    };
+                if let Some(address) = interrupt_to_execute {
+                    println!("Interrupt handling");
+                    use NoReadInstruction::*;
+                    *write_once.instruction_register.get_mut() = (
+                        DecPc.into(),
+                        vec([
+                            Nop.into(),
+                            WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
+                            WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
+                            DecStackPointer.into(),
+                        ]),
+                    );
+                } else {
+                    println!("opcode: 0x{opcode:02x}");
+                    *write_once.instruction_register.get_mut() =
+                        get_instructions(opcode, write_once.is_cb_mode.get());
+                    *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
+                    *write_once.pc.get_mut() =
+                        if let AfterReadInstruction::NoRead(NoReadInstruction::JumpHl) = inst {
+                            write_once
+                                .get_16bit_register(Register16Bit::HL)
+                                .wrapping_add(1)
+                        } else {
+                            write_once.pc.get().wrapping_add(1)
+                        };
+                }
             }
         })
     }
