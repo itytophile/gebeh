@@ -121,6 +121,7 @@ pub enum NoReadInstruction {
     Swap8Bit(Register8Bit),
     LoadHlFromAdjustedStackPointerFirst,
     LoadHlFromAdjustedStackPointerSecond,
+    LdSpHl,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -726,6 +727,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 LoadHlFromAdjustedStackPointerFirst.into(),
             ]),
         ),
+        0xf9 => (LdSpHl.into(), vec([Nop.into()])),
         0xfa => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
