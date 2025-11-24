@@ -122,7 +122,7 @@ pub enum NoReadInstruction {
     LoadHlFromAdjustedStackPointerFirst,
     LoadHlFromAdjustedStackPointerSecond,
     LdSpHl,
-    Rlca
+    Rlca,
 }
 
 #[derive(Clone, Copy, Debug)]

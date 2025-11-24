@@ -29,6 +29,7 @@ pub struct Cpu {
     instruction_register: Instructions,
     ime: bool,
     is_halted: bool,
+    interrupt_to_execute: Option<u16>,
 }
 
 enum PipelineAction {
@@ -651,12 +652,15 @@ impl StateMachine for Cpu {
 
         let mut interrupt_flag_to_reset = Option::<Ints>::None;
 
-        let mut write_once = self.write_once();
-
-        let mut interrupt_to_execute = None;
-
         // https://gbdev.io/pandocs/Interrupt_Sources.html
-        if write_once.ime.get()
+        // interrupt_to_execute peut être défini en même temps que ime = true
+        // dans le cas du RETI
+        // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#ret-and-reti
+        // Malheureusement je ne comprends pas l'explication, donc je vais simplement
+        // désactiver la vérification des interruptions tant que interrupt_to_execute est défini
+        // Pas de write_once pour les interruptions car c'est trop spécifique (oui raison de merde)
+        if self.interrupt_to_execute.is_none()
+            && self.ime
             && let Some((interrupt, address)) = [
                 (Ints::VBLANK, 0x40),
                 (Ints::LCD, 0x48),
@@ -668,14 +672,18 @@ impl StateMachine for Cpu {
             .find(|(flag, _)| interrupts_to_execute.contains(*flag))
         {
             println!("Interrupt handler: {interrupt:?}");
+            // Citation: The IF bit corresponding to this interrupt and the IME flag are reset by the CPU
+            // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
             interrupt_flag_to_reset = Some(interrupt);
-            *write_once.ime.get_mut() = false;
+            self.ime = false;
             // interrupt will be handled at next opcode
             // Citation: and interrupt servicing happens after fetching the next opcode,
             // so PC has to be adjusted to point to the next executed instruction
             // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#isr-and-nmi
-            interrupt_to_execute = Some(address);
+            self.interrupt_to_execute = Some(address);
         }
+
+        let mut write_once = self.write_once();
 
         let (inst, tail) = write_once.instruction_register.get_ref();
 
@@ -753,7 +761,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                if let Some(address) = interrupt_to_execute {
+                if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;
                     *write_once.instruction_register.get_mut() = (
