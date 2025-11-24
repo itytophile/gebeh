@@ -507,6 +507,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x57 => ld_r_r(D, A),
         0x5e => ld_r_hl(E),
         0x5f => ld_r_r(E, A),
+        0x62 => ld_r_r(H, D),
         0x66 => ld_r_hl(H),
         0x67 => ld_r_r(H, A),
         0x6e => ld_r_hl(L),
