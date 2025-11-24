@@ -574,6 +574,26 @@ impl CpuWriteOnce<'_> {
                 *self.f.get_mut() = flags;
                 self.set_8bit_register(register, result);
             }
+            NoRead(LoadHlFromAdjustedStackPointerFirst) => {
+                let [_, sp_lsb] = self.sp.get().to_be_bytes();
+                // TODO réflechir à propos du lsb qui est utilisé à travers plusieurs cycles
+                // dans le cas des interruptions
+                let (result, carry) = sp_lsb.overflowing_add(self.lsb.get());
+                *self.l.get_mut() = result;
+                let mut flags = self.f.get();
+                flags.remove(Flags::Z);
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(sp_lsb, self.lsb.get()));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+            }
+            NoRead(LoadHlFromAdjustedStackPointerSecond) => {
+                [*self.h.get_mut(), _] = self
+                    .sp
+                    .get()
+                    .wrapping_add(u16::from(self.lsb.get()))
+                    .to_be_bytes();
+            }
         }
 
         PipelineAction::Pop
