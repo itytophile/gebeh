@@ -117,6 +117,7 @@ pub enum NoReadInstruction {
     SetHl(u8),
     Ei,
     Halt,
+    Swap8Bit(Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -377,6 +378,10 @@ mod opcodes {
             ),
             vec([Nop.into(), SetHl(bit).into()]),
         )
+    }
+
+    pub fn swap_r(register: Register8Bit) -> Instructions {
+        (Swap8Bit(register).into(), Default::default())
     }
 }
 
@@ -731,6 +736,13 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x1c => rr_r(H),
         0x1d => rr_r(L),
         0x1f => rr_r(A),
+        0x30 => swap_r(B),
+        0x31 => swap_r(C),
+        0x32 => swap_r(D),
+        0x33 => swap_r(E),
+        0x34 => swap_r(H),
+        0x35 => swap_r(L),
+        0x37 => swap_r(A),
         0x38 => srl_r(B),
         0x39 => srl_r(C),
         0x3a => srl_r(D),
