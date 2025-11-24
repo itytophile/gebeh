@@ -606,6 +606,17 @@ impl CpuWriteOnce<'_> {
             NoRead(LdSpHl) => {
                 *self.sp.get_mut() = self.get_16bit_register(Register16Bit::HL);
             }
+            NoRead(Rlca) => {
+                let a = self.a.get();
+                let carry = a >> 7;
+                *self.a.get_mut() = (a << 1) | carry;
+                let mut flags = self.f.get();
+                flags.remove(Flags::Z);
+                flags.remove(Flags::N);
+                flags.remove(Flags::H);
+                flags.set(Flags::C, carry == 1);
+                *self.f.get_mut() = flags;
+            }
         }
 
         PipelineAction::Pop

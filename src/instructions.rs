@@ -122,6 +122,7 @@ pub enum NoReadInstruction {
     LoadHlFromAdjustedStackPointerFirst,
     LoadHlFromAdjustedStackPointerSecond,
     LdSpHl,
+    Rlca
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -413,6 +414,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x03 => inc_rr(BC),
         0x04 => inc_r(B),
         0x05 => dec_r(B),
+        0x07 => (Rlca.into(), Default::default()),
         0x09 => add_hl_rr(BC),
         0x0b => dec_rr(BC),
         0x0c => inc_r(C),
