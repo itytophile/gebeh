@@ -203,10 +203,14 @@ impl MmuRead<'_> {
             OBP1 => self.0.obp1,
             WY => self.0.wy,
             WX => self.0.wx,
+            0xff4d => {
+                println!("Reading $ff4d (Prepare speed switch)");
+                0
+            }
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)],
             INTERRUPT_ENABLE => self.0.interrupt_enable.bits(),
-            _ => todo!("{index:04x}"),
+            _ => todo!("Reading ${index:04x}"),
         }
     }
 }
@@ -255,7 +259,7 @@ impl MmuWrite<'_> {
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => self.0.interrupt_enable = Ints::from_bits_retain(value),
-            _ => todo!("${index:04x}"),
+            _ => todo!("Writing 0x{value:02x} at ${index:04x}"),
         }
     }
 }
