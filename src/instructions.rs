@@ -96,6 +96,7 @@ pub enum NoReadInstruction {
     Dec16Bit(Register16Bit),
     DecHl,
     Compare,
+    Cp8Bit(Register8Bit),
     LoadToCachedAddressFromA,
     Sub8Bit(Register8Bit),
     Sub,
@@ -385,6 +386,10 @@ mod opcodes {
     pub fn swap_r(register: Register8Bit) -> Instructions {
         (Swap8Bit(register).into(), Default::default())
     }
+
+    pub fn cp_r(register: Register8Bit) -> Instructions {
+        (Cp8Bit(register).into(), Default::default())
+    }
 }
 
 use opcodes::*;
@@ -586,6 +591,12 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             vec([Or.into()]),
         ),
         0xb7 => or_r(A),
+        0xb8 => cp_r(B),
+        0xb9 => cp_r(C),
+        0xba => cp_r(D),
+        0xbb => cp_r(E),
+        0xbc => cp_r(H),
+        0xbd => cp_r(L),
         0xbe => (
             Read(
                 ReadAddress::Register {
@@ -596,6 +607,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ),
             vec([Compare.into()]),
         ),
+        0xbf => cp_r(A),
         0xc0 => ret_cc(Condition {
             flag: Flag::Z,
             not: true,

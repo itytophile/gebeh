@@ -594,6 +594,17 @@ impl CpuWriteOnce<'_> {
                     .wrapping_add(u16::from(self.lsb.get()))
                     .to_be_bytes();
             }
+            NoRead(Cp8Bit(register)) => {
+                let a = self.a.get();
+                let value = self.get_8bit_register(register);
+                let (result, carry) = a.overflowing_sub(value);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.insert(Flags::N);
+                flags.set(Flags::H, set_h_sub(a, value));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+            }
         }
 
         PipelineAction::Pop
