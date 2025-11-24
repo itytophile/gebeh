@@ -6,6 +6,7 @@ pub const WORK_RAM: u16 = 0xc000;
 const ECHO_RAM: u16 = 0xe000;
 const OAM: u16 = 0xfe00;
 const NOT_USABLE: u16 = 0xfea0;
+const JOYPAD: u16 = 0xff00;
 const SB: u16 = 0xff01; // Serial transfer data
 const SC: u16 = 0xff02; // Serial transfer control
 const TIMER_COUNTER: u16 = 0xff05; // TIMA
@@ -29,6 +30,18 @@ const WX: u16 = 0xff4b;
 const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 const HRAM: u16 = 0xff80;
 const INTERRUPT_ENABLE: u16 = 0xffff;
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    struct JoypadFlags: u8 {
+        const NOT_BUTTONS = 1 << 5;
+        const NOT_DPAD = 1 << 4;
+        const NOT_START_DOWN = 1 << 3;
+        const NOT_SELECT_UP = 1 << 2;
+        const NOT_B_LEFT = 1 << 1;
+        const NOT_A_RIGHT = 1;
+    }
+}
 
 const DMG_BOOT: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
@@ -74,6 +87,7 @@ pub struct State {
     pub timer_control: u8,
     pub timer_counter: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
+    pub joypad: JoypadFlags,
 }
 
 impl State {
@@ -110,6 +124,7 @@ impl State {
             timer_counter: 0,
             lcd_status: 0,
             oam: [0; (NOT_USABLE - OAM) as usize],
+            joypad: JoypadFlags::empty(),
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
@@ -181,6 +196,18 @@ impl MmuRead<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)],
             OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)],
+            JOYPAD => {
+                if self
+                    .0
+                    .joypad
+                    .contains(JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD)
+                {
+                    // https://gbdev.io/pandocs/Joypad_Input.html#ff00--p1joyp-joypad
+                    self.0.joypad.bits() | 0xf
+                } else {
+                    self.0.joypad.bits()
+                }
+            }
             SB => self.0.sb,
             SC => self.0.sc,
             TIMER_COUNTER => self.0.timer_counter,
@@ -229,6 +256,13 @@ impl MmuWrite<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)] = value,
+            JOYPAD => {
+                self.0
+                    .joypad
+                    .remove(JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD);
+                self.0.joypad |= JoypadFlags::from_bits_retain(value)
+                    & (JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD)
+            }
             SB => self.0.sb = value,
             SC => self.0.sc = value,
             TIMER_COUNTER => self.0.timer_counter = value,
