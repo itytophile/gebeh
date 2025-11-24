@@ -576,8 +576,6 @@ impl CpuWriteOnce<'_> {
             }
             NoRead(LoadHlFromAdjustedStackPointerFirst) => {
                 let [_, sp_lsb] = self.sp.get().to_be_bytes();
-                // TODO réflechir à propos du lsb qui est utilisé à travers plusieurs cycles
-                // dans le cas des interruptions
                 let (result, carry) = sp_lsb.overflowing_add(self.lsb.get());
                 *self.l.get_mut() = result;
                 let mut flags = self.f.get();
@@ -757,7 +755,6 @@ impl StateMachine for Cpu {
                         ]),
                     );
                 } else {
-                    println!("opcode: 0x{opcode:02x}");
                     *write_once.instruction_register.get_mut() =
                         get_instructions(opcode, write_once.is_cb_mode.get());
                     *write_once.is_cb_mode.get_mut() = opcode == 0xcb;

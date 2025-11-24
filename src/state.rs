@@ -179,6 +179,7 @@ impl MmuRead<'_> {
             VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.read(index),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
+            ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)],
             OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)],
             SB => self.0.sb,
             SC => self.0.sc,
@@ -222,6 +223,7 @@ impl MmuWrite<'_> {
             }
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.write(index, value),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
+            ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)] = value,
             SB => self.0.sb = value,
             SC => self.0.sc = value,
