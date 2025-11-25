@@ -635,6 +635,17 @@ impl CpuWriteOnce<'_> {
                 let [msb, _] = self.sp.get().to_be_bytes();
                 mmu.write(u16::from_be_bytes([self.msb.get(), self.lsb.get()]), msb);
             }
+            NoRead(AddSpE) => {
+                let [_, sp_lsb] = self.sp.get().to_be_bytes();
+                let (_, carry) = sp_lsb.overflowing_add(self.lsb.get());
+                let mut flags = self.f.get();
+                flags.remove(Flags::Z);
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(sp_lsb, self.lsb.get()));
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.sp.get_mut() = self.sp.get().wrapping_add(u16::from(self.lsb.get()));
+            }
         }
 
         PipelineAction::Pop

@@ -131,6 +131,7 @@ pub enum NoReadInstruction {
     Stop,
     WriteLsbSpToCachedAddressAndIncCachedAddress,
     WriteMsbSpToCachedAddress,
+    AddSpE,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -723,6 +724,13 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xe2 => (LoadFromAccumulator(Some(C)).into(), vec([Nop.into()])),
         0xe5 => push_rr(HL),
         0xe6 => (Read(CONSUME_PC, ReadIntoLsb), vec([And.into()])),
+        // je commence à en avoir marre de détailler chaque opération à chaque cycle.
+        // Les changements au niveau des registres n'est pas observable pendant l'exécution
+        // d'un opcode donc au final je pense que c'est osef
+        0xe8 => (
+            Read(CONSUME_PC, ReadIntoLsb),
+            vec([Nop.into(), Nop.into(), AddSpE.into()]),
+        ),
         0xe9 => (JumpHl.into(), Default::default()),
         0xea => (
             Read(CONSUME_PC, ReadIntoLsb),
