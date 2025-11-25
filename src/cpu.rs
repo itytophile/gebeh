@@ -80,6 +80,8 @@ impl CpuWriteOnce<'_> {
             Register8Bit::H => self.h.get(),
             Register8Bit::L => self.l.get(),
             Register8Bit::F => self.f.get().bits(),
+            Register8Bit::MsbSp => self.sp.get().to_be_bytes()[0],
+            Register8Bit::LsbSp => self.sp.get().to_be_bytes()[1],
         }
     }
 
@@ -93,6 +95,7 @@ impl CpuWriteOnce<'_> {
             Register8Bit::H => *self.h.get_mut() = value,
             Register8Bit::L => *self.l.get_mut() = value,
             Register8Bit::F => *self.f.get_mut() = Flags::from_bits_retain(value),
+            Register8Bit::MsbSp | Register8Bit::LsbSp => unreachable!(),
         }
     }
 

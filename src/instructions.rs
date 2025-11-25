@@ -10,6 +10,8 @@ pub enum Register8Bit {
     H,
     L,
     F,
+    LsbSp,
+    MsbSp,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -29,7 +31,8 @@ impl Register16Bit {
             Register16Bit::BC => Register8Bit::B,
             Register16Bit::DE => Register8Bit::D,
             Register16Bit::HL => Register8Bit::H,
-            Register16Bit::SP | Register16Bit::PC => unreachable!(),
+            Register16Bit::SP => Register8Bit::MsbSp,
+            Register16Bit::PC => unreachable!(),
         }
     }
 
@@ -39,7 +42,8 @@ impl Register16Bit {
             Register16Bit::BC => Register8Bit::C,
             Register16Bit::DE => Register8Bit::E,
             Register16Bit::HL => Register8Bit::L,
-            Register16Bit::SP | Register16Bit::PC => unreachable!(),
+            Register16Bit::SP => Register8Bit::LsbSp,
+            Register16Bit::PC => unreachable!(),
         }
     }
 }
