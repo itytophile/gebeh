@@ -29,7 +29,7 @@ pub struct Cpu {
     instruction_register: Instructions,
     ime: bool,
     is_halted: bool,
-    interrupt_to_execute: Option<u16>,
+    interrupt_to_execute: Option<u8>,
     stop_mode: bool,
 }
 
@@ -454,7 +454,7 @@ impl CpuWriteOnce<'_> {
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
                 mmu.write(self.sp.get(), self.pc.get().to_be_bytes()[1]);
-                *self.pc.get_mut() = address;
+                *self.pc.get_mut() = u16::from(address);
             }
             NoRead(Res(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) & !(1 << bit));

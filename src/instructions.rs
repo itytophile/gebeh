@@ -86,7 +86,7 @@ pub enum NoReadInstruction {
     DecStackPointer,
     WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit),
     WriteLsbPcWhereSpPointsAndLoadCacheToPc,
-    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(u16),
+    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(u8),
     Load {
         to: Register8Bit,
         from: Register8Bit,
@@ -403,6 +403,17 @@ mod opcodes {
     pub fn cp_r(register: Register8Bit) -> Instructions {
         (Cp8Bit(register).into(), Default::default())
     }
+
+    pub fn rst_n(value: u8) -> Instructions {
+        (
+            DecStackPointer.into(),
+            vec([
+                Nop.into(),
+                WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(value).into(),
+                WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
+            ]),
+        )
+    }
 }
 
 use opcodes::*;
@@ -693,6 +704,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         }),
         0xc5 => push_rr(BC),
         0xc6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Add.into()])),
+        0xc7 => rst_n(0),
         0xc8 => ret_cc(Condition {
             flag: Flag::Z,
             not: false,
@@ -725,6 +737,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xce => (Read(CONSUME_PC, ReadIntoLsb), vec([Adc.into()])),
+        0xcf => rst_n(0x08),
         0xd0 => ret_cc(Condition {
             flag: Flag::C,
             not: true,
@@ -740,6 +753,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         }),
         0xd5 => push_rr(DE),
         0xd6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Sub.into()])),
+        0xd7 => rst_n(0x10),
         0xd8 => ret_cc(Condition {
             flag: Flag::C,
             not: false,
@@ -757,6 +771,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             not: false,
         }),
         0xde => (Read(CONSUME_PC, ReadIntoLsb), vec([Sbc.into()])),
+        0xdf => rst_n(0x18),
         0xe0 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), LoadFromAccumulator(None).into()]),
@@ -765,6 +780,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xe2 => (LoadFromAccumulator(Some(C)).into(), vec([Nop.into()])),
         0xe5 => push_rr(HL),
         0xe6 => (Read(CONSUME_PC, ReadIntoLsb), vec([And.into()])),
+        0xe7 => rst_n(0x20),
         // je commence à en avoir marre de détailler chaque opération à chaque cycle.
         // Les changements au niveau des registres n'est pas observable pendant l'exécution
         // d'un opcode donc au final je pense que c'est osef
@@ -782,6 +798,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xee => (Read(CONSUME_PC, ReadIntoLsb), vec([Xor.into()])),
+        0xef => rst_n(0x28),
         0xf0 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
@@ -793,6 +810,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xf3 => (Di.into(), Default::default()),
         0xf5 => push_rr(AF),
         0xf6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Or.into()])),
+        0xf7 => rst_n(0x30),
         0xf8 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
@@ -811,6 +829,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         ),
         0xfb => (Ei.into(), Default::default()),
         0xfe => (Read(CONSUME_PC, ReadIntoLsb), vec([Compare.into()])),
+        0xff => rst_n(0x38),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
 }
