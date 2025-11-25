@@ -125,6 +125,8 @@ pub enum NoReadInstruction {
     Rlca,
     // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
     Stop,
+    WriteLsbSpToCachedAddressAndIncCachedAddress,
+    WriteMsbSpToCachedAddress,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -423,6 +425,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x0d => dec_r(C),
         0x0e => ld_r_n(C),
         0x06 => ld_r_n(B),
+        0x08 => (
+            Read(CONSUME_PC, ReadIntoLsb),
+            vec([
+                Nop.into(),
+                WriteMsbSpToCachedAddress.into(),
+                WriteLsbSpToCachedAddressAndIncCachedAddress.into(),
+                Read(CONSUME_PC, ReadIntoMsb),
+            ]),
+        ),
         0x10 => {
             println!("stop");
             (Stop.into(), Default::default())

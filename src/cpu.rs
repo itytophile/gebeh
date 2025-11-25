@@ -622,6 +622,16 @@ impl CpuWriteOnce<'_> {
             NoRead(Stop) => {
                 *self.stop_mode.get_mut() = true;
             }
+            NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
+                let [_, lsb] = self.sp.get().to_be_bytes();
+                let wz = u16::from_be_bytes([self.msb.get(), self.lsb.get()]);
+                mmu.write(wz, lsb);
+                [*self.msb.get_mut(), *self.lsb.get_mut()] = wz.wrapping_add(1).to_be_bytes();
+            }
+            NoRead(WriteMsbSpToCachedAddress) => {
+                let [msb, _] = self.sp.get().to_be_bytes();
+                mmu.write(u16::from_be_bytes([self.msb.get(), self.lsb.get()]), msb);
+            }
         }
 
         PipelineAction::Pop
