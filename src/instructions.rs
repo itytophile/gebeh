@@ -133,6 +133,7 @@ pub enum NoReadInstruction {
     WriteMsbSpToCachedAddress,
     AddSpE,
     Sbc,
+    Reti,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -743,6 +744,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             flag: Flag::C,
             not: false,
         }),
+        0xd9 => (
+            Read(POP_SP, ReadIntoLsb),
+            vec([Nop.into(), Reti.into(), Read(POP_SP, ReadIntoMsb)]),
+        ),
         0xda => jp_cc_nn(Condition {
             flag: Flag::C,
             not: false,
