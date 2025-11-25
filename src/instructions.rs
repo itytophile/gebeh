@@ -132,6 +132,7 @@ pub enum NoReadInstruction {
     WriteLsbSpToCachedAddressAndIncCachedAddress,
     WriteMsbSpToCachedAddress,
     AddSpE,
+    Sbc,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -716,6 +717,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             flag: Flag::C,
             not: false,
         }),
+        0xde => (Read(CONSUME_PC, ReadIntoLsb), vec([Sbc.into()])),
         0xe0 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), LoadFromAccumulator(None).into()]),

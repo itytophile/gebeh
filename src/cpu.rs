@@ -59,6 +59,13 @@ pub fn set_h_sub(arg1: u8, arg2: u8) -> bool {
     (lo1.wrapping_sub(lo2) & (0x10)) == 0x10
 }
 
+pub fn set_h_sub_with_carry(arg1: u8, arg2: u8, carry: bool) -> bool {
+    let lo1 = arg1 & 0x0F;
+    let lo2 = arg2 & 0x0F;
+
+    (lo1.wrapping_sub(lo2 + carry as u8) & (0x10)) == 0x10
+}
+
 bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
     pub struct Flags: u8 {
@@ -645,6 +652,23 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, carry);
                 *self.f.get_mut() = flags;
                 *self.sp.get_mut() = self.sp.get().wrapping_add(u16::from(self.lsb.get()));
+            }
+            NoRead(Sbc) => {
+                let a = self.a.get();
+                let register_value = self.lsb.get();
+                let (result, mut carry) = a.overflowing_sub(register_value);
+                let mut flags = self.f.get();
+                let (result, carry1) = result.overflowing_sub(flags.contains(Flags::C) as u8);
+                carry |= carry1;
+                // no z
+                flags.insert(Flags::N);
+                flags.set(
+                    Flags::H,
+                    set_h_sub_with_carry(a, register_value, flags.contains(Flags::C)),
+                );
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.a.get_mut() = result;
             }
         }
 
