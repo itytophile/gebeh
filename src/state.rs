@@ -290,6 +290,9 @@ impl MmuWrite<'_> {
             OBP1 => self.0.obp1 = value,
             WY => self.0.wy = value,
             WX => self.0.wx = value,
+            0xff4d => {
+                println!("Writing $ff4d (Prepare speed switch)");
+            }
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => self.0.interrupt_enable = Ints::from_bits_retain(value),

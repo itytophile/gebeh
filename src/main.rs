@@ -47,8 +47,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom =
-        std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/cpu_instrs.gb")
-            .unwrap();
+        std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/cpu_instrs.gb").unwrap();
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
     let title = &rom[0x134..0x143];
     let end_zero_pos = title

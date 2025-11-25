@@ -30,6 +30,7 @@ pub struct Cpu {
     ime: bool,
     is_halted: bool,
     interrupt_to_execute: Option<u16>,
+    stop_mode: bool,
 }
 
 enum PipelineAction {
@@ -618,6 +619,9 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, carry == 1);
                 *self.f.get_mut() = flags;
             }
+            NoRead(Stop) => {
+                *self.stop_mode.get_mut() = true;
+            }
         }
 
         PipelineAction::Pop
@@ -638,6 +642,16 @@ impl CpuWriteOnce<'_> {
 impl StateMachine for Cpu {
     fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         let interrupts_to_execute = state.interrupt_enable & state.interrupt_flag;
+
+        // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
+        if self.stop_mode {
+            self.stop_mode = false;
+            // quand on va sortir du stop mode on va exécuter un nop
+            // et fetch le prochain opcode en parallèle
+            self.instruction_register = (NoReadInstruction::Nop.into(), Default::default());
+            // permet de passer un cycle en stop mode sans rien faire
+            return None;
+        }
 
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted && !interrupts_to_execute.is_empty() {

@@ -123,6 +123,8 @@ pub enum NoReadInstruction {
     LoadHlFromAdjustedStackPointerSecond,
     LdSpHl,
     Rlca,
+    // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
+    Stop,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -421,6 +423,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x0d => dec_r(C),
         0x0e => ld_r_n(C),
         0x06 => ld_r_n(B),
+        0x10 => {
+            println!("stop");
+            (Stop.into(), Default::default())
+        }
         0x11 => ld_rr_n(DE),
         0x12 => ld_rr_r(DE, A),
         0x13 => inc_rr(DE),
