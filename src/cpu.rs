@@ -683,6 +683,11 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::N | Flags::H);
                 flags.insert(Flags::C);
             }
+            NoRead(Ccf) => {
+                let flags = self.f.get_mut();
+                flags.remove(Flags::N | Flags::H);
+                flags.toggle(Flags::C);
+            }
         }
 
         PipelineAction::Pop

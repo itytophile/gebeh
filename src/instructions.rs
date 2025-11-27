@@ -135,7 +135,8 @@ pub enum NoReadInstruction {
     Sbc,
     Reti,
     Cpl,
-    Scf
+    Scf,
+    Ccf
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -547,6 +548,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x3c => inc_r(A),
         0x3d => dec_r(A),
         0x3e => ld_r_n(A),
+        0x3f => (Ccf.into(), Default::default()),
         0x40 => ld_r_r(B, B),
         0x41 => ld_r_r(B, C),
         0x42 => ld_r_r(B, D),
