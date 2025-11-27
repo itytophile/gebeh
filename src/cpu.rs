@@ -675,10 +675,13 @@ impl CpuWriteOnce<'_> {
                 *self.ime.get_mut() = true;
             }
             NoRead(Cpl) => {
-                let mut flags = self.f.get();
-                flags.insert(Flags::N | Flags::H);
-                *self.f.get_mut() = flags;
+                self.f.get_mut().insert(Flags::N | Flags::H);
                 *self.a.get_mut() = !self.a.get();
+            }
+            NoRead(Scf) => {
+                let flags = self.f.get_mut();
+                flags.remove(Flags::N | Flags::H);
+                flags.insert(Flags::C);
             }
         }
 

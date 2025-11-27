@@ -134,7 +134,8 @@ pub enum NoReadInstruction {
     AddSpE,
     Sbc,
     Reti,
-    Cpl
+    Cpl,
+    Scf
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -536,6 +537,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), LoadToAddressHlN.into()]),
         ),
+        0x37 => (Scf.into(), Default::default()),
         0x38 => jr_cc_e(Condition {
             flag: Flag::C,
             not: false,
