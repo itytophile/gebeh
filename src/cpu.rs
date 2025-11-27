@@ -776,7 +776,13 @@ impl StateMachine for Cpu {
         let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => {
-                AfterReadInstruction::Read(mmu.read(0xff00 | (write_once.lsb.get() as u16)), inst)
+                AfterReadInstruction::Read(mmu.read(0xff00 | u16::from(write_once.lsb.get())), inst)
+            }
+            Instruction::Read(ReadAddress::Accumulator8Bit(register), inst) => {
+                AfterReadInstruction::Read(
+                    mmu.read(0xff00 | u16::from(write_once.get_8bit_register(register))),
+                    inst,
+                )
             }
             Instruction::Read(ReadAddress::Cache, inst) => AfterReadInstruction::Read(
                 mmu.read(u16::from_be_bytes([

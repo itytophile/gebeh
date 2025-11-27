@@ -159,6 +159,7 @@ pub enum ReadAddress {
     },
     // LDH A, (n)
     Accumulator,
+    Accumulator8Bit(Register8Bit),
     // (nn)
     Cache,
 }
@@ -807,6 +808,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             ]),
         ),
         0xf1 => pop_rr(AF),
+        0xf2 => (
+            Read(ReadAddress::Accumulator8Bit(C), ReadIntoLsb),
+            vec([Store8Bit(A).into()]),
+        ),
         0xf3 => (Di.into(), Default::default()),
         0xf5 => push_rr(AF),
         0xf6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Or.into()])),
