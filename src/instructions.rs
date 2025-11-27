@@ -155,6 +155,7 @@ pub enum NoReadInstruction {
     SwapHl,
     SrlHl,
     IncHl,
+    Daa
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -596,6 +597,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x24 => inc_r(H),
         0x25 => dec_r(H),
         0x26 => ld_r_n(H),
+        0x27 => (Daa.into(), Default::default()),
         0x28 => jr_cc_e(Condition {
             flag: Flag::Z,
             not: false,

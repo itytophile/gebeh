@@ -867,6 +867,33 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::H, set_h_add(r, 1));
                 *self.f.get_mut() = flags;
             }
+            NoRead(Daa) => {
+                // https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7#DAA
+                let flags = self.f.get_mut();
+                let mut adj = 0;
+                let result = if flags.contains(Flags::N) {
+                    if flags.contains(Flags::H) {
+                        adj += 0x06
+                    }
+                    if flags.contains(Flags::C) {
+                        adj += 0x60
+                    }
+                    self.a.get().wrapping_sub(adj)
+                } else {
+                    let a = self.a.get();
+                    if flags.contains(Flags::H) || (a & 0x0f) > 0x09 {
+                        adj += 0x06;
+                    }
+                    if flags.contains(Flags::C) || a > 0x99 {
+                        adj += 0x60;
+                        flags.insert(Flags::C);
+                    }
+                    self.a.get().wrapping_add(adj)
+                };
+                *self.a.get_mut() = result;
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::H);
+            }
         }
 
         PipelineAction::Pop
