@@ -154,6 +154,7 @@ pub enum NoReadInstruction {
     SraHl,
     SwapHl,
     SrlHl,
+    IncHl,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -622,6 +623,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x31 => ld_rr_n(SP),
         0x32 => (LoadToAddressHlFromADec.into(), vec([Nop.into()])),
         0x33 => inc_rr(SP),
+        0x34 => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Nop.into(), IncHl.into()]),
+        ),
         0x35 => (
             Read(
                 ReadAddress::Register {

@@ -857,6 +857,16 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (register_value & 0x1) == 0x1);
                 *self.f.get_mut() = flags;
             }
+            NoRead(IncHl) => {
+                let r = self.lsb.get();
+                let incremented = r.wrapping_add(1);
+                mmu.write(self.get_16bit_register(Register16Bit::HL), incremented);
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, incremented == 0);
+                flags.remove(Flags::N);
+                flags.set(Flags::H, set_h_add(r, 1));
+                *self.f.get_mut() = flags;
+            }
         }
 
         PipelineAction::Pop
