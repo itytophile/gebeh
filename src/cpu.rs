@@ -674,6 +674,12 @@ impl CpuWriteOnce<'_> {
                 *self.pc.get_mut() = u16::from_be_bytes([self.msb.get(), self.lsb.get()]);
                 *self.ime.get_mut() = true;
             }
+            NoRead(Cpl) => {
+                let mut flags = self.f.get();
+                flags.insert(Flags::N | Flags::H);
+                *self.f.get_mut() = flags;
+                *self.a.get_mut() = !self.a.get();
+            }
         }
 
         PipelineAction::Pop
