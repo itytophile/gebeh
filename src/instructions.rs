@@ -145,6 +145,7 @@ pub enum NoReadInstruction {
     Rrc8Bit(Register8Bit),
     Sla8Bit(Register8Bit),
     Sra8Bit(Register8Bit),
+    Set8Bit(u8, Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -453,6 +454,10 @@ mod opcodes {
 
     pub fn sra_r(register: Register8Bit) -> Instructions {
         (Sra8Bit(register).into(), Default::default())
+    }
+
+    pub fn set_b_r(bit: u8, register: Register8Bit) -> Instructions {
+        (Set8Bit(bit, register).into(), Default::default())
     }
 }
 
@@ -1099,7 +1104,62 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0xee => set_b_hl(5),
         0xf6 => set_b_hl(6),
         0xfe => set_b_hl(7),
-        _ => panic!("Opcode not implemented (cb mode): 0x{opcode:02x}"),
+        0xc0 => set_b_r(0, B),
+        0xc1 => set_b_r(0, C),
+        0xc2 => set_b_r(0, D),
+        0xc3 => set_b_r(0, E),
+        0xc4 => set_b_r(0, H),
+        0xc5 => set_b_r(0, L),
+        0xc7 => set_b_r(0, A),
+        0xc8 => set_b_r(1, B),
+        0xc9 => set_b_r(1, C),
+        0xca => set_b_r(1, D),
+        0xcb => set_b_r(1, E),
+        0xcc => set_b_r(1, H),
+        0xcd => set_b_r(1, L),
+        0xcf => set_b_r(1, A),
+        0xd0 => set_b_r(2, B),
+        0xd1 => set_b_r(2, C),
+        0xd2 => set_b_r(2, D),
+        0xd3 => set_b_r(2, E),
+        0xd4 => set_b_r(2, H),
+        0xd5 => set_b_r(2, L),
+        0xd7 => set_b_r(2, A),
+        0xd8 => set_b_r(3, B),
+        0xd9 => set_b_r(3, C),
+        0xda => set_b_r(3, D),
+        0xdb => set_b_r(3, E),
+        0xdc => set_b_r(3, H),
+        0xdd => set_b_r(3, L),
+        0xdf => set_b_r(3, A),
+        0xe0 => set_b_r(4, B),
+        0xe1 => set_b_r(4, C),
+        0xe2 => set_b_r(4, D),
+        0xe3 => set_b_r(4, E),
+        0xe4 => set_b_r(4, H),
+        0xe5 => set_b_r(4, L),
+        0xe7 => set_b_r(4, A),
+        0xe8 => set_b_r(5, B),
+        0xe9 => set_b_r(5, C),
+        0xea => set_b_r(5, D),
+        0xeb => set_b_r(5, E),
+        0xec => set_b_r(5, H),
+        0xed => set_b_r(5, L),
+        0xef => set_b_r(5, A),
+        0xf0 => set_b_r(6, B),
+        0xf1 => set_b_r(6, C),
+        0xf2 => set_b_r(6, D),
+        0xf3 => set_b_r(6, E),
+        0xf4 => set_b_r(6, H),
+        0xf5 => set_b_r(6, L),
+        0xf7 => set_b_r(6, A),
+        0xf8 => set_b_r(7, B),
+        0xf9 => set_b_r(7, C),
+        0xfa => set_b_r(7, D),
+        0xfb => set_b_r(7, E),
+        0xfc => set_b_r(7, H),
+        0xfd => set_b_r(7, L),
+        0xff => set_b_r(7, A),
     }
 }
 

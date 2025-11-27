@@ -772,6 +772,9 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::N | Flags::H);
                 flags.set(Flags::C, carry);
             }
+            NoRead(Set8Bit(bit, register)) => {
+                self.set_8bit_register(register, self.get_8bit_register(register) | (1 << bit));
+            }
         }
 
         PipelineAction::Pop
