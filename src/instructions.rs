@@ -778,6 +778,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x9b => sbc_r(E),
         0x9c => sbc_r(H),
         0x9d => sbc_r(L),
+        0x9e => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Sbc.into()]),
+        ),
         0x9f => sbc_r(A),
         0xa0 => and_r(B),
         0xa1 => and_r(C),
