@@ -744,6 +744,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x8b => adc_r(E),
         0x8c => adc_r(H),
         0x8d => adc_r(L),
+        0x8e => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Adc.into()]),
+        ),
         0x8f => adc_r(A),
         0x90 => sub_r(B),
         0x91 => sub_r(C),
