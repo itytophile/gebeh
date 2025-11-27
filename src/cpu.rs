@@ -747,6 +747,14 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::N | Flags::H);
                 flags.set(Flags::C, (result & 1) == 1)
             }
+            NoRead(Rrc8Bit(register)) => {
+                let register_value = self.get_8bit_register(register);
+                self.set_8bit_register(register, register_value.rotate_right(1));
+                let flags = self.f.get_mut();
+                flags.set(Flags::Z, register_value == 0);
+                flags.remove(Flags::N | Flags::H);
+                flags.set(Flags::C, (register_value & 1) == 1)
+            }
         }
 
         PipelineAction::Pop
