@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use minifb::{Key, Scale, Window, WindowOptions};
 
 use crate::{
@@ -83,23 +85,36 @@ fn main() {
     )
     .unwrap();
 
-    while window.is_open() && !window.is_key_down(Key::Escape) {
-        loop {
-            machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
-            let ((_, ppu), _) = &mut machine;
-            if let Some(ly) = ppu.drawn_ly.take() {
-                let base = usize::from(ly) * WIDTH;
-                for (a, b) in buffer[base..].iter_mut().zip(&ppu.gpu.draw_line) {
-                    *a = u32::from(*b);
+    let mut is_changed = false;
+
+    let check_duration = Duration::from_millis(100);
+    let mut last_checked = Instant::now();
+
+    loop {
+        machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
+        let ((_, ppu), _) = &mut machine;
+        if let Some(ly) = ppu.drawn_ly.take() {
+            let base = usize::from(ly) * WIDTH;
+            for (a, b) in buffer[base..].iter_mut().zip(&ppu.gpu.draw_line) {
+                let b = u32::from(*b);
+                if *a != b {
+                    is_changed = true;
                 }
-                if usize::from(ly) == HEIGHT - 1 {
-                    break;
+                *a = b;
+            }
+            if usize::from(ly) == HEIGHT - 1 {
+                if is_changed {
+                    window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+                    is_changed = false;
+                } else if last_checked.elapsed() > check_duration {
+                    window.update();
+                    last_checked = Instant::now();
+                    if !window.is_open() || window.is_key_down(Key::Escape) {
+                        return;
+                    }
                 }
             }
         }
-
-        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
-        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
 
