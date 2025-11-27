@@ -795,6 +795,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xa3 => and_r(E),
         0xa4 => and_r(H),
         0xa5 => and_r(L),
+        0xa6 => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([And.into()]),
+        ),
         0xa7 => and_r(A),
         0xa8 => xor_r(B),
         0xa9 => xor_r(C),
