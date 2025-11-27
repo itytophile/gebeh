@@ -146,6 +146,14 @@ pub enum NoReadInstruction {
     Sla8Bit(Register8Bit),
     Sra8Bit(Register8Bit),
     Set8Bit(u8, Register8Bit),
+    RlcHl,
+    RrcHl,
+    RlHl,
+    RrHl,
+    SlaHl,
+    SraHl,
+    SwapHl,
+    SrlHl,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -221,6 +229,7 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
 mod opcodes {
     use crate::instructions::CONSUME_PC;
     use crate::instructions::Condition;
+    use crate::instructions::NoReadInstruction;
     use crate::instructions::OpAfterRead;
     use crate::instructions::POP_SP;
     use crate::instructions::ReadAddress;
@@ -383,7 +392,8 @@ mod opcodes {
         (Read(CONSUME_PC, ReadIntoLsb), vec([Bit(bit).into()]))
     }
 
-    pub fn res_b_hl(bit: u8) -> Instructions {
+    // 3 M-cycles (+1 cb opcode)
+    fn byte_op_hl(inst: NoReadInstruction) -> Instructions {
         (
             Read(
                 ReadAddress::Register {
@@ -392,21 +402,16 @@ mod opcodes {
                 },
                 ReadIntoLsb,
             ),
-            vec([Nop.into(), ResHl(bit).into()]),
+            vec([Nop.into(), inst.into()]),
         )
     }
 
+    pub fn res_b_hl(bit: u8) -> Instructions {
+        byte_op_hl(ResHl(bit))
+    }
+
     pub fn set_b_hl(bit: u8) -> Instructions {
-        (
-            Read(
-                ReadAddress::Register {
-                    register: Register16Bit::HL,
-                    op: OpAfterRead::None,
-                },
-                ReadIntoLsb,
-            ),
-            vec([Nop.into(), SetHl(bit).into()]),
-        )
+        byte_op_hl(SetHl(bit))
     }
 
     pub fn swap_r(register: Register8Bit) -> Instructions {
@@ -458,6 +463,38 @@ mod opcodes {
 
     pub fn set_b_r(bit: u8, register: Register8Bit) -> Instructions {
         (Set8Bit(bit, register).into(), Default::default())
+    }
+
+    pub fn rlc_hl() -> Instructions {
+        byte_op_hl(RlcHl)
+    }
+
+    pub fn rrc_hl() -> Instructions {
+        byte_op_hl(RrcHl)
+    }
+
+    pub fn rl_hl() -> Instructions {
+        byte_op_hl(RlHl)
+    }
+
+    pub fn rr_hl() -> Instructions {
+        byte_op_hl(RrHl)
+    }
+
+    pub fn sla_hl() -> Instructions {
+        byte_op_hl(SlaHl)
+    }
+
+    pub fn sra_hl() -> Instructions {
+        byte_op_hl(SraHl)
+    }
+
+    pub fn swap_hl() -> Instructions {
+        byte_op_hl(SwapHl)
+    }
+
+    pub fn srl_hl() -> Instructions {
+        byte_op_hl(SrlHl)
     }
 }
 
@@ -918,6 +955,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x03 => rlc_r(E),
         0x04 => rlc_r(H),
         0x05 => rlc_r(L),
+        0x06 => rlc_hl(),
         0x07 => rlc_r(A),
         0x08 => rrc_r(B),
         0x09 => rrc_r(C),
@@ -925,6 +963,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x0b => rrc_r(E),
         0x0c => rrc_r(H),
         0x0d => rrc_r(L),
+        0x0e => rrc_hl(),
         0x0f => rrc_r(A),
         0x10 => rl_r(B),
         0x11 => rl_r(C),
@@ -932,6 +971,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x13 => rl_r(E),
         0x14 => rl_r(H),
         0x15 => rl_r(L),
+        0x16 => rl_hl(),
         0x17 => rl_r(A),
         0x18 => rr_r(B),
         0x19 => rr_r(C),
@@ -939,6 +979,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x1b => rr_r(E),
         0x1c => rr_r(H),
         0x1d => rr_r(L),
+        0x1e => rr_hl(),
         0x1f => rr_r(A),
         0x20 => sla_r(B),
         0x21 => sla_r(C),
@@ -946,6 +987,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x23 => sla_r(E),
         0x24 => sla_r(H),
         0x25 => sla_r(L),
+        0x26 => sla_hl(),
         0x27 => sla_r(A),
         0x28 => sra_r(B),
         0x29 => sra_r(C),
@@ -953,6 +995,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x2b => sra_r(E),
         0x2c => sra_r(H),
         0x2d => sra_r(L),
+        0x2e => sra_hl(),
         0x2f => sra_r(A),
         0x30 => swap_r(B),
         0x31 => swap_r(C),
@@ -960,6 +1003,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x33 => swap_r(E),
         0x34 => swap_r(H),
         0x35 => swap_r(L),
+        0x36 => swap_hl(),
         0x37 => swap_r(A),
         0x38 => srl_r(B),
         0x39 => srl_r(C),
@@ -967,6 +1011,7 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x3b => srl_r(E),
         0x3c => srl_r(H),
         0x3d => srl_r(L),
+        0x3e => srl_hl(),
         0x3f => srl_r(A),
         0x40 => bit_b_r(0, B),
         0x41 => bit_b_r(0, C),
