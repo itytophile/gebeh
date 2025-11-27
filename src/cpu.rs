@@ -722,6 +722,16 @@ impl CpuWriteOnce<'_> {
                 *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
             }
+            NoRead(And8Bit(register)) => {
+                let result = self.a.get() & self.get_8bit_register(register);
+                *self.a.get_mut() = result;
+                let mut flags = self.f.get();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N);
+                flags.insert(Flags::H);
+                flags.remove(Flags::C);
+                *self.f.get_mut() = flags;
+            }
         }
 
         PipelineAction::Pop
