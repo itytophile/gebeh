@@ -137,7 +137,8 @@ pub enum NoReadInstruction {
     Cpl,
     Scf,
     Ccf,
-    Adc8Bit(Register8Bit)
+    Adc8Bit(Register8Bit),
+    Sbc8Bit(Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -419,9 +420,13 @@ mod opcodes {
             ]),
         )
     }
-    
+
     pub fn adc_r(register: Register8Bit) -> Instructions {
         (Adc8Bit(register).into(), Default::default())
+    }
+
+    pub fn sbc_r(register: Register8Bit) -> Instructions {
+        (Sbc8Bit(register).into(), Default::default())
     }
 }
 
@@ -649,6 +654,13 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x94 => sub_r(H),
         0x95 => sub_r(L),
         0x97 => sub_r(A),
+        0x98 => sbc_r(B),
+        0x99 => sbc_r(C),
+        0x9a => sbc_r(D),
+        0x9b => sbc_r(E),
+        0x9c => sbc_r(H),
+        0x9d => sbc_r(L),
+        0x9f => sbc_r(A),
         0xa8 => xor_r(B),
         0xa9 => xor_r(C),
         0xaa => xor_r(D),

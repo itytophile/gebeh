@@ -705,6 +705,23 @@ impl CpuWriteOnce<'_> {
                 *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
             }
+            NoRead(Sbc8Bit(register)) => {
+                let a = self.a.get();
+                let register_value = self.get_8bit_register(register);
+                let (result, mut carry) = a.overflowing_sub(register_value);
+                let mut flags = self.f.get();
+                let (result, carry1) = result.overflowing_sub(flags.contains(Flags::C) as u8);
+                carry |= carry1;
+                // no z
+                flags.insert(Flags::N);
+                flags.set(
+                    Flags::H,
+                    set_h_sub_with_carry(a, register_value, flags.contains(Flags::C)),
+                );
+                flags.set(Flags::C, carry);
+                *self.f.get_mut() = flags;
+                *self.a.get_mut() = result;
+            }
         }
 
         PipelineAction::Pop
