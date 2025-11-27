@@ -520,6 +520,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x05 => dec_r(B),
         0x07 => (Rlca.into(), Default::default()),
         0x09 => add_hl_rr(BC),
+        0x0a => (
+            Read(
+                ReadAddress::Register {
+                    register: BC,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Store8Bit(A).into()]),
+        ),
         0x0b => dec_rr(BC),
         0x0c => inc_r(C),
         0x0d => dec_r(C),
