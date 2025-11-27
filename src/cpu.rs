@@ -981,6 +981,9 @@ impl StateMachine for Cpu {
                     OpAfterRead::Inc => {
                         write_once.set_16bit_register(register, register_value.wrapping_add(1));
                     }
+                    OpAfterRead::Dec => {
+                        write_once.set_16bit_register(register, register_value.wrapping_sub(1));
+                    }
                 }
                 AfterReadInstruction::Read(mmu.read(register_value), inst)
             }

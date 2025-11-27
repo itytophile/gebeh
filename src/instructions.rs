@@ -169,6 +169,7 @@ pub enum ReadInstruction {
 pub enum OpAfterRead {
     None,
     Inc,
+    Dec,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -641,6 +642,16 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             not: false,
         }),
         0x39 => add_hl_rr(SP),
+        0x3a => (
+            Read(
+                ReadAddress::Register {
+                    register: HL,
+                    op: OpAfterRead::Dec,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Store8Bit(A).into()]),
+        ),
         0x3b => dec_rr(SP),
         0x3c => inc_r(A),
         0x3d => dec_r(A),
