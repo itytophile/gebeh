@@ -764,7 +764,7 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, carry);
             }
             NoRead(Sra8Bit(register)) => {
-                // peut-être merdique 
+                // peut-être merdique
                 let (result, carry) = self.get_8bit_register(register).overflowing_shr(1);
                 self.set_8bit_register(register, result);
                 let flags = self.f.get_mut();
