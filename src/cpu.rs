@@ -755,6 +755,14 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::N | Flags::H);
                 flags.set(Flags::C, (register_value & 1) == 1)
             }
+            NoRead(Sla8Bit(register)) => {
+                let (result, carry) = self.get_8bit_register(register).overflowing_shl(1);
+                self.set_8bit_register(register, result);
+                let flags = self.f.get_mut();
+                flags.set(Flags::Z, result == 0);
+                flags.remove(Flags::N | Flags::H);
+                flags.set(Flags::C, carry);
+            }
         }
 
         PipelineAction::Pop

@@ -142,7 +142,8 @@ pub enum NoReadInstruction {
     And8Bit(Register8Bit),
     Rrca,
     Rlc8Bit(Register8Bit),
-    Rrc8Bit(Register8Bit)
+    Rrc8Bit(Register8Bit),
+    Sla8Bit(Register8Bit),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -432,17 +433,21 @@ mod opcodes {
     pub fn sbc_r(register: Register8Bit) -> Instructions {
         (Sbc8Bit(register).into(), Default::default())
     }
-    
+
     pub fn and_r(register: Register8Bit) -> Instructions {
         (And8Bit(register).into(), Default::default())
     }
-    
+
     pub fn rlc_r(register: Register8Bit) -> Instructions {
         (Rlc8Bit(register).into(), Default::default())
     }
-    
+
     pub fn rrc_r(register: Register8Bit) -> Instructions {
         (Rrc8Bit(register).into(), Default::default())
+    }
+    
+    pub fn sla_r(register: Register8Bit) -> Instructions {
+        (Sla8Bit(register).into(), Default::default())
     }
 }
 
@@ -926,6 +931,13 @@ fn get_instructions_cb_mode(opcode: u8) -> Instructions {
         0x1c => rr_r(H),
         0x1d => rr_r(L),
         0x1f => rr_r(A),
+        0x20 => sla_r(B),
+        0x21 => sla_r(C),
+        0x22 => sla_r(D),
+        0x23 => sla_r(E),
+        0x24 => sla_r(H),
+        0x25 => sla_r(L),
+        0x27 => sla_r(A),
         0x30 => swap_r(B),
         0x31 => swap_r(C),
         0x32 => swap_r(D),
