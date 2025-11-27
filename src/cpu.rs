@@ -732,6 +732,13 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::C);
                 *self.f.get_mut() = flags;
             }
+            NoRead(Rrca) => {
+                let a = self.a.get();
+                *self.a.get_mut() = a.rotate_right(1);
+                let flags = self.f.get_mut();
+                flags.remove(Flags::Z | Flags::N | Flags::H);
+                flags.set(Flags::C, (a & 1) == 1)
+            }
         }
 
         PipelineAction::Pop

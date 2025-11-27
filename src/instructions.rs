@@ -139,7 +139,8 @@ pub enum NoReadInstruction {
     Ccf,
     Adc8Bit(Register8Bit),
     Sbc8Bit(Register8Bit),
-    And8Bit(Register8Bit)
+    And8Bit(Register8Bit),
+    Rrca
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -471,6 +472,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
                 Read(CONSUME_PC, ReadIntoMsb),
             ]),
         ),
+        0x0f => (Rrca.into(), Default::default()),
         0x10 => {
             println!("stop");
             (Stop.into(), Default::default())
