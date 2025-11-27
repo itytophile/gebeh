@@ -515,9 +515,18 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     match opcode {
         0 => Default::default(),
         0x01 => ld_rr_n(BC),
+        0x02 => (
+            LoadToAddressFromRegister {
+                address: BC,
+                value: A,
+            }
+            .into(),
+            vec([Nop.into()]),
+        ),
         0x03 => inc_rr(BC),
         0x04 => inc_r(B),
         0x05 => dec_r(B),
+        0x06 => ld_r_n(B),
         0x07 => (Rlca.into(), Default::default()),
         0x09 => add_hl_rr(BC),
         0x0a => (
@@ -534,7 +543,6 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x0c => inc_r(C),
         0x0d => dec_r(C),
         0x0e => ld_r_n(C),
-        0x06 => ld_r_n(B),
         0x08 => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
