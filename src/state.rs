@@ -114,7 +114,7 @@ impl State {
             ly: 0,
             lyc: 0,
             mbc: Mbc::new(rom),
-            boot_rom_mapping_control: 1,
+            boot_rom_mapping_control: 0,
             sb: 0,
             sc: 0,
             wy: 0,

@@ -1,5 +1,3 @@
-use std::ops::Sub;
-
 use crate::{
     StateMachine,
     ic::Ints,
@@ -15,24 +13,24 @@ use my_lib::HeapSize;
 
 #[derive(HeapSize, Default)]
 pub struct Cpu {
-    sp: u16,
-    lsb: u8,
-    msb: u8,
-    a: u8,
-    b: u8,
-    c: u8,
-    d: u8,
-    e: u8,
-    h: u8,
-    l: u8,
-    f: Flags,
-    is_cb_mode: bool,
+    pub sp: u16,
+    pub lsb: u8,
+    pub msb: u8,
+    pub a: u8,
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub h: u8,
+    pub l: u8,
+    pub f: Flags,
+    pub is_cb_mode: bool,
     pub pc: u16,
-    instruction_register: Instructions,
-    ime: bool,
-    is_halted: bool,
-    interrupt_to_execute: Option<u8>,
-    stop_mode: bool,
+    pub instruction_register: Instructions,
+    pub ime: bool,
+    pub is_halted: bool,
+    pub interrupt_to_execute: Option<u8>,
+    pub stop_mode: bool,
 }
 
 enum PipelineAction {
@@ -59,13 +57,6 @@ pub fn set_h_sub(arg1: u8, arg2: u8) -> bool {
     let lo2 = arg2 & 0x0F;
 
     (lo1.wrapping_sub(lo2) & (0x10)) == 0x10
-}
-
-pub fn set_h_sub_with_carry(arg1: u8, arg2: u8, carry: bool) -> bool {
-    let lo1 = arg1 & 0x0F;
-    let lo2 = arg2 & 0x0F;
-
-    (lo1.wrapping_sub(lo2 + carry as u8) & (0x10)) == 0x10
 }
 
 bitflags::bitflags! {
@@ -767,7 +758,10 @@ impl CpuWriteOnce<'_> {
                 );
             }
             NoRead(SraHl) => {
-                mmu.write(self.get_16bit_register(Register16Bit::HL), self.sra(self.lsb.get()));
+                mmu.write(
+                    self.get_16bit_register(Register16Bit::HL),
+                    self.sra(self.lsb.get()),
+                );
             }
             NoRead(SwapHl) => {
                 let value = self.lsb.get();
@@ -886,7 +880,7 @@ impl CpuWriteOnce<'_> {
         flags.set(Flags::C, (value & 0x80) == 0x80);
         result
     }
-    
+
     fn sra(&mut self, value: u8) -> u8 {
         let result = (value >> 1) | (value & 0x80);
         let flags = self.f.get_mut();
@@ -959,15 +953,16 @@ impl StateMachine for Cpu {
 
         let (inst, tail) = write_once.instruction_register.get_ref();
 
-        let pc = write_once.pc.get();
+        // let pc = if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
+        //     write_once.get_16bit_register(Register16Bit::HL)
+        // } else {
+        //     write_once.pc.get()
+        // };
         let opcode_to_parse = if tail.is_empty() {
             // la seule instruction qui fait un truc de zinzin avec PC et qui dure 1 cycle
             if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
                 Some(mmu.read(write_once.get_16bit_register(Register16Bit::HL)))
             } else {
-                if pc == 0xcb35 {
-                    // panic!("test failed")
-                }
                 Some(mmu.read(write_once.pc.get()))
             }
         } else {
@@ -1055,7 +1050,27 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                // println!("${pc:04x} => 0x{opcode:02x}");
+                // eprintln!("${pc:04x} => 0x{opcode:02x}");
+                // if !write_once.is_cb_mode.get() {
+                //     println!(
+                //         "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",
+                //         write_once.a.get(),
+                //         write_once.f.get().bits(),
+                //         write_once.b.get(),
+                //         write_once.c.get(),
+                //         write_once.d.get(),
+                //         write_once.e.get(),
+                //         write_once.h.get(),
+                //         write_once.l.get(),
+                //         write_once.sp.get(),
+                //         pc,
+                //         state.doctor().mmu().read(pc),
+                //         state.doctor().mmu().read(pc.wrapping_add(1)),
+                //         state.doctor().mmu().read(pc.wrapping_add(2)),
+                //         state.doctor().mmu().read(pc.wrapping_add(3)),
+                //     );
+                // }
+
                 if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;
@@ -1071,7 +1086,8 @@ impl StateMachine for Cpu {
                 } else {
                     *write_once.instruction_register.get_mut() =
                         get_instructions(opcode, write_once.is_cb_mode.get());
-                    *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
+                    *write_once.is_cb_mode.get_mut() =
+                        !write_once.is_cb_mode.get() && opcode == 0xcb;
                 }
                 // même dans le cas de l'interruption
                 *write_once.pc.get_mut() =
@@ -1082,6 +1098,7 @@ impl StateMachine for Cpu {
                     } else {
                         write_once.pc.get().wrapping_add(1)
                     };
+                // std::io::stdin().lines().next();
             }
         })
     }
