@@ -707,22 +707,12 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (register_value & 1) == 1)
             }
             NoRead(Sla8Bit(register)) => {
-                let value = self.get_8bit_register(register);
-                let result = value << 1;
+                let result = self.sla(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, (value & 0x80) == 0x80);
             }
             NoRead(Sra8Bit(register)) => {
-                let value = self.get_8bit_register(register);
-                let result = (value >> 1) | (value & 0x80);
+                let result = self.sra(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, (value & 0x1) == 0x1);
             }
             NoRead(Set8Bit(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) | (1 << bit));
@@ -771,21 +761,13 @@ impl CpuWriteOnce<'_> {
                 *self.f.get_mut() = flags;
             }
             NoRead(SlaHl) => {
-                let (result, carry) = self.lsb.get().overflowing_shl(1);
-                mmu.write(self.get_16bit_register(Register16Bit::HL), result);
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, carry);
+                mmu.write(
+                    self.get_16bit_register(Register16Bit::HL),
+                    self.sla(self.lsb.get()),
+                );
             }
             NoRead(SraHl) => {
-                // peut-être merdique
-                let (result, carry) = self.lsb.get().overflowing_shr(1);
-                mmu.write(self.get_16bit_register(Register16Bit::HL), result);
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, carry);
+                mmu.write(self.get_16bit_register(Register16Bit::HL), self.sra(self.lsb.get()));
             }
             NoRead(SwapHl) => {
                 let value = self.lsb.get();
@@ -894,6 +876,24 @@ impl CpuWriteOnce<'_> {
         flags.set(Flags::C, (result & 0x100) == 0x100);
 
         *self.a.get_mut() = result_b;
+    }
+
+    fn sla(&mut self, value: u8) -> u8 {
+        let result = value << 1;
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, result == 0);
+        flags.remove(Flags::N | Flags::H);
+        flags.set(Flags::C, (value & 0x80) == 0x80);
+        result
+    }
+    
+    fn sra(&mut self, value: u8) -> u8 {
+        let result = (value >> 1) | (value & 0x80);
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, result == 0);
+        flags.remove(Flags::N | Flags::H);
+        flags.set(Flags::C, (value & 0x1) == 0x1);
+        result
     }
 }
 
