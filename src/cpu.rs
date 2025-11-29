@@ -1050,7 +1050,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                // eprintln!("${pc:04x} => 0x{opcode:02x}");
+                // println!("${pc:04x} => 0x{opcode:02x}");
                 // if !write_once.is_cb_mode.get() {
                 //     println!(
                 //         "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",

@@ -17,3 +17,15 @@ my-lib = { path = "./my-lib" }
 [profile.release]
 overflow-checks = true
 debug = true
+
+[profile.test]
+opt-level = 3
+overflow-checks = true
+debug = true
+split-debuginfo = '...'  # Platform-specific.
+strip = "none"
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false

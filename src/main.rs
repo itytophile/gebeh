@@ -1,43 +1,18 @@
 use std::time::{Duration, Instant};
 
 use minifb::{Key, Scale, Window, WindowOptions};
-
-use crate::{
+use testouille_emulator_future::{
+    StateMachine,
     cartridge::CartridgeType,
-    cpu::{Cpu, Flags},
+    cpu::Cpu,
+    get_factor_8_kib_ram, get_factor_32_kib_rom,
     ppu::Ppu,
     state::{State, WriteOnlyState},
     timer::Timer,
 };
-mod cartridge;
-mod cpu;
-mod dma;
-mod gpu;
-mod hardware;
-mod ic;
-mod instructions;
-mod ppu;
-mod state;
-mod timer;
 
 const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
-
-pub fn get_factor_32_kib_rom(rom: &[u8]) -> u8 {
-    1 << rom[0x148]
-}
-
-// https://gbdev.io/pandocs/The_Cartridge_Header.html#0149--ram-size
-pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
-    match rom[0x149] {
-        0 => 0,
-        2 => 1,
-        3 => 4,
-        4 => 16,
-        5 => 8,
-        _ => panic!(),
-    }
-}
 
 fn main() {
     color_eyre::install().unwrap();
@@ -118,31 +93,5 @@ fn main() {
                 }
             }
         }
-    }
-}
-
-trait StateMachine {
-    /// must take one M-cycle
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a>;
-    fn compose<T: StateMachine>(self, other: T) -> (Self, T)
-    where
-        Self: Sized,
-    {
-        (self, other)
-    }
-}
-
-impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
-        let first = self.0.execute(state);
-        let second = self.1.execute(state);
-        Some(move |mut state: WriteOnlyState<'_>| {
-            if let Some(first) = first {
-                first(state.reborrow());
-            }
-            if let Some(second) = second {
-                second(state);
-            }
-        })
     }
 }

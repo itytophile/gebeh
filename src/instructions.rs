@@ -566,7 +566,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         ),
         0x0f => (Rrca.into(), Default::default()),
         0x10 => {
-            println!("stop");
+            eprintln!("stop");
             (Stop.into(), Default::default())
         }
         0x11 => ld_rr_n(DE),

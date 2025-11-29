@@ -33,6 +33,15 @@ const INTERRUPT_ENABLE: u16 = 0xffff;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    pub struct SerialControl: u8 {
+        const TRANSFER_ENABLE = 1 << 7;
+        const CLOCK_SPEED = 1 << 1;
+        const CLOCK_SELECT = 1;
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
     pub struct JoypadFlags: u8 {
         const NOT_BUTTONS = 1 << 5;
         const NOT_DPAD = 1 << 4;
@@ -80,7 +89,7 @@ pub struct State {
     pub lyc: u8,
     pub boot_rom_mapping_control: u8,
     pub sb: u8,
-    pub sc: u8,
+    pub sc: SerialControl,
     pub wy: u8,
     pub wx: u8,
     pub timer_modulo: u8,
@@ -116,7 +125,7 @@ impl State {
             mbc: Mbc::new(rom),
             boot_rom_mapping_control: 0,
             sb: 0,
-            sc: 0,
+            sc: SerialControl::empty(),
             wy: 0,
             wx: 0,
             timer_modulo: 0,
@@ -158,6 +167,9 @@ impl<'a> WriteOnlyState<'a> {
     }
     pub fn get_if_mut(&mut self) -> &mut Ints {
         &mut self.0.interrupt_flag
+    }
+    pub fn get_sc_mut(&mut self) -> &mut SerialControl {
+        &mut self.0.sc
     }
 
     pub fn set_ly(&mut self, value: u8) {
@@ -209,7 +221,7 @@ impl MmuRead<'_> {
                 }
             }
             SB => self.0.sb,
-            SC => self.0.sc,
+            SC => self.0.sc.bits(),
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control,
@@ -231,7 +243,7 @@ impl MmuRead<'_> {
             WY => self.0.wy,
             WX => self.0.wx,
             0xff4d => {
-                println!("Reading $ff4d (Prepare speed switch)");
+                eprintln!("Reading $ff4d (Prepare speed switch)");
                 0
             }
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
@@ -264,13 +276,13 @@ impl MmuWrite<'_> {
                     & (JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD)
             }
             SB => self.0.sb = value,
-            SC => self.0.sc = value,
+            SC => self.0.sc = SerialControl::from_bits_truncate(value),
             TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
-            INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_retain(value),
+            INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_truncate(value),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
-            LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_retain(value),
+            LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
             SCY => {
@@ -291,7 +303,7 @@ impl MmuWrite<'_> {
             WY => self.0.wy = value,
             WX => self.0.wx = value,
             0xff4d => {
-                println!("Writing $ff4d (Prepare speed switch)");
+                eprintln!("Writing $ff4d (Prepare speed switch)");
             }
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
