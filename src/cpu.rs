@@ -707,12 +707,13 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (register_value & 1) == 1)
             }
             NoRead(Sla8Bit(register)) => {
-                let (result, carry) = self.get_8bit_register(register).overflowing_shl(1);
+                let value = self.get_8bit_register(register);
+                let result = value << 1;
                 self.set_8bit_register(register, result);
                 let flags = self.f.get_mut();
                 flags.set(Flags::Z, result == 0);
                 flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, carry);
+                flags.set(Flags::C, (value & 0x80) == 0x80);
             }
             NoRead(Sra8Bit(register)) => {
                 // peut-être merdique
@@ -980,7 +981,7 @@ impl StateMachine for Cpu {
         //     );
         // }
 
-        print!("{inst:?}");
+        // print!("{inst:?}");
 
         let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -1015,11 +1016,11 @@ impl StateMachine for Cpu {
             }
         };
 
-        if let AfterReadInstruction::Read(value, _) = inst {
-            print!(", read: 0x{value:02x}");
-        }
+        // if let AfterReadInstruction::Read(value, _) = inst {
+        //     print!(", read: 0x{value:02x}");
+        // }
 
-        println!();
+        // println!();
 
         Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
@@ -1054,7 +1055,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                println!("${pc:04x} => 0x{opcode:02x}");
+                // println!("${pc:04x} => 0x{opcode:02x}");
                 if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;
