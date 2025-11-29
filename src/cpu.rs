@@ -716,13 +716,13 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (value & 0x80) == 0x80);
             }
             NoRead(Sra8Bit(register)) => {
-                // peut-être merdique
-                let (result, carry) = self.get_8bit_register(register).overflowing_shr(1);
+                let value = self.get_8bit_register(register);
+                let result = (value >> 1) | (value & 0x80);
                 self.set_8bit_register(register, result);
                 let flags = self.f.get_mut();
                 flags.set(Flags::Z, result == 0);
                 flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, carry);
+                flags.set(Flags::C, (value & 0x1) == 0x1);
             }
             NoRead(Set8Bit(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) | (1 << bit));
