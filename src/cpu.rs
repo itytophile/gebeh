@@ -1,3 +1,5 @@
+use std::ops::Sub;
+
 use crate::{
     StateMachine,
     ic::Ints,
@@ -248,8 +250,10 @@ impl CpuWriteOnce<'_> {
                 *self.f.get_mut() = flags;
             }
             NoRead(OffsetPc) => {
-                *self.pc.get_mut() =
-                    (self.pc.get() as i16).wrapping_add(i16::from(self.lsb.get() as i8)) as u16;
+                *self.pc.get_mut() = self
+                    .pc
+                    .get()
+                    .wrapping_add_signed(i16::from(self.lsb.get().cast_signed()));
             }
             NoRead(LoadFromAccumulator(register)) => {
                 mmu.write(
@@ -601,7 +605,7 @@ impl CpuWriteOnce<'_> {
                 [*self.h.get_mut(), _] = self
                     .sp
                     .get()
-                    .wrapping_add(u16::from(self.lsb.get()))
+                    .wrapping_add_signed(i16::from(self.lsb.get().cast_signed()))
                     .to_be_bytes();
             }
             NoRead(Cp8Bit(register)) => {
@@ -651,7 +655,10 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::H, set_h_add(sp_lsb, self.lsb.get()));
                 flags.set(Flags::C, carry);
                 *self.f.get_mut() = flags;
-                *self.sp.get_mut() = self.sp.get().wrapping_add(u16::from(self.lsb.get()));
+                *self.sp.get_mut() = self
+                    .sp
+                    .get()
+                    .wrapping_add_signed(i16::from(self.lsb.get().cast_signed()));
             }
             NoRead(Sbc) => {
                 let a = self.a.get();
@@ -973,14 +980,12 @@ impl StateMachine for Cpu {
 
         let (inst, tail) = write_once.instruction_register.get_ref();
 
+        let pc = write_once.pc.get();
         let opcode_to_parse = if tail.is_empty() {
             // la seule instruction qui fait un truc de zinzin avec PC et qui dure 1 cycle
             if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
                 Some(mmu.read(write_once.get_16bit_register(Register16Bit::HL)))
             } else {
-                // if write_once.pc.get() == 0xc7d2 {
-                //     panic!("test failed")
-                // }
                 Some(mmu.read(write_once.pc.get()))
             }
         } else {
@@ -994,7 +999,7 @@ impl StateMachine for Cpu {
         //     );
         // }
 
-        // print!("Executing {inst:?}");
+        print!("Executing {inst:?}");
 
         let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -1029,11 +1034,11 @@ impl StateMachine for Cpu {
             }
         };
 
-        // if let AfterReadInstruction::Read(value, _) = inst {
-        //     print!(", read: 0x{value:02x}");
-        // }
+        if let AfterReadInstruction::Read(value, _) = inst {
+            print!(", read: 0x{value:02x}");
+        }
 
-        // println!();
+        println!();
 
         Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
@@ -1046,14 +1051,17 @@ impl StateMachine for Cpu {
             match write_once.execute_instruction(state.mmu(), inst) {
                 PipelineAction::Pop => write_once.pipeline_pop_front(),
                 PipelineAction::Replace(instructions) => {
+                    println!("Replacing pipeline");
                     *write_once.instruction_register.get_mut() = instructions
                 }
             }
             // println!(
-            //     "BC: 0x{:04x}, AF: 0x{:04x}, DE: 0x{:04x}",
+            //     "BC: 0x{:04x}, AF: 0x{:04x}, DE: 0x{:04x}, HL: 0x{:04x}, SP: 0x{:04x}",
             //     write_once.get_16bit_register(Register16Bit::BC),
             //     write_once.get_16bit_register(Register16Bit::AF),
-            //     write_once.get_16bit_register(Register16Bit::DE)
+            //     write_once.get_16bit_register(Register16Bit::DE),
+            //     write_once.get_16bit_register(Register16Bit::HL),
+            //     write_once.sp.get()
             // );
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
@@ -1065,7 +1073,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                // println!("0x{opcode:02x}");
+                println!("${pc:04x} => 0x{opcode:02x}");
                 if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;
@@ -1082,15 +1090,16 @@ impl StateMachine for Cpu {
                     *write_once.instruction_register.get_mut() =
                         get_instructions(opcode, write_once.is_cb_mode.get());
                     *write_once.is_cb_mode.get_mut() = opcode == 0xcb;
-                    *write_once.pc.get_mut() =
-                        if let AfterReadInstruction::NoRead(NoReadInstruction::JumpHl) = inst {
-                            write_once
-                                .get_16bit_register(Register16Bit::HL)
-                                .wrapping_add(1)
-                        } else {
-                            write_once.pc.get().wrapping_add(1)
-                        };
                 }
+                // même dans le cas de l'interruption
+                *write_once.pc.get_mut() =
+                    if let AfterReadInstruction::NoRead(NoReadInstruction::JumpHl) = inst {
+                        write_once
+                            .get_16bit_register(Register16Bit::HL)
+                            .wrapping_add(1)
+                    } else {
+                        write_once.pc.get().wrapping_add(1)
+                    };
             }
         })
     }

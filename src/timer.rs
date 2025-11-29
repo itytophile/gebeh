@@ -19,7 +19,7 @@ impl StateMachine for Timer {
         };
         let mut timer_counter = state.timer_counter;
         let mut overflow = false;
-        if u16::from(self.0) % increment_frequency == 0 {
+        if state.timer_control & 0b100 == 0b100 && u16::from(self.0) % increment_frequency == 0 {
             timer_counter = if let Some(value) = timer_counter.checked_add(1) {
                 value
             } else {
