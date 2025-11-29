@@ -392,7 +392,16 @@ mod opcodes {
     }
 
     pub fn bit_b_hl(bit: u8) -> Instructions {
-        (Read(CONSUME_PC, ReadIntoLsb), vec([Bit(bit).into()]))
+        (
+            Read(
+                ReadAddress::Register {
+                    register: Register16Bit::HL,
+                    op: OpAfterRead::None,
+                },
+                ReadIntoLsb,
+            ),
+            vec([Bit(bit).into()]),
+        )
     }
 
     // 3 M-cycles (+1 cb opcode)
