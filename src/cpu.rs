@@ -647,21 +647,7 @@ impl CpuWriteOnce<'_> {
                     .wrapping_add_signed(i16::from(self.lsb.get().cast_signed()));
             }
             NoRead(Sbc) => {
-                let a = self.a.get();
-                let register_value = self.lsb.get();
-                let (result, mut carry) = a.overflowing_sub(register_value);
-                let mut flags = self.f.get();
-                let (result, carry1) = result.overflowing_sub(flags.contains(Flags::C) as u8);
-                carry |= carry1;
-                // no z
-                flags.insert(Flags::N);
-                flags.set(
-                    Flags::H,
-                    set_h_sub_with_carry(a, register_value, flags.contains(Flags::C)),
-                );
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-                *self.a.get_mut() = result;
+                self.sbc(self.lsb.get());
             }
             NoRead(Reti) => {
                 *self.pc.get_mut() = u16::from_be_bytes([self.msb.get(), self.lsb.get()]);
@@ -685,21 +671,7 @@ impl CpuWriteOnce<'_> {
                 self.adc(self.get_8bit_register(register));
             }
             NoRead(Sbc8Bit(register)) => {
-                let a = self.a.get();
-                let register_value = self.get_8bit_register(register);
-                let (result, mut carry) = a.overflowing_sub(register_value);
-                let mut flags = self.f.get();
-                let (result, carry1) = result.overflowing_sub(flags.contains(Flags::C) as u8);
-                carry |= carry1;
-                // no z
-                flags.insert(Flags::N);
-                flags.set(
-                    Flags::H,
-                    set_h_sub_with_carry(a, register_value, flags.contains(Flags::C)),
-                );
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-                *self.a.get_mut() = result;
+                self.sbc(self.get_8bit_register(register));
             }
             NoRead(And8Bit(register)) => {
                 let result = self.a.get() & self.get_8bit_register(register);
@@ -888,21 +860,38 @@ impl CpuWriteOnce<'_> {
         let instruction_register = self.instruction_register.get_mut();
         instruction_register.0 = instruction_register.1.pop().unwrap();
     }
-    
+
     fn adc(&mut self, second: u8) {
         let first = self.a.get() as u32;
         let second = second as u32;
         let flags = self.f.get_mut();
         let carry = flags.contains(Flags::C) as u32;
-    
+
         let result = first.wrapping_add(second).wrapping_add(carry);
         let result_b = result as u8;
-    
+
         flags.remove(Flags::N);
         flags.set(Flags::Z, result_b == 0);
         flags.set(Flags::H, (first ^ second ^ result) & 0x10 == 0x10);
         flags.set(Flags::C, (result & 0x100) == 0x100);
-        
+
+        *self.a.get_mut() = result_b;
+    }
+
+    fn sbc(&mut self, second: u8) {
+        let first = self.a.get() as u32;
+        let second = second as u32;
+        let flags = self.f.get_mut();
+        let carry = flags.contains(Flags::C) as u32;
+
+        let result = first.wrapping_sub(second).wrapping_sub(carry);
+        let result_b = result as u8;
+
+        flags.insert(Flags::N);
+        flags.set(Flags::Z, result_b == 0);
+        flags.set(Flags::H, (first ^ second ^ result) & 0x10 == 0x10);
+        flags.set(Flags::C, (result & 0x100) == 0x100);
+
         *self.a.get_mut() = result_b;
     }
 }
