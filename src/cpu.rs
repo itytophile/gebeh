@@ -999,7 +999,7 @@ impl StateMachine for Cpu {
         //     );
         // }
 
-        print!("Executing {inst:?}");
+        // print!("Executing {inst:?}");
 
         let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -1034,11 +1034,11 @@ impl StateMachine for Cpu {
             }
         };
 
-        if let AfterReadInstruction::Read(value, _) = inst {
-            print!(", read: 0x{value:02x}");
-        }
+        // if let AfterReadInstruction::Read(value, _) = inst {
+        //     print!(", read: 0x{value:02x}");
+        // }
 
-        println!();
+        // println!();
 
         Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
@@ -1051,7 +1051,7 @@ impl StateMachine for Cpu {
             match write_once.execute_instruction(state.mmu(), inst) {
                 PipelineAction::Pop => write_once.pipeline_pop_front(),
                 PipelineAction::Replace(instructions) => {
-                    println!("Replacing pipeline");
+                    // println!("Replacing pipeline");
                     *write_once.instruction_register.get_mut() = instructions
                 }
             }
@@ -1073,7 +1073,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                println!("${pc:04x} => 0x{opcode:02x}");
+                // println!("${pc:04x} => 0x{opcode:02x}");
                 if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;
