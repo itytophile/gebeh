@@ -541,21 +541,7 @@ impl CpuWriteOnce<'_> {
                 // cas spécial car il modifie PC en un seul cycle, il faut faire un refactoring pour lui
             }
             NoRead(Adc) => {
-                let a = self.a.get();
-                let register_value = self.lsb.get();
-                let (result, mut carry) = a.overflowing_add(register_value);
-                let mut flags = self.f.get();
-                let (result, carry1) = result.overflowing_add(flags.contains(Flags::C) as u8);
-                carry |= carry1;
-                // no z
-                flags.remove(Flags::N);
-                flags.set(
-                    Flags::H,
-                    set_h_add_with_carry(a, register_value, flags.contains(Flags::C)),
-                );
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-                *self.a.get_mut() = result;
+                self.adc(self.lsb.get());
             }
             NoRead(ConditionalReturn(Condition { flag, not })) => {
                 if self.get_flag(flag) != not {
@@ -696,21 +682,7 @@ impl CpuWriteOnce<'_> {
                 flags.toggle(Flags::C);
             }
             NoRead(Adc8Bit(register)) => {
-                let a = self.a.get();
-                let register_value = self.get_8bit_register(register);
-                let (result, mut carry) = a.overflowing_add(register_value);
-                let mut flags = self.f.get();
-                let (result, carry1) = result.overflowing_add(flags.contains(Flags::C) as u8);
-                carry |= carry1;
-                // no z
-                flags.remove(Flags::N);
-                flags.set(
-                    Flags::H,
-                    set_h_add_with_carry(a, register_value, flags.contains(Flags::C)),
-                );
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-                *self.a.get_mut() = result;
+                self.adc(self.get_8bit_register(register));
             }
             NoRead(Sbc8Bit(register)) => {
                 let a = self.a.get();
@@ -916,6 +888,23 @@ impl CpuWriteOnce<'_> {
         let instruction_register = self.instruction_register.get_mut();
         instruction_register.0 = instruction_register.1.pop().unwrap();
     }
+    
+    fn adc(&mut self, second: u8) {
+        let first = self.a.get() as u32;
+        let second = second as u32;
+        let flags = self.f.get_mut();
+        let carry = flags.contains(Flags::C) as u32;
+    
+        let result = first.wrapping_add(second).wrapping_add(carry);
+        let result_b = result as u8;
+    
+        flags.remove(Flags::N);
+        flags.set(Flags::Z, result_b == 0);
+        flags.set(Flags::H, (first ^ second ^ result) & 0x10 == 0x10);
+        flags.set(Flags::C, (result & 0x100) == 0x100);
+        
+        *self.a.get_mut() = result_b;
+    }
 }
 
 impl StateMachine for Cpu {
@@ -986,6 +975,9 @@ impl StateMachine for Cpu {
             if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
                 Some(mmu.read(write_once.get_16bit_register(Register16Bit::HL)))
             } else {
+                if pc == 0xcb35 {
+                    // panic!("test failed")
+                }
                 Some(mmu.read(write_once.pc.get()))
             }
         } else {
@@ -999,7 +991,7 @@ impl StateMachine for Cpu {
         //     );
         // }
 
-        // print!("Executing {inst:?}");
+        print!("{inst:?}");
 
         let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -1034,11 +1026,11 @@ impl StateMachine for Cpu {
             }
         };
 
-        // if let AfterReadInstruction::Read(value, _) = inst {
-        //     print!(", read: 0x{value:02x}");
-        // }
+        if let AfterReadInstruction::Read(value, _) = inst {
+            print!(", read: 0x{value:02x}");
+        }
 
-        // println!();
+        println!();
 
         Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
@@ -1073,7 +1065,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
-                // println!("${pc:04x} => 0x{opcode:02x}");
+                println!("${pc:04x} => 0x{opcode:02x}");
                 if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;
