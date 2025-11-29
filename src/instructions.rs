@@ -155,7 +155,7 @@ pub enum NoReadInstruction {
     SwapHl,
     SrlHl,
     IncHl,
-    Daa
+    Daa,
 }
 
 #[derive(Clone, Copy, Debug)]

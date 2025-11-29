@@ -33,7 +33,7 @@ const INTERRUPT_ENABLE: u16 = 0xffff;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
-    struct JoypadFlags: u8 {
+    pub struct JoypadFlags: u8 {
         const NOT_BUTTONS = 1 << 5;
         const NOT_DPAD = 1 << 4;
         const NOT_START_DOWN = 1 << 3;
@@ -114,7 +114,7 @@ impl State {
             ly: 0,
             lyc: 0,
             mbc: Mbc::new(rom),
-            boot_rom_mapping_control: 0,
+            boot_rom_mapping_control: 1,
             sb: 0,
             sc: 0,
             wy: 0,

@@ -25,7 +25,7 @@ pub struct Cpu {
     l: u8,
     f: Flags,
     is_cb_mode: bool,
-    pc: u16,
+    pub pc: u16,
     instruction_register: Instructions,
     ime: bool,
     is_halted: bool,
@@ -101,7 +101,7 @@ impl CpuWriteOnce<'_> {
             Register8Bit::E => *self.e.get_mut() = value,
             Register8Bit::H => *self.h.get_mut() = value,
             Register8Bit::L => *self.l.get_mut() = value,
-            Register8Bit::F => *self.f.get_mut() = Flags::from_bits_retain(value),
+            Register8Bit::F => *self.f.get_mut() = Flags::from_bits_truncate(value),
             Register8Bit::MsbSp | Register8Bit::LsbSp => unreachable!(),
         }
     }
@@ -978,6 +978,9 @@ impl StateMachine for Cpu {
             if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
                 Some(mmu.read(write_once.get_16bit_register(Register16Bit::HL)))
             } else {
+                // if write_once.pc.get() == 0xc7d2 {
+                //     panic!("test failed")
+                // }
                 Some(mmu.read(write_once.pc.get()))
             }
         } else {
@@ -1027,7 +1030,7 @@ impl StateMachine for Cpu {
         };
 
         // if let AfterReadInstruction::Read(value, _) = inst {
-        //     print!(", read: 0x{value:x}");
+        //     print!(", read: 0x{value:02x}");
         // }
 
         // println!();
@@ -1046,6 +1049,12 @@ impl StateMachine for Cpu {
                     *write_once.instruction_register.get_mut() = instructions
                 }
             }
+            // println!(
+            //     "BC: 0x{:04x}, AF: 0x{:04x}, DE: 0x{:04x}",
+            //     write_once.get_16bit_register(Register16Bit::BC),
+            //     write_once.get_16bit_register(Register16Bit::AF),
+            //     write_once.get_16bit_register(Register16Bit::DE)
+            // );
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
@@ -1056,6 +1065,7 @@ impl StateMachine for Cpu {
             }
 
             if let Some(opcode) = opcode_to_parse {
+                // println!("0x{opcode:02x}");
                 if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                     println!("Interrupt handling");
                     use NoReadInstruction::*;

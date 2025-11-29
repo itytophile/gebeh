@@ -49,7 +49,8 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom =
-        std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/cpu_instrs.gb").unwrap();
+        std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/individual/01-special.gb")
+            .unwrap();
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
     let title = &rom[0x134..0x143];
     let end_zero_pos = title
@@ -67,9 +68,13 @@ fn main() {
 
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
-    let mut machine = Cpu::default()
-        .compose(Ppu::default())
-        .compose(Timer::default());
+    let mut machine = {
+        let mut cpu = Cpu::default();
+        cpu.pc = 0x0100;
+        cpu
+    }
+    .compose(Ppu::default())
+    .compose(Timer::default());
 
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
