@@ -281,15 +281,8 @@ impl CpuWriteOnce<'_> {
                 self.set_8bit_register(register, result);
             }
             NoRead(Srl(register)) => {
-                let register_value = self.get_8bit_register(register);
-                let result = register_value >> 1;
+                let result = self.srl(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.set(Flags::C, (register_value & 0x1) == 0x1);
-                *self.f.get_mut() = flags;
             }
             NoRead(Rr(register)) => {
                 let value = self.get_8bit_register(register);
@@ -660,17 +653,10 @@ impl CpuWriteOnce<'_> {
                 *self.f.get_mut() = flags;
                 mmu.write(self.get_16bit_register(Register16Bit::HL), result);
             }
-            NoRead(SrlHl) => {
-                let register_value = self.lsb.get();
-                let result = register_value >> 1;
-                mmu.write(self.get_16bit_register(Register16Bit::HL), result);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.set(Flags::C, (register_value & 0x1) == 0x1);
-                *self.f.get_mut() = flags;
-            }
+            NoRead(SrlHl) => mmu.write(
+                self.get_16bit_register(Register16Bit::HL),
+                self.srl(self.lsb.get()),
+            ),
             NoRead(IncHl) => mmu.write(
                 self.get_16bit_register(Register16Bit::HL),
                 self.inc(self.lsb.get()),
@@ -803,6 +789,15 @@ impl CpuWriteOnce<'_> {
         flags.set(Flags::Z, result == 0);
         flags.remove(Flags::N | Flags::H);
         flags.set(Flags::C, new_carry);
+        result
+    }
+
+    fn srl(&mut self, value: u8) -> u8 {
+        let result = value >> 1;
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, result == 0);
+        flags.remove(Flags::N | Flags::H);
+        flags.set(Flags::C, (value & 0x1) == 0x1);
         result
     }
 }
