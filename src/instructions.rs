@@ -113,8 +113,6 @@ pub enum NoReadInstruction {
     Res(u8, Register8Bit),
     ResHl(u8),
     Or8Bit(Register8Bit),
-    // besoin d'un refactoring pour lui
-    JumpHl,
     ConditionalReturn(Condition),
     SetHl(u8),
     Ei,
@@ -232,7 +230,14 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
     ArrayVec::from_iter(insts)
 }
 
-struct FetchStep {}
+// what to set pc with after the last instruction
+pub struct SetPc(pub Register16Bit);
+
+impl Default for SetPc {
+    fn default() -> Self {
+        Self(Register16Bit::PC)
+    }
+}
 
 mod opcodes {
     use crate::instructions::CONSUME_PC;
@@ -517,7 +522,16 @@ mod opcodes {
 
 use opcodes::*;
 
-pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
+#[derive(Default)]
+pub struct InstructionsAndSetPc(pub Instructions, pub SetPc);
+
+impl From<Instructions> for InstructionsAndSetPc {
+    fn from(value: Instructions) -> Self {
+        Self(value, Default::default())
+    }
+}
+
+pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
     use Instruction::*;
     use NoReadInstruction::*;
     use ReadInstruction::*;
@@ -525,12 +539,12 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
     use Register16Bit::*;
 
     if is_cb_mode {
-        return get_instructions_cb_mode(opcode);
+        return get_instructions_cb_mode(opcode).into();
     }
 
     // instructions in arrayvec are reversed
     match opcode {
-        0 => Default::default(),
+        0 => Instructions::default(),
         0x01 => ld_rr_n(BC),
         0x02 => (
             LoadToAddressFromRegister {
@@ -580,10 +594,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0x14 => inc_r(D),
         0x15 => dec_r(D),
         0x17 => (Rla.into(), Default::default()),
-        0x18 => (
-            Read(CONSUME_PC, ReadIntoLsb),
-            vec([Nop.into(), OffsetPc.into()]),
-        ),
+        0x18 => {
+            return InstructionsAndSetPc(
+                (
+                    Read(CONSUME_PC, ReadIntoLsb),
+                    vec([Nop.into(), OffsetPc.into()]),
+                ),
+                SetPc(WZ),
+            );
+        }
         0x19 => add_hl_rr(DE),
         0x1b => dec_rr(DE),
         0x1c => inc_r(E),
@@ -991,7 +1010,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), Nop.into(), AddSpE.into()]),
         ),
-        0xe9 => (JumpHl.into(), Default::default()),
+        0xe9 => return InstructionsAndSetPc(Default::default(), SetPc(HL)),
         0xea => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
@@ -1039,6 +1058,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
         0xff => rst_n(0x38),
         _ => panic!("Opcode not implemented: 0x{opcode:02x}"),
     }
+    .into()
 }
 
 fn get_instructions_cb_mode(opcode: u8) -> Instructions {
