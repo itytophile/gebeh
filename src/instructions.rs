@@ -76,7 +76,6 @@ pub enum NoReadInstruction {
     LoadToAddressHlFromADec,
     LoadToAddressHlFromAInc,
     Bit8Bit(u8, Register8Bit),
-    Bit(u8),
     OffsetPc,
     // prefix avec 0xff00
     LoadFromAccumulator(Option<Register8Bit>),
@@ -406,7 +405,7 @@ mod opcodes {
                 },
                 ReadIntoLsb,
             ),
-            vec([Bit(bit).into()]),
+            vec([Bit8Bit(bit, Register8Bit::Z).into()]),
         )
     }
 

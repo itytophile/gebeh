@@ -229,13 +229,6 @@ impl CpuWriteOnce<'_> {
                 flags.insert(Flags::H);
                 *self.f.get_mut() = flags;
             }
-            NoRead(Bit(bit)) => {
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, (self.lsb.get() & (1 << bit)) == 0);
-                flags.remove(Flags::N);
-                flags.insert(Flags::H);
-                *self.f.get_mut() = flags;
-            }
             NoRead(OffsetPc) => {
                 *self.pc.get_mut() = self
                     .pc
