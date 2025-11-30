@@ -82,6 +82,8 @@ impl CpuWriteOnce<'_> {
             Register8Bit::F => self.f.get().bits(),
             Register8Bit::MsbSp => self.sp.get().to_be_bytes()[0],
             Register8Bit::LsbSp => self.sp.get().to_be_bytes()[1],
+            Register8Bit::W => self.msb.get(),
+            Register8Bit::Z => self.lsb.get(),
         }
     }
 
@@ -95,6 +97,8 @@ impl CpuWriteOnce<'_> {
             Register8Bit::H => *self.h.get_mut() = value,
             Register8Bit::L => *self.l.get_mut() = value,
             Register8Bit::F => *self.f.get_mut() = Flags::from_bits_truncate(value),
+            Register8Bit::W => *self.msb.get_mut() = value,
+            Register8Bit::Z => *self.lsb.get_mut() = value,
             Register8Bit::MsbSp | Register8Bit::LsbSp => unreachable!(),
         }
     }
@@ -105,6 +109,7 @@ impl CpuWriteOnce<'_> {
             Register16Bit::BC => u16::from(self.b.get()) << 8 | u16::from(self.c.get()),
             Register16Bit::DE => u16::from(self.d.get()) << 8 | u16::from(self.e.get()),
             Register16Bit::HL => u16::from(self.h.get()) << 8 | u16::from(self.l.get()),
+            Register16Bit::WZ => u16::from_be_bytes([self.msb.get(), self.lsb.get()]),
             Register16Bit::SP => self.sp.get(),
             Register16Bit::PC => self.pc.get(),
         }
@@ -988,14 +993,7 @@ impl StateMachine for Cpu {
                     mmu.read(0xff00 | u16::from(write_once.get_8bit_register(register))),
                     inst,
                 )
-            }
-            Instruction::Read(ReadAddress::Cache, inst) => AfterReadInstruction::Read(
-                mmu.read(u16::from_be_bytes([
-                    write_once.msb.get(),
-                    write_once.lsb.get(),
-                ])),
-                inst,
-            ),
+            },
             Instruction::Read(ReadAddress::Register { register, op }, inst) => {
                 let register_value = write_once.get_16bit_register(register);
                 match op {

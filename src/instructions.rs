@@ -12,6 +12,8 @@ pub enum Register8Bit {
     F,
     LsbSp,
     MsbSp,
+    W,
+    Z,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -22,6 +24,7 @@ pub enum Register16Bit {
     SP,
     HL,
     PC,
+    WZ,
 }
 
 impl Register16Bit {
@@ -32,6 +35,7 @@ impl Register16Bit {
             Register16Bit::DE => Register8Bit::D,
             Register16Bit::HL => Register8Bit::H,
             Register16Bit::SP => Register8Bit::MsbSp,
+            Register16Bit::WZ => Register8Bit::W,
             Register16Bit::PC => unreachable!(),
         }
     }
@@ -43,6 +47,7 @@ impl Register16Bit {
             Register16Bit::DE => Register8Bit::E,
             Register16Bit::HL => Register8Bit::L,
             Register16Bit::SP => Register8Bit::LsbSp,
+            Register16Bit::WZ => Register8Bit::Z,
             Register16Bit::PC => unreachable!(),
         }
     }
@@ -183,8 +188,15 @@ pub enum ReadAddress {
     // LDH A, (n)
     Accumulator,
     Accumulator8Bit(Register8Bit),
-    // (nn)
-    Cache,
+}
+
+impl From<Register16Bit> for ReadAddress {
+    fn from(value: Register16Bit) -> Self {
+        Self::Register {
+            register: value,
+            op: OpAfterRead::None,
+        }
+    }
 }
 
 const CONSUME_PC: ReadAddress = ReadAddress::Register {
@@ -228,6 +240,8 @@ pub type Instructions = (Instruction, ArrayVec<Instruction, 5>);
 pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> {
     ArrayVec::from_iter(insts)
 }
+
+struct FetchStep {}
 
 mod opcodes {
     use crate::instructions::CONSUME_PC;
@@ -1025,7 +1039,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> Instructions {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
                 Store8Bit(A).into(),
-                Read(ReadAddress::Cache, ReadIntoLsb),
+                Read(WZ.into(), ReadIntoLsb),
                 Read(CONSUME_PC, ReadIntoMsb),
             ]),
         ),
