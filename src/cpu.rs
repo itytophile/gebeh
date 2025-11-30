@@ -446,12 +446,10 @@ impl CpuWriteOnce<'_> {
                     ));
                 }
             }
-            NoRead(SetHl(bit)) => {
-                mmu.write(
-                    self.get_16bit_register(Register16Bit::HL),
-                    self.lsb.get() | (1 << bit),
-                );
-            }
+            NoRead(SetHl(bit)) => mmu.write(
+                self.get_16bit_register(Register16Bit::HL),
+                self.lsb.get() | (1 << bit),
+            ),
             NoRead(Halt) => {
                 *self.is_halted.get_mut() = true;
             }
