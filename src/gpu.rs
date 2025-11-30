@@ -23,6 +23,18 @@ pub enum Mode {
     None,
 }
 
+impl From<Mode> for crate::state::LcdStatus {
+    fn from(value: Mode) -> Self {
+        match value {
+            Mode::OamScan => crate::state::LcdStatus::OAM_SCAN,
+            Mode::Drawing => crate::state::LcdStatus::DRAWING,
+            Mode::HBlank => crate::state::LcdStatus::HBLANK,
+            Mode::VBlank => crate::state::LcdStatus::VBLANK,
+            Mode::None => crate::state::LcdStatus::empty(), // hblank
+        }
+    }
+}
+
 impl From<Mode> for u8 {
     fn from(v: Mode) -> u8 {
         match v {

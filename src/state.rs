@@ -52,6 +52,23 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    pub struct LcdStatus: u8 {
+        const LYC_INT = 1 << 6;
+        const OAM_INT = 1 << 5;
+        const VBLANK_INT = 1 << 4;
+        const HBLANK_INT = 1 << 3;
+        const LYC_EQUAL_TO_LY = 1 << 2;
+        const PPU_MASK = 0b11;
+        const HBLANK = 0;
+        const VBLANK = 1;
+        const OAM_SCAN = 0b10;
+        const DRAWING = 0b11;
+        const READONLY_MASK = 0b111;
+    }
+}
+
 const DMG_BOOT: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
     12, 62, 243, 50, 226, 12, 62, 119, 50, 226, 17, 4, 1, 33, 16, 128, 26, 205, 184, 0, 26, 203,
@@ -84,7 +101,7 @@ pub struct State {
     pub scy: u8,
     pub scx: u8,
     pub lcd_control: LcdControl,
-    pub lcd_status: u8,
+    pub lcd_status: LcdStatus,
     pub ly: u8,
     pub lyc: u8,
     pub boot_rom_mapping_control: u8,
@@ -131,13 +148,14 @@ impl State {
             timer_modulo: 0,
             timer_control: 0,
             timer_counter: 0,
-            lcd_status: 0,
+            lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
             joypad: JoypadFlags::empty(),
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
-        self.lcd_status = (self.lcd_status & 0b111) | (value & 0b11111000)
+        self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
+            | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
 }
 
@@ -181,7 +199,7 @@ impl<'a> WriteOnlyState<'a> {
         self.0.timer_counter = timer_counter;
     }
     pub fn set_ppu_mode(&mut self, mode: gpu::Mode) {
-        self.0.lcd_status = (self.0.lcd_status & 0b11111100) | u8::from(mode);
+        self.0.lcd_status = (self.0.lcd_status & !LcdStatus::PPU_MASK) | LcdStatus::from(mode);
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.0.set_interrupt_part_lcd_status(value);
@@ -228,8 +246,10 @@ impl MmuRead<'_> {
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
             LCD_STATUS => {
+                let mut status = self.0.lcd_status;
                 // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
-                (self.0.lcd_status & 0b11111011) | (((self.0.ly == self.0.lyc) as u8) << 2)
+                status.set(LcdStatus::LYC_EQUAL_TO_LY, self.0.ly == self.0.lyc);
+                status.bits()
             }
             SCY => self.0.scy,
             SCX => self.0.scx,
