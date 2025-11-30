@@ -209,15 +209,6 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::C);
                 *self.f.get_mut() = flags;
             }
-            NoRead(Xor) => {
-                *self.a.get_mut() ^= self.lsb.get();
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, self.a.get() == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.remove(Flags::C);
-                *self.f.get_mut() = flags;
-            }
             NoRead(LoadToAddressHlFromADec) => {
                 let hl = self.get_16bit_register(Register16Bit::HL);
                 mmu.write(hl, self.a.get());
@@ -378,17 +369,6 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::H, set_h_sub(r, 1));
                 *self.f.get_mut() = flags;
             }
-            NoRead(Compare) => {
-                let a = self.a.get();
-                let lsb = self.lsb.get();
-                let (result, carry) = a.overflowing_sub(lsb);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.insert(Flags::N);
-                flags.set(Flags::H, set_h_sub(a, lsb));
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-            }
             NoRead(LoadToCachedAddressFromA) => {
                 mmu.write(
                     u16::from_be_bytes([self.msb.get(), self.lsb.get()]),
@@ -403,30 +383,6 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::Z, result == 0);
                 flags.insert(Flags::N);
                 flags.set(Flags::H, set_h_sub(a, r));
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-                *self.a.get_mut() = result;
-            }
-            NoRead(Sub) => {
-                let a = self.a.get();
-                let r = self.lsb.get();
-                let (result, carry) = a.overflowing_sub(r);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.insert(Flags::N);
-                flags.set(Flags::H, set_h_sub(a, r));
-                flags.set(Flags::C, carry);
-                *self.f.get_mut() = flags;
-                *self.a.get_mut() = result;
-            }
-            NoRead(Add) => {
-                let a = self.a.get();
-                let lsb = self.lsb.get();
-                let (result, carry) = a.overflowing_add(lsb);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.set(Flags::H, set_h_add(a, lsb));
                 flags.set(Flags::C, carry);
                 *self.f.get_mut() = flags;
                 *self.a.get_mut() = result;
@@ -465,16 +421,6 @@ impl CpuWriteOnce<'_> {
                     self.lsb.get() & !(1 << bit),
                 );
             }
-            NoRead(And) => {
-                let result = self.a.get() & self.lsb.get();
-                *self.a.get_mut() = result;
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.insert(Flags::H);
-                flags.remove(Flags::C);
-                *self.f.get_mut() = flags;
-            }
             NoRead(LoadToAddressHlN) => {
                 mmu.write(self.get_16bit_register(Register16Bit::HL), self.lsb.get());
             }
@@ -486,16 +432,6 @@ impl CpuWriteOnce<'_> {
             }
             NoRead(Or8Bit(register)) => {
                 let result = self.a.get() | self.get_8bit_register(register);
-                *self.a.get_mut() = result;
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.remove(Flags::C);
-                *self.f.get_mut() = flags;
-            }
-            NoRead(Or) => {
-                let result = self.a.get() | self.lsb.get();
                 *self.a.get_mut() = result;
                 let mut flags = self.f.get();
                 flags.set(Flags::Z, result == 0);
@@ -535,9 +471,6 @@ impl CpuWriteOnce<'_> {
             }
             NoRead(JumpHl) => {
                 // cas spécial car il modifie PC en un seul cycle, il faut faire un refactoring pour lui
-            }
-            NoRead(Adc) => {
-                self.adc(self.lsb.get());
             }
             NoRead(ConditionalReturn(Condition { flag, not })) => {
                 if self.get_flag(flag) != not {
@@ -641,9 +574,6 @@ impl CpuWriteOnce<'_> {
                     .sp
                     .get()
                     .wrapping_add_signed(i16::from(self.lsb.get().cast_signed()));
-            }
-            NoRead(Sbc) => {
-                self.sbc(self.lsb.get());
             }
             NoRead(Reti) => {
                 *self.pc.get_mut() = u16::from_be_bytes([self.msb.get(), self.lsb.get()]);
@@ -993,7 +923,7 @@ impl StateMachine for Cpu {
                     mmu.read(0xff00 | u16::from(write_once.get_8bit_register(register))),
                     inst,
                 )
-            },
+            }
             Instruction::Read(ReadAddress::Register { register, op }, inst) => {
                 let register_value = write_once.get_16bit_register(register);
                 match op {
