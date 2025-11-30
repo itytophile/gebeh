@@ -247,14 +247,8 @@ impl CpuWriteOnce<'_> {
                 );
             }
             NoRead(Inc(register)) => {
-                let r = self.get_8bit_register(register);
-                let incremented = r.wrapping_add(1);
+                let incremented = self.inc(self.get_8bit_register(register));
                 self.set_8bit_register(register, incremented);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, incremented == 0);
-                flags.remove(Flags::N);
-                flags.set(Flags::H, set_h_add(r, 1));
-                *self.f.get_mut() = flags;
             }
             NoRead(Inc16Bit(register)) => {
                 self.set_16bit_register(
@@ -713,16 +707,10 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (register_value & 0x1) == 0x1);
                 *self.f.get_mut() = flags;
             }
-            NoRead(IncHl) => {
-                let r = self.lsb.get();
-                let incremented = r.wrapping_add(1);
-                mmu.write(self.get_16bit_register(Register16Bit::HL), incremented);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, incremented == 0);
-                flags.remove(Flags::N);
-                flags.set(Flags::H, set_h_add(r, 1));
-                *self.f.get_mut() = flags;
-            }
+            NoRead(IncHl) => mmu.write(
+                self.get_16bit_register(Register16Bit::HL),
+                self.inc(self.lsb.get()),
+            ),
             NoRead(Daa) => {
                 // https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7#DAA
                 let flags = self.f.get_mut();
@@ -816,6 +804,15 @@ impl CpuWriteOnce<'_> {
         flags.remove(Flags::N | Flags::H);
         flags.set(Flags::C, (value & 0x1) == 0x1);
         result
+    }
+
+    fn inc(&mut self, value: u8) -> u8 {
+        let incremented = value.wrapping_add(1);
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, incremented == 0);
+        flags.remove(Flags::N);
+        flags.set(Flags::H, set_h_add(value, 1));
+        incremented
     }
 }
 
