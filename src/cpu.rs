@@ -251,10 +251,7 @@ impl CpuWriteOnce<'_> {
                 self.set_8bit_register(register, incremented);
             }
             NoRead(Inc16Bit(register)) => {
-                self.set_16bit_register(
-                    register,
-                    self.get_16bit_register(register).wrapping_add(1),
-                );
+                self.set_16bit_register(register, self.get_16bit_register(register).wrapping_add(1))
             }
             NoRead(LoadToAddressFromRegister { address, value }) => {
                 mmu.write(
@@ -612,12 +609,8 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (result & 1) == 1)
             }
             NoRead(Rrc8Bit(register)) => {
-                let register_value = self.get_8bit_register(register);
-                self.set_8bit_register(register, register_value.rotate_right(1));
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, register_value == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, (register_value & 1) == 1)
+                let result = self.rrc(self.get_8bit_register(register));
+                self.set_8bit_register(register, result);
             }
             NoRead(Sla8Bit(register)) => {
                 let result = self.sla(self.get_8bit_register(register));
@@ -639,15 +632,10 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (result & 1) == 1)
             }
             NoRead(RrcHl) => {
-                let register_value = self.lsb.get();
                 mmu.write(
                     self.get_16bit_register(Register16Bit::HL),
-                    register_value.rotate_right(1),
+                    self.rrc(self.lsb.get()),
                 );
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, register_value == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, (register_value & 1) == 1)
             }
             NoRead(RlHl) => {
                 let register_value = self.lsb.get();
@@ -813,6 +801,14 @@ impl CpuWriteOnce<'_> {
         flags.remove(Flags::N);
         flags.set(Flags::H, set_h_add(value, 1));
         incremented
+    }
+
+    fn rrc(&mut self, value: u8) -> u8 {
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, value == 0);
+        flags.remove(Flags::N | Flags::H);
+        flags.set(Flags::C, (value & 1) == 1);
+        value.rotate_right(1)
     }
 }
 
