@@ -220,11 +220,24 @@ impl MmuRead<'_> {
                     self.0.mbc.read(index)
                 }
             }
-            VIDEO_RAM..EXTERNAL_RAM => self.0.video_ram[usize::from(index - VIDEO_RAM)],
+            VIDEO_RAM..EXTERNAL_RAM => {
+                if (self.0.lcd_status & LcdStatus::PPU_MASK) == LcdStatus::DRAWING {
+                    0xff
+                } else {
+                    self.0.video_ram[usize::from(index - VIDEO_RAM)]
+                }
+            }
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.read(index),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
             ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)],
-            OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)],
+            OAM..NOT_USABLE => {
+                let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
+                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN {
+                    0xff
+                } else {
+                    self.0.oam[usize::from(index - OAM)]
+                }
+            }
             JOYPAD => {
                 if self
                     .0
@@ -280,13 +293,19 @@ impl MmuWrite<'_> {
         match index {
             0..VIDEO_RAM => self.0.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
-                // println!("VRAM ${index:04x} => 0x{value:x}");
-                self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
+                if (self.0.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
+                    self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
+                }
             }
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.write(index, value),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)] = value,
-            OAM..NOT_USABLE => self.0.oam[usize::from(index - OAM)] = value,
+            OAM..NOT_USABLE => {
+                let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
+                if ppu != LcdStatus::DRAWING && ppu != LcdStatus::OAM_SCAN {
+                    self.0.oam[usize::from(index - OAM)] = value
+                }
+            }
             JOYPAD => {
                 self.0
                     .joypad

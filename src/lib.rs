@@ -7,9 +7,9 @@ pub mod hardware;
 pub mod ic;
 pub mod instructions;
 pub mod ppu;
+pub mod ppu2;
 pub mod state;
 pub mod timer;
-pub mod ppu2;
 
 pub fn get_factor_32_kib_rom(rom: &[u8]) -> u8 {
     1 << rom[0x148]
