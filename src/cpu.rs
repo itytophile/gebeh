@@ -277,16 +277,8 @@ impl CpuWriteOnce<'_> {
                 self.set_8bit_register(to, self.get_8bit_register(from));
             }
             NoRead(Rl(register)) => {
-                let register_value = self.get_8bit_register(register);
-                let new_carry = (register_value & 0x80) == 0x80;
-                let new_value = (register_value << 1) | (self.f.get().contains(Flags::C) as u8);
-                self.set_8bit_register(register, new_value);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, new_value == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.set(Flags::C, new_carry);
-                *self.f.get_mut() = flags;
+                let result = self.rl(self.get_8bit_register(register));
+                self.set_8bit_register(register, result);
             }
             NoRead(Srl(register)) => {
                 let register_value = self.get_8bit_register(register);
@@ -629,18 +621,10 @@ impl CpuWriteOnce<'_> {
                     self.rrc(self.lsb.get()),
                 );
             }
-            NoRead(RlHl) => {
-                let register_value = self.lsb.get();
-                let new_carry = (register_value & 0x80) == 0x80;
-                let new_value = (register_value << 1) | (self.f.get().contains(Flags::C) as u8);
-                mmu.write(self.get_16bit_register(Register16Bit::HL), new_value);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, new_value == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.set(Flags::C, new_carry);
-                *self.f.get_mut() = flags;
-            }
+            NoRead(RlHl) => mmu.write(
+                self.get_16bit_register(Register16Bit::HL),
+                self.rl(self.lsb.get()),
+            ),
             NoRead(RrHl) => {
                 let value = self.lsb.get();
                 let mut flags = self.f.get();
@@ -809,6 +793,16 @@ impl CpuWriteOnce<'_> {
         flags.set(Flags::Z, result == 0);
         flags.remove(Flags::N | Flags::H);
         flags.set(Flags::C, (result & 1) == 1);
+        result
+    }
+
+    fn rl(&mut self, value: u8) -> u8 {
+        let new_carry = (value & 0x80) == 0x80;
+        let result = (value << 1) | (self.f.get().contains(Flags::C) as u8);
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, result == 0);
+        flags.remove(Flags::N | Flags::H);
+        flags.set(Flags::C, new_carry);
         result
     }
 }
