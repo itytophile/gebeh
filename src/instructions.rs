@@ -150,7 +150,7 @@ pub enum NoReadInstruction {
     SrlHl,
     IncHl,
     Daa,
-    CbMode
+    CbMode,
 }
 
 #[derive(Clone, Copy, Debug)]
