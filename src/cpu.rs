@@ -601,12 +601,8 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::C, (a & 1) == 1)
             }
             NoRead(Rlc8Bit(register)) => {
-                let result = self.get_8bit_register(register).rotate_left(1);
+                let result = self.rlc(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, (result & 1) == 1)
             }
             NoRead(Rrc8Bit(register)) => {
                 let result = self.rrc(self.get_8bit_register(register));
@@ -623,14 +619,10 @@ impl CpuWriteOnce<'_> {
             NoRead(Set8Bit(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) | (1 << bit));
             }
-            NoRead(RlcHl) => {
-                let result = self.lsb.get().rotate_left(1);
-                mmu.write(self.get_16bit_register(Register16Bit::HL), result);
-                let flags = self.f.get_mut();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N | Flags::H);
-                flags.set(Flags::C, (result & 1) == 1)
-            }
+            NoRead(RlcHl) => mmu.write(
+                self.get_16bit_register(Register16Bit::HL),
+                self.rlc(self.lsb.get()),
+            ),
             NoRead(RrcHl) => {
                 mmu.write(
                     self.get_16bit_register(Register16Bit::HL),
@@ -809,6 +801,15 @@ impl CpuWriteOnce<'_> {
         flags.remove(Flags::N | Flags::H);
         flags.set(Flags::C, (value & 1) == 1);
         value.rotate_right(1)
+    }
+
+    fn rlc(&mut self, value: u8) -> u8 {
+        let result = value.rotate_left(1);
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, result == 0);
+        flags.remove(Flags::N | Flags::H);
+        flags.set(Flags::C, (result & 1) == 1);
+        result
     }
 }
 
