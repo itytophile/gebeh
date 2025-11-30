@@ -171,7 +171,6 @@ impl<'a> WriteOnlyState<'a> {
     pub fn get_sc_mut(&mut self) -> &mut SerialControl {
         &mut self.0.sc
     }
-
     pub fn set_ly(&mut self, value: u8) {
         self.0.ly = value;
     }
@@ -186,9 +185,6 @@ impl<'a> WriteOnlyState<'a> {
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.0.set_interrupt_part_lcd_status(value);
-    }
-    pub fn who_cares(&self) -> &State {
-        self.0
     }
 }
 

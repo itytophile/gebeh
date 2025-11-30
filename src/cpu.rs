@@ -9,6 +9,7 @@ use crate::{
     state::{MmuWrite, State, WriteOnlyState},
 };
 
+use arrayvec::ArrayVec;
 use my_lib::HeapSize;
 
 #[derive(HeapSize, Default)]
@@ -26,11 +27,25 @@ pub struct Cpu {
     pub f: Flags,
     pub is_cb_mode: bool,
     pub pc: u16,
-    pub instruction_register: InstructionsAndSetPc,
+    pub instruction_register: (ArrayVec<Instruction, 5>, SetPc),
     pub ime: bool,
     pub is_halted: bool,
     pub interrupt_to_execute: Option<u8>,
     pub stop_mode: bool,
+}
+
+impl Cpu {
+    fn get_16bit_register(&self, register: Register16Bit) -> u16 {
+        match register {
+            Register16Bit::AF => u16::from(self.a) << 8 | u16::from(self.f.bits()),
+            Register16Bit::BC => u16::from(self.b) << 8 | u16::from(self.c),
+            Register16Bit::DE => u16::from(self.d) << 8 | u16::from(self.e),
+            Register16Bit::HL => u16::from(self.h) << 8 | u16::from(self.l),
+            Register16Bit::WZ => u16::from_be_bytes([self.msb, self.lsb]),
+            Register16Bit::SP => self.sp,
+            Register16Bit::PC => self.pc,
+        }
+    }
 }
 
 enum PipelineAction {
@@ -139,11 +154,7 @@ impl CpuWriteOnce<'_> {
         }
     }
 
-    fn execute_instruction(
-        &mut self,
-        mut mmu: MmuWrite,
-        inst: AfterReadInstruction,
-    ) -> PipelineAction {
+    fn execute_instruction(&mut self, mut mmu: MmuWrite, inst: AfterReadInstruction) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
@@ -156,44 +167,33 @@ impl CpuWriteOnce<'_> {
                     ConditionalRelativeJump(Condition { flag, not }) => {
                         *self.lsb.get_mut() = value;
                         if self.get_flag(flag) != not {
-                            return PipelineAction::Replace(InstructionsAndSetPc(
-                                (
-                                    Instruction::NoRead(OffsetPc),
-                                    // important to match the cycle and not conflict with the overlapping opcode fetch
-                                    vec([Instruction::NoRead(Nop)]),
-                                ),
+                            *self.instruction_register.get_mut() = (
+                                vec([Instruction::NoRead(Nop), Instruction::NoRead(OffsetPc)]),
                                 SetPc(Register16Bit::WZ),
-                            ));
+                            );
                         }
                     }
                     ConditionalCall(Condition { flag, not }) => {
                         *self.msb.get_mut() = value; // msb not like jr
                         if self.get_flag(flag) != not {
-                            return PipelineAction::Replace(
-                                (
+                            *self.instruction_register.get_mut() = (
+                                vec([
+                                    Nop.into(),
+                                    WriteLsbPcWhereSpPointsAndLoadCacheToPc.into(),
+                                    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC)
+                                        .into(),
                                     DecStackPointer.into(),
-                                    // important to match the cycle and not conflict with the overlapping opcode fetch
-                                    vec([
-                                        Nop.into(),
-                                        WriteLsbPcWhereSpPointsAndLoadCacheToPc.into(),
-                                        WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC)
-                                            .into(),
-                                    ]),
-                                )
-                                    .into(),
+                                ]),
+                                Default::default(),
                             );
                         }
                     }
                     ConditionalJump(Condition { flag, not }) => {
                         *self.msb.get_mut() = value; // msb not like jr
                         if self.get_flag(flag) != not {
-                            return PipelineAction::Replace(
-                                (
-                                    Store16Bit(Register16Bit::PC).into(),
-                                    // important to match the cycle and not conflict with the overlapping opcode fetch
-                                    vec([Nop.into()]),
-                                )
-                                    .into(),
+                            *self.instruction_register.get_mut() = (
+                                vec([Nop.into(), Store16Bit(Register16Bit::PC).into()]),
+                                Default::default(),
                             );
                         }
                     }
@@ -443,17 +443,14 @@ impl CpuWriteOnce<'_> {
             }
             NoRead(ConditionalReturn(Condition { flag, not })) => {
                 if self.get_flag(flag) != not {
-                    return PipelineAction::Replace(
-                        (
+                    *self.instruction_register.get_mut() = (
+                        vec([
+                            Nop.into(),
+                            Store16Bit(Register16Bit::PC).into(),
+                            Instruction::Read(POP_SP, ReadIntoMsb),
                             Instruction::Read(POP_SP, ReadIntoLsb),
-                            // important to match the cycle and not conflict with the overlapping opcode fetch
-                            vec([
-                                Nop.into(),
-                                Store16Bit(Register16Bit::PC).into(),
-                                Instruction::Read(POP_SP, ReadIntoMsb),
-                            ]),
-                        )
-                            .into(),
+                        ]),
+                        Default::default(),
                     );
                 }
             }
@@ -668,19 +665,6 @@ impl CpuWriteOnce<'_> {
                 flags.remove(Flags::H);
             }
         }
-
-        PipelineAction::Pop
-    }
-
-    pub fn pipeline_pop_front(&mut self) {
-        // does nothing if there is only one instruction inside the pipeline
-        // if there is only one instruction then the OpcodeFetcher will override the whole pipeline
-        if self.instruction_register.get_ref().0.1.is_empty() {
-            // we can't use pop because the WriteOnce will panic
-            return;
-        }
-        let instruction_register = self.instruction_register.get_mut();
-        instruction_register.0.0 = instruction_register.0.1.pop().unwrap();
     }
 
     fn adc(&mut self, second: u8) {
@@ -857,11 +841,36 @@ impl StateMachine for Cpu {
             self.interrupt_to_execute = Some(address);
         }
 
+        let inst = if let Some(inst) = self.instruction_register.0.pop() {
+            inst
+        } else {
+            // affecter et incrémenter le pc même dans le cas de l'interruption
+            self.pc = self.get_16bit_register(self.instruction_register.1.0);
+            let opcode = mmu.read(self.pc);
+            self.pc = self.pc.wrapping_add(1);
+            if let Some(address) = self.interrupt_to_execute.take() {
+                println!("Interrupt handling");
+                use NoReadInstruction::*;
+                self.instruction_register.0 = vec([
+                    Nop.into(),
+                    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
+                    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
+                    DecStackPointer.into(),
+                ]);
+                self.instruction_register.1 = Default::default();
+                DecPc.into()
+            } else {
+                let prout = get_instructions(opcode, self.is_cb_mode);
+                self.is_cb_mode = !self.is_cb_mode && opcode == 0xcb;
+                self.instruction_register.0 = prout.0.1;
+                self.instruction_register.1 = prout.1;
+                prout.0.0
+            }
+        };
+
         let mut write_once = self.write_once();
 
-        let (inst, tail) = &write_once.instruction_register.get_ref().0;
-
-        let inst = match *inst {
+        let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => {
                 AfterReadInstruction::Read(mmu.read(0xff00 | u16::from(write_once.lsb.get())), inst)
@@ -892,31 +901,7 @@ impl StateMachine for Cpu {
                 state.remove_if_bit(flag);
             }
 
-            let (instructions_register, new_pc) =
-                match write_once.execute_instruction(state.mmu(), inst) {
-                    PipelineAction::Pop => {
-                        // write_once.pipeline_pop_front()
-                        let new_pc = write_once
-                            .get_16bit_register(write_once.instruction_register.get_ref().1.0);
-                        let instructions_and_set_pc = write_once.instruction_register.get_mut();
-                        let InstructionsAndSetPc((head, tail), _) = instructions_and_set_pc;
-
-                        if let Some(next) = tail.pop() {
-                            *head = next;
-                            return;
-                        }
-
-                        (instructions_and_set_pc, new_pc)
-                    }
-                    PipelineAction::Replace(instructions) => {
-                        // println!("Replacing pipeline");
-                        *write_once.instruction_register.get_mut() = instructions;
-                        return;
-                    }
-                };
-
-            let pc = write_once.pc.get_mut();
-            *pc = new_pc;
+            write_once.execute_instruction(state.mmu(), inst);
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
@@ -925,27 +910,6 @@ impl StateMachine for Cpu {
             {
                 todo!("halt bug")
             }
-
-            if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
-                println!("Interrupt handling");
-                use NoReadInstruction::*;
-                *instructions_register = (
-                    DecPc.into(),
-                    vec([
-                        Nop.into(),
-                        WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
-                        WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
-                        DecStackPointer.into(),
-                    ]),
-                )
-                    .into();
-            } else {
-                let opcode = state.who_cares().mmu().read(*pc);
-                *instructions_register = get_instructions(opcode, write_once.is_cb_mode.get());
-                *write_once.is_cb_mode.get_mut() = !write_once.is_cb_mode.get() && opcode == 0xcb;
-            }
-            // même dans le cas de l'interruption
-            *pc = pc.wrapping_add(1);
         })
     }
 }
