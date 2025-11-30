@@ -861,21 +861,6 @@ impl StateMachine for Cpu {
 
         let (inst, tail) = &write_once.instruction_register.get_ref().0;
 
-        // let pc = if let Instruction::NoRead(NoReadInstruction::JumpHl) = inst {
-        //     write_once.get_16bit_register(Register16Bit::HL)
-        // } else {
-        //     write_once.pc.get()
-        // };
-
-        // if should_load_next_opcode {
-        //     println!(
-        //         "Read opcode at ${:04x} (0x{opcode:02x})",
-        //         write_once.pc.get()
-        //     );
-        // }
-
-        // print!("{inst:?}");
-
         let inst = match *inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => {
@@ -902,20 +887,11 @@ impl StateMachine for Cpu {
             }
         };
 
-        // if let AfterReadInstruction::Read(value, _) = inst {
-        //     print!(", read: 0x{value:02x}");
-        // }
-
-        // println!();
-
         Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
                 state.remove_if_bit(flag);
             }
 
-            // TODO reétudier l'ordre d'exécution de l'opcode fetching.
-            // Il est préférable que ça marche tout le temps, mais quand on inverse les deux
-            // blocs cela ne marche plus
             let (instructions_register, new_pc) =
                 match write_once.execute_instruction(state.mmu(), inst) {
                     PipelineAction::Pop => {
@@ -942,15 +918,6 @@ impl StateMachine for Cpu {
             let pc = write_once.pc.get_mut();
             *pc = new_pc;
 
-            // println!(
-            //     "BC: 0x{:04x}, AF: 0x{:04x}, DE: 0x{:04x}, HL: 0x{:04x}, SP: 0x{:04x}",
-            //     write_once.get_16bit_register(Register16Bit::BC),
-            //     write_once.get_16bit_register(Register16Bit::AF),
-            //     write_once.get_16bit_register(Register16Bit::DE),
-            //     write_once.get_16bit_register(Register16Bit::HL),
-            //     write_once.sp.get()
-            // );
-
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
                 && !write_once.ime.get()
@@ -958,27 +925,6 @@ impl StateMachine for Cpu {
             {
                 todo!("halt bug")
             }
-
-            // println!("${pc:04x} => 0x{opcode:02x}");
-            // if !write_once.is_cb_mode.get() {
-            //     println!(
-            //         "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",
-            //         write_once.a.get(),
-            //         write_once.f.get().bits(),
-            //         write_once.b.get(),
-            //         write_once.c.get(),
-            //         write_once.d.get(),
-            //         write_once.e.get(),
-            //         write_once.h.get(),
-            //         write_once.l.get(),
-            //         write_once.sp.get(),
-            //         pc,
-            //         state.doctor().mmu().read(pc),
-            //         state.doctor().mmu().read(pc.wrapping_add(1)),
-            //         state.doctor().mmu().read(pc.wrapping_add(2)),
-            //         state.doctor().mmu().read(pc.wrapping_add(3)),
-            //     );
-            // }
 
             if let Some(address) = write_once.interrupt_to_execute.get_mut().take() {
                 println!("Interrupt handling");
