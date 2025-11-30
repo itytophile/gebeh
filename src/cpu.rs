@@ -11,7 +11,6 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
-#[derive(Default)]
 pub struct Cpu {
     pub sp: u16,
     pub lsb: u8,
@@ -31,6 +30,33 @@ pub struct Cpu {
     pub is_halted: bool,
     pub interrupt_to_execute: Option<u8>,
     pub stop_mode: bool,
+}
+
+impl Default for Cpu {
+    fn default() -> Self {
+        Self {
+            sp: Default::default(),
+            lsb: Default::default(),
+            msb: Default::default(),
+            a: Default::default(),
+            b: Default::default(),
+            c: Default::default(),
+            d: Default::default(),
+            e: Default::default(),
+            h: Default::default(),
+            l: Default::default(),
+            f: Default::default(),
+            is_cb_mode: Default::default(),
+            pc: Default::default(),
+            // yes the cpu can fetch opcodes in parallel of the execution but for the first boost we must
+            // feed a nop or the cpu will fetch + execute the fist opcode in the same cycle
+            instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
+            ime: Default::default(),
+            is_halted: Default::default(),
+            interrupt_to_execute: Default::default(),
+            stop_mode: Default::default(),
+        }
+    }
 }
 
 pub fn set_h_add(arg1: u8, arg2: u8) -> bool {
