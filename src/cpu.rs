@@ -456,14 +456,7 @@ impl CpuWriteOnce<'_> {
                 *self.is_halted.get_mut() = true;
             }
             NoRead(Swap8Bit(register)) => {
-                let value = self.get_8bit_register(register);
-                let result = ((value >> 4) & 0x0f) | ((value << 4) & 0xf0);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.remove(Flags::C);
-                *self.f.get_mut() = flags;
+                let result = self.swap(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
             }
             NoRead(LoadHlFromAdjustedStackPointerFirst) => {
@@ -626,17 +619,10 @@ impl CpuWriteOnce<'_> {
                     self.sra(self.lsb.get()),
                 );
             }
-            NoRead(SwapHl) => {
-                let value = self.lsb.get();
-                let result = ((value >> 4) & 0x0f) | ((value << 4) & 0xf0);
-                let mut flags = self.f.get();
-                flags.set(Flags::Z, result == 0);
-                flags.remove(Flags::N);
-                flags.remove(Flags::H);
-                flags.remove(Flags::C);
-                *self.f.get_mut() = flags;
-                mmu.write(self.get_16bit_register(Register16Bit::HL), result);
-            }
+            NoRead(SwapHl) => mmu.write(
+                self.get_16bit_register(Register16Bit::HL),
+                self.swap(self.lsb.get()),
+            ),
             NoRead(SrlHl) => mmu.write(
                 self.get_16bit_register(Register16Bit::HL),
                 self.srl(self.lsb.get()),
@@ -792,6 +778,14 @@ impl CpuWriteOnce<'_> {
         let result = (value >> 1) | ((carry as u8) << 7);
         flags.remove(Flags::N | Flags::H);
         flags.set(Flags::Z, result == 0);
+        result
+    }
+
+    fn swap(&mut self, value: u8) -> u8 {
+        let result = ((value >> 4) & 0x0f) | ((value << 4) & 0xf0);
+        let flags = self.f.get_mut();
+        flags.set(Flags::Z, result == 0);
+        flags.remove(Flags::N | Flags::H | Flags::C);
         result
     }
 }
