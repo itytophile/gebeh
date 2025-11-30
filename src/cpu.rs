@@ -2,8 +2,9 @@ use crate::{
     StateMachine,
     ic::Ints,
     instructions::{
-        AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, OpAfterRead, POP_SP,
-        ReadAddress, ReadInstruction, Register8Bit, Register16Bit, SetPc, get_instructions, vec,
+        AfterReadInstruction, Condition, Flag, Instruction, InstructionsAndSetPc,
+        NoReadInstruction, OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit,
+        Register16Bit, SetPc, get_instructions, vec,
     },
     state::{MmuWrite, State, WriteOnlyState},
 };
@@ -787,11 +788,12 @@ impl StateMachine for Cpu {
                 self.instruction_register.1 = Default::default();
                 DecPc.into()
             } else {
-                let prout = get_instructions(opcode, self.is_cb_mode);
+                let InstructionsAndSetPc((head, tail), set_pc) =
+                    get_instructions(opcode, self.is_cb_mode);
                 self.is_cb_mode = false;
-                self.instruction_register.0 = prout.0.1;
-                self.instruction_register.1 = prout.1;
-                prout.0.0
+                self.instruction_register.0 = tail;
+                self.instruction_register.1 = set_pc;
+                head
             }
         };
 
