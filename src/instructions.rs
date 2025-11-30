@@ -150,6 +150,7 @@ pub enum NoReadInstruction {
     SrlHl,
     IncHl,
     Daa,
+    CbMode
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -943,7 +944,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
             flag: Flag::Z,
             not: false,
         }),
-        0xcb => (Nop.into(), Default::default()),
+        0xcb => (CbMode.into(), Default::default()),
         0xcc => call_cc_nn(Condition {
             flag: Flag::Z,
             not: false,

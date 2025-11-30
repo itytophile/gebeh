@@ -48,11 +48,6 @@ impl Cpu {
     }
 }
 
-enum PipelineAction {
-    Pop,
-    Replace(InstructionsAndSetPc),
-}
-
 pub fn set_h_add(arg1: u8, arg2: u8) -> bool {
     let lo1 = arg1 & 0x0F;
     let lo2 = arg2 & 0x0F;
@@ -664,6 +659,9 @@ impl CpuWriteOnce<'_> {
                 flags.set(Flags::Z, result == 0);
                 flags.remove(Flags::H);
             }
+            NoRead(CbMode) => {
+                *self.is_cb_mode.get_mut() = true;
+            }
         }
     }
 
@@ -861,7 +859,7 @@ impl StateMachine for Cpu {
                 DecPc.into()
             } else {
                 let prout = get_instructions(opcode, self.is_cb_mode);
-                self.is_cb_mode = !self.is_cb_mode && opcode == 0xcb;
+                self.is_cb_mode = false;
                 self.instruction_register.0 = prout.0.1;
                 self.instruction_register.1 = prout.1;
                 prout.0.0
