@@ -214,6 +214,7 @@ fn get_tile_data_low(tile_id: u8, vram: &TileVram) {
 impl StateMachine for Ppu2 {
     fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         let mut ly = state.ly;
+        let lyc = state.lyc;
         let mut mode_changed = false;
         let lcd_status = state.lcd_status;
 
@@ -247,24 +248,26 @@ impl StateMachine for Ppu2 {
             Ppu2::VerticalBlankScanline { remaining_dots } => {
                 if let Some(dots) = NonZeroU16::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
+                } else if ly == 153 {
+                    mode_changed = true;
+                    ly = 0;
+                    *self = Ppu2::OamScan {
+                        remaining_dots: OAM_SCAN_DURATION,
+                    }
                 } else {
-                    if ly == 153 {
-                        mode_changed = true;
-                        ly = 0;
-                        *self = Ppu2::OamScan {
-                            remaining_dots: OAM_SCAN_DURATION,
-                        }
-                    } else {
-                        ly += 1;
-                        *self = Ppu2::VerticalBlankScanline {
-                            remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-                        }
+                    ly += 1;
+                    *self = Ppu2::VerticalBlankScanline {
+                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }
                 }
             }
         };
         Some(move |mut state: WriteOnlyState| {
             state.set_ly(ly);
+
+            if lcd_status.contains(LcdStatus::LYC_INT) && ly == lyc {
+                state.insert_if(Ints::LCD);
+            }
 
             if !mode_changed {
                 return;
