@@ -180,11 +180,17 @@ impl<'a> WriteOnlyState<'a> {
     pub fn mmu(&mut self) -> MmuWrite<'_> {
         MmuWrite(self.0)
     }
-    pub fn get_ie_mut(&mut self) -> &mut Ints {
-        &mut self.0.interrupt_enable
+    pub fn insert_ie(&mut self, flag: Ints) {
+        self.0.interrupt_enable.insert(flag);
     }
-    pub fn get_if_mut(&mut self) -> &mut Ints {
-        &mut self.0.interrupt_flag
+    pub fn remove_ie(&mut self, flag: Ints) {
+        self.0.interrupt_enable.remove(flag);
+    }
+    pub fn insert_if(&mut self, flag: Ints) {
+        self.0.interrupt_flag.insert(flag);
+    }
+    pub fn remove_if(&mut self, flag: Ints) {
+        self.0.interrupt_flag.remove(flag);
     }
     pub fn get_sc_mut(&mut self) -> &mut SerialControl {
         &mut self.0.sc

@@ -207,7 +207,7 @@ fn get_picture_pixel_and_tile_map_address(
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 fn get_tile_data_low(tile_id: u8, vram: &TileVram) {
-    get_bg_win_tile()
+    todo!()
 }
 
 // one iteration = one dot = (1/4 M-cyle DMG)
@@ -288,7 +288,7 @@ impl StateMachine for Ppu2 {
             state.set_ppu_mode(mode);
 
             if request_interrupt {
-                state.get_if_mut().insert(Ints::LCD);
+                state.insert_if(Ints::LCD);
             }
         })
     }

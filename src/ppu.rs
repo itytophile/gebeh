@@ -58,16 +58,16 @@ impl StateMachine for Ppu {
             state.set_ly(ly);
             for flag in [Ints::VBLANK, Ints::LCD] {
                 if interrupt_flag.contains(flag) && !irq.request.contains(flag) {
-                    state.get_if_mut().remove(flag);
+                    state.remove_if(flag);
                 }
                 if !interrupt_flag.contains(flag) && irq.request.contains(flag) {
-                    state.get_if_mut().insert(flag);
+                    state.insert_if(flag);
                 }
                 if interrupt_enable.contains(flag) && !irq.enable.contains(flag) {
-                    state.get_ie_mut().remove(flag);
+                    state.remove_ie(flag);
                 }
                 if !interrupt_enable.contains(flag) && irq.enable.contains(flag) {
-                    state.get_ie_mut().insert(flag);
+                    state.insert_ie(flag);
                 }
             }
             state.set_ppu_mode(self.gpu.mode);

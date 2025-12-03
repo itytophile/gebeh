@@ -31,7 +31,7 @@ impl StateMachine for Timer {
         Some(move |mut state: WriteOnlyState| {
             state.set_timer_counter(timer_counter);
             if overflow {
-                state.get_if_mut().insert(Ints::TIMER);
+                state.insert_if(Ints::TIMER);
             }
         })
     }
