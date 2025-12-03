@@ -4,8 +4,9 @@ use bitflags::Flags;
 
 use crate::{
     StateMachine,
-    gpu::LcdControl,
-    state::{State, WriteOnlyState},
+    gpu::{self, LcdControl},
+    ic::Ints,
+    state::{LcdStatus, State, WriteOnlyState},
 };
 
 pub enum Ppu2 {
@@ -213,12 +214,15 @@ fn get_tile_data_low(tile_id: u8, vram: &TileVram) {
 impl StateMachine for Ppu2 {
     fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         let mut ly = state.ly;
+        let mut mode_changed = false;
+        let lcd_status = state.lcd_status;
 
         match self {
             Ppu2::OamScan { remaining_dots } => {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
+                    mode_changed = true;
                     *self = Ppu2::DrawingPixels { dots_count: 0 };
                 }
             }
@@ -228,6 +232,7 @@ impl StateMachine for Ppu2 {
                     *remaining_dots = dots;
                 } else {
                     ly += 1;
+                    mode_changed = true;
                     if ly == 144 {
                         *self = Ppu2::VerticalBlankScanline {
                             remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
@@ -244,6 +249,7 @@ impl StateMachine for Ppu2 {
                     *remaining_dots = dots;
                 } else {
                     if ly == 153 {
+                        mode_changed = true;
                         ly = 0;
                         *self = Ppu2::OamScan {
                             remaining_dots: OAM_SCAN_DURATION,
@@ -259,6 +265,31 @@ impl StateMachine for Ppu2 {
         };
         Some(move |mut state: WriteOnlyState| {
             state.set_ly(ly);
+
+            if !mode_changed {
+                return;
+            }
+
+            let (mode, request_interrupt) = match self {
+                Ppu2::OamScan { .. } => {
+                    (gpu::Mode::OamScan, lcd_status.contains(LcdStatus::OAM_INT))
+                }
+                Ppu2::DrawingPixels { .. } => (gpu::Mode::Drawing, false),
+                Ppu2::HorizontalBlank { .. } => (
+                    gpu::Mode::HBlank,
+                    lcd_status.contains(LcdStatus::HBLANK_INT),
+                ),
+                Ppu2::VerticalBlankScanline { .. } => (
+                    gpu::Mode::VBlank,
+                    lcd_status.contains(LcdStatus::VBLANK_INT),
+                ),
+            };
+
+            state.set_ppu_mode(mode);
+
+            if request_interrupt {
+                state.get_if_mut().insert(Ints::LCD);
+            }
         })
     }
 }
