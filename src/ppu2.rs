@@ -245,7 +245,15 @@ impl StateMachine2 for Ppu2 {
                     *self = Ppu2::DrawingPixels { dots_count: 0 };
                 }
             }
-            Ppu2::DrawingPixels { dots_count } => todo!(),
+            Ppu2::DrawingPixels { dots_count } => {
+                *dots_count += 1;
+                if *dots_count == 172 {
+                    mode_changed = true;
+                    *self = Ppu2::HorizontalBlank {
+                        remaining_dots: NonZeroU8::new(204).unwrap(),
+                    }
+                }
+            }
             Ppu2::HorizontalBlank { remaining_dots } => {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
