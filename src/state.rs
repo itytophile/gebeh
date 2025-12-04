@@ -162,7 +162,10 @@ impl State {
 use std::num::NonZeroU8;
 
 use crate::{
-    StateMachine, cartridge::Mbc, gpu::{self, LcdControl}, ic::Ints
+    StateMachine,
+    cartridge::Mbc,
+    gpu::{self, LcdControl},
+    ic::Ints,
 };
 
 pub struct WriteOnlyState<'a>(&'a mut State);

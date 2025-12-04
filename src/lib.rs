@@ -55,4 +55,3 @@ impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
         })
     }
 }
-

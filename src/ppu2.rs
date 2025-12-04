@@ -210,14 +210,14 @@ fn get_tile_data_low(tile_id: u8, vram: &TileVram) {
     todo!()
 }
 
-trait StateMachine2 {
+pub trait StateMachine2 {
     type WorkState;
     fn get_work_state(state: &State) -> Self::WorkState;
     fn execute(&mut self, work_state: &mut Self::WorkState, state: &State);
     fn commit(&self, work_state: Self::WorkState, state: WriteOnlyState);
 }
 
-struct PpuWorkState {
+pub struct PpuWorkState {
     ly: u8,
     is_requesting_lcd_int: bool,
 }
@@ -330,7 +330,7 @@ impl<T: StateMachine2> StateMachine for T {
     }
 }
 
-struct Speeder<T: StateMachine2>(T, NonZeroU8);
+pub struct Speeder<T: StateMachine2>(pub T, pub NonZeroU8);
 
 impl<T: StateMachine2> StateMachine for Speeder<T> {
     fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
