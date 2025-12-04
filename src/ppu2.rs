@@ -321,3 +321,17 @@ impl<T: StateMachine2> StateMachine for T {
         Some(move |state: WriteOnlyState| self.commit(work_state, state))
     }
 }
+
+struct Speeder<T: StateMachine2>(T, NonZeroU8);
+
+impl<T: StateMachine2> StateMachine for Speeder<T> {
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+        let mut work_state = T::get_work_state(state);
+        for _ in 0..self.1.get() {
+            self.0.execute(&mut work_state, state);
+        }
+        Some(move |state: WriteOnlyState| {
+            self.0.commit(work_state, state);
+        })
+    }
+}
