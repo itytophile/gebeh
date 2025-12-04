@@ -159,14 +159,7 @@ impl State {
     }
 }
 
-use std::num::NonZeroU8;
-
-use crate::{
-    StateMachine,
-    cartridge::Mbc,
-    gpu::{self, LcdControl},
-    ic::Ints,
-};
+use crate::{cartridge::Mbc, ic::Ints, ppu::LcdControl};
 
 pub struct WriteOnlyState<'a>(&'a mut State);
 
@@ -207,8 +200,9 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_timer_counter(&mut self, timer_counter: u8) {
         self.0.timer_counter = timer_counter;
     }
-    pub fn set_ppu_mode(&mut self, mode: gpu::Mode) {
-        self.0.lcd_status = (self.0.lcd_status & !LcdStatus::PPU_MASK) | LcdStatus::from(mode);
+    pub fn set_ppu_mode(&mut self, mode: LcdStatus) {
+        self.0.lcd_status =
+            (self.0.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.0.set_interrupt_part_lcd_status(value);

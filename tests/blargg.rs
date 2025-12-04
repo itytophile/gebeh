@@ -4,8 +4,7 @@ use arrayvec::ArrayVec;
 use testouille_emulator_future::{
     StateMachine,
     cpu::Cpu,
-    ppu::Ppu,
-    ppu2::{Ppu2, Speeder},
+    ppu::{Ppu, Speeder},
     state::{SerialControl, State, WriteOnlyState},
     timer::Timer,
 };
@@ -42,7 +41,7 @@ fn cpu_instrs() {
     // the machine should not be affected by the composition order
     let mut machine = Cpu::default()
         .compose(Timer::default())
-        .compose(Speeder(Ppu2::default(), NonZeroU8::new(4).unwrap()))
+        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
         .compose(TestSerial(None));
 
     let buffer: ArrayVec<u8, LEN> = iter::from_fn(|| {
