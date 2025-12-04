@@ -1,3 +1,5 @@
+use std::num::NonZeroU8;
+
 use crate::state::{State, WriteOnlyState};
 
 pub mod cartridge;
@@ -53,3 +55,4 @@ impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
         })
     }
 }
+

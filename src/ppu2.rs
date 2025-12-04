@@ -210,13 +210,31 @@ fn get_tile_data_low(tile_id: u8, vram: &TileVram) {
     todo!()
 }
 
+trait StateMachine2 {
+    type WorkState;
+    fn get_work_state(state: &State) -> Self::WorkState;
+    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State);
+    fn commit(&self, work_state: Self::WorkState, state: WriteOnlyState);
+}
+
+struct PpuWorkState {
+    ly: u8,
+    is_requesting_lcd_int: bool,
+}
+
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl StateMachine for Ppu2 {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
-        let mut ly = state.ly;
-        let lyc = state.lyc;
+impl StateMachine2 for Ppu2 {
+    type WorkState = PpuWorkState;
+
+    fn get_work_state(state: &State) -> Self::WorkState {
+        PpuWorkState {
+            is_requesting_lcd_int: false,
+            ly: state.ly,
+        }
+    }
+
+    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State) {
         let mut mode_changed = false;
-        let lcd_status = state.lcd_status;
 
         match self {
             Ppu2::OamScan { remaining_dots } => {
@@ -232,9 +250,9 @@ impl StateMachine for Ppu2 {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
-                    ly += 1;
+                    work_state.ly += 1;
                     mode_changed = true;
-                    if ly == 144 {
+                    if work_state.ly == 144 {
                         *self = Ppu2::VerticalBlankScanline {
                             remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                         };
@@ -248,51 +266,58 @@ impl StateMachine for Ppu2 {
             Ppu2::VerticalBlankScanline { remaining_dots } => {
                 if let Some(dots) = NonZeroU16::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
-                } else if ly == 153 {
+                } else if work_state.ly == 153 {
                     mode_changed = true;
-                    ly = 0;
+                    work_state.ly = 0;
                     *self = Ppu2::OamScan {
                         remaining_dots: OAM_SCAN_DURATION,
                     }
                 } else {
-                    ly += 1;
+                    work_state.ly += 1;
                     *self = Ppu2::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }
                 }
             }
         };
-        Some(move |mut state: WriteOnlyState| {
-            state.set_ly(ly);
 
-            if lcd_status.contains(LcdStatus::LYC_INT) && ly == lyc {
-                state.insert_if(Ints::LCD);
-            }
+        if state.lcd_status.contains(LcdStatus::LYC_INT) && work_state.ly == state.lyc {
+            work_state.is_requesting_lcd_int = true;
+        }
 
-            if !mode_changed {
-                return;
-            }
+        if !mode_changed {
+            return;
+        }
 
-            let (mode, request_interrupt) = match self {
-                Ppu2::OamScan { .. } => {
-                    (gpu::Mode::OamScan, lcd_status.contains(LcdStatus::OAM_INT))
-                }
-                Ppu2::DrawingPixels { .. } => (gpu::Mode::Drawing, false),
-                Ppu2::HorizontalBlank { .. } => (
-                    gpu::Mode::HBlank,
-                    lcd_status.contains(LcdStatus::HBLANK_INT),
-                ),
-                Ppu2::VerticalBlankScanline { .. } => (
-                    gpu::Mode::VBlank,
-                    lcd_status.contains(LcdStatus::VBLANK_INT),
-                ),
-            };
+        let is_requesting_interrupt = match self {
+            Ppu2::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
+            Ppu2::DrawingPixels { .. } => false,
+            Ppu2::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            Ppu2::VerticalBlankScanline { .. } => state.lcd_status.contains(LcdStatus::VBLANK_INT),
+        };
 
-            state.set_ppu_mode(mode);
+        work_state.is_requesting_lcd_int |= is_requesting_interrupt;
+    }
 
-            if request_interrupt {
-                state.insert_if(Ints::LCD);
-            }
-        })
+    fn commit(&self, work_state: Self::WorkState, mut state: WriteOnlyState) {
+        let mode = match self {
+            Ppu2::OamScan { .. } => gpu::Mode::OamScan,
+            Ppu2::DrawingPixels { .. } => gpu::Mode::Drawing,
+            Ppu2::HorizontalBlank { .. } => gpu::Mode::HBlank,
+            Ppu2::VerticalBlankScanline { .. } => gpu::Mode::VBlank,
+        };
+        state.set_ppu_mode(mode);
+        state.set_ly(work_state.ly);
+        if work_state.is_requesting_lcd_int {
+            state.insert_if(Ints::LCD);
+        }
+    }
+}
+
+impl<T: StateMachine2> StateMachine for T {
+    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+        let mut work_state = T::get_work_state(state);
+        self.execute(&mut work_state, state);
+        Some(move |state: WriteOnlyState| self.commit(work_state, state))
     }
 }

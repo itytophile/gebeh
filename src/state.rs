@@ -159,10 +159,10 @@ impl State {
     }
 }
 
+use std::num::NonZeroU8;
+
 use crate::{
-    cartridge::Mbc,
-    gpu::{self, LcdControl},
-    ic::Ints,
+    StateMachine, cartridge::Mbc, gpu::{self, LcdControl}, ic::Ints
 };
 
 pub struct WriteOnlyState<'a>(&'a mut State);
@@ -209,6 +209,10 @@ impl<'a> WriteOnlyState<'a> {
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.0.set_interrupt_part_lcd_status(value);
+    }
+    // used only by Speeder
+    fn into_inner(self) -> &'a mut State {
+        self.0
     }
 }
 
