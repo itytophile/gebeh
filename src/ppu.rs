@@ -279,10 +279,10 @@ pub enum Color {
 impl From<Color> for u32 {
     fn from(c: Color) -> u32 {
         match c {
-            Color::White => 0xdddddd,
+            Color::White => 0xffffff,
             Color::LightGray => 0xaaaaaa,
-            Color::DarkGray => 0x888888,
-            Color::Black => 0x555555,
+            Color::DarkGray => 0x555555,
+            Color::Black => 0,
         }
     }
 }
