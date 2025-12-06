@@ -5,14 +5,23 @@ use bitflags::Flags;
 use crate::{
     StateMachine,
     ic::Ints,
-    state::{LcdStatus, State, WriteOnlyState},
+    state::{LcdStatus, State, VIDEO_RAM, WriteOnlyState},
 };
 
 pub enum Ppu {
-    OamScan { remaining_dots: NonZeroU8 },                // <= 80
-    DrawingPixels { dots_count: u16 },                    // <= 289
-    HorizontalBlank { remaining_dots: NonZeroU8 },        // <= 204
-    VerticalBlankScanline { remaining_dots: NonZeroU16 }, // <= 456
+    OamScan {
+        remaining_dots: NonZeroU8,
+    }, // <= 80
+    DrawingPixels {
+        dots_count: u16,
+        scanline: [Color; 160],
+    }, // <= 289
+    HorizontalBlank {
+        remaining_dots: NonZeroU8,
+    }, // <= 204
+    VerticalBlankScanline {
+        remaining_dots: NonZeroU16,
+    }, // <= 456
 }
 
 bitflags::bitflags! {
@@ -66,7 +75,18 @@ impl ColorIndex {
     }
 }
 
+#[must_use]
+fn get_color_from_tile(tile: &Tile, x: u8, y: u8) -> ColorIndex {
+    assert!(x < 8);
+    assert!(y < 8);
+    let line: [u8; 2] = tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
+        .try_into()
+        .unwrap();
+    ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
+}
+
 // https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
+#[must_use]
 fn get_object_tile(vram: &TileVram, index: u8) -> &Tile {
     let base = usize::from(index) * usize::from(TILE_LENGTH);
     vram[base..base + usize::from(TILE_LENGTH)]
@@ -74,6 +94,7 @@ fn get_object_tile(vram: &TileVram, index: u8) -> &Tile {
         .unwrap()
 }
 
+#[must_use]
 fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
     let base = if is_signed_addressing {
         0x1000usize.strict_add_signed(isize::from(index.cast_signed()) * isize::from(TILE_LENGTH))
@@ -179,6 +200,7 @@ impl PicturePixel {
 // Only 160×144 of those pixels are displayed on the LCD at any given time.
 
 // https://gbdev.io/pandocs/pixel_fifo.html#get-tile
+#[must_use]
 fn get_picture_pixel_and_tile_map_address(
     lcdc: LcdControl,
     scanline: Scanline,
@@ -219,9 +241,6 @@ fn get_picture_pixel_and_tile_map_address(
 }
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
-fn get_tile_data_low(tile_id: u8, vram: &TileVram) {
-    todo!()
-}
 
 pub trait StateMachine2 {
     type WorkState;
@@ -233,6 +252,27 @@ pub trait StateMachine2 {
 pub struct PpuWorkState {
     ly: u8,
     is_requesting_lcd_int: bool,
+}
+
+impl Ppu {
+    #[must_use]
+    pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
+        match self {
+            Self::DrawingPixels {
+                scanline,
+                dots_count,
+            } if *dots_count == 1 => Some(scanline),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Color {
+    White = 0,
+    LightGray = 1,
+    DarkGray = 2,
+    Black = 3,
 }
 
 // one iteration = one dot = (1/4 M-cyle DMG)
@@ -255,10 +295,61 @@ impl StateMachine2 for Ppu {
                     *remaining_dots = dots;
                 } else {
                     mode_changed = true;
-                    *self = Ppu::DrawingPixels { dots_count: 0 };
+                    *self = Ppu::DrawingPixels {
+                        dots_count: 0,
+                        scanline: [Color::Black; 160],
+                    };
                 }
             }
-            Ppu::DrawingPixels { dots_count } => {
+            Ppu::DrawingPixels {
+                dots_count,
+                scanline,
+            } => {
+                // if first iteration then draw whole line without thinking
+                // TODO: draw the line during the good amount of dots
+                if *dots_count == 0 {
+                    for (x, pixel) in scanline.iter_mut().enumerate() {
+                        let (picture_pixel, tile_map_address) =
+                            get_picture_pixel_and_tile_map_address(
+                                state.lcd_control,
+                                Scanline {
+                                    x: x.try_into().unwrap(),
+                                    y: work_state.ly,
+                                },
+                                Window {
+                                    x: state.wx,
+                                    y: state.wy,
+                                },
+                                Background {
+                                    x: state.scx,
+                                    y: state.scy,
+                                },
+                            );
+                        let tile_index = state.video_ram[usize::from(
+                            picture_pixel.get_relative_tile_map_index() - VIDEO_RAM
+                                + tile_map_address,
+                        )];
+                        let tile = get_bg_win_tile(
+                            state.video_ram[..0x1800].try_into().unwrap(),
+                            tile_index,
+                            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+                        );
+                        let color =
+                            get_color_from_tile(tile, picture_pixel.x % 8, picture_pixel.y % 8);
+                        let shift: u8 = match color {
+                            ColorIndex::Zero => 0,
+                            ColorIndex::One => 2,
+                            ColorIndex::Two => 4,
+                            ColorIndex::Three => 6,
+                        };
+                        *pixel = match (state.bgp_register >> shift) & 0b11 {
+                            0 => Color::White,
+                            1 => Color::LightGray,
+                            2 => Color::DarkGray,
+                            _ => Color::Black,
+                        };
+                    }
+                }
                 *dots_count += 1;
                 if *dots_count == 172 {
                     mode_changed = true;
