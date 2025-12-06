@@ -475,7 +475,7 @@ fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
     // if is_big then the tile_index must be corrected to be always even
     // then we check if scanline.y reaches the second tile
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
-        + (is_big && scanline.y + 8 >= obj.y) as u8;
+        + (is_big && (scanline.y + 8 >= obj.y || obj.flags.contains(ObjectFlags::Y_FLIP))) as u8;
 
     let tile = get_object_tile(
         state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
@@ -484,7 +484,22 @@ fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
         tile_index,
     );
 
-    get_color_from_tile(tile, scanline.x + 8 - obj.x, (scanline.y + 16 - obj.y) % 8)
+    let x = scanline.x + 8 - obj.x;
+    let y = (scanline.y + 16 - obj.y) % 8;
+
+    get_color_from_tile(
+        tile,
+        if obj.flags.contains(ObjectFlags::X_FLIP) {
+            7 - x
+        } else {
+            x
+        },
+        if obj.flags.contains(ObjectFlags::Y_FLIP) {
+            7 - y
+        } else {
+            y
+        },
+    )
 }
 
 impl<T: StateMachine2> StateMachine for T {
