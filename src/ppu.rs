@@ -59,10 +59,10 @@ type Tile = [u8; 16];
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ColorIndex {
-    Zero = 0b00,
-    One = 0b01,
-    Two = 0b10,
-    Three = 0b11,
+    Zero,
+    One,
+    Two,
+    Three,
 }
 
 impl ColorIndex {
@@ -72,6 +72,21 @@ impl ColorIndex {
             (true, false) => Self::Two,
             (false, true) => Self::One,
             (false, false) => Self::Zero,
+        }
+    }
+
+    pub fn get_color(self, palette: u8) -> Color {
+        let shift: u8 = match self {
+            ColorIndex::Zero => 0,
+            ColorIndex::One => 2,
+            ColorIndex::Two => 4,
+            ColorIndex::Three => 6,
+        };
+        match (palette >> shift) & 0b11 {
+            0 => Color::White,
+            1 => Color::LightGray,
+            2 => Color::DarkGray,
+            _ => Color::Black,
         }
     }
 }
@@ -124,6 +139,7 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Copy)]
 struct ObjectAttribute {
     y: u8,
     x: u8,
@@ -270,10 +286,10 @@ impl Ppu {
 
 #[derive(Clone, Copy)]
 pub enum Color {
-    White = 0,
-    LightGray = 1,
-    DarkGray = 2,
-    Black = 3,
+    White,
+    LightGray,
+    DarkGray,
+    Black,
 }
 
 impl From<Color> for u32 {
@@ -324,40 +340,41 @@ impl StateMachine2 for Ppu {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
-                    let mut indexes = [ColorIndex::Zero; 160];
-                    for (x, pixel) in indexes.iter_mut().enumerate() {
+                    let mut colors = [Option::<Color>::None; 160];
+                    for (x, color) in colors.iter_mut().enumerate() {
                         let scanline = Scanline {
                             x: x.try_into().unwrap(),
                             y: work_state.ly,
                         };
-                        *pixel = get_color_bg_win(scanline, state);
+                        let color_index = get_color_bg_win(scanline, state);
+                        *color = if color_index == ColorIndex::Zero {
+                            None
+                        } else {
+                            Some(color_index.get_color(state.bgp_register))
+                        };
                     }
-                    for (x, priority, color) in get_colors(
+                    for (x, obj, color) in get_colors(
                         get_at_most_ten_objects_on_ly(work_state.ly, state),
                         work_state.ly,
                         state,
                     ) {
                         let x = usize::from(x);
                         if color != ColorIndex::Zero
-                            && (!priority || indexes[x] == ColorIndex::Zero)
+                            && (!obj.flags.contains(ObjectFlags::PRIORITY) || colors[x].is_none())
                         {
-                            indexes[x] = color;
+                            colors[x] = Some(color.get_color(
+                                if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
+                                    state.obp1
+                                } else {
+                                    state.obp0
+                                },
+                            ));
                         }
                     }
 
-                    for (color, index) in scanline.iter_mut().zip(indexes) {
-                        let shift: u8 = match index {
-                            ColorIndex::Zero => 0,
-                            ColorIndex::One => 2,
-                            ColorIndex::Two => 4,
-                            ColorIndex::Three => 6,
-                        };
-                        *color = match (state.bgp_register >> shift) & 0b11 {
-                            0 => Color::White,
-                            1 => Color::LightGray,
-                            2 => Color::DarkGray,
-                            _ => Color::Black,
-                        };
+                    let bg_color = ColorIndex::Zero.get_color(state.bgp_register);
+                    for (a, b) in scanline.iter_mut().zip(colors) {
+                        *a = b.unwrap_or(bg_color)
                     }
                 }
                 *dots_count += 1;
@@ -482,7 +499,7 @@ fn get_colors(
     objects_on_ly: impl IntoIterator<Item = ObjectAttribute>,
     ly: u8,
     state: &State,
-) -> impl Iterator<Item = (u8, bool, ColorIndex)> {
+) -> impl Iterator<Item = (u8, ObjectAttribute, ColorIndex)> {
     let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
     // Citation:
     // In Non-CGB mode, the smaller the X coordinate, the higher the priority.
@@ -511,7 +528,7 @@ fn get_colors(
         (0..8).filter_map(move |x| {
             Some((
                 (obj.x + x).checked_sub(8)?,
-                obj.flags.contains(ObjectFlags::PRIORITY),
+                obj,
                 get_color_from_line(
                     line,
                     if obj.flags.contains(ObjectFlags::X_FLIP) {

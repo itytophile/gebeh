@@ -208,10 +208,6 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.0.set_interrupt_part_lcd_status(value);
     }
-    // used only by Speeder
-    fn into_inner(self) -> &'a mut State {
-        self.0
-    }
 }
 
 pub struct MmuRead<'a>(&'a State);
