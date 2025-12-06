@@ -181,7 +181,7 @@ struct PicturePixel {
 
 impl PicturePixel {
     fn get_relative_tile_map_index(self) -> u16 {
-        u16::from(self.x / 8) + u16::from(self.y) * 4 // x / 8 + y / 8 * 32
+        u16::from(self.x / 8) + u16::from(self.y) / 8 * 32 // don't simplify this product lol
     }
 }
 
