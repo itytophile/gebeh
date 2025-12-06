@@ -326,17 +326,26 @@ impl StateMachine2 for Ppu {
                             x: x.try_into().unwrap(),
                             y: work_state.ly,
                         };
-                        let color_obj = if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
-                            get_color_obj(scanline, state)
-                        } else {
-                            ColorIndex::Zero
-                        };
-                        let color = if color_obj == ColorIndex::Zero {
+                        let (color_obj, priority) =
+                            if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
+                                get_color_obj(scanline, state)
+                            } else {
+                                (ColorIndex::Zero, false)
+                            };
+                        let color = if priority {
+                            let color_bg_win = get_color_bg_win(scanline, state);
+                            if color_bg_win == ColorIndex::Zero {
+                                color_obj
+                            } else {
+                                color_bg_win
+                            }
+                        } else if color_obj == ColorIndex::Zero {
                             // ColorIndex::Zero means transparent for objects
                             get_color_bg_win(scanline, state)
                         } else {
                             color_obj
                         };
+
                         let shift: u8 = match color {
                             ColorIndex::Zero => 0,
                             ColorIndex::One => 2,
@@ -456,7 +465,7 @@ fn get_color_bg_win(scanline: Scanline, state: &State) -> ColorIndex {
 }
 
 // https://gbdev.io/pandocs/OAM.html#object-attribute-memory-oam
-fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
+fn get_color_obj(scanline: Scanline, state: &State) -> (ColorIndex, bool) {
     let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
 
     let Some(obj) = state.oam[usize::from(0xfe00 - OAM)..usize::from(0xfea0 - OAM)]
@@ -469,7 +478,7 @@ fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
                 && scanline.y + 16 < (obj.y + if is_big { 16 } else { 8 })
         })
     else {
-        return ColorIndex::Zero;
+        return (ColorIndex::Zero, false);
     };
 
     // if is_big then the tile_index must be corrected to be always even
@@ -487,18 +496,21 @@ fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
     let x = scanline.x + 8 - obj.x;
     let y = (scanline.y + 16 - obj.y) % 8;
 
-    get_color_from_tile(
-        tile,
-        if obj.flags.contains(ObjectFlags::X_FLIP) {
-            7 - x
-        } else {
-            x
-        },
-        if obj.flags.contains(ObjectFlags::Y_FLIP) {
-            7 - y
-        } else {
-            y
-        },
+    (
+        get_color_from_tile(
+            tile,
+            if obj.flags.contains(ObjectFlags::X_FLIP) {
+                7 - x
+            } else {
+                x
+            },
+            if obj.flags.contains(ObjectFlags::Y_FLIP) {
+                7 - y
+            } else {
+                y
+            },
+        ),
+        obj.flags.contains(ObjectFlags::PRIORITY),
     )
 }
 
