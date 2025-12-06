@@ -72,7 +72,9 @@ fn main() {
     loop {
         machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
         let ((_, Speeder(ppu, _)), _) = &mut machine;
-        if let Some(scanline) = ppu.get_scanline_if_ready() && previous_ly != Some(state.ly) {
+        if let Some(scanline) = ppu.get_scanline_if_ready()
+            && previous_ly != Some(state.ly)
+        {
             previous_ly = Some(state.ly);
             println!("=> ly {} {:?}", state.ly, state.lcd_status);
             let base = usize::from(state.ly) * WIDTH;

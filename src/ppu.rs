@@ -148,6 +148,7 @@ impl From<[u8; 4]> for ObjectAttribute {
 struct Window {
     x: u8,
     y: u8,
+    is_enabled: bool,
 }
 #[derive(Clone, Copy)]
 struct Scanline {
@@ -167,7 +168,7 @@ struct Background {
 
 impl Window {
     fn is_visible(self) -> bool {
-        self.x <= 166 && self.y <= 143
+        self.is_enabled && self.x <= 166 && self.y <= 143
     }
 }
 
@@ -298,6 +299,10 @@ impl StateMachine2 for Ppu {
     }
 
     fn execute(&mut self, work_state: &mut Self::WorkState, state: &State) {
+        if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
+            return;
+        }
+
         let mut mode_changed = false;
 
         match self {
@@ -320,6 +325,10 @@ impl StateMachine2 for Ppu {
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
                     for (x, pixel) in scanline.iter_mut().enumerate() {
+                        if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+                            *pixel = Color::White;
+                            return;
+                        }
                         let (picture_pixel, tile_map_address) =
                             get_picture_pixel_and_tile_map_address(
                                 state.lcd_control,
@@ -330,6 +339,9 @@ impl StateMachine2 for Ppu {
                                 Window {
                                     x: state.wx,
                                     y: state.wy,
+                                    is_enabled: state
+                                        .lcd_control
+                                        .contains(LcdControl::WINDOW_ENABLE),
                                 },
                                 Background {
                                     x: state.scx,
