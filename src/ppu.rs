@@ -5,7 +5,7 @@ use bitflags::Flags;
 use crate::{
     StateMachine,
     ic::Ints,
-    state::{LcdStatus, State, VIDEO_RAM, WriteOnlyState},
+    state::{LcdStatus, OAM, State, VIDEO_RAM, WriteOnlyState},
 };
 
 pub enum Ppu {
@@ -57,6 +57,7 @@ type TileVram = [u8; 0x1800];
 type Tile = [u8; 16];
 type Line = [u8; 2];
 
+#[derive(PartialEq, Eq)]
 pub enum ColorIndex {
     Zero = 0b00,
     One = 0b01,
@@ -109,10 +110,6 @@ fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &T
 // Tile maps
 
 type TileMap = [u8; 0x400]; // 32 * 32 Tile indexes
-
-// OAM
-
-type OAM = [u8; 0xa0];
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
@@ -325,13 +322,17 @@ impl StateMachine2 for Ppu {
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
                     for (x, pixel) in scanline.iter_mut().enumerate() {
-                        let color = get_color_bg_win(
-                            Scanline {
-                                x: x.try_into().unwrap(),
-                                y: work_state.ly,
-                            },
-                            state,
-                        );
+                        let scanline = Scanline {
+                            x: x.try_into().unwrap(),
+                            y: work_state.ly,
+                        };
+                        let color_obj = get_color_obj(scanline, state);
+                        let color = if color_obj == ColorIndex::Zero {
+                            // ColorIndex::Zero means transparent for objects
+                            get_color_bg_win(scanline, state)
+                        } else {
+                            color_obj
+                        };
                         let shift: u8 = match color {
                             ColorIndex::Zero => 0,
                             ColorIndex::One => 2,
@@ -448,6 +449,38 @@ fn get_color_bg_win(scanline: Scanline, state: &State) -> ColorIndex {
     );
 
     get_color_from_tile(tile, picture_pixel.x % 8, picture_pixel.y % 8)
+}
+
+// https://gbdev.io/pandocs/OAM.html#object-attribute-memory-oam
+fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
+    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
+
+    let Some(obj) = state.oam[usize::from(0xfe00 - OAM)..usize::from(0xfea0 - OAM)]
+        .chunks(4)
+        .map(|slice| ObjectAttribute::from(<[u8; 4]>::try_from(slice).unwrap()))
+        .find(|obj| {
+            obj.x <= scanline.x + 8
+                && scanline.x <= obj.x
+                && obj.y <= scanline.y + 16
+                && scanline.y + 16 <= (obj.y + if is_big { 16 } else { 8 })
+        })
+    else {
+        return ColorIndex::Zero;
+    };
+
+    // if is_big then the tile_index must be corrected to be always even
+    // then we check if scanline.y reaches the second tile
+    let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
+        + (is_big && scanline.y + 8 >= obj.y) as u8;
+
+    let tile = get_object_tile(
+        state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
+            .try_into()
+            .unwrap(),
+        tile_index,
+    );
+
+    get_color_from_tile(tile, scanline.x + 8 - obj.x, (scanline.y + 16 - obj.y) % 8)
 }
 
 impl<T: StateMachine2> StateMachine for T {
