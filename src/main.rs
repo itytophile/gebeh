@@ -71,6 +71,13 @@ fn main() {
 
     loop {
         machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
+        if last_checked.elapsed() > check_duration {
+            window.update();
+            last_checked = Instant::now();
+            if !window.is_open() || window.is_key_down(Key::Escape) {
+                return;
+            }
+        }
         let ((_, Speeder(ppu, _)), _) = &mut machine;
         if let Some(scanline) = ppu.get_scanline_if_ready()
             && previous_ly != Some(state.ly)
@@ -85,17 +92,9 @@ fn main() {
                 }
                 *a = b;
             }
-            if usize::from(state.ly) == HEIGHT - 1 {
-                if is_changed {
-                    window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
-                    is_changed = false;
-                } else if last_checked.elapsed() > check_duration {
-                    window.update();
-                    last_checked = Instant::now();
-                    if !window.is_open() || window.is_key_down(Key::Escape) {
-                        return;
-                    }
-                }
+            if usize::from(state.ly) == HEIGHT - 1 && is_changed {
+                window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+                is_changed = false;
             }
         }
     }
