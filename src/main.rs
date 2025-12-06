@@ -68,27 +68,27 @@ fn main() {
     loop {
         machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
         let ((_, ppu), _) = &mut machine;
-        // if let Some(ly) = ppu.drawn_ly.take() {
-        //     let base = usize::from(ly) * WIDTH;
-        //     for (a, b) in buffer[base..].iter_mut().zip(&ppu.gpu.draw_line) {
-        //         let b = u32::from(*b);
-        //         if *a != b {
-        //             is_changed = true;
-        //         }
-        //         *a = b;
-        //     }
-        //     if usize::from(ly) == HEIGHT - 1 {
-        //         if is_changed {
-        //             window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
-        //             is_changed = false;
-        //         } else if last_checked.elapsed() > check_duration {
-        //             window.update();
-        //             last_checked = Instant::now();
-        //             if !window.is_open() || window.is_key_down(Key::Escape) {
-        //                 return;
-        //             }
-        //         }
-        //     }
-        // }
+        if let Some(scanline) = ppu.get_scanline_if_ready() {
+            let base = usize::from(state.ly) * WIDTH;
+            for (a, b) in buffer[base..].iter_mut().zip(scanline) {
+                let b = u32::from(*b);
+                if *a != b {
+                    is_changed = true;
+                }
+                *a = b;
+            }
+            if usize::from(state.ly) == HEIGHT - 1 {
+                if is_changed {
+                    window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+                    is_changed = false;
+                } else if last_checked.elapsed() > check_duration {
+                    window.update();
+                    last_checked = Instant::now();
+                    if !window.is_open() || window.is_key_down(Key::Escape) {
+                        return;
+                    }
+                }
+            }
+        }
     }
 }

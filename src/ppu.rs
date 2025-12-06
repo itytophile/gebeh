@@ -275,6 +275,17 @@ pub enum Color {
     Black = 3,
 }
 
+impl From<Color> for u32 {
+    fn from(c: Color) -> u32 {
+        match c {
+            Color::White => 0xdddddd,
+            Color::LightGray => 0xaaaaaa,
+            Color::DarkGray => 0x888888,
+            Color::Black => 0x555555,
+        }
+    }
+}
+
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl StateMachine2 for Ppu {
     type WorkState = PpuWorkState;
@@ -326,8 +337,8 @@ impl StateMachine2 for Ppu {
                                 },
                             );
                         let tile_index = state.video_ram[usize::from(
-                            picture_pixel.get_relative_tile_map_index() - VIDEO_RAM
-                                + tile_map_address,
+                            tile_map_address - VIDEO_RAM
+                                + picture_pixel.get_relative_tile_map_index(),
                         )];
                         let tile = get_bg_win_tile(
                             state.video_ram[..0x1800].try_into().unwrap(),
