@@ -325,41 +325,13 @@ impl StateMachine2 for Ppu {
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
                     for (x, pixel) in scanline.iter_mut().enumerate() {
-                        if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-                            *pixel = Color::White;
-                            return;
-                        }
-                        let (picture_pixel, tile_map_address) =
-                            get_picture_pixel_and_tile_map_address(
-                                state.lcd_control,
-                                Scanline {
-                                    x: x.try_into().unwrap(),
-                                    y: work_state.ly,
-                                },
-                                Window {
-                                    x: state.wx,
-                                    y: state.wy,
-                                    is_enabled: state
-                                        .lcd_control
-                                        .contains(LcdControl::WINDOW_ENABLE),
-                                },
-                                Background {
-                                    x: state.scx,
-                                    y: state.scy,
-                                },
-                            );
-
-                        let tile_index = state.video_ram[usize::from(
-                            tile_map_address - VIDEO_RAM
-                                + picture_pixel.get_relative_tile_map_index(),
-                        )];
-                        let tile = get_bg_win_tile(
-                            state.video_ram[..0x1800].try_into().unwrap(),
-                            tile_index,
-                            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+                        let color = get_color_bg_win(
+                            Scanline {
+                                x: x.try_into().unwrap(),
+                                y: work_state.ly,
+                            },
+                            state,
                         );
-                        let color =
-                            get_color_from_tile(tile, picture_pixel.x % 8, picture_pixel.y % 8);
                         let shift: u8 = match color {
                             ColorIndex::Zero => 0,
                             ColorIndex::One => 2,
@@ -448,6 +420,34 @@ impl StateMachine2 for Ppu {
             state.insert_if(Ints::LCD);
         }
     }
+}
+
+fn get_color_bg_win(scanline: Scanline, state: &State) -> ColorIndex {
+    if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+        return ColorIndex::Zero;
+    }
+    let (picture_pixel, tile_map_address) = get_picture_pixel_and_tile_map_address(
+        state.lcd_control,
+        scanline,
+        Window {
+            x: state.wx,
+            y: state.wy,
+            is_enabled: state.lcd_control.contains(LcdControl::WINDOW_ENABLE),
+        },
+        Background {
+            x: state.scx,
+            y: state.scy,
+        },
+    );
+    let tile_index = state.video_ram
+        [usize::from(tile_map_address - VIDEO_RAM + picture_pixel.get_relative_tile_map_index())];
+    let tile = get_bg_win_tile(
+        state.video_ram[..0x1800].try_into().unwrap(),
+        tile_index,
+        !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+    );
+
+    get_color_from_tile(tile, picture_pixel.x % 8, picture_pixel.y % 8)
 }
 
 impl<T: StateMachine2> StateMachine for T {
