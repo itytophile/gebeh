@@ -54,8 +54,8 @@ impl Default for Ppu {
 const TILE_LENGTH: u8 = 16;
 
 type TileVram = [u8; 0x1800];
+type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
-type Line = [u8; 2];
 
 #[derive(PartialEq, Eq)]
 pub enum ColorIndex {
@@ -88,7 +88,7 @@ fn get_color_from_tile(tile: &Tile, x: u8, y: u8) -> ColorIndex {
 
 // https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
 #[must_use]
-fn get_object_tile(vram: &TileVram, index: u8) -> &Tile {
+fn get_object_tile(vram: &TileVramObj, index: u8) -> &Tile {
     let base = usize::from(index) * usize::from(TILE_LENGTH);
     vram[base..base + usize::from(TILE_LENGTH)]
         .try_into()
@@ -464,9 +464,9 @@ fn get_color_obj(scanline: Scanline, state: &State) -> ColorIndex {
         .map(|slice| ObjectAttribute::from(<[u8; 4]>::try_from(slice).unwrap()))
         .find(|obj| {
             obj.x <= scanline.x + 8
-                && scanline.x <= obj.x
+                && scanline.x < obj.x
                 && obj.y <= scanline.y + 16
-                && scanline.y + 16 <= (obj.y + if is_big { 16 } else { 8 })
+                && scanline.y + 16 < (obj.y + if is_big { 16 } else { 8 })
         })
     else {
         return ColorIndex::Zero;
