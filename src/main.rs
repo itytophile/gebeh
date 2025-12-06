@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    num::NonZeroU8,
+    time::{Duration, Instant},
+};
 
 use minifb::{Key, Scale, Window, WindowOptions};
 use testouille_emulator_future::{
@@ -6,7 +9,7 @@ use testouille_emulator_future::{
     cartridge::CartridgeType,
     cpu::Cpu,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
-    ppu::Ppu,
+    ppu::{Ppu, Speeder},
     state::{State, WriteOnlyState},
     timer::Timer,
 };
@@ -43,7 +46,7 @@ fn main() {
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = Cpu::default()
-        .compose(Ppu::default())
+        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
         .compose(Timer::default());
 
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
@@ -64,11 +67,14 @@ fn main() {
 
     let check_duration = Duration::from_millis(100);
     let mut last_checked = Instant::now();
+    let mut previous_ly = None;
 
     loop {
         machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
-        let ((_, ppu), _) = &mut machine;
-        if let Some(scanline) = ppu.get_scanline_if_ready() {
+        let ((_, Speeder(ppu, _)), _) = &mut machine;
+        if let Some(scanline) = ppu.get_scanline_if_ready() && previous_ly != Some(state.ly) {
+            previous_ly = Some(state.ly);
+            println!("=> ly {} {:?}", state.ly, state.lcd_status);
             let base = usize::from(state.ly) * WIDTH;
             for (a, b) in buffer[base..].iter_mut().zip(scanline) {
                 let b = u32::from(*b);

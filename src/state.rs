@@ -60,11 +60,12 @@ bitflags::bitflags! {
         const VBLANK_INT = 1 << 4;
         const HBLANK_INT = 1 << 3;
         const LYC_EQUAL_TO_LY = 1 << 2;
+        // Drawing before ppu mask for debug output
+        const DRAWING = 0b11;
         const PPU_MASK = 0b11;
         const HBLANK = 0;
         const VBLANK = 1;
         const OAM_SCAN = 0b10;
-        const DRAWING = 0b11;
         const READONLY_MASK = 0b111;
     }
 }

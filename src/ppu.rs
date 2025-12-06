@@ -261,7 +261,7 @@ impl Ppu {
             Self::DrawingPixels {
                 scanline,
                 dots_count,
-            } if *dots_count == 1 => Some(scanline),
+            } if *dots_count > 0 => Some(scanline),
             _ => None,
         }
     }
