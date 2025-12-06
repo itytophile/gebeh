@@ -173,7 +173,7 @@ impl Window {
 }
 
 // A pixel inside the 256x256 pixels picture held by the tile map
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct PicturePixel {
     x: u8,
     y: u8,
@@ -229,8 +229,8 @@ fn get_picture_pixel_and_tile_map_address(
     } else {
         (
             PicturePixel {
-                x: scanline.x.wrapping_sub(background.x),
-                y: scanline.y.wrapping_sub(background.y),
+                x: scanline.x.wrapping_add(background.x),
+                y: scanline.y.wrapping_add(background.y),
             },
             if lcdc.contains(LcdControl::BG_TILE_MAP) {
                 0x9c00
@@ -348,6 +348,7 @@ impl StateMachine2 for Ppu {
                                     y: state.scy,
                                 },
                             );
+
                         let tile_index = state.video_ram[usize::from(
                             tile_map_address - VIDEO_RAM
                                 + picture_pixel.get_relative_tile_map_index(),

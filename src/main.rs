@@ -83,7 +83,6 @@ fn main() {
             && previous_ly != Some(state.ly)
         {
             previous_ly = Some(state.ly);
-            println!("=> ly {} {:?}", state.ly, state.lcd_status);
             let base = usize::from(state.ly) * WIDTH;
             for (a, b) in buffer[base..].iter_mut().zip(scanline) {
                 let b = u32::from(*b);
