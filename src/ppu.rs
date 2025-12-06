@@ -326,7 +326,11 @@ impl StateMachine2 for Ppu {
                             x: x.try_into().unwrap(),
                             y: work_state.ly,
                         };
-                        let color_obj = get_color_obj(scanline, state);
+                        let color_obj = if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
+                            get_color_obj(scanline, state)
+                        } else {
+                            ColorIndex::Zero
+                        };
                         let color = if color_obj == ColorIndex::Zero {
                             // ColorIndex::Zero means transparent for objects
                             get_color_bg_win(scanline, state)
