@@ -340,8 +340,8 @@ impl StateMachine2 for Ppu {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
-                    let mut colors = [Option::<Color>::None; 160];
-                    for (x, color) in colors.iter_mut().enumerate() {
+                    let mut bg_win_colors = [Option::<Color>::None; 160];
+                    for (x, color) in bg_win_colors.iter_mut().enumerate() {
                         let scanline = Scanline {
                             x: x.try_into().unwrap(),
                             y: work_state.ly,
@@ -353,28 +353,37 @@ impl StateMachine2 for Ppu {
                             Some(color_index.get_color(state.bgp_register))
                         };
                     }
+                    // https://gbdev.io/pandocs/OAM.html#drawing-priority
+                    // the objects that have the priority "BG over OBJ" enabled must override the other objects if
+                    // their "normal" priority is higher
+                    let mut obj_colors = [Option::<(Color, bool)>::None; 160];
                     for (x, obj, color) in get_colors(
                         get_at_most_ten_objects_on_ly(work_state.ly, state),
                         work_state.ly,
                         state,
                     ) {
                         let x = usize::from(x);
-                        if color != ColorIndex::Zero
-                            && (!obj.flags.contains(ObjectFlags::PRIORITY) || colors[x].is_none())
-                        {
-                            colors[x] = Some(color.get_color(
-                                if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
+                        if color != ColorIndex::Zero {
+                            obj_colors[x] = Some((
+                                color.get_color(if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
                                     state.obp1
                                 } else {
                                     state.obp0
-                                },
+                                }),
+                                obj.flags.contains(ObjectFlags::PRIORITY),
                             ));
                         }
                     }
 
                     let bg_color = ColorIndex::Zero.get_color(state.bgp_register);
-                    for (a, b) in scanline.iter_mut().zip(colors) {
-                        *a = b.unwrap_or(bg_color)
+                    for ((color, bg_win_color), obj_color) in
+                        scanline.iter_mut().zip(bg_win_colors).zip(obj_colors)
+                    {
+                        *color = match (bg_win_color, obj_color) {
+                            (None, None) => bg_color,
+                            (None, Some((color, _))) | (_, Some((color, false))) => color,
+                            (Some(color), Some((_, true)) | None) => color,
+                        }
                     }
                 }
                 *dots_count += 1;
