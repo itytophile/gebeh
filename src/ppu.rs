@@ -1,11 +1,11 @@
 use std::num::{NonZeroU8, NonZeroU16};
 
-use bitflags::Flags;
+use arrayvec::ArrayVec;
 
 use crate::{
     StateMachine,
     ic::Ints,
-    state::{LcdStatus, OAM, State, VIDEO_RAM, WriteOnlyState},
+    state::{LcdStatus, State, VIDEO_RAM, WriteOnlyState},
 };
 
 pub enum Ppu {
@@ -57,7 +57,7 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ColorIndex {
     Zero = 0b00,
     One = 0b01,
@@ -76,14 +76,21 @@ impl ColorIndex {
     }
 }
 
+fn get_line_from_tile(tile: &Tile, y: u8) -> [u8; 2] {
+    assert!(y < 8);
+    tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
+        .try_into()
+        .unwrap()
+}
+
+fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
+    assert!(x < 8);
+    ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
+}
+
 #[must_use]
 fn get_color_from_tile(tile: &Tile, x: u8, y: u8) -> ColorIndex {
-    assert!(x < 8);
-    assert!(y < 8);
-    let line: [u8; 2] = tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
-        .try_into()
-        .unwrap();
-    ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
+    get_color_from_line(get_line_from_tile(tile, y), x)
 }
 
 // https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
@@ -106,10 +113,6 @@ fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &T
         .try_into()
         .unwrap()
 }
-
-// Tile maps
-
-type TileMap = [u8; 0x400]; // 32 * 32 Tile indexes
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
@@ -321,38 +324,35 @@ impl StateMachine2 for Ppu {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
-                    for (x, pixel) in scanline.iter_mut().enumerate() {
+                    let mut indexes = [ColorIndex::Zero; 160];
+                    for (x, pixel) in indexes.iter_mut().enumerate() {
                         let scanline = Scanline {
                             x: x.try_into().unwrap(),
                             y: work_state.ly,
                         };
-                        let (color_obj, priority) =
-                            if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
-                                get_color_obj(scanline, state)
-                            } else {
-                                (ColorIndex::Zero, false)
-                            };
-                        let color = if priority {
-                            let color_bg_win = get_color_bg_win(scanline, state);
-                            if color_bg_win == ColorIndex::Zero {
-                                color_obj
-                            } else {
-                                color_bg_win
-                            }
-                        } else if color_obj == ColorIndex::Zero {
-                            // ColorIndex::Zero means transparent for objects
-                            get_color_bg_win(scanline, state)
-                        } else {
-                            color_obj
-                        };
+                        *pixel = get_color_bg_win(scanline, state);
+                    }
+                    for (x, priority, color) in get_colors(
+                        get_at_most_ten_objects_on_ly(work_state.ly, state),
+                        work_state.ly,
+                        state,
+                    ) {
+                        let x = usize::from(x);
+                        if color != ColorIndex::Zero
+                            && (!priority || indexes[x] == ColorIndex::Zero)
+                        {
+                            indexes[x] = color;
+                        }
+                    }
 
-                        let shift: u8 = match color {
+                    for (color, index) in scanline.iter_mut().zip(indexes) {
+                        let shift: u8 = match index {
                             ColorIndex::Zero => 0,
                             ColorIndex::One => 2,
                             ColorIndex::Two => 4,
                             ColorIndex::Three => 6,
                         };
-                        *pixel = match (state.bgp_register >> shift) & 0b11 {
+                        *color = match (state.bgp_register >> shift) & 0b11 {
                             0 => Color::White,
                             1 => Color::LightGray,
                             2 => Color::DarkGray,
@@ -464,54 +464,65 @@ fn get_color_bg_win(scanline: Scanline, state: &State) -> ColorIndex {
     get_color_from_tile(tile, picture_pixel.x % 8, picture_pixel.y % 8)
 }
 
-// https://gbdev.io/pandocs/OAM.html#object-attribute-memory-oam
-fn get_color_obj(scanline: Scanline, state: &State) -> (ColorIndex, bool) {
+// https://gbdev.io/pandocs/OAM.html#selection-priority
+fn get_at_most_ten_objects_on_ly(ly: u8, state: &State) -> impl Iterator<Item = ObjectAttribute> {
     let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
-
-    let Some(obj) = state.oam[usize::from(0xfe00 - OAM)..usize::from(0xfea0 - OAM)]
+    state
+        .oam
         .chunks(4)
         .map(|slice| ObjectAttribute::from(<[u8; 4]>::try_from(slice).unwrap()))
-        .find(|obj| {
-            obj.x <= scanline.x + 8
-                && scanline.x < obj.x
-                && obj.y <= scanline.y + 16
-                && scanline.y + 16 < (obj.y + if is_big { 16 } else { 8 })
+        .filter(move |obj| obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 }))
+        .take(10)
+}
+
+// emit the color and the object priority flag for x on the current scanline. Can emit multiple time the same x.
+// If multiple x emitted, the lastest takes priority. So don't think and write to the scanline in the same order as the
+// x are emitted.
+fn get_colors(
+    objects_on_ly: impl IntoIterator<Item = ObjectAttribute>,
+    ly: u8,
+    state: &State,
+) -> impl Iterator<Item = (u8, bool, ColorIndex)> {
+    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
+    // Citation:
+    // In Non-CGB mode, the smaller the X coordinate, the higher the priority.
+    // When X coordinates are identical, the object located first in OAM has higher priority.
+    let mut objects_on_ly: ArrayVec<_, 10> = objects_on_ly.into_iter().enumerate().collect();
+    objects_on_ly.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
+    // rev to emit the most prioritary the lastest
+    objects_on_ly.into_iter().rev().flat_map(move |(_, obj)| {
+        // if is_big then the tile_index must be corrected to be always even
+        // then we check if scanline.y reaches the second tile
+        let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
+            + (is_big && (ly + 8 >= obj.y || obj.flags.contains(ObjectFlags::Y_FLIP))) as u8;
+        let tile = get_object_tile(
+            state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
+                .try_into()
+                .unwrap(),
+            tile_index,
+        );
+        let mut y = (ly + 16 - obj.y) % 8;
+        y = if obj.flags.contains(ObjectFlags::Y_FLIP) {
+            7 - y
+        } else {
+            y
+        };
+        let line = get_line_from_tile(tile, y);
+        (0..8).filter_map(move |x| {
+            Some((
+                (obj.x + x).checked_sub(8)?,
+                obj.flags.contains(ObjectFlags::PRIORITY),
+                get_color_from_line(
+                    line,
+                    if obj.flags.contains(ObjectFlags::X_FLIP) {
+                        7 - x
+                    } else {
+                        x
+                    },
+                ),
+            ))
         })
-    else {
-        return (ColorIndex::Zero, false);
-    };
-
-    // if is_big then the tile_index must be corrected to be always even
-    // then we check if scanline.y reaches the second tile
-    let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
-        + (is_big && (scanline.y + 8 >= obj.y || obj.flags.contains(ObjectFlags::Y_FLIP))) as u8;
-
-    let tile = get_object_tile(
-        state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
-            .try_into()
-            .unwrap(),
-        tile_index,
-    );
-
-    let x = scanline.x + 8 - obj.x;
-    let y = (scanline.y + 16 - obj.y) % 8;
-
-    (
-        get_color_from_tile(
-            tile,
-            if obj.flags.contains(ObjectFlags::X_FLIP) {
-                7 - x
-            } else {
-                x
-            },
-            if obj.flags.contains(ObjectFlags::Y_FLIP) {
-                7 - y
-            } else {
-                y
-            },
-        ),
-        obj.flags.contains(ObjectFlags::PRIORITY),
-    )
+    })
 }
 
 impl<T: StateMachine2> StateMachine for T {
