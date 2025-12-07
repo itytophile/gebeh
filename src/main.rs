@@ -5,7 +5,7 @@ use std::{
 
 use minifb::{Key, Scale, Window, WindowOptions};
 use testouille_emulator_future::{
-    StateMachine,
+    HEIGHT, StateMachine, WIDTH,
     cartridge::CartridgeType,
     cpu::Cpu,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
@@ -13,9 +13,6 @@ use testouille_emulator_future::{
     state::{State, WriteOnlyState},
     timer::Timer,
 };
-
-const WIDTH: usize = 160;
-const HEIGHT: usize = 144;
 
 fn main() {
     color_eyre::install().unwrap();

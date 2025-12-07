@@ -299,7 +299,7 @@ impl Ppu {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Color {
     White,
     LightGray,
