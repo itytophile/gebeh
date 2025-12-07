@@ -788,10 +788,10 @@ impl StateMachine for Cpu {
             .into_iter()
             .find(|(flag, _)| interrupts_to_execute.contains(*flag))
         {
-            println!(
-                "Interrupt handler: {interrupt:?}, enable: {:?}, lcd_status: {:?}",
-                state.interrupt_enable, state.lcd_status
-            );
+            // println!(
+            //     "Interrupt handler: {interrupt:?}, enable: {:?}, lcd_status: {:?}",
+            //     state.interrupt_enable, state.lcd_status
+            // );
             // Citation: The IF bit corresponding to this interrupt and the IME flag are reset by the CPU
             // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
             interrupt_flag_to_reset = Some(interrupt);
@@ -811,7 +811,7 @@ impl StateMachine for Cpu {
             let opcode = mmu.read(self.pc);
             self.pc = self.pc.wrapping_add(1);
             if let Some(address) = self.interrupt_to_execute.take() {
-                println!("Interrupt handling");
+                // println!("Interrupt handling");
                 use NoReadInstruction::*;
                 self.instruction_register.0 = vec([
                     Nop.into(),
