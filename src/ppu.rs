@@ -373,11 +373,6 @@ impl StateMachine2 for Ppu {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
-                    println!(
-                        "{} {:?} {:?}",
-                        work_state.ly, state.lcd_control, state.lcd_status
-                    );
-
                     let mut bg_win_colors = [Option::<Color>::None; 160];
 
                     if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
