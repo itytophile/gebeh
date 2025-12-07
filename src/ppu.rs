@@ -173,7 +173,6 @@ impl From<[u8; 4]> for ObjectAttribute {
 #[derive(Clone, Copy)]
 struct Window {
     x: u8,
-    y: u8,
     internal_y_window_counter: Option<u8>,
 }
 #[derive(Clone, Copy)]
@@ -545,7 +544,6 @@ fn get_color_bg_win(
         scanline,
         Window {
             x: state.wx,
-            y: state.wy,
             internal_y_window_counter,
         },
         Background {
