@@ -324,6 +324,9 @@ impl MmuWrite<'_> {
             TIMER_CONTROL => self.0.timer_control = value,
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_truncate(value),
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
+            WAVE..LCD_CONTROL => {
+                // TODO wave ram
+            },
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
