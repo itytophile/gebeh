@@ -11,16 +11,21 @@ use crate::{
 pub enum Ppu {
     OamScan {
         remaining_dots: NonZeroU8,
+        // https://gbdev.io/pandocs/Scrolling.html#window
+        wy_condition: bool,
     }, // <= 80
     DrawingPixels {
         dots_count: u16,
         scanline: [Color; 160],
+        wy_condition: bool,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: NonZeroU8,
+        wy_condition: bool,
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: NonZeroU16,
+        // no wy_condition because vblank means the frame ends
     }, // <= 456
 }
 
@@ -45,6 +50,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self::OamScan {
             remaining_dots: OAM_SCAN_DURATION,
+            wy_condition: false,
         }
     }
 }
@@ -278,6 +284,7 @@ impl Ppu {
             Self::DrawingPixels {
                 scanline,
                 dots_count,
+                ..
             } if *dots_count > 0 => Some(scanline),
             _ => None,
         }
@@ -288,7 +295,8 @@ impl Ppu {
         matches!(
             self,
             Ppu::OamScan {
-                remaining_dots: OAM_SCAN_DURATION
+                remaining_dots: OAM_SCAN_DURATION,
+                ..
             } | Ppu::VerticalBlankScanline {
                 remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
             }
@@ -341,7 +349,13 @@ impl StateMachine2 for Ppu {
         }
 
         match self {
-            Ppu::OamScan { remaining_dots } => {
+            Ppu::OamScan {
+                remaining_dots,
+                wy_condition,
+            } => {
+                // Citation:
+                // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
+                *wy_condition |= *remaining_dots == OAM_SCAN_DURATION && work_state.ly == state.wy;
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
@@ -349,12 +363,14 @@ impl StateMachine2 for Ppu {
                     *self = Ppu::DrawingPixels {
                         dots_count: 0,
                         scanline: [Color::Black; 160],
+                        wy_condition: *wy_condition,
                     };
                 }
             }
             Ppu::DrawingPixels {
                 dots_count,
                 scanline,
+                wy_condition,
             } => {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
@@ -414,10 +430,14 @@ impl StateMachine2 for Ppu {
                     mode_changed = true;
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: NonZeroU8::new(204).unwrap(),
+                        wy_condition: *wy_condition,
                     }
                 }
             }
-            Ppu::HorizontalBlank { remaining_dots } => {
+            Ppu::HorizontalBlank {
+                remaining_dots,
+                wy_condition,
+            } => {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
@@ -430,6 +450,7 @@ impl StateMachine2 for Ppu {
                     } else {
                         *self = Ppu::OamScan {
                             remaining_dots: OAM_SCAN_DURATION,
+                            wy_condition: *wy_condition,
                         }
                     }
                 }
@@ -442,6 +463,7 @@ impl StateMachine2 for Ppu {
                     work_state.ly = 0;
                     *self = Ppu::OamScan {
                         remaining_dots: OAM_SCAN_DURATION,
+                        wy_condition: false,
                     }
                 } else {
                     work_state.ly += 1;
