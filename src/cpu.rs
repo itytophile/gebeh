@@ -160,10 +160,12 @@ impl Cpu {
         }
     }
 
-    fn execute_instruction(&mut self, mut mmu: MmuWrite, inst: AfterReadInstruction) {
+    fn execute_instruction(&mut self, mut state: WriteOnlyState, inst: AfterReadInstruction) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
+
+        let mut mmu = state.mmu();
 
         match inst {
             Read(value, inst) => {
@@ -468,7 +470,10 @@ impl Cpu {
                 flags.remove(Flags::Z | Flags::N | Flags::H);
                 flags.set(Flags::C, carry == 1);
             }
-            NoRead(Stop) => self.stop_mode = true,
+            NoRead(Stop) => {
+                self.stop_mode = true;
+                state.set_div(0);
+            }
             NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
                 let [_, lsb] = self.sp.to_be_bytes();
                 let wz = u16::from_be_bytes([self.msb, self.lsb]);
@@ -857,7 +862,7 @@ impl StateMachine for Cpu {
                 state.remove_if_bit(flag);
             }
 
-            self.execute_instruction(state.mmu(), inst);
+            self.execute_instruction(state, inst);
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst

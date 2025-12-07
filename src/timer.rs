@@ -10,6 +10,7 @@ pub struct Timer(u8);
 impl StateMachine for Timer {
     fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
         self.0 = self.0.wrapping_add(1);
+        let div = state.div;
         let increment_frequency: u16 = match state.timer_control & 0b11 {
             0 => 256,
             1 => 4,
@@ -30,6 +31,7 @@ impl StateMachine for Timer {
 
         Some(move |mut state: WriteOnlyState| {
             state.set_timer_counter(timer_counter);
+            state.set_div(div.wrapping_add((self.0 == 0) as u8));
             if overflow {
                 state.insert_if(Ints::TIMER);
             }

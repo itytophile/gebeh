@@ -9,6 +9,7 @@ const NOT_USABLE: u16 = 0xfea0;
 const JOYPAD: u16 = 0xff00;
 const SB: u16 = 0xff01; // Serial transfer data
 const SC: u16 = 0xff02; // Serial transfer control
+const DIV: u16 = 0xff04; // Divider register (timer)
 const TIMER_COUNTER: u16 = 0xff05; // TIMA
 const TIMER_MODULO: u16 = 0xff06; // TMA
 const TIMER_CONTROL: u16 = 0xff07; // TAC
@@ -115,6 +116,7 @@ pub struct State {
     pub timer_counter: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
+    pub div: u8,
 }
 
 impl State {
@@ -152,6 +154,8 @@ impl State {
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
             joypad: JoypadFlags::empty(),
+            // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
+            div: 0,
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
@@ -216,6 +220,10 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_dma_request_to_false(&mut self) {
         self.0.dma_request = false;
     }
+
+    pub fn set_div(&mut self, value: u8) {
+        self.0.div = value;
+    }
 }
 
 pub struct MmuRead<'a>(&'a State);
@@ -264,6 +272,7 @@ impl MmuRead<'_> {
             }
             SB => self.0.sb,
             SC => self.0.sc.bits(),
+            DIV => self.0.div,
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control,
@@ -327,6 +336,9 @@ impl MmuWrite<'_> {
             }
             SB => self.0.sb = value,
             SC => self.0.sc = SerialControl::from_bits_truncate(value),
+            // Citation:
+            // Writing any value to this register resets it to $00
+            DIV => self.0.div = 0,
             TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
