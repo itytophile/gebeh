@@ -472,7 +472,7 @@ impl Cpu {
             }
             NoRead(Stop) => {
                 self.stop_mode = true;
-                state.set_div(0);
+                state.set_reset_system_clock(true);
             }
             NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
                 let [_, lsb] = self.sp.to_be_bytes();

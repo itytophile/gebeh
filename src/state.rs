@@ -117,6 +117,7 @@ pub struct State {
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
     pub div: u8,
+    pub reset_system_clock: bool,
 }
 
 impl State {
@@ -156,6 +157,7 @@ impl State {
             joypad: JoypadFlags::empty(),
             // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
             div: 0,
+            reset_system_clock: false,
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
@@ -223,6 +225,10 @@ impl<'a> WriteOnlyState<'a> {
 
     pub fn set_div(&mut self, value: u8) {
         self.0.div = value;
+    }
+
+    pub fn set_reset_system_clock(&mut self, value: bool) {
+        self.0.reset_system_clock = value;
     }
 }
 
