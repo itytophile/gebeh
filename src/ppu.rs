@@ -13,15 +13,18 @@ pub enum Ppu {
         remaining_dots: NonZeroU8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         wy_condition: bool,
+        internal_y_window_counter: Option<u8>,
     }, // <= 80
     DrawingPixels {
         dots_count: u16,
         scanline: [Color; 160],
         wy_condition: bool,
+        internal_y_window_counter: Option<u8>,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: NonZeroU8,
         wy_condition: bool,
+        internal_y_window_counter: Option<u8>,
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: NonZeroU16,
@@ -51,6 +54,7 @@ impl Default for Ppu {
         Self::OamScan {
             remaining_dots: OAM_SCAN_DURATION,
             wy_condition: false,
+            internal_y_window_counter: None,
         }
     }
 }
@@ -170,7 +174,7 @@ impl From<[u8; 4]> for ObjectAttribute {
 struct Window {
     x: u8,
     y: u8,
-    is_enabled: bool,
+    internal_y_window_counter: Option<u8>,
 }
 #[derive(Clone, Copy)]
 struct Scanline {
@@ -186,12 +190,6 @@ struct Background {
     x: u8,
     // 0 < y < 256
     y: u8,
-}
-
-impl Window {
-    fn is_visible(self) -> bool {
-        self.is_enabled && self.x <= 166 && self.y <= 143
-    }
 }
 
 // A pixel inside the 256x256 pixels picture held by the tile map
@@ -233,15 +231,13 @@ fn get_picture_pixel_and_tile_map_address(
     assert!(scanline.x < 160);
     assert!(scanline.y < 144);
 
-    if window.is_visible()
-        && let (Some(x), Some(y)) = (
-            (scanline.x + 7).checked_sub(window.x),
-            scanline.y.checked_sub(window.y),
-        )
-    {
+    if let Some(y) = window.internal_y_window_counter {
         // is in window
         (
-            PicturePixel { x, y },
+            PicturePixel {
+                x: scanline.x + 7 - window.x, // no overflow because wx_condition was triggered
+                y,
+            },
             if lcdc.contains(LcdControl::WINDOW_TILE_MAP) {
                 0x9c00
             } else {
@@ -352,6 +348,7 @@ impl StateMachine2 for Ppu {
             Ppu::OamScan {
                 remaining_dots,
                 wy_condition,
+                internal_y_window_counter,
             } => {
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
@@ -364,6 +361,7 @@ impl StateMachine2 for Ppu {
                         dots_count: 0,
                         scanline: [Color::Black; 160],
                         wy_condition: *wy_condition,
+                        internal_y_window_counter: *internal_y_window_counter,
                     };
                 }
             }
@@ -371,6 +369,7 @@ impl StateMachine2 for Ppu {
                 dots_count,
                 scanline,
                 wy_condition,
+                internal_y_window_counter,
             } => {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
@@ -379,20 +378,42 @@ impl StateMachine2 for Ppu {
                         "{} {:?} {:?}",
                         work_state.ly, state.lcd_control, state.lcd_status
                     );
+
                     let mut bg_win_colors = [Option::<Color>::None; 160];
                     // https://gbdev.io/pandocs/Scrolling.html#window
                     let mut wx_condition = false;
+                    let mut is_win_enabled = false;
                     for (x, color) in bg_win_colors.iter_mut().enumerate() {
                         let x = u8::try_from(x).unwrap();
                         // Citation:
                         // the current X coordinate being rendered + 7 was equal to WX
                         wx_condition |= x + 7 == state.wx;
+                        if !is_win_enabled
+                            && wx_condition
+                            && *wy_condition
+                            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+                        {
+                            is_win_enabled = true;
+                            *internal_y_window_counter =
+                                Some(internal_y_window_counter.map(|y| y + 1).unwrap_or(0));
+                            println!(
+                                "ly {} wy {} internal {:?}",
+                                work_state.ly, state.wy, internal_y_window_counter
+                            );
+                        }
                         let scanline = Scanline {
                             x,
                             y: work_state.ly,
                         };
-                        let color_index =
-                            get_color_bg_win(scanline, state, *wy_condition && wx_condition);
+                        let color_index = get_color_bg_win(
+                            scanline,
+                            state,
+                            if is_win_enabled {
+                                *internal_y_window_counter
+                            } else {
+                                None
+                            },
+                        );
                         *color = if color_index == ColorIndex::Zero {
                             None
                         } else {
@@ -438,12 +459,14 @@ impl StateMachine2 for Ppu {
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: NonZeroU8::new(204).unwrap(),
                         wy_condition: *wy_condition,
+                        internal_y_window_counter: *internal_y_window_counter,
                     }
                 }
             }
             Ppu::HorizontalBlank {
                 remaining_dots,
                 wy_condition,
+                internal_y_window_counter,
             } => {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
@@ -458,6 +481,7 @@ impl StateMachine2 for Ppu {
                         *self = Ppu::OamScan {
                             remaining_dots: OAM_SCAN_DURATION,
                             wy_condition: *wy_condition,
+                            internal_y_window_counter: *internal_y_window_counter,
                         }
                     }
                 }
@@ -468,10 +492,7 @@ impl StateMachine2 for Ppu {
                 } else if work_state.ly == 153 {
                     mode_changed = true;
                     work_state.ly = 0;
-                    *self = Ppu::OamScan {
-                        remaining_dots: OAM_SCAN_DURATION,
-                        wy_condition: false,
-                    }
+                    *self = Default::default()
                 } else {
                     work_state.ly += 1;
                     *self = Ppu::VerticalBlankScanline {
@@ -510,7 +531,11 @@ impl StateMachine2 for Ppu {
     }
 }
 
-fn get_color_bg_win(scanline: Scanline, state: &State, is_win_enabled: bool) -> ColorIndex {
+fn get_color_bg_win(
+    scanline: Scanline,
+    state: &State,
+    internal_y_window_counter: Option<u8>,
+) -> ColorIndex {
     if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
         return ColorIndex::Zero;
     }
@@ -520,7 +545,7 @@ fn get_color_bg_win(scanline: Scanline, state: &State, is_win_enabled: bool) -> 
         Window {
             x: state.wx,
             y: state.wy,
-            is_enabled: state.lcd_control.contains(LcdControl::WINDOW_ENABLE) && is_win_enabled,
+            internal_y_window_counter,
         },
         Background {
             x: state.scx,
