@@ -380,61 +380,73 @@ impl StateMachine2 for Ppu {
                     );
 
                     let mut bg_win_colors = [Option::<Color>::None; 160];
-                    // https://gbdev.io/pandocs/Scrolling.html#window
-                    let mut wx_condition = false;
-                    for (x, color) in bg_win_colors.iter_mut().enumerate() {
-                        let x = u8::try_from(x).unwrap();
-                        // Citation:
-                        // the current X coordinate being rendered + 7 was equal to WX
-                        wx_condition |= x + 7 == state.wx;
-                        let scanline = Scanline {
-                            x,
-                            y: work_state.ly,
-                        };
-                        let color_index = get_color_bg_win(
-                            scanline,
-                            state,
-                            (wx_condition
-                                && *wy_condition
-                                && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
-                            .then_some(*internal_y_window_counter),
-                        );
-                        *color = if color_index == ColorIndex::Zero {
-                            None
-                        } else {
-                            Some(color_index.get_color(state.bgp_register))
-                        };
+
+                    if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+                        // https://gbdev.io/pandocs/Scrolling.html#window
+                        let mut wx_condition = false;
+                        for (x, color) in bg_win_colors.iter_mut().enumerate() {
+                            let x = u8::try_from(x).unwrap();
+                            // Citation:
+                            // the current X coordinate being rendered + 7 was equal to WX
+                            wx_condition |= x + 7 == state.wx;
+                            let scanline = Scanline {
+                                x,
+                                y: work_state.ly,
+                            };
+                            let color_index = get_color_bg_win(
+                                scanline,
+                                state,
+                                (wx_condition
+                                    && *wy_condition
+                                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
+                                .then_some(*internal_y_window_counter),
+                            );
+                            *color = if color_index == ColorIndex::Zero {
+                                None
+                            } else {
+                                Some(color_index.get_color(state.bgp_register))
+                            };
+                        }
+                        if wx_condition
+                            && *wy_condition
+                            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+                        {
+                            *internal_y_window_counter += 1;
+                        }
                     }
 
-                    if wx_condition
-                        && *wy_condition
-                        && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                    {
-                        *internal_y_window_counter += 1;
-                    }
                     // https://gbdev.io/pandocs/OAM.html#drawing-priority
                     // the objects that have the priority "BG over OBJ" enabled must override the other objects if
                     // their "normal" priority is higher
                     let mut obj_colors = [Option::<(Color, bool)>::None; 160];
-                    for (x, obj, color) in get_colors(
-                        get_at_most_ten_objects_on_ly(work_state.ly, state),
-                        work_state.ly,
-                        state,
-                    ) {
-                        let x = usize::from(x);
-                        if color != ColorIndex::Zero {
-                            obj_colors[x] = Some((
-                                color.get_color(if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
-                                    state.obp1
-                                } else {
-                                    state.obp0
-                                }),
-                                obj.flags.contains(ObjectFlags::PRIORITY),
-                            ));
+
+                    if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
+                        for (x, obj, color) in get_colors(
+                            get_at_most_ten_objects_on_ly(work_state.ly, state),
+                            work_state.ly,
+                            state,
+                        ) {
+                            let x = usize::from(x);
+                            if color != ColorIndex::Zero {
+                                obj_colors[x] = Some((
+                                    color.get_color(
+                                        if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
+                                            state.obp1
+                                        } else {
+                                            state.obp0
+                                        },
+                                    ),
+                                    obj.flags.contains(ObjectFlags::PRIORITY),
+                                ));
+                            }
                         }
                     }
 
-                    let bg_color = ColorIndex::Zero.get_color(state.bgp_register);
+                    let bg_color = if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+                        ColorIndex::Zero.get_color(state.bgp_register)
+                    } else {
+                        Color::White
+                    };
                     for ((color, bg_win_color), obj_color) in
                         scanline.iter_mut().zip(bg_win_colors).zip(obj_colors)
                     {
@@ -528,9 +540,6 @@ fn get_color_bg_win(
     state: &State,
     internal_y_window_counter: Option<u8>,
 ) -> ColorIndex {
-    if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-        return ColorIndex::Zero;
-    }
     let (picture_pixel, tile_map_address) = get_picture_pixel_and_tile_map_address(
         state.lcd_control,
         scanline,
