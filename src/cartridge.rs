@@ -52,7 +52,7 @@ impl Mbc {
 
 pub struct Mbc1 {
     rom: &'static [u8],
-    rom_offset: u16,
+    rom_offset: usize,
     // 32 KiB
     ram: [u8; 0x8000],
     ram_offset: u16,
@@ -68,7 +68,7 @@ impl Mbc1 {
     fn new(rom: &'static [u8]) -> Self {
         Self {
             rom,
-            rom_offset: SWITCHABLE_ROM_BANK,
+            rom_offset: SWITCHABLE_ROM_BANK.into(),
             ram_offset: 0,
             rom_bank_count: get_factor_32_kib_rom(rom) * 2,
             ram_bank_count: get_factor_8_kib_ram(rom),
@@ -80,7 +80,7 @@ impl Mbc1 {
         match index {
             ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
             SWITCHABLE_ROM_BANK..VIDEO_RAM => {
-                self.rom[usize::from(self.rom_offset - SWITCHABLE_ROM_BANK + index)]
+                self.rom[self.rom_offset - usize::from(SWITCHABLE_ROM_BANK) + usize::from(index)]
             }
             EXTERNAL_RAM..WORK_RAM => self.ram[usize::from(self.ram_offset - EXTERNAL_RAM + index)],
             _ => panic!(),
@@ -125,7 +125,7 @@ impl Mbc1 {
         }
     }
     pub fn set_rom_bank(&mut self, rom_bank: u8) {
-        self.rom_offset = u16::from(rom_bank) * ROM_BANK_SIZE;
+        self.rom_offset = usize::from(rom_bank) * usize::from(ROM_BANK_SIZE);
     }
     pub fn set_ram_bank(&mut self, ram_bank: u8) {
         self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
