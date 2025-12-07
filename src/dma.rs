@@ -5,6 +5,7 @@ use crate::{
     state::{State, WriteOnlyState},
 };
 
+#[derive(Default)]
 pub struct Dma(Option<(RangeInclusive<u16>, RangeFrom<u8>)>);
 
 impl StateMachine for Dma {

@@ -8,6 +8,7 @@ use testouille_emulator_future::{
     HEIGHT, StateMachine, WIDTH,
     cartridge::CartridgeType,
     cpu::Cpu,
+    dma::Dma,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
     ppu::{Ppu, Speeder},
     state::{State, WriteOnlyState},
@@ -44,8 +45,9 @@ fn main() {
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = Cpu::default()
-        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
-        .compose(Timer::default());
+        .compose(Timer::default())
+        .compose(Dma::default())
+        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
 
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
@@ -76,7 +78,7 @@ fn main() {
                 return;
             }
         }
-        let ((_, Speeder(ppu, _)), _) = &mut machine;
+        let (_, Speeder(ppu, _)) = &mut machine;
         if let Some(scanline) = ppu.get_scanline_if_ready()
             && previous_ly != Some(state.ly)
         {
