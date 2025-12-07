@@ -8,6 +8,7 @@ pub mod instructions;
 pub mod ppu;
 pub mod state;
 pub mod timer;
+pub mod dma;
 
 pub const WIDTH: usize = 160;
 pub const HEIGHT: usize = 144;

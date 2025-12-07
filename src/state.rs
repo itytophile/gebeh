@@ -92,7 +92,6 @@ pub struct State {
     pub hram: [u8; (INTERRUPT_ENABLE - HRAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
-    pub dma_request: bool,
     pub bgp_register: u8,
     pub obp0: u8,
     pub obp1: u8,
@@ -128,7 +127,6 @@ impl State {
             hram: [0; (INTERRUPT_ENABLE - HRAM) as usize],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
-            dma_request: false,
             bgp_register: 0,
             obp0: 0,
             obp1: 0,
@@ -207,6 +205,10 @@ impl<'a> WriteOnlyState<'a> {
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.0.set_interrupt_part_lcd_status(value);
+    }
+
+    pub fn write_to_oam(&mut self, index: u8, value: u8) {
+        self.0.oam[usize::from(index)] = value;
     }
 }
 
@@ -326,7 +328,7 @@ impl MmuWrite<'_> {
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
             WAVE..LCD_CONTROL => {
                 // TODO wave ram
-            },
+            }
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
@@ -339,7 +341,6 @@ impl MmuWrite<'_> {
             LYC => self.0.lyc = value,
             DMA => {
                 self.0.dma_register = value;
-                self.0.dma_request = true;
                 todo!()
             }
             BGP => self.0.bgp_register = value,
