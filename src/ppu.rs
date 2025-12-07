@@ -13,18 +13,18 @@ pub enum Ppu {
         remaining_dots: NonZeroU8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         wy_condition: bool,
-        internal_y_window_counter: Option<u8>,
+        internal_y_window_counter: u8,
     }, // <= 80
     DrawingPixels {
         dots_count: u16,
         scanline: [Color; 160],
         wy_condition: bool,
-        internal_y_window_counter: Option<u8>,
+        internal_y_window_counter: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: NonZeroU8,
         wy_condition: bool,
-        internal_y_window_counter: Option<u8>,
+        internal_y_window_counter: u8,
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: NonZeroU16,
@@ -54,7 +54,7 @@ impl Default for Ppu {
         Self::OamScan {
             remaining_dots: OAM_SCAN_DURATION,
             wy_condition: false,
-            internal_y_window_counter: None,
+            internal_y_window_counter: 0,
         }
     }
 }
@@ -382,25 +382,11 @@ impl StateMachine2 for Ppu {
                     let mut bg_win_colors = [Option::<Color>::None; 160];
                     // https://gbdev.io/pandocs/Scrolling.html#window
                     let mut wx_condition = false;
-                    let mut is_win_enabled = false;
                     for (x, color) in bg_win_colors.iter_mut().enumerate() {
                         let x = u8::try_from(x).unwrap();
                         // Citation:
                         // the current X coordinate being rendered + 7 was equal to WX
                         wx_condition |= x + 7 == state.wx;
-                        if !is_win_enabled
-                            && wx_condition
-                            && *wy_condition
-                            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                        {
-                            is_win_enabled = true;
-                            *internal_y_window_counter =
-                                Some(internal_y_window_counter.map(|y| y + 1).unwrap_or(0));
-                            println!(
-                                "ly {} wy {} internal {:?}",
-                                work_state.ly, state.wy, internal_y_window_counter
-                            );
-                        }
                         let scanline = Scanline {
                             x,
                             y: work_state.ly,
@@ -408,17 +394,23 @@ impl StateMachine2 for Ppu {
                         let color_index = get_color_bg_win(
                             scanline,
                             state,
-                            if is_win_enabled {
-                                *internal_y_window_counter
-                            } else {
-                                None
-                            },
+                            (wx_condition
+                                && *wy_condition
+                                && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
+                            .then_some(*internal_y_window_counter),
                         );
                         *color = if color_index == ColorIndex::Zero {
                             None
                         } else {
                             Some(color_index.get_color(state.bgp_register))
                         };
+                    }
+
+                    if wx_condition
+                        && *wy_condition
+                        && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+                    {
+                        *internal_y_window_counter += 1;
                     }
                     // https://gbdev.io/pandocs/OAM.html#drawing-priority
                     // the objects that have the priority "BG over OBJ" enabled must override the other objects if
