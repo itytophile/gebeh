@@ -591,8 +591,9 @@ fn get_colors(
     objects_on_ly.into_iter().rev().flat_map(move |(_, obj)| {
         // if is_big then the tile_index must be corrected to be always even
         // then we check if scanline.y reaches the second tile
+        let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
         let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
-            + (is_big && (ly + 8 >= obj.y || obj.flags.contains(ObjectFlags::Y_FLIP))) as u8;
+            + (is_big && (ly + 8 >= obj.y) != y_flip) as u8;
         let tile = get_object_tile(
             state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
                 .try_into()
@@ -600,11 +601,7 @@ fn get_colors(
             tile_index,
         );
         let mut y = (ly + 16 - obj.y) % 8;
-        y = if obj.flags.contains(ObjectFlags::Y_FLIP) {
-            7 - y
-        } else {
-            y
-        };
+        y = if y_flip { 7 - y } else { y };
         let line = get_line_from_tile(tile, y);
         (0..8).filter_map(move |x| {
             Some((
