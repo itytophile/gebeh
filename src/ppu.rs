@@ -423,7 +423,7 @@ impl StateMachine2 for Ppu {
                             state,
                         ) {
                             let x = usize::from(x);
-                            if color != ColorIndex::Zero {
+                            if x < obj_colors.len() && color != ColorIndex::Zero {
                                 obj_colors[x] = Some((
                                     color.get_color(
                                         if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
