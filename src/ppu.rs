@@ -380,12 +380,19 @@ impl StateMachine2 for Ppu {
                         work_state.ly, state.lcd_control, state.lcd_status
                     );
                     let mut bg_win_colors = [Option::<Color>::None; 160];
+                    // https://gbdev.io/pandocs/Scrolling.html#window
+                    let mut wx_condition = false;
                     for (x, color) in bg_win_colors.iter_mut().enumerate() {
+                        let x = u8::try_from(x).unwrap();
+                        // Citation:
+                        // the current X coordinate being rendered + 7 was equal to WX
+                        wx_condition |= x + 7 == state.wx;
                         let scanline = Scanline {
-                            x: x.try_into().unwrap(),
+                            x,
                             y: work_state.ly,
                         };
-                        let color_index = get_color_bg_win(scanline, state);
+                        let color_index =
+                            get_color_bg_win(scanline, state, *wy_condition && wx_condition);
                         *color = if color_index == ColorIndex::Zero {
                             None
                         } else {
@@ -503,7 +510,7 @@ impl StateMachine2 for Ppu {
     }
 }
 
-fn get_color_bg_win(scanline: Scanline, state: &State) -> ColorIndex {
+fn get_color_bg_win(scanline: Scanline, state: &State, is_win_enabled: bool) -> ColorIndex {
     if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
         return ColorIndex::Zero;
     }
@@ -513,7 +520,7 @@ fn get_color_bg_win(scanline: Scanline, state: &State) -> ColorIndex {
         Window {
             x: state.wx,
             y: state.wy,
-            is_enabled: state.lcd_control.contains(LcdControl::WINDOW_ENABLE),
+            is_enabled: state.lcd_control.contains(LcdControl::WINDOW_ENABLE) && is_win_enabled,
         },
         Background {
             x: state.scx,
