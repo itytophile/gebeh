@@ -282,6 +282,18 @@ impl Ppu {
             _ => None,
         }
     }
+
+    #[must_use]
+    pub fn is_starting_line(&self) -> bool {
+        matches!(
+            self,
+            Ppu::OamScan {
+                remaining_dots: OAM_SCAN_DURATION
+            } | Ppu::VerticalBlankScanline {
+                remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
+            }
+        )
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -321,6 +333,13 @@ impl StateMachine2 for Ppu {
 
         let mut mode_changed = false;
 
+        if state.lcd_status.contains(LcdStatus::LYC_INT)
+            && self.is_starting_line()
+            && work_state.ly == state.lyc
+        {
+            work_state.is_requesting_lcd_int = true;
+        }
+
         match self {
             Ppu::OamScan { remaining_dots } => {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
@@ -340,6 +359,10 @@ impl StateMachine2 for Ppu {
                 // if first iteration then draw whole line without thinking
                 // TODO: draw the line during the good amount of dots
                 if *dots_count == 0 {
+                    println!(
+                        "{} {:?} {:?}",
+                        work_state.ly, state.lcd_control, state.lcd_status
+                    );
                     let mut bg_win_colors = [Option::<Color>::None; 160];
                     for (x, color) in bg_win_colors.iter_mut().enumerate() {
                         let scanline = Scanline {
@@ -428,10 +451,6 @@ impl StateMachine2 for Ppu {
                 }
             }
         };
-
-        if state.lcd_status.contains(LcdStatus::LYC_INT) && work_state.ly == state.lyc {
-            work_state.is_requesting_lcd_int = true;
-        }
 
         if !mode_changed {
             return;
