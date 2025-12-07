@@ -783,7 +783,10 @@ impl StateMachine for Cpu {
             .into_iter()
             .find(|(flag, _)| interrupts_to_execute.contains(*flag))
         {
-            println!("Interrupt handler: {interrupt:?} {:?}", state.lcd_status);
+            println!(
+                "Interrupt handler: {interrupt:?}, enable: {:?}, lcd_status: {:?}",
+                state.interrupt_enable, state.lcd_status
+            );
             // Citation: The IF bit corresponding to this interrupt and the IME flag are reset by the CPU
             // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
             interrupt_flag_to_reset = Some(interrupt);

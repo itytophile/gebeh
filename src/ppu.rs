@@ -270,6 +270,7 @@ pub trait StateMachine2 {
 pub struct PpuWorkState {
     ly: u8,
     is_requesting_lcd_int: bool,
+    is_requesting_vblank_int: bool,
 }
 
 impl Ppu {
@@ -326,6 +327,7 @@ impl StateMachine2 for Ppu {
         PpuWorkState {
             is_requesting_lcd_int: false,
             ly: state.ly,
+            is_requesting_vblank_int: false,
         }
     }
 
@@ -512,6 +514,7 @@ impl StateMachine2 for Ppu {
         };
 
         work_state.is_requesting_lcd_int |= is_requesting_interrupt;
+        work_state.is_requesting_vblank_int |= matches!(self, Ppu::VerticalBlankScanline { .. });
     }
 
     fn commit(&self, work_state: Self::WorkState, mut state: WriteOnlyState) {
@@ -525,6 +528,9 @@ impl StateMachine2 for Ppu {
         state.set_ly(work_state.ly);
         if work_state.is_requesting_lcd_int {
             state.insert_if(Ints::LCD);
+        }
+        if work_state.is_requesting_vblank_int {
+            state.insert_if(Ints::VBLANK);
         }
     }
 }
