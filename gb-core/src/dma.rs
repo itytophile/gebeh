@@ -1,4 +1,4 @@
-use std::ops::{RangeFrom, RangeInclusive};
+use core::ops::{RangeFrom, RangeInclusive};
 
 use crate::{
     StateMachine,

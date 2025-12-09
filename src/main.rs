@@ -4,7 +4,7 @@ use std::{
 };
 
 use minifb::{Key, Scale, Window, WindowOptions};
-use testouille_emulator_future::{
+use gb_core::{
     HEIGHT, StateMachine, WIDTH,
     cartridge::CartridgeType,
     cpu::Cpu,
@@ -17,6 +17,8 @@ use testouille_emulator_future::{
 
 fn main() {
     color_eyre::install().unwrap();
+    env_logger::init();
+
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
     //         .unwrap();

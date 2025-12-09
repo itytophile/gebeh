@@ -302,7 +302,7 @@ impl MmuRead<'_> {
             WY => self.0.wy,
             WX => self.0.wx,
             0xff4d => {
-                eprintln!("Reading $ff4d (Prepare speed switch)");
+                log::warn!("Reading $ff4d (Prepare speed switch)");
                 0
             }
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
@@ -373,7 +373,7 @@ impl MmuWrite<'_> {
             WY => self.0.wy = value,
             WX => self.0.wx = value,
             0xff4d => {
-                eprintln!("Writing $ff4d (Prepare speed switch)");
+                log::warn!("Writing $ff4d (Prepare speed switch)");
             }
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,

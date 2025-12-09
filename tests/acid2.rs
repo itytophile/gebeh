@@ -1,6 +1,6 @@
 use std::num::NonZeroU8;
 
-use testouille_emulator_future::{
+use gb_core::{
     HEIGHT, StateMachine,
     cpu::Cpu,
     ppu::{Color, Ppu, Speeder},

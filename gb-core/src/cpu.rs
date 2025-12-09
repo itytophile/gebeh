@@ -6,7 +6,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit,
         Register16Bit, SetPc, get_instructions, vec,
     },
-    state::{MmuWrite, State, WriteOnlyState},
+    state::{State, WriteOnlyState},
 };
 
 use arrayvec::ArrayVec;

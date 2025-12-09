@@ -1,4 +1,4 @@
-use std::num::{NonZeroU8, NonZeroU16};
+use core::num::{NonZeroU8, NonZeroU16};
 
 use arrayvec::ArrayVec;
 

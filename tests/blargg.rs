@@ -1,7 +1,7 @@
 use std::{iter, num::NonZeroU8};
 
 use arrayvec::ArrayVec;
-use testouille_emulator_future::{
+use gb_core::{
     StateMachine,
     cpu::Cpu,
     ppu::{Ppu, Speeder},

@@ -1,0 +1,11 @@
+[package]
+name = "gb-core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+arrayvec = "0.7.6"
+bitflags = "2.10.0"
+log = "0.4.29"
+my-lib = { path = "../my-lib" }

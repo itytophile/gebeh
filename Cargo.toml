@@ -1,5 +1,5 @@
 [workspace]
-members = ["macros", "my-lib"]
+members = ["gb-core","macros", "my-lib"]
 
 [package]
 name = "testouille-emulator-future"
@@ -7,12 +7,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-arrayvec = "0.7.6"
-bitflags = "2.10.0"
 color-eyre = "0.6.5"
 futures-util = "0.3.31"
 minifb = "0.28.0"
-my-lib = { path = "./my-lib" }
+gb-core = { path = "./gb-core" }
+env_logger = "0.11.8"
+
+[dev-dependencies]
+arrayvec = "0.7.6"
 
 [profile.release]
 overflow-checks = true
