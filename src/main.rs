@@ -10,7 +10,7 @@ use gb_core::{
     state::{State, WriteOnlyState},
     timer::Timer,
 };
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
     event::{Event, WindowEvent},
@@ -72,7 +72,10 @@ fn main() {
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(WIDTH.into(), HEIGHT.into(), surface_texture).unwrap()
+        PixelsBuilder::new(WIDTH.into(), HEIGHT.into(), surface_texture)
+            .enable_vsync(false)
+            .build()
+            .unwrap()
     };
 
     let mut previous_ly = None;
