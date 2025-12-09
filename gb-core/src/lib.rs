@@ -12,8 +12,8 @@ pub mod ppu;
 pub mod state;
 pub mod timer;
 
-pub const WIDTH: usize = 160;
-pub const HEIGHT: usize = 144;
+pub const WIDTH: u8 = 160;
+pub const HEIGHT: u8 = 144;
 
 pub fn get_factor_32_kib_rom(rom: &[u8]) -> u8 {
     1 << rom[0x148]

@@ -9,9 +9,11 @@ edition = "2024"
 [dependencies]
 color-eyre = "0.6.5"
 futures-util = "0.3.31"
-minifb = "0.28.0"
 gb-core = { path = "./gb-core" }
 env_logger = "0.11.8"
+winit = "0.29"
+pixels = "0.15.0"
+winit_input_helper = "0.15"
 
 [dev-dependencies]
 arrayvec = "0.7.6"

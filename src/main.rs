@@ -1,9 +1,5 @@
-use std::{
-    num::NonZeroU8,
-    time::{Duration, Instant},
-};
+use std::num::NonZeroU8;
 
-use minifb::{Key, Scale, Window, WindowOptions};
 use gb_core::{
     HEIGHT, StateMachine, WIDTH,
     cartridge::CartridgeType,
@@ -14,6 +10,15 @@ use gb_core::{
     state::{State, WriteOnlyState},
     timer::Timer,
 };
+use pixels::{Pixels, SurfaceTexture};
+use winit::{
+    dpi::LogicalSize,
+    event::{Event, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::KeyCode,
+    window::WindowBuilder,
+};
+use winit_input_helper::WinitInputHelper;
 
 fn main() {
     color_eyre::install().unwrap();
@@ -51,52 +56,78 @@ fn main() {
         .compose(Dma::default())
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
 
-    let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+    let event_loop = EventLoop::new().unwrap();
+    let mut input = WinitInputHelper::new();
+    let window = {
+        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
+        WindowBuilder::new()
+            .with_title("Hello Pixels")
+            .with_inner_size(scaled_size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
 
-    let mut window = Window::new(
-        "Test - ESC to exit",
-        WIDTH,
-        HEIGHT,
-        WindowOptions {
-            resize: false,
-            scale: Scale::X4,
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(WIDTH.into(), HEIGHT.into(), surface_texture).unwrap()
+    };
 
-    let mut is_changed = false;
-
-    let check_duration = Duration::from_millis(100);
-    let mut last_checked = Instant::now();
     let mut previous_ly = None;
 
-    loop {
-        machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
-        if last_checked.elapsed() > check_duration {
-            window.update();
-            last_checked = Instant::now();
-            if !window.is_open() || window.is_key_down(Key::Escape) {
-                return;
-            }
-        }
-        let (_, Speeder(ppu, _)) = &mut machine;
-        if let Some(scanline) = ppu.get_scanline_if_ready()
-            && previous_ly != Some(state.ly)
-        {
-            previous_ly = Some(state.ly);
-            let base = usize::from(state.ly) * WIDTH;
-            for (a, b) in buffer[base..].iter_mut().zip(scanline) {
-                let b = u32::from(*b);
-                if *a != b {
-                    is_changed = true;
+    event_loop
+        .run(|event, elwt| {
+            // Draw the current frame
+            if let Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                ..
+            } = event
+            {
+                loop {
+                    machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
+                    let (_, Speeder(ppu, _)) = &mut machine;
+                    if let Some(scanline) = ppu.get_scanline_if_ready()
+                        && previous_ly != Some(state.ly)
+                    {
+                        previous_ly = Some(state.ly);
+                        let base = usize::from(state.ly) * usize::from(WIDTH);
+                        for (pixel, color) in pixels.frame_mut().as_chunks_mut::<4>().0[base..]
+                            .iter_mut()
+                            .zip(scanline)
+                        {
+                            *pixel = (*color).into();
+                        }
+                        if state.ly == HEIGHT - 1 {
+                            break;
+                        }
+                    }
                 }
-                *a = b;
+                if pixels.render().is_err() {
+                    elwt.exit();
+                    return;
+                }
             }
-            if usize::from(state.ly) == HEIGHT - 1 && is_changed {
-                window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
-                is_changed = false;
+
+            // Handle input events
+            if input.update(&event) {
+                // Close events
+                if input.key_pressed(KeyCode::Escape) || input.close_requested() {
+                    elwt.exit();
+                    return;
+                }
+
+                // Resize the window
+                if let Some(size) = input.window_resized()
+                    && pixels.resize_surface(size.width, size.height).is_err()
+                {
+                    elwt.exit();
+                    return;
+                }
+
+                window.request_redraw();
             }
-        }
-    }
+        })
+        .unwrap();
 }

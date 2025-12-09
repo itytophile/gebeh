@@ -36,7 +36,7 @@ fn dmg_acid2() {
         {
             previous_ly = Some(state.ly);
             all_good &= working_split.next().unwrap().eq(scanline.iter().copied());
-            if usize::from(state.ly) == HEIGHT - 1 {
+            if state.ly == HEIGHT - 1 {
                 if all_good {
                     return;
                 }

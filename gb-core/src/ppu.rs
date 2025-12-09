@@ -319,6 +319,17 @@ impl From<Color> for u32 {
     }
 }
 
+impl From<Color> for [u8; 4] {
+    fn from(c: Color) -> Self {
+        match c {
+            Color::White => [0xff; 4],
+            Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
+            Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
+            Color::Black => [0, 0, 0, 0xff],
+        }
+    }
+}
+
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl StateMachine2 for Ppu {
     type WorkState = PpuWorkState;
