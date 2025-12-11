@@ -101,14 +101,14 @@ impl ColorIndex {
     }
 }
 
-fn get_line_from_tile(tile: &Tile, y: u8) -> [u8; 2] {
+pub fn get_line_from_tile(tile: &Tile, y: u8) -> [u8; 2] {
     assert!(y < 8);
     tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
         .try_into()
         .unwrap()
 }
 
-fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
+pub fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
     assert!(x < 8);
     ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
 }

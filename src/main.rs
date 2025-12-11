@@ -6,7 +6,7 @@ use gb_core::{
     cpu::Cpu,
     dma::Dma,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
-    ppu::{Ppu, Speeder},
+    ppu::{Ppu, Speeder, get_color_from_line, get_line_from_tile},
     state::{State, WriteOnlyState},
     timer::Timer,
 };
@@ -24,11 +24,10 @@ const DEBUG_TILE_ROW_COUNT: u8 = 16;
 const DEBUG_TILE_WIDTH: u8 = DEBUG_TILE_COL_COUNT * 8;
 const DEBUG_TILE_HEIGHT: u8 = DEBUG_TILE_ROW_COUNT * 8;
 
-fn get_pixels_from_window(window: &Window) -> Pixels<'_> {
+fn get_pixels_from_window(window: &Window, width: u8, height: u8) -> Pixels<'_> {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
-    PixelsBuilder::new(WIDTH.into(), HEIGHT.into(), surface_texture)
-        .enable_vsync(false)
+    PixelsBuilder::new(width.into(), height.into(), surface_texture)
         .build()
         .unwrap()
 }
@@ -84,18 +83,19 @@ fn main() {
 
     let debug_window = {
         let size = LogicalSize::new(DEBUG_TILE_WIDTH as f64, DEBUG_TILE_HEIGHT as f64);
-        let scaled_size = LogicalSize::new(WIDTH as f64 * 2.0, HEIGHT as f64 * 2.0);
+        let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
         WindowBuilder::new()
-            .with_title("Debug window")
+            .with_title("Tile debug")
             .with_inner_size(scaled_size)
             .with_min_inner_size(size)
             .build(&event_loop)
             .unwrap()
     };
 
-    let mut debug_pixels = get_pixels_from_window(&debug_window);
+    let mut debug_pixels =
+        get_pixels_from_window(&debug_window, DEBUG_TILE_WIDTH, DEBUG_TILE_HEIGHT);
 
-    let mut pixels = get_pixels_from_window(&window);
+    let mut pixels = get_pixels_from_window(&window, WIDTH, HEIGHT);
 
     let mut previous_ly = None;
 
@@ -182,4 +182,19 @@ fn draw_frame_to_window(
     }
 }
 
-fn draw_to_debug(state: &State, pixels: &mut [[u8; 4]]) {}
+fn draw_to_debug(state: &State, pixels: &mut [[u8; 4]]) {
+    let tiles_vram: &[u8; 0x1800] = state.video_ram[..0x1800].try_into().unwrap();
+    for (index, tile) in tiles_vram.as_chunks::<16>().0.iter().enumerate() {
+        for (y, line) in (0..8).map(|y| (y, get_line_from_tile(tile, y))) {
+            for (x, color) in (0..8).map(|x| (x, get_color_from_line(line, x))) {
+                let tile_x = index % usize::from(DEBUG_TILE_COL_COUNT);
+                let tile_y = index / usize::from(DEBUG_TILE_COL_COUNT);
+                let pixel_x = tile_x * 8 + usize::from(x);
+                let pixel_y = tile_y * 8 + usize::from(y);
+                // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable
+                pixels[pixel_y * usize::from(DEBUG_TILE_WIDTH) + pixel_x] =
+                    color.get_color(0xe1).into();
+            }
+        }
+    }
+}
