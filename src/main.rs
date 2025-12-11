@@ -10,14 +10,28 @@ use gb_core::{
     state::{State, WriteOnlyState},
     timer::Timer,
 };
-use pixels::{PixelsBuilder, SurfaceTexture};
+use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
-    window::WindowBuilder,
+    window::{Window, WindowBuilder},
 };
+
+const DEBUG_TILE_COL_COUNT: u8 = 24;
+const DEBUG_TILE_ROW_COUNT: u8 = 16;
+const DEBUG_TILE_WIDTH: u8 = DEBUG_TILE_COL_COUNT * 8;
+const DEBUG_TILE_HEIGHT: u8 = DEBUG_TILE_ROW_COUNT * 8;
+
+fn get_pixels_from_window(window: &Window) -> Pixels<'_> {
+    let window_size = window.inner_size();
+    let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
+    PixelsBuilder::new(WIDTH.into(), HEIGHT.into(), surface_texture)
+        .enable_vsync(false)
+        .build()
+        .unwrap()
+}
 
 fn main() {
     color_eyre::install().unwrap();
@@ -61,7 +75,7 @@ fn main() {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
         WindowBuilder::new()
-            .with_title("Hello Pixels")
+            .with_title("Emulator")
             .with_inner_size(scaled_size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -69,8 +83,8 @@ fn main() {
     };
 
     let debug_window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
-        let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
+        let size = LogicalSize::new(DEBUG_TILE_WIDTH as f64, DEBUG_TILE_HEIGHT as f64);
+        let scaled_size = LogicalSize::new(WIDTH as f64 * 2.0, HEIGHT as f64 * 2.0);
         WindowBuilder::new()
             .with_title("Debug window")
             .with_inner_size(scaled_size)
@@ -79,14 +93,9 @@ fn main() {
             .unwrap()
     };
 
-    let mut pixels = {
-        let window_size = window.inner_size();
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        PixelsBuilder::new(WIDTH.into(), HEIGHT.into(), surface_texture)
-            .enable_vsync(false)
-            .build()
-            .unwrap()
-    };
+    let mut debug_pixels = get_pixels_from_window(&debug_window);
+
+    let mut pixels = get_pixels_from_window(&window);
 
     let mut previous_ly = None;
 
@@ -105,6 +114,15 @@ fn main() {
                 );
                 pixels.render().unwrap();
                 window.request_redraw();
+            }
+            Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                window_id,
+                ..
+            } if window_id == debug_window.id() => {
+                draw_to_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                debug_pixels.render().unwrap();
+                debug_window.request_redraw();
             }
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -164,4 +182,4 @@ fn draw_frame_to_window(
     }
 }
 
-fn draw_to_debug(state: &State, window: &winit::window::Window, pixels: &mut pixels::Pixels<'_>) {}
+fn draw_to_debug(state: &State, pixels: &mut [[u8; 4]]) {}
