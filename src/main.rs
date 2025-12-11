@@ -116,9 +116,7 @@ fn main() {
                         }
                     }
                 }
-                if pixels.render().is_err() {
-                    elwt.exit();
-                }
+                pixels.render().unwrap();
                 window.request_redraw();
             }
             Event::WindowEvent {
@@ -126,9 +124,7 @@ fn main() {
                 window_id,
                 ..
             } if window_id == window.id() => {
-                if pixels.resize_surface(size.width, size.height).is_err() {
-                    elwt.exit();
-                }
+                pixels.resize_surface(size.width, size.height).unwrap();
             }
             Event::WindowEvent {
                 event:
