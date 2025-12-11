@@ -13,12 +13,11 @@ use gb_core::{
 use pixels::{PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
-    event::{Event, WindowEvent},
+    event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
-    keyboard::KeyCode,
+    keyboard::{KeyCode, PhysicalKey},
     window::WindowBuilder,
 };
-use winit_input_helper::WinitInputHelper;
 
 fn main() {
     color_eyre::install().unwrap();
@@ -57,12 +56,23 @@ fn main() {
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
 
     let event_loop = EventLoop::new().unwrap();
-    let mut input = WinitInputHelper::new();
+
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
         WindowBuilder::new()
             .with_title("Hello Pixels")
+            .with_inner_size(scaled_size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
+
+    let debug_window = {
+        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
+        WindowBuilder::new()
+            .with_title("Debug window")
             .with_inner_size(scaled_size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -81,13 +91,12 @@ fn main() {
     let mut previous_ly = None;
 
     event_loop
-        .run(|event, elwt| {
-            // Draw the current frame
-            if let Event::WindowEvent {
+        .run(|event, elwt| match event {
+            Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,
+                window_id,
                 ..
-            } = event
-            {
+            } if window_id == window.id() => {
                 loop {
                     machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
                     let (_, Speeder(ppu, _)) = &mut machine;
@@ -109,28 +118,35 @@ fn main() {
                 }
                 if pixels.render().is_err() {
                     elwt.exit();
-                    return;
                 }
-            }
-
-            // Handle input events
-            if input.update(&event) {
-                // Close events
-                if input.key_pressed(KeyCode::Escape) || input.close_requested() {
-                    elwt.exit();
-                    return;
-                }
-
-                // Resize the window
-                if let Some(size) = input.window_resized()
-                    && pixels.resize_surface(size.width, size.height).is_err()
-                {
-                    elwt.exit();
-                    return;
-                }
-
                 window.request_redraw();
             }
+            Event::WindowEvent {
+                event: WindowEvent::Resized(size),
+                window_id,
+                ..
+            } if window_id == window.id() => {
+                if pixels.resize_surface(size.width, size.height).is_err() {
+                    elwt.exit();
+                }
+            }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                elwt.exit();
+            }
+            _ => {}
         })
         .unwrap();
 }

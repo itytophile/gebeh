@@ -12,7 +12,6 @@ gb-core = { path = "./gb-core" }
 env_logger = "0.11.8"
 winit = "0.29"
 pixels = "0.15.0"
-winit_input_helper = "0.15"
 
 [dev-dependencies]
 arrayvec = "0.7.6"
