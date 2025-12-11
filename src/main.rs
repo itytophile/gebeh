@@ -100,10 +100,11 @@ fn main() {
                 draw_frame_to_window(
                     &mut state,
                     &mut machine,
-                    &window,
-                    &mut pixels,
+                    pixels.frame_mut().as_chunks_mut::<4>().0,
                     &mut previous_ly,
                 );
+                pixels.render().unwrap();
+                window.request_redraw();
             }
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -136,29 +137,31 @@ fn main() {
 fn draw_frame_to_window(
     state: &mut State,
     mut machine: &mut (impl StateMachine, Speeder<Ppu>),
-    window: &winit::window::Window,
-    pixels: &mut pixels::Pixels<'_>,
+    pixels: &mut [[u8; 4]],
     previous_ly: &mut Option<u8>,
 ) {
     loop {
         machine.execute(state).unwrap()(WriteOnlyState::new(state));
+
+        if *previous_ly == Some(state.ly) {
+            continue;
+        }
+
         let (_, Speeder(ppu, _)) = &mut machine;
-        if let Some(scanline) = ppu.get_scanline_if_ready()
-            && *previous_ly != Some(state.ly)
-        {
-            *previous_ly = Some(state.ly);
-            let base = usize::from(state.ly) * usize::from(WIDTH);
-            for (pixel, color) in pixels.frame_mut().as_chunks_mut::<4>().0[base..]
-                .iter_mut()
-                .zip(scanline)
-            {
-                *pixel = (*color).into();
-            }
-            if state.ly == HEIGHT - 1 {
-                break;
-            }
+
+        let Some(scanline) = ppu.get_scanline_if_ready() else {
+            continue;
+        };
+
+        *previous_ly = Some(state.ly);
+        let base = usize::from(state.ly) * usize::from(WIDTH);
+        for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
+            *pixel = (*color).into();
+        }
+        if state.ly == HEIGHT - 1 {
+            break;
         }
     }
-    pixels.render().unwrap();
-    window.request_redraw();
 }
+
+fn draw_to_debug(state: &State, window: &winit::window::Window, pixels: &mut pixels::Pixels<'_>) {}
