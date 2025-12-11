@@ -97,27 +97,13 @@ fn main() {
                 window_id,
                 ..
             } if window_id == window.id() => {
-                loop {
-                    machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
-                    let (_, Speeder(ppu, _)) = &mut machine;
-                    if let Some(scanline) = ppu.get_scanline_if_ready()
-                        && previous_ly != Some(state.ly)
-                    {
-                        previous_ly = Some(state.ly);
-                        let base = usize::from(state.ly) * usize::from(WIDTH);
-                        for (pixel, color) in pixels.frame_mut().as_chunks_mut::<4>().0[base..]
-                            .iter_mut()
-                            .zip(scanline)
-                        {
-                            *pixel = (*color).into();
-                        }
-                        if state.ly == HEIGHT - 1 {
-                            break;
-                        }
-                    }
-                }
-                pixels.render().unwrap();
-                window.request_redraw();
+                draw_frame_to_window(
+                    &mut state,
+                    &mut machine,
+                    &window,
+                    &mut pixels,
+                    &mut previous_ly,
+                );
             }
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -145,4 +131,34 @@ fn main() {
             _ => {}
         })
         .unwrap();
+}
+
+fn draw_frame_to_window(
+    state: &mut State,
+    mut machine: &mut (impl StateMachine, Speeder<Ppu>),
+    window: &winit::window::Window,
+    pixels: &mut pixels::Pixels<'_>,
+    previous_ly: &mut Option<u8>,
+) {
+    loop {
+        machine.execute(state).unwrap()(WriteOnlyState::new(state));
+        let (_, Speeder(ppu, _)) = &mut machine;
+        if let Some(scanline) = ppu.get_scanline_if_ready()
+            && *previous_ly != Some(state.ly)
+        {
+            *previous_ly = Some(state.ly);
+            let base = usize::from(state.ly) * usize::from(WIDTH);
+            for (pixel, color) in pixels.frame_mut().as_chunks_mut::<4>().0[base..]
+                .iter_mut()
+                .zip(scanline)
+            {
+                *pixel = (*color).into();
+            }
+            if state.ly == HEIGHT - 1 {
+                break;
+            }
+        }
+    }
+    pixels.render().unwrap();
+    window.request_redraw();
 }
