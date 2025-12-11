@@ -183,8 +183,8 @@ fn draw_frame_to_window(
 }
 
 fn draw_to_debug(state: &State, pixels: &mut [[u8; 4]]) {
-    let tiles_vram: &[u8; 0x1800] = state.video_ram[..0x1800].try_into().unwrap();
-    for (index, tile) in tiles_vram.as_chunks::<16>().0.iter().enumerate() {
+    let (tiles, _) = state.video_ram[..0x1800].as_chunks::<16>();
+    for (index, tile) in tiles.iter().enumerate() {
         for (y, line) in (0..8).map(|y| (y, get_line_from_tile(tile, y))) {
             for (x, color) in (0..8).map(|x| (x, get_color_from_line(line, x))) {
                 let tile_x = index % usize::from(DEBUG_TILE_COL_COUNT);
