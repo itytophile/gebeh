@@ -579,8 +579,10 @@ fn get_at_most_ten_objects_on_ly(ly: u8, state: &State) -> impl Iterator<Item = 
     let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
     state
         .oam
-        .chunks(4)
-        .map(|slice| ObjectAttribute::from(<[u8; 4]>::try_from(slice).unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|slice| ObjectAttribute::from(*slice))
         .filter(move |obj| obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 }))
         .take(10)
 }
