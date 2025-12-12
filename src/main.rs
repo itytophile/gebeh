@@ -35,7 +35,7 @@ fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     PixelsBuilder::new(width, height, surface_texture)
-        .enable_vsync(false)
+        .enable_vsync(true)
         .build()
         .unwrap()
 }
@@ -271,32 +271,56 @@ fn draw_tile_map_debug(state: &State, pixels: &mut [[u8; 4]]) {
         );
     }
 
-    let bg_tile_map_area = if state.lcd_control.contains(LcdControl::BG_TILE_MAP) {
+    if !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+        return;
+    }
+
+    // background
+    draw_viewport(
+        state.scx,
+        state.scy,
+        state.lcd_control.contains(LcdControl::BG_TILE_MAP),
+        pixels,
+        [0xff, 0, 0, 0xff],
+    );
+
+    if !state.lcd_control.contains(LcdControl::WINDOW_ENABLE) {
+        return;
+    }
+
+    draw_viewport(
+        0,
+        0,
+        state.lcd_control.contains(LcdControl::WINDOW_TILE_MAP),
+        pixels,
+        [0, 0, 0xff, 0xff],
+    );
+}
+
+fn draw_viewport(x: u8, y: u8, tile_map_area: bool, pixels: &mut [[u8; 4]], color: [u8; 4]) {
+    let bg_tile_map_area = if tile_map_area {
         usize::from(DEBUG_TILE_MAP_HEIGHT) / 2
     } else {
         0
     };
 
-    // background and window
     for i in 0..WIDTH {
-        pixels[(usize::from(state.scy) + bg_tile_map_area)
+        pixels[(usize::from(y) + bg_tile_map_area) * usize::from(DEBUG_TILE_MAP_COL_COUNT) * 8
+            + usize::from(x.wrapping_add(i))] = color;
+        pixels[(usize::from(y.wrapping_add(HEIGHT)) + bg_tile_map_area)
             * usize::from(DEBUG_TILE_MAP_COL_COUNT)
             * 8
-            + usize::from(state.scx.wrapping_add(i))] = [0xff, 0, 0, 0xff];
-        pixels[(usize::from(state.scy.wrapping_add(HEIGHT)) + bg_tile_map_area)
-            * usize::from(DEBUG_TILE_MAP_COL_COUNT)
-            * 8
-            + usize::from(state.scx.wrapping_add(i))] = [0xff, 0, 0, 0xff];
+            + usize::from(x.wrapping_add(i))] = color;
     }
 
     for i in 0..HEIGHT {
-        pixels[(usize::from(state.scy.wrapping_add(i)) + bg_tile_map_area)
+        pixels[(usize::from(y.wrapping_add(i)) + bg_tile_map_area)
             * usize::from(DEBUG_TILE_MAP_COL_COUNT)
             * 8
-            + usize::from(state.scx)] = [0xff, 0, 0, 0xff];
-        pixels[(usize::from(state.scy.wrapping_add(i)) + bg_tile_map_area)
+            + usize::from(x)] = color;
+        pixels[(usize::from(y.wrapping_add(i)) + bg_tile_map_area)
             * usize::from(DEBUG_TILE_MAP_COL_COUNT)
             * 8
-            + usize::from(state.scx.wrapping_add(WIDTH))] = [0xff, 0, 0, 0xff];
+            + usize::from(x.wrapping_add(WIDTH))] = color;
     }
 }
