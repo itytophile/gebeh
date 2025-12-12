@@ -288,4 +288,15 @@ fn draw_tile_map_debug(state: &State, pixels: &mut [[u8; 4]]) {
             * 8
             + usize::from(state.scx.wrapping_add(i))] = [0xff, 0, 0, 0xff];
     }
+
+    for i in 0..HEIGHT {
+        pixels[(usize::from(state.scy.wrapping_add(i)) + bg_tile_map_area)
+            * usize::from(DEBUG_TILE_MAP_COL_COUNT)
+            * 8
+            + usize::from(state.scx)] = [0xff, 0, 0, 0xff];
+        pixels[(usize::from(state.scy.wrapping_add(i)) + bg_tile_map_area)
+            * usize::from(DEBUG_TILE_MAP_COL_COUNT)
+            * 8
+            + usize::from(state.scx.wrapping_add(WIDTH))] = [0xff, 0, 0, 0xff];
+    }
 }
