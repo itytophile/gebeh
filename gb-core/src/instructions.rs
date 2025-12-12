@@ -232,6 +232,7 @@ pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> 
 }
 
 // what to set pc with after the last instruction
+#[derive(Clone)]
 pub struct SetPc(pub Register16Bit);
 
 impl Default for SetPc {

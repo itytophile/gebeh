@@ -11,6 +11,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
+#[derive(Clone)]
 pub struct Cpu {
     pub sp: u16,
     pub lsb: u8,

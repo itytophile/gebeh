@@ -12,7 +12,7 @@ use crate::{
 // so div frequency = 4.194304 MHz / 4 / 2^6 = 16384 Hz as pandocs says
 // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Timer(u16);
 
 impl StateMachine for Timer {

@@ -8,6 +8,7 @@ use crate::{
     state::{LcdStatus, State, VIDEO_RAM, WriteOnlyState},
 };
 
+#[derive(Clone)]
 pub enum Ppu {
     OamScan {
         remaining_dots: NonZeroU8,
@@ -264,7 +265,7 @@ fn get_picture_pixel_and_tile_map_address(
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
-pub trait StateMachine2 {
+pub trait StateMachine2: Clone {
     type WorkState;
     fn get_work_state(state: &State) -> Self::WorkState;
     fn execute(&mut self, work_state: &mut Self::WorkState, state: &State);
@@ -644,6 +645,7 @@ impl<T: StateMachine2> StateMachine for T {
     }
 }
 
+#[derive(Clone)]
 pub struct Speeder<T: StateMachine2>(pub T, pub NonZeroU8);
 
 impl<T: StateMachine2> StateMachine for Speeder<T> {

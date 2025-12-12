@@ -9,6 +9,7 @@ use gb_core::{
     timer::Timer,
 };
 
+#[derive(Clone)]
 struct TestSerial(Option<u8>);
 
 impl StateMachine for TestSerial {

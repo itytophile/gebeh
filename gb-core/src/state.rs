@@ -86,6 +86,7 @@ const DMG_BOOT: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
 
+#[derive(Clone)]
 pub struct State {
     pub boot_rom: &'static [u8; 256],
     pub mbc: Mbc,

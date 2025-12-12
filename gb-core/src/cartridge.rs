@@ -24,6 +24,7 @@ impl TryFrom<u8> for CartridgeType {
 }
 
 // Memory Bank Controller
+#[derive(Clone)]
 pub enum Mbc {
     NoMbc(&'static [u8]),
     Mbc1(Mbc1),
@@ -50,6 +51,7 @@ impl Mbc {
     }
 }
 
+#[derive(Clone)]
 pub struct Mbc1 {
     rom: &'static [u8],
     rom_offset: usize,

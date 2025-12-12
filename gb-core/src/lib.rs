@@ -31,7 +31,7 @@ pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
     }
 }
 
-pub trait StateMachine {
+pub trait StateMachine: Clone {
     /// must take one M-cycle
     #[must_use]
     fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a>;

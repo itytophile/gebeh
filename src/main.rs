@@ -1,4 +1,7 @@
-use std::num::NonZeroU8;
+use std::{
+    num::NonZeroU8,
+    time::{Duration, Instant},
+};
 
 use gb_core::{
     HEIGHT, StateMachine, WIDTH,
@@ -47,8 +50,8 @@ fn main() {
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
     //         .unwrap();
-    let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
+    // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
+    let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/individual/10-bit ops.gb")
     //         .unwrap();
@@ -75,6 +78,8 @@ fn main() {
         .compose(Timer::default())
         .compose(Dma::default())
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
+
+    let mut save_states = vec![(machine.clone(), state.clone())];
 
     let event_loop = EventLoop::new().unwrap();
 
@@ -135,6 +140,8 @@ fn main() {
 
     let mut is_paused = false;
 
+    let mut last_save = Instant::now();
+
     event_loop
         .run(|event, elwt| match event {
             Event::WindowEvent {
@@ -143,6 +150,10 @@ fn main() {
                 ..
             } if window_id == window.id() => {
                 if !is_paused {
+                    if last_save.elapsed() >= Duration::from_secs(2) {
+                        last_save = Instant::now();
+                        save_states.push((machine.clone(), state.clone()));
+                    }
                     draw_emulator(
                         &mut state,
                         &mut machine,
@@ -198,6 +209,23 @@ fn main() {
                     },
                 ..
             } => is_paused = !is_paused,
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                physical_key: PhysicalKey::Code(KeyCode::ArrowLeft),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                if let Some(old) = save_states.pop() {
+                    (machine, state) = old
+                }
+            }
             Event::WindowEvent {
                 event:
                     WindowEvent::CloseRequested
