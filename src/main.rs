@@ -26,7 +26,12 @@ const DEBUG_TILE_ROW_COUNT: u8 = 24;
 const DEBUG_TILE_WIDTH: u8 = DEBUG_TILE_COL_COUNT * 8;
 const DEBUG_TILE_HEIGHT: u8 = DEBUG_TILE_ROW_COUNT * 8;
 
-fn get_pixels_from_window(window: &Window, width: u8, height: u8) -> Pixels<'_> {
+const DEBUG_TILE_MAP_COL_COUNT: u8 = 32;
+const DEBUG_TILE_MAP_ROW_COUNT: u8 = 64;
+const DEBUG_TILE_MAP_WIDTH: u16 = DEBUG_TILE_MAP_COL_COUNT as u16 * 8;
+const DEBUG_TILE_MAP_HEIGHT: u16 = DEBUG_TILE_MAP_ROW_COUNT as u16 * 8;
+
+fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_> {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     PixelsBuilder::new(width.into(), height.into(), surface_texture)
@@ -85,7 +90,10 @@ fn main() {
 
     let debug_window = {
         let size = LogicalSize::new(DEBUG_TILE_WIDTH as f64, DEBUG_TILE_HEIGHT as f64);
-        let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
+        let scaled_size = LogicalSize::new(
+            DEBUG_TILE_WIDTH as f64 * 4.0,
+            DEBUG_TILE_HEIGHT as f64 * 4.0,
+        );
         WindowBuilder::new()
             .with_title("Tile debug")
             .with_inner_size(scaled_size)
@@ -94,10 +102,33 @@ fn main() {
             .unwrap()
     };
 
-    let mut debug_pixels =
-        get_pixels_from_window(&debug_window, DEBUG_TILE_WIDTH, DEBUG_TILE_HEIGHT);
+    let debug_tile_map_window = {
+        let size = LogicalSize::new(DEBUG_TILE_MAP_WIDTH as f64, DEBUG_TILE_MAP_HEIGHT as f64);
+        let scaled_size = LogicalSize::new(
+            DEBUG_TILE_MAP_WIDTH as f64 * 4.0,
+            DEBUG_TILE_MAP_HEIGHT as f64 * 4.0,
+        );
+        WindowBuilder::new()
+            .with_title("Tile debug")
+            .with_inner_size(scaled_size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
 
-    let mut pixels = get_pixels_from_window(&window, WIDTH, HEIGHT);
+    let debug_tile_map_pixels = get_pixels_from_window(
+        &debug_tile_map_window,
+        DEBUG_TILE_MAP_WIDTH.into(),
+        DEBUG_TILE_MAP_HEIGHT.into(),
+    );
+
+    let mut debug_pixels = get_pixels_from_window(
+        &debug_window,
+        DEBUG_TILE_WIDTH.into(),
+        DEBUG_TILE_HEIGHT.into(),
+    );
+
+    let mut pixels = get_pixels_from_window(&window, WIDTH.into(), HEIGHT.into());
 
     let mut previous_ly = None;
 
