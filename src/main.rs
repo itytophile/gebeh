@@ -34,7 +34,8 @@ const DEBUG_TILE_MAP_HEIGHT: u16 = DEBUG_TILE_MAP_ROW_COUNT as u16 * 8;
 fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_> {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
-    PixelsBuilder::new(width.into(), height.into(), surface_texture)
+    PixelsBuilder::new(width, height, surface_texture)
+        .enable_vsync(false)
         .build()
         .unwrap()
 }
@@ -105,18 +106,18 @@ fn main() {
     let debug_tile_map_window = {
         let size = LogicalSize::new(DEBUG_TILE_MAP_WIDTH as f64, DEBUG_TILE_MAP_HEIGHT as f64);
         let scaled_size = LogicalSize::new(
-            DEBUG_TILE_MAP_WIDTH as f64 * 4.0,
-            DEBUG_TILE_MAP_HEIGHT as f64 * 4.0,
+            DEBUG_TILE_MAP_WIDTH as f64 * 2.0,
+            DEBUG_TILE_MAP_HEIGHT as f64 * 2.0,
         );
         WindowBuilder::new()
-            .with_title("Tile debug")
+            .with_title("Tile Map debug")
             .with_inner_size(scaled_size)
             .with_min_inner_size(size)
             .build(&event_loop)
             .unwrap()
     };
 
-    let debug_tile_map_pixels = get_pixels_from_window(
+    let mut debug_tile_map_pixels = get_pixels_from_window(
         &debug_tile_map_window,
         DEBUG_TILE_MAP_WIDTH.into(),
         DEBUG_TILE_MAP_HEIGHT.into(),
@@ -162,7 +163,10 @@ fn main() {
                 window_id,
                 ..
             } if window_id == debug_tile_map_window.id() => {
-                draw_tile_map_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                draw_tile_map_debug(
+                    &state,
+                    debug_tile_map_pixels.frame_mut().as_chunks_mut::<4>().0,
+                );
                 debug_tile_map_pixels.render().unwrap();
                 debug_tile_map_window.request_redraw();
             }
