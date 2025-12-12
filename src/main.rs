@@ -19,8 +19,10 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-const DEBUG_TILE_COL_COUNT: u8 = 24;
-const DEBUG_TILE_ROW_COUNT: u8 = 16;
+const DEBUG_TILE_COL_COUNT: u8 = 16;
+// must be divisible by three because there are three blocks of tiles
+// https://gbdev.io/pandocs/Tile_Data.html
+const DEBUG_TILE_ROW_COUNT: u8 = 24;
 const DEBUG_TILE_WIDTH: u8 = DEBUG_TILE_COL_COUNT * 8;
 const DEBUG_TILE_HEIGHT: u8 = DEBUG_TILE_ROW_COUNT * 8;
 
