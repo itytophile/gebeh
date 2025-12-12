@@ -270,4 +270,22 @@ fn draw_tile_map_debug(state: &State, pixels: &mut [[u8; 4]]) {
             state.bgp_register,
         );
     }
+
+    let bg_tile_map_area = if state.lcd_control.contains(LcdControl::BG_TILE_MAP) {
+        usize::from(DEBUG_TILE_MAP_HEIGHT) / 2
+    } else {
+        0
+    };
+
+    // background and window
+    for i in 0..WIDTH {
+        pixels[(usize::from(state.scy) + bg_tile_map_area)
+            * usize::from(DEBUG_TILE_MAP_COL_COUNT)
+            * 8
+            + usize::from(state.scx.wrapping_add(i))] = [0xff, 0, 0, 0xff];
+        pixels[(usize::from(state.scy.wrapping_add(HEIGHT)) + bg_tile_map_area)
+            * usize::from(DEBUG_TILE_MAP_COL_COUNT)
+            * 8
+            + usize::from(state.scx.wrapping_add(i))] = [0xff, 0, 0, 0xff];
+    }
 }
