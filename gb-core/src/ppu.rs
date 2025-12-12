@@ -3,7 +3,7 @@ use core::num::{NonZeroU8, NonZeroU16};
 use arrayvec::ArrayVec;
 
 use crate::{
-    StateMachine,
+    StateMachine, WIDTH,
     ic::Ints,
     state::{LcdStatus, State, VIDEO_RAM, WriteOnlyState},
 };
@@ -19,12 +19,16 @@ pub enum Ppu {
         dots_count: u16,
         scanline: [Color; 160],
         wy_condition: bool,
+        wx_condition: bool,
         internal_y_window_counter: u8,
+        x: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: NonZeroU8,
         wy_condition: bool,
         internal_y_window_counter: u8,
+        // can be read by the lcd
+        scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: NonZeroU16,
@@ -277,11 +281,7 @@ impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
         match self {
-            Self::DrawingPixels {
-                scanline,
-                dots_count,
-                ..
-            } if *dots_count > 0 => Some(scanline),
+            Self::HorizontalBlank { scanline, .. } => Some(scanline),
             _ => None,
         }
     }
@@ -373,7 +373,9 @@ impl StateMachine2 for Ppu {
                         dots_count: 0,
                         scanline: [Color::Black; 160],
                         wy_condition: *wy_condition,
+                        wx_condition: false,
                         internal_y_window_counter: *internal_y_window_counter,
+                        x: 0,
                     };
                 }
             }
@@ -382,60 +384,53 @@ impl StateMachine2 for Ppu {
                 scanline,
                 wy_condition,
                 internal_y_window_counter,
+                // we could recompute x from dots_count but no
+                x,
+                // https://gbdev.io/pandocs/Scrolling.html#window
+                wx_condition,
             } => {
-                // if first iteration then draw whole line without thinking
-                // TODO: draw the line during the good amount of dots
-                if *dots_count == 0 {
-                    let mut bg_win_colors = [Option::<Color>::None; 160];
+                // https://gbdev.io/pandocs/Rendering.html#first12
+                if *dots_count >= 12 && *x < WIDTH {
+                    let mut bg_win_color = Option::<Color>::None;
 
                     if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-                        // https://gbdev.io/pandocs/Scrolling.html#window
-                        let mut wx_condition = false;
-                        for (x, color) in bg_win_colors.iter_mut().enumerate() {
-                            let x = u8::try_from(x).unwrap();
-                            // Citation:
-                            // the current X coordinate being rendered + 7 was equal to WX
-                            wx_condition |= x + 7 == state.wx;
-                            let scanline = Scanline {
-                                x,
-                                y: work_state.ly,
-                            };
-                            let color_index = get_color_bg_win(
-                                scanline,
-                                state,
-                                (wx_condition
-                                    && *wy_condition
-                                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
-                                .then_some(*internal_y_window_counter),
-                            );
-                            *color = if color_index == ColorIndex::Zero {
-                                None
-                            } else {
-                                Some(color_index.get_color(state.bgp_register))
-                            };
-                        }
-                        if wx_condition
-                            && *wy_condition
-                            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                        {
-                            *internal_y_window_counter += 1;
-                        }
+                        let x = *x;
+                        // Citation:
+                        // the current X coordinate being rendered + 7 was equal to WX
+                        *wx_condition |= x + 7 == state.wx;
+                        let scanline = Scanline {
+                            x,
+                            y: work_state.ly,
+                        };
+                        let color_index = get_color_bg_win(
+                            scanline,
+                            state,
+                            (*wx_condition
+                                && *wy_condition
+                                && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
+                            .then_some(*internal_y_window_counter),
+                        );
+                        bg_win_color = if color_index == ColorIndex::Zero {
+                            None
+                        } else {
+                            Some(color_index.get_color(state.bgp_register))
+                        };
                     }
 
                     // https://gbdev.io/pandocs/OAM.html#drawing-priority
                     // the objects that have the priority "BG over OBJ" enabled must override the other objects if
                     // their "normal" priority is higher
-                    let mut obj_colors = [Option::<(Color, bool)>::None; 160];
+                    let mut obj_color = Option::<(Color, bool)>::None;
 
                     if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
-                        for (x, obj, color) in get_colors(
+                        // TODO maybe performance hit here
+                        for (incoming_x, obj, color) in get_colors(
                             get_at_most_ten_objects_on_ly(work_state.ly, state),
                             work_state.ly,
                             state,
                         ) {
-                            let x = usize::from(x);
-                            if x < obj_colors.len() && color != ColorIndex::Zero {
-                                obj_colors[x] = Some((
+                            if incoming_x == *x && color != ColorIndex::Zero {
+                                obj_color = Some((
                                     color.get_color(
                                         if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
                                             state.obp1
@@ -454,23 +449,29 @@ impl StateMachine2 for Ppu {
                     } else {
                         Color::White
                     };
-                    for ((color, bg_win_color), obj_color) in
-                        scanline.iter_mut().zip(bg_win_colors).zip(obj_colors)
-                    {
-                        *color = match (bg_win_color, obj_color) {
-                            (None, None) => bg_color,
-                            (None, Some((color, _))) | (_, Some((color, false))) => color,
-                            (Some(color), Some((_, true)) | None) => color,
-                        }
-                    }
+                    scanline[usize::from(*x)] = match (bg_win_color, obj_color) {
+                        (None, None) => bg_color,
+                        (None, Some((color, _))) | (_, Some((color, false))) => color,
+                        (Some(color), Some((_, true)) | None) => color,
+                    };
+                    *x += 1;
                 }
+
                 *dots_count += 1;
+
                 if *dots_count == 172 {
+                    if *wx_condition
+                        && *wy_condition
+                        && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+                    {
+                        *internal_y_window_counter += 1;
+                    }
                     mode_changed = true;
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: NonZeroU8::new(204).unwrap(),
                         wy_condition: *wy_condition,
                         internal_y_window_counter: *internal_y_window_counter,
+                        scanline: *scanline,
                     }
                 }
             }
@@ -478,6 +479,7 @@ impl StateMachine2 for Ppu {
                 remaining_dots,
                 wy_condition,
                 internal_y_window_counter,
+                ..
             } => {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
