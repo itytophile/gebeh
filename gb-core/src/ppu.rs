@@ -128,7 +128,7 @@ fn get_object_tile(vram: &TileVramObj, index: u8) -> &Tile {
 }
 
 #[must_use]
-fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
+pub fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
     let base = if is_signed_addressing {
         0x1000usize.strict_add_signed(isize::from(index.cast_signed()) * isize::from(TILE_LENGTH))
     } else {

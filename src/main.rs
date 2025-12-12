@@ -6,7 +6,7 @@ use gb_core::{
     cpu::Cpu,
     dma::Dma,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
-    ppu::{Ppu, Speeder, get_color_from_line, get_line_from_tile},
+    ppu::{LcdControl, Ppu, Speeder, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::{State, WriteOnlyState},
     timer::Timer,
 };
@@ -153,9 +153,18 @@ fn main() {
                 window_id,
                 ..
             } if window_id == debug_window.id() => {
-                draw_tile_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                draw_tiles_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
                 debug_pixels.render().unwrap();
                 debug_window.request_redraw();
+            }
+            Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                window_id,
+                ..
+            } if window_id == debug_tile_map_window.id() => {
+                draw_tile_map_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                debug_tile_map_pixels.render().unwrap();
+                debug_tile_map_window.request_redraw();
             }
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -215,19 +224,46 @@ fn draw_emulator(
     }
 }
 
-fn draw_tile_debug(state: &State, pixels: &mut [[u8; 4]]) {
+fn draw_tiles_debug(state: &State, pixels: &mut [[u8; 4]]) {
     let (tiles, _) = state.video_ram[..0x1800].as_chunks::<16>();
     for (index, tile) in tiles.iter().enumerate() {
-        for (y, line) in (0..8).map(|y| (y, get_line_from_tile(tile, y))) {
-            for (x, color) in (0..8).map(|x| (x, get_color_from_line(line, x))) {
-                let tile_x = index % usize::from(DEBUG_TILE_COL_COUNT);
-                let tile_y = index / usize::from(DEBUG_TILE_COL_COUNT);
-                let pixel_x = tile_x * 8 + usize::from(x);
-                let pixel_y = tile_y * 8 + usize::from(y);
-                // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable
-                pixels[pixel_y * usize::from(DEBUG_TILE_WIDTH) + pixel_x] =
-                    color.get_color(0xe1).into();
-            }
+        // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable
+        draw_tile(pixels, index, tile, DEBUG_TILE_COL_COUNT, 0xe1);
+    }
+}
+
+fn draw_tile(
+    pixels: &mut [[u8; 4]],
+    index: usize,
+    tile: &[u8; 16],
+    tile_col_count: u8,
+    palette: u8,
+) {
+    for (y, line) in (0..8).map(|y| (y, get_line_from_tile(tile, y))) {
+        for (x, color) in (0..8).map(|x| (x, get_color_from_line(line, x))) {
+            let tile_x = index % usize::from(tile_col_count);
+            let tile_y = index / usize::from(tile_col_count);
+            let pixel_x = tile_x * 8 + usize::from(x);
+            let pixel_y = tile_y * 8 + usize::from(y);
+            pixels[pixel_y * usize::from(tile_col_count) * 8 + pixel_x] =
+                color.get_color(palette).into();
         }
+    }
+}
+
+fn draw_tile_map_debug(state: &State, pixels: &mut [[u8; 4]]) {
+    for (index, tile_index) in state.video_ram[0x1800..].iter().copied().enumerate() {
+        let tile = get_bg_win_tile(
+            state.video_ram[..0x1800].try_into().unwrap(),
+            tile_index,
+            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+        );
+        draw_tile(
+            pixels,
+            index,
+            tile,
+            DEBUG_TILE_MAP_COL_COUNT,
+            state.bgp_register,
+        );
     }
 }
