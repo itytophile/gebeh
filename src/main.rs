@@ -106,7 +106,7 @@ fn main() {
                 window_id,
                 ..
             } if window_id == window.id() => {
-                draw_frame_to_window(
+                draw_emulator(
                     &mut state,
                     &mut machine,
                     pixels.frame_mut().as_chunks_mut::<4>().0,
@@ -120,7 +120,7 @@ fn main() {
                 window_id,
                 ..
             } if window_id == debug_window.id() => {
-                draw_to_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                draw_tile_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
                 debug_pixels.render().unwrap();
                 debug_window.request_redraw();
             }
@@ -152,7 +152,7 @@ fn main() {
         .unwrap();
 }
 
-fn draw_frame_to_window(
+fn draw_emulator(
     state: &mut State,
     mut machine: &mut (impl StateMachine, Speeder<Ppu>),
     pixels: &mut [[u8; 4]],
@@ -182,7 +182,7 @@ fn draw_frame_to_window(
     }
 }
 
-fn draw_to_debug(state: &State, pixels: &mut [[u8; 4]]) {
+fn draw_tile_debug(state: &State, pixels: &mut [[u8; 4]]) {
     let (tiles, _) = state.video_ram[..0x1800].as_chunks::<16>();
     for (index, tile) in tiles.iter().enumerate() {
         for (y, line) in (0..8).map(|y| (y, get_line_from_tile(tile, y))) {
