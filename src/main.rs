@@ -133,6 +133,8 @@ fn main() {
 
     let mut previous_ly = None;
 
+    let mut is_paused = false;
+
     event_loop
         .run(|event, elwt| match event {
             Event::WindowEvent {
@@ -140,13 +142,16 @@ fn main() {
                 window_id,
                 ..
             } if window_id == window.id() => {
-                draw_emulator(
-                    &mut state,
-                    &mut machine,
-                    pixels.frame_mut().as_chunks_mut::<4>().0,
-                    &mut previous_ly,
-                );
-                pixels.render().unwrap();
+                if !is_paused {
+                    draw_emulator(
+                        &mut state,
+                        &mut machine,
+                        pixels.frame_mut().as_chunks_mut::<4>().0,
+                        &mut previous_ly,
+                    );
+                    pixels.render().unwrap();
+                }
+
                 window.request_redraw();
             }
             Event::WindowEvent {
@@ -163,11 +168,14 @@ fn main() {
                 window_id,
                 ..
             } if window_id == debug_tile_map_window.id() => {
-                draw_tile_map_debug(
-                    &state,
-                    debug_tile_map_pixels.frame_mut().as_chunks_mut::<4>().0,
-                );
-                debug_tile_map_pixels.render().unwrap();
+                if !is_paused {
+                    draw_tile_map_debug(
+                        &state,
+                        debug_tile_map_pixels.frame_mut().as_chunks_mut::<4>().0,
+                    );
+                    debug_tile_map_pixels.render().unwrap();
+                }
+
                 debug_tile_map_window.request_redraw();
             }
             Event::WindowEvent {
@@ -177,6 +185,19 @@ fn main() {
             } if window_id == window.id() => {
                 pixels.resize_surface(size.width, size.height).unwrap();
             }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                physical_key: PhysicalKey::Code(KeyCode::Space),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => is_paused = !is_paused,
             Event::WindowEvent {
                 event:
                     WindowEvent::CloseRequested
@@ -275,7 +296,6 @@ fn draw_tile_map_debug(state: &State, pixels: &mut [[u8; 4]]) {
         return;
     }
 
-    // background
     draw_viewport(
         state.scx,
         state.scy,
