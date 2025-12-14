@@ -45,3 +45,8 @@ fn add_sp_e_timing() {
 fn mem_oam() {
     test_mooneye("/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/mem_oam.gb")
 }
+
+#[test]
+fn reg_f() {
+    test_mooneye("/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/reg_f.gb")
+}
