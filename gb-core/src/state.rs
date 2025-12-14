@@ -284,7 +284,7 @@ impl MmuRead<'_> {
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
-            INTERRUPT_FLAG => self.0.interrupt_flag.bits(),
+            INTERRUPT_FLAG => self.0.interrupt_flag.bits() | 0b11100000,
             AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
             LCD_CONTROL => self.0.lcd_control.bits(),
             LCD_STATUS => {
