@@ -4,21 +4,19 @@ use gb_core::{
     dma::Dma,
     ppu::{Ppu, Speeder},
     state::{State, WriteOnlyState},
+    timer::Timer,
 };
 use std::num::NonZeroU8;
 
 mod common;
 
-#[test]
-fn add_sp_e_timing() {
-    let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/add_sp_e_timing.gb",
-    )
-    .unwrap();
+fn test_mooneye(path: &str) {
+    let rom = std::fs::read(path).unwrap();
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = Dma::default()
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
+        .compose(Timer::default())
         .compose(Cpu::default());
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
@@ -34,4 +32,16 @@ fn add_sp_e_timing() {
     assert_eq!(13, cpu.e);
     assert_eq!(21, cpu.h);
     assert_eq!(34, cpu.l);
+}
+
+#[test]
+fn add_sp_e_timing() {
+    test_mooneye(
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/add_sp_e_timing.gb",
+    )
+}
+
+#[test]
+fn mem_oam() {
+    test_mooneye("/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/mem_oam.gb")
 }
