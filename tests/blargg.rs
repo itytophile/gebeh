@@ -1,35 +1,15 @@
-use std::{iter, num::NonZeroU8};
-
+use crate::common::{TestSerial, machine_to_serial_iter};
 use arrayvec::ArrayVec;
 use gb_core::{
     StateMachine,
     cpu::Cpu,
     ppu::{Ppu, Speeder},
-    state::{SerialControl, State, WriteOnlyState},
+    state::State,
     timer::Timer,
 };
+use std::num::NonZeroU8;
 
-#[derive(Clone)]
-struct TestSerial(Option<u8>);
-
-impl StateMachine for TestSerial {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
-        // if transfer enable
-        let mut must_clear = false;
-        if state
-            .sc
-            .contains(SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT)
-        {
-            self.0 = Some(state.sb);
-            must_clear = true;
-        }
-        Some(move |mut state: WriteOnlyState| {
-            if must_clear {
-                state.get_sc_mut().remove(SerialControl::TRANSFER_ENABLE);
-            }
-        })
-    }
-}
+mod common;
 
 #[test]
 fn cpu_instrs() {
@@ -45,17 +25,9 @@ fn cpu_instrs() {
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
         .compose(TestSerial(None));
 
-    let buffer: ArrayVec<u8, LEN> = iter::from_fn(|| {
-        loop {
-            machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
-            let (_, TestSerial(byte)) = &mut machine;
-            if let Some(byte) = byte.take() {
-                return Some(byte);
-            }
-        }
-    })
-    .take(LEN)
-    .collect();
+    let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, &mut state)
+        .take(LEN)
+        .collect();
 
     assert_eq!(EXPECTED, str::from_utf8(&buffer).unwrap());
 }

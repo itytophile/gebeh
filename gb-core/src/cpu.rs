@@ -31,6 +31,8 @@ pub struct Cpu {
     pub is_halted: bool,
     pub interrupt_to_execute: Option<u8>,
     pub stop_mode: bool,
+    // test purposes
+    pub current_opcode: u8,
 }
 
 impl Default for Cpu {
@@ -56,6 +58,7 @@ impl Default for Cpu {
             is_halted: Default::default(),
             interrupt_to_execute: Default::default(),
             stop_mode: Default::default(),
+            current_opcode: 0,
         }
     }
 }
@@ -810,6 +813,7 @@ impl StateMachine for Cpu {
             // affecter et incrémenter le pc même dans le cas de l'interruption
             self.pc = self.get_16bit_register(self.instruction_register.1.0);
             let opcode = mmu.read(self.pc);
+            self.current_opcode = opcode;
             self.pc = self.pc.wrapping_add(1);
             if let Some(address) = self.interrupt_to_execute.take() {
                 // println!("Interrupt handling");
