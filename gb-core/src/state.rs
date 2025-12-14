@@ -235,6 +235,8 @@ impl<'a> WriteOnlyState<'a> {
 
 pub struct MmuRead<'a>(&'a State);
 
+pub struct MmuReadCpu<'a>(pub MmuRead<'a>);
+
 impl MmuRead<'_> {
     pub fn read(&self, index: u16) -> u8 {
         match index {
@@ -314,10 +316,23 @@ impl MmuRead<'_> {
     }
 }
 
+impl<'a> MmuReadCpu<'a> {
+    pub fn read(&self, index: u16) -> u8 {
+        if self.0.0.dma_request && (OAM..NOT_USABLE).contains(&index) {
+            return 0xff;
+        }
+        self.0.read(index)
+    }
+}
+
 pub struct MmuWrite<'a>(&'a mut State);
 
 impl MmuWrite<'_> {
     pub fn write(&mut self, index: u16, value: u8) {
+        if self.0.dma_request && !(HRAM..INTERRUPT_ENABLE).contains(&index) {
+            return;
+        }
+
         match index {
             0..VIDEO_RAM => self.0.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {

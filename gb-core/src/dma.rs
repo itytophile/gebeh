@@ -28,9 +28,9 @@ impl StateMachine for Dma {
         Some(move |mut state: WriteOnlyState| {
             if let (Some(source), Some(destination)) = (source, destination) {
                 state.write_to_oam(destination, source);
-                state.set_dma_request_to_false();
             } else {
                 self.0 = None;
+                state.set_dma_request_to_false();
             }
         })
     }

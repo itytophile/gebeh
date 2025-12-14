@@ -6,7 +6,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit,
         Register16Bit, SetPc, get_instructions, vec,
     },
-    state::{State, WriteOnlyState},
+    state::{MmuReadCpu, State, WriteOnlyState},
 };
 
 use arrayvec::ArrayVec;
@@ -766,7 +766,7 @@ impl StateMachine for Cpu {
             return None;
         }
 
-        let mmu = state.mmu();
+        let mmu = MmuReadCpu(state.mmu());
 
         let mut interrupt_flag_to_reset = Option::<Ints>::None;
 
