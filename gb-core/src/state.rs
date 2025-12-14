@@ -14,7 +14,14 @@ const TIMER_COUNTER: u16 = 0xff05; // TIMA
 const TIMER_MODULO: u16 = 0xff06; // TMA
 const TIMER_CONTROL: u16 = 0xff07; // TAC
 const INTERRUPT_FLAG: u16 = 0xff0f;
-const AUDIO: u16 = 0xff10;
+const SWEEP: u16 = 0xff10;
+const LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff11;
+const VOLUME_AND_ENVELOPE: u16 = 0xff12;
+const CHANNEL_1_PERIOD_LOW: u16 = 0xff13;
+const CHANNEL_1_PERIOD_HIGH_AND_CONTROL: u16 = 0xff14;
+const MASTER_VOLUME_AND_VIN_PANNING: u16 = 0xff24;
+const SOUND_PANNING: u16 = 0xff25;
+const AUDIO_MASTER_CONTROL: u16 = 0xff26;
 const WAVE: u16 = 0xff30;
 const LCD_CONTROL: u16 = 0xff40;
 const LCD_STATUS: u16 = 0xff41;
@@ -99,7 +106,14 @@ pub struct State {
     pub obp1: u8,
     pub interrupt_enable: Ints,
     pub interrupt_flag: Ints,
-    pub audio: [u8; (WAVE - AUDIO) as usize],
+    pub sweep: u8,
+    pub length_timer_and_duty_cycle: u8,
+    pub volume_and_envelope: u8,
+    pub channel_1_period_low: u8,
+    pub channel_1_period_high_and_control: u8,
+    pub master_volume_and_vin_panning: u8,
+    pub sound_panning: u8,
+    pub audio_master_control: u8,
     pub scy: u8,
     pub scx: u8,
     pub lcd_control: LcdControl,
@@ -137,7 +151,14 @@ impl State {
             obp1: 0,
             interrupt_enable: Ints::empty(),
             interrupt_flag: Ints::empty(),
-            audio: [0; (WAVE - AUDIO) as usize],
+            sweep: 0,
+            length_timer_and_duty_cycle: 0,
+            volume_and_envelope: 0,
+            channel_1_period_low: 0,
+            channel_1_period_high_and_control: 0,
+            master_volume_and_vin_panning: 0,
+            sound_panning: 0,
+            audio_master_control: 0,
             scx: 0,
             scy: 0,
             lcd_control: LcdControl::empty(),
@@ -285,7 +306,16 @@ impl MmuRead<'_> {
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
             INTERRUPT_FLAG => self.0.interrupt_flag.bits() | 0b11100000,
-            AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)],
+            SWEEP => self.0.sweep | 0b10000000,
+            LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle,
+            VOLUME_AND_ENVELOPE => self.0.volume_and_envelope,
+            CHANNEL_1_PERIOD_LOW => 0xff,
+            CHANNEL_1_PERIOD_HIGH_AND_CONTROL => {
+                self.0.channel_1_period_high_and_control | 0b10111111
+            }
+            MASTER_VOLUME_AND_VIN_PANNING => self.0.master_volume_and_vin_panning,
+            SOUND_PANNING => self.0.sound_panning,
+            AUDIO_MASTER_CONTROL => self.0.audio_master_control | 0b01110000,
             LCD_CONTROL => self.0.lcd_control.bits(),
             LCD_STATUS => {
                 let mut status = self.0.lcd_status;
@@ -364,7 +394,14 @@ impl MmuWrite<'_> {
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_truncate(value),
-            AUDIO..WAVE => self.0.audio[usize::from(index - AUDIO)] = value,
+            SWEEP => self.0.sweep = value,
+            LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle = value,
+            VOLUME_AND_ENVELOPE => self.0.volume_and_envelope = value,
+            CHANNEL_1_PERIOD_LOW => self.0.channel_1_period_low = value,
+            CHANNEL_1_PERIOD_HIGH_AND_CONTROL => self.0.channel_1_period_high_and_control = value,
+            MASTER_VOLUME_AND_VIN_PANNING => self.0.master_volume_and_vin_panning = value,
+            SOUND_PANNING => self.0.sound_panning = value,
+            AUDIO_MASTER_CONTROL => self.0.audio_master_control = value,
             WAVE..LCD_CONTROL => {
                 // TODO wave ram
             }
