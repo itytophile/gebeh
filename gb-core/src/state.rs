@@ -36,7 +36,6 @@ bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
     pub struct SerialControl: u8 {
         const TRANSFER_ENABLE = 1 << 7;
-        const CLOCK_SPEED = 1 << 1;
         const CLOCK_SELECT = 1;
     }
 }
@@ -280,7 +279,7 @@ impl MmuRead<'_> {
                 }) | 0b11000000 // unused bits return 1
             }
             SB => self.0.sb,
-            SC => self.0.sc.bits(),
+            SC => self.0.sc.bits() | 0b01111110,
             DIV => self.0.div,
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
