@@ -19,6 +19,10 @@ const LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff11;
 const VOLUME_AND_ENVELOPE: u16 = 0xff12;
 const CHANNEL_1_PERIOD_LOW: u16 = 0xff13;
 const CHANNEL_1_PERIOD_HIGH_AND_CONTROL: u16 = 0xff14;
+const CHANNEL_3_DAC_ENABLE: u16 = 0xff1a;
+const CHANNEL_3_OUTPUT_LEVEL: u16 = 0xff1c;
+const CHANNEL_4_LENGTH_TIMER: u16 = 0xff20;
+const CHANNEL_4_CONTROL: u16 = 0xff23;
 const MASTER_VOLUME_AND_VIN_PANNING: u16 = 0xff24;
 const SOUND_PANNING: u16 = 0xff25;
 const AUDIO_MASTER_CONTROL: u16 = 0xff26;
@@ -111,6 +115,10 @@ pub struct State {
     pub volume_and_envelope: u8,
     pub channel_1_period_low: u8,
     pub channel_1_period_high_and_control: u8,
+    pub channel_3_dac_enable: u8,
+    pub channel_3_output_level: u8,
+    pub channel_4_length_timer: u8,
+    pub channel_4_control: u8,
     pub master_volume_and_vin_panning: u8,
     pub sound_panning: u8,
     pub audio_master_control: u8,
@@ -156,6 +164,10 @@ impl State {
             volume_and_envelope: 0,
             channel_1_period_low: 0,
             channel_1_period_high_and_control: 0,
+            channel_3_dac_enable: 0,
+            channel_3_output_level: 0,
+            channel_4_length_timer: 0,
+            channel_4_control: 0,
             master_volume_and_vin_panning: 0,
             sound_panning: 0,
             audio_master_control: 0,
@@ -301,10 +313,12 @@ impl MmuRead<'_> {
             }
             SB => self.0.sb,
             SC => self.0.sc.bits() | 0b01111110,
+            0xff03 => 0xff,
             DIV => self.0.div,
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
+            0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.0.interrupt_flag.bits() | 0b11100000,
             SWEEP => self.0.sweep | 0b10000000,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle,
@@ -313,9 +327,16 @@ impl MmuRead<'_> {
             CHANNEL_1_PERIOD_HIGH_AND_CONTROL => {
                 self.0.channel_1_period_high_and_control | 0b10111111
             }
+            0xff15 => 0xff,
+            CHANNEL_3_DAC_ENABLE => self.0.channel_3_dac_enable | 0b01111111,
+            CHANNEL_3_OUTPUT_LEVEL => self.0.channel_3_output_level | 0b10011111,
+            0xff1f => 0xff,
+            CHANNEL_4_LENGTH_TIMER => 0xff,
+            CHANNEL_4_CONTROL => self.0.channel_4_control | 0b10111111,
             MASTER_VOLUME_AND_VIN_PANNING => self.0.master_volume_and_vin_panning,
             SOUND_PANNING => self.0.sound_panning,
             AUDIO_MASTER_CONTROL => self.0.audio_master_control | 0b01110000,
+            0xff27..WAVE => 0xff,
             LCD_CONTROL => self.0.lcd_control.bits(),
             LCD_STATUS => {
                 let mut status = self.0.lcd_status;
@@ -333,11 +354,15 @@ impl MmuRead<'_> {
             OBP1 => self.0.obp1,
             WY => self.0.wy,
             WX => self.0.wx,
+            0xff4c => 0xff,
             0xff4d => {
                 log::warn!("Reading $ff4d (Prepare speed switch)");
-                0
+                0xff
             }
-            BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control,
+            0xff4e => 0xff,
+            0xff4f => 0xff,
+            BOOT_ROM_MAPPING_CONTROL => 0xff,
+            0xff51..HRAM => 0xff,
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)],
             INTERRUPT_ENABLE => self.0.interrupt_enable.bits(),
             _ => todo!("Reading ${index:04x}"),
@@ -387,21 +412,30 @@ impl MmuWrite<'_> {
             }
             SB => self.0.sb = value,
             SC => self.0.sc = SerialControl::from_bits_truncate(value),
+            0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00
             DIV => self.0.div = 0,
             TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
+            0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_truncate(value),
             SWEEP => self.0.sweep = value,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle = value,
             VOLUME_AND_ENVELOPE => self.0.volume_and_envelope = value,
             CHANNEL_1_PERIOD_LOW => self.0.channel_1_period_low = value,
             CHANNEL_1_PERIOD_HIGH_AND_CONTROL => self.0.channel_1_period_high_and_control = value,
+            0xff15 => {}
+            CHANNEL_3_DAC_ENABLE => self.0.channel_3_dac_enable = value,
+            CHANNEL_3_OUTPUT_LEVEL => self.0.channel_3_output_level = value,
+            0xff1f => {}
+            CHANNEL_4_LENGTH_TIMER => self.0.channel_4_length_timer = value,
+            CHANNEL_4_CONTROL => self.0.channel_4_control = value,
             MASTER_VOLUME_AND_VIN_PANNING => self.0.master_volume_and_vin_panning = value,
             SOUND_PANNING => self.0.sound_panning = value,
             AUDIO_MASTER_CONTROL => self.0.audio_master_control = value,
+            0xff27..WAVE => {}
             WAVE..LCD_CONTROL => {
                 // TODO wave ram
             }
@@ -424,10 +458,14 @@ impl MmuWrite<'_> {
             OBP1 => self.0.obp1 = value,
             WY => self.0.wy = value,
             WX => self.0.wx = value,
+            0xff4c => {}
             0xff4d => {
                 log::warn!("Writing $ff4d (Prepare speed switch)");
             }
+            0xff4e => {}
+            0xff4f => {}
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
+            0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => self.0.interrupt_enable = Ints::from_bits_retain(value),
             _ => todo!("Writing 0x{value:02x} at ${index:04x}"),

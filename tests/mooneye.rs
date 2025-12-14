@@ -50,3 +50,10 @@ fn mem_oam() {
 fn reg_f() {
     test_mooneye("/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/reg_f.gb")
 }
+
+#[test]
+fn unused_hwio_gs() {
+    test_mooneye(
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/unused_hwio-GS.gb",
+    )
+}
