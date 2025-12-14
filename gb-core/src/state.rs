@@ -268,7 +268,7 @@ impl MmuRead<'_> {
                 }
             }
             JOYPAD => {
-                if self
+                (if self
                     .0
                     .joypad
                     .contains(JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD)
@@ -277,7 +277,7 @@ impl MmuRead<'_> {
                     self.0.joypad.bits() | 0xf
                 } else {
                     self.0.joypad.bits()
-                }
+                }) | 0b11000000 // unused bits return 1
             }
             SB => self.0.sb,
             SC => self.0.sc.bits(),
