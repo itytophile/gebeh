@@ -11,7 +11,10 @@ use std::num::NonZeroU8;
 mod common;
 
 fn test_mooneye(path: &str) {
-    let rom = std::fs::read(path).unwrap();
+    let rom = std::fs::read(format!(
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/{path}"
+    ))
+    .unwrap();
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = Dma::default()
@@ -36,24 +39,20 @@ fn test_mooneye(path: &str) {
 
 #[test]
 fn add_sp_e_timing() {
-    test_mooneye(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/add_sp_e_timing.gb",
-    )
+    test_mooneye("acceptance/add_sp_e_timing.gb")
 }
 
 #[test]
 fn mem_oam() {
-    test_mooneye("/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/mem_oam.gb")
+    test_mooneye("acceptance/bits/mem_oam.gb")
 }
 
 #[test]
 fn reg_f() {
-    test_mooneye("/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/reg_f.gb")
+    test_mooneye("acceptance/bits/reg_f.gb")
 }
 
 #[test]
 fn unused_hwio_gs() {
-    test_mooneye(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/bits/unused_hwio-GS.gb",
-    )
+    test_mooneye("acceptance/bits/unused_hwio-GS.gb")
 }
