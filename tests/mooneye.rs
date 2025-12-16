@@ -8,8 +8,6 @@ use gb_core::{
 };
 use std::num::NonZeroU8;
 
-mod common;
-
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(
         "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/{path}"
@@ -60,4 +58,9 @@ fn unused_hwio_gs() {
 #[test]
 fn call_cc_timing() {
     test_mooneye("call_cc_timing.gb");
+}
+
+#[test]
+fn call_cc_timing2() {
+    test_mooneye("call_cc_timing2.gb");
 }

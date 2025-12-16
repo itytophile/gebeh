@@ -38,7 +38,7 @@ fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     PixelsBuilder::new(width, height, surface_texture)
-        .enable_vsync(true)
+        .enable_vsync(false)
         .build()
         .unwrap()
 }
@@ -51,7 +51,10 @@ fn main() {
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
-    let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
+    let rom = std::fs::read(
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/call_cc_timing2.gb",
+    )
+    .unwrap();
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/individual/10-bit ops.gb")
     //         .unwrap();

@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Register8Bit {
     A,
     B,
@@ -16,7 +16,7 @@ pub enum Register8Bit {
     Z,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Register16Bit {
     AF,
     BC,

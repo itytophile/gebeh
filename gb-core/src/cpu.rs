@@ -6,7 +6,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit,
         Register16Bit, SetPc, get_instructions, vec,
     },
-    state::{MmuReadCpu, State, WriteOnlyState},
+    state::{MmuReadCpu, MmuWrite, State, WriteOnlyState},
 };
 
 use arrayvec::ArrayVec;
@@ -164,12 +164,10 @@ impl Cpu {
         }
     }
 
-    fn execute_instruction(&mut self, mut state: WriteOnlyState, inst: AfterReadInstruction) {
+    fn execute_instruction(&mut self, mut mmu: MmuWrite, inst: AfterReadInstruction) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
-
-        let mut mmu = state.mmu();
 
         match inst {
             Read(value, inst) => {
@@ -476,7 +474,7 @@ impl Cpu {
             }
             NoRead(Stop) => {
                 self.stop_mode = true;
-                state.set_reset_system_clock(true);
+                mmu.inner().set_reset_system_clock(true);
             }
             NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
                 let [_, lsb] = self.sp.to_be_bytes();
@@ -862,12 +860,14 @@ impl StateMachine for Cpu {
             }
         };
 
+        let data_for_write = state.get_data_for_write();
+
         Some(move |mut state: WriteOnlyState<'_>| {
             if let Some(flag) = interrupt_flag_to_reset {
                 state.remove_if_bit(flag);
             }
 
-            self.execute_instruction(state, inst);
+            self.execute_instruction(state.mmu(data_for_write), inst);
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst

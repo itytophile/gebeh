@@ -197,6 +197,12 @@ impl State {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
+    pub fn get_data_for_write(&self) -> DataForWrite {
+        DataForWrite {
+            dma_request: self.dma_request,
+            lcd_status: self.lcd_status,
+        }
+    }
 }
 
 use crate::{cartridge::Mbc, ic::Ints, ppu::LcdControl};
@@ -213,8 +219,8 @@ impl<'a> WriteOnlyState<'a> {
     {
         WriteOnlyState(&mut *self.0)
     }
-    pub fn mmu(&mut self) -> MmuWrite<'_> {
-        MmuWrite(self.0)
+    pub fn mmu(&mut self, data_for_write: DataForWrite) -> MmuWrite<'_> {
+        MmuWrite(self.0, data_for_write)
     }
     pub fn insert_ie(&mut self, flag: Ints) {
         self.0.interrupt_enable.insert(flag);
@@ -379,18 +385,27 @@ impl<'a> MmuReadCpu<'a> {
     }
 }
 
-pub struct MmuWrite<'a>(&'a mut State);
+pub struct DataForWrite {
+    dma_request: bool,
+    lcd_status: LcdStatus,
+}
+
+// never read State for taking decisions (like conditions) when writing. Use DataForWrite instead.
+pub struct MmuWrite<'a>(&'a mut State, DataForWrite);
 
 impl MmuWrite<'_> {
+    pub fn inner(&mut self) -> WriteOnlyState<'_> {
+        WriteOnlyState(self.0)
+    }
     pub fn write(&mut self, index: u16, value: u8) {
-        if self.0.dma_request && !(HRAM..INTERRUPT_ENABLE).contains(&index) {
+        if self.1.dma_request && !(HRAM..INTERRUPT_ENABLE).contains(&index) {
             return;
         }
 
         match index {
             0..VIDEO_RAM => self.0.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
-                if (self.0.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
+                if (self.1.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
                     self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
                 }
             }
@@ -398,7 +413,7 @@ impl MmuWrite<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
-                let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
+                let ppu = self.1.lcd_status & LcdStatus::PPU_MASK;
                 if ppu != LcdStatus::DRAWING && ppu != LcdStatus::OAM_SCAN {
                     self.0.oam[usize::from(index - OAM)] = value
                 }
