@@ -12,7 +12,7 @@ mod common;
 
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/{path}"
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/{path}"
     ))
     .unwrap();
     let mut state = State::new(rom.leak());
@@ -39,20 +39,25 @@ fn test_mooneye(path: &str) {
 
 #[test]
 fn add_sp_e_timing() {
-    test_mooneye("acceptance/add_sp_e_timing.gb")
+    test_mooneye("add_sp_e_timing.gb")
 }
 
 #[test]
 fn mem_oam() {
-    test_mooneye("acceptance/bits/mem_oam.gb")
+    test_mooneye("bits/mem_oam.gb")
 }
 
 #[test]
 fn reg_f() {
-    test_mooneye("acceptance/bits/reg_f.gb")
+    test_mooneye("bits/reg_f.gb")
 }
 
 #[test]
 fn unused_hwio_gs() {
-    test_mooneye("acceptance/bits/unused_hwio-GS.gb")
+    test_mooneye("bits/unused_hwio-GS.gb")
+}
+
+#[test]
+fn call_cc_timing() {
+    test_mooneye("call_cc_timing.gb");
 }
