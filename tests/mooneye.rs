@@ -64,3 +64,18 @@ fn call_cc_timing() {
 fn call_cc_timing2() {
     test_mooneye("call_cc_timing2.gb");
 }
+
+#[test]
+fn call_timing() {
+    test_mooneye("call_timing.gb");
+}
+
+#[test]
+fn call_timing2() {
+    test_mooneye("call_timing2.gb");
+}
+
+#[test]
+fn di_timing_gs() {
+    test_mooneye("di_timing-GS.gb");
+}
