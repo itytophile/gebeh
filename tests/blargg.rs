@@ -21,7 +21,7 @@ fn cpu_instrs() {
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order
     let mut machine = Cpu::default()
-        .compose(Timer::default())
+        .compose(Timer)
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
         .compose(TestSerial(None));
 

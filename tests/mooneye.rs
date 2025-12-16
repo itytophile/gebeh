@@ -14,18 +14,18 @@ fn test_mooneye(path: &str) {
     ))
     .unwrap();
     let mut state = State::new(rom.leak());
-    // the machine should not be affected by the composition order
     let mut machine = Dma::default()
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
-        .compose(Timer::default())
-        .compose(Cpu::default());
+        .compose(Cpu::default())
+        .compose(Timer);
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
-    while machine.1.current_opcode != 0x40 {
+    while machine.0.1.current_opcode != 0x40 {
+        log::warn!("clock");
         machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
     }
 
-    let (_, cpu) = machine;
+    let ((_, cpu), _) = machine;
 
     assert_eq!(3, cpu.b);
     assert_eq!(5, cpu.c);
@@ -78,4 +78,9 @@ fn call_timing2() {
 #[test]
 fn di_timing_gs() {
     test_mooneye("di_timing-GS.gb");
+}
+
+#[test]
+fn div_timing() {
+    test_mooneye("div_timing.gb");
 }

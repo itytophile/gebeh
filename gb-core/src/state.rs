@@ -138,7 +138,7 @@ pub struct State {
     pub timer_counter: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
-    pub div: u8,
+    pub system_counter: u16,
     pub reset_system_clock: bool,
 }
 
@@ -189,7 +189,7 @@ impl State {
             oam: [0; (NOT_USABLE - OAM) as usize],
             joypad: JoypadFlags::empty(),
             // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
-            div: 0,
+            system_counter: 0,
             reset_system_clock: false,
         }
     }
@@ -262,8 +262,12 @@ impl<'a> WriteOnlyState<'a> {
         self.0.dma_request = false;
     }
 
-    pub fn set_div(&mut self, value: u8) {
-        self.0.div = value;
+    pub fn increment_system_counter(&mut self) {
+        self.0.system_counter = self.0.system_counter.wrapping_add(1);
+    }
+
+    pub fn reset_system_counter(&mut self) {
+        self.0.system_counter = 0;
     }
 
     pub fn set_reset_system_clock(&mut self, value: bool) {
@@ -320,7 +324,7 @@ impl MmuRead<'_> {
             SB => self.0.sb,
             SC => self.0.sc.bits() | 0b01111110,
             0xff03 => 0xff,
-            DIV => self.0.div,
+            DIV => (self.0.system_counter >> 6 & 0xff).try_into().unwrap(),
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
@@ -430,7 +434,7 @@ impl MmuWrite<'_> {
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00
-            DIV => self.0.div = 0,
+            DIV => self.0.system_counter = 0,
             TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,

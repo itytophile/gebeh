@@ -1627,6 +1627,7 @@ dependencies = [
  "color-eyre",
  "env_logger",
  "gb-core",
+ "log",
  "pixels",
  "winit",
 ]

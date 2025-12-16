@@ -14,7 +14,7 @@ fn dmg_acid2() {
     let mut state = State::new(rom.leak());
     let mut machine = Cpu::default()
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
-        .compose(Timer::default());
+        .compose(Timer);
     let mut previous_ly = None;
     let expected = include_bytes!("acid2_expected.txt");
     let split = expected.split(|a| *a == b'\n').map(|slice| {

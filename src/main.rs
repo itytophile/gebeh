@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/call_cc_timing2.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/div_timing.gb",
     )
     .unwrap();
     // let rom =
@@ -76,9 +76,10 @@ fn main() {
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     let mut state = State::new(rom.leak());
-    // the machine should not be affected by the composition order
+    // the machine should not be affected by the composition order for state read.
+    // However for writes, order matters for the cpu and timer.
     let mut machine = Cpu::default()
-        .compose(Timer::default())
+        .compose(Timer)
         .compose(Dma::default())
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
 
