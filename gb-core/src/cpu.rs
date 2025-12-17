@@ -11,6 +11,14 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
+#[derive(Clone, PartialEq, Eq)]
+enum Ime {
+    Off,
+    On,
+    // https://gbdev.io/pandocs/Interrupts.html#ime-interrupt-master-enable-flag-write-only
+    Delay,
+}
+
 #[derive(Clone)]
 pub struct Cpu {
     pub sp: u16,
@@ -27,7 +35,7 @@ pub struct Cpu {
     pub is_cb_mode: bool,
     pub pc: u16,
     pub instruction_register: (ArrayVec<Instruction, 5>, SetPc),
-    pub ime: bool,
+    pub ime: Ime,
     pub is_halted: bool,
     pub interrupt_to_execute: Option<u8>,
     pub stop_mode: bool,
@@ -54,7 +62,7 @@ impl Default for Cpu {
             // yes the cpu can fetch opcodes in parallel of the execution but for the first boost we must
             // feed a nop or the cpu will fetch + execute the fist opcode in the same cycle
             instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
-            ime: Default::default(),
+            ime: Ime::Off,
             is_halted: Default::default(),
             interrupt_to_execute: Default::default(),
             stop_mode: Default::default(),
@@ -161,6 +169,12 @@ impl Cpu {
         match flag {
             Flag::Z => self.f.contains(Flags::Z),
             Flag::C => self.f.contains(Flags::C),
+        }
+    }
+
+    fn enable_ime(&mut self) {
+        if self.ime == Ime::Off {
+            self.ime = Ime::Delay;
         }
     }
 
@@ -357,8 +371,8 @@ impl Cpu {
                 flags.set(Flags::C, carry);
                 self.a = result;
             }
-            NoRead(Di) => self.ime = false,
-            NoRead(Ei) => self.ime = true,
+            NoRead(Di) => self.ime = Ime::Off,
+            NoRead(Ei) => self.enable_ime(),
             NoRead(DecPc) => self.pc -= 1,
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1]);
@@ -499,7 +513,7 @@ impl Cpu {
             }
             NoRead(Reti) => {
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
-                self.ime = true;
+                self.enable_ime();
             }
             NoRead(Cpl) => {
                 self.f.insert(Flags::N | Flags::H);
@@ -779,7 +793,7 @@ impl StateMachine for Cpu {
         // désactiver la vérification des interruptions tant que interrupt_to_execute est défini
         // Pas de write_once pour les interruptions car c'est trop spécifique (oui raison de merde)
         if self.interrupt_to_execute.is_none()
-            && self.ime
+            && self.ime == Ime::On
             && let Some((interrupt, address)) = [
                 (Ints::VBLANK, 0x40),
                 (Ints::LCD, 0x48),
@@ -797,12 +811,16 @@ impl StateMachine for Cpu {
             // Citation: The IF bit corresponding to this interrupt and the IME flag are reset by the CPU
             // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
             interrupt_flag_to_reset = Some(interrupt);
-            self.ime = false;
+            self.ime = Ime::Off;
             // interrupt will be handled at next opcode
             // Citation: and interrupt servicing happens after fetching the next opcode,
             // so PC has to be adjusted to point to the next executed instruction
             // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#isr-and-nmi
             self.interrupt_to_execute = Some(address);
+        }
+
+        if self.ime == Ime::Delay {
+            self.ime = Ime::On;
         }
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
@@ -871,7 +889,7 @@ impl StateMachine for Cpu {
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
-                && !self.ime
+                && self.ime == Ime::Off
                 && !interrupts_to_execute.is_empty()
             {
                 todo!("halt bug")

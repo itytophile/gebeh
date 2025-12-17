@@ -84,3 +84,8 @@ fn di_timing_gs() {
 fn div_timing() {
     test_mooneye("div_timing.gb");
 }
+
+#[test]
+fn ei_sequence() {
+    test_mooneye("ei_sequence.gb");
+}
