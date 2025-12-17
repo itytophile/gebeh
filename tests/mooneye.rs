@@ -129,3 +129,8 @@ fn intr_timing() {
 fn jp_cc_timing() {
     test_mooneye("jp_cc_timing.gb");
 }
+
+#[test]
+fn jp_timing() {
+    test_mooneye("jp_timing.gb");
+}
