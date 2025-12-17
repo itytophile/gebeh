@@ -99,3 +99,8 @@ fn ei_timing() {
 fn halt_ime0_ei() {
     test_mooneye("halt_ime0_ei.gb");
 }
+
+#[test]
+fn halt_ime0_nointr_timing() {
+    test_mooneye("halt_ime0_nointr_timing.gb");
+}
