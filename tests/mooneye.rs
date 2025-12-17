@@ -109,3 +109,9 @@ fn halt_ime0_nointr_timing() {
 fn halt_ime1_timing() {
     test_mooneye("halt_ime1_timing.gb");
 }
+
+#[test]
+fn halt_ime1_timing2_gs() {
+    test_mooneye("halt_ime1_timing2-GS.gb");
+}
+
