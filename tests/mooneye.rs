@@ -94,3 +94,8 @@ fn ei_sequence() {
 fn ei_timing() {
     test_mooneye("ei_timing.gb");
 }
+
+#[test]
+fn halt_ime0_ei() {
+    test_mooneye("halt_ime0_ei.gb");
+}
