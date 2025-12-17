@@ -115,3 +115,7 @@ fn halt_ime1_timing2_gs() {
     test_mooneye("halt_ime1_timing2-GS.gb");
 }
 
+#[test]
+fn if_ie_registers() {
+    test_mooneye("if_ie_registers.gb");
+}
