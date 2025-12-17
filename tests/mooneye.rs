@@ -124,3 +124,8 @@ fn if_ie_registers() {
 fn intr_timing() {
     test_mooneye("intr_timing.gb");
 }
+
+#[test]
+fn jp_cc_timing() {
+    test_mooneye("jp_cc_timing.gb");
+}
