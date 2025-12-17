@@ -139,3 +139,8 @@ fn jp_timing() {
 fn ld_hl_sp_e_timing() {
     test_mooneye("ld_hl_sp_e_timing.gb");
 }
+
+#[test]
+fn oam_dma_restart() {
+    test_mooneye("oam_dma_restart.gb");
+}

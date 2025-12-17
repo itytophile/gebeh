@@ -12,7 +12,7 @@ use crate::{
 use arrayvec::ArrayVec;
 
 #[derive(Clone, PartialEq, Eq)]
-enum Ime {
+pub enum Ime {
     Off,
     On,
     // https://gbdev.io/pandocs/Interrupts.html#ime-interrupt-master-enable-flag-write-only

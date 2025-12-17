@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/div_timing.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/oam_dma_restart.gb",
     )
     .unwrap();
     // let rom =
@@ -77,10 +77,10 @@ fn main() {
 
     let mut state = State::new(rom.leak());
     // the machine should not be affected by the composition order for state read.
-    // However for writes, order matters for the cpu and timer.
-    let mut machine = Cpu::default()
+    // However for writes, order matters for the cpu and timer and dma (lol).
+    let mut machine = Dma::default()
+        .compose(Cpu::default())
         .compose(Timer)
-        .compose(Dma::default())
         .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
 
     let mut save_states = vec![(machine.clone(), state.clone())];

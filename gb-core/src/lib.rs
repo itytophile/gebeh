@@ -5,7 +5,6 @@ use crate::state::{State, WriteOnlyState};
 pub mod cartridge;
 pub mod cpu;
 pub mod dma;
-pub mod hardware;
 pub mod ic;
 pub mod instructions;
 pub mod ppu;
