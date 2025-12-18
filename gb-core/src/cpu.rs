@@ -852,21 +852,7 @@ impl StateMachine for Cpu {
         if self.instruction_register.0.is_empty() {
             // affecter et incrémenter le pc même dans le cas de l'interruption
             self.pc = self.get_16bit_register(self.instruction_register.1.0);
-            let opcode = mmu.read(self.pc);
-            if self.pc == 0xfe00 {
-                log::warn!(
-                    "Damn, need to fetch at ${:04x} value 0x{opcode:02x}",
-                    self.pc
-                );
-            }
-
-            if opcode == 0xff {
-                log::warn!("${:04x} RST 0x38, DMA: {:?}", self.pc, state.dma_state);
-            }
-            if opcode == 0x77 {
-                log::warn!("${:04x} LD (HL), A, DMA: {:?}", self.pc, state.dma_state);
-            }
-            self.current_opcode = opcode;
+            self.current_opcode = mmu.read(self.pc);
             self.pc = self.pc.wrapping_add(1);
         }
 

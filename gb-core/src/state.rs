@@ -96,13 +96,6 @@ const DMG_BOOT: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
 
-#[derive(Clone, PartialEq, Eq, Debug, Copy)]
-pub enum DmaState {
-    Starting,
-    Active,
-    Off,
-}
-
 #[derive(Clone)]
 pub struct State {
     pub boot_rom: &'static [u8; 256],
@@ -111,7 +104,8 @@ pub struct State {
     pub hram: [u8; (INTERRUPT_ENABLE - HRAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
-    pub dma_state: DmaState,
+    pub dma_request: bool,
+    pub is_dma_active: bool,
     pub bgp_register: u8,
     pub obp0: u8,
     pub obp1: u8,
@@ -160,7 +154,8 @@ impl State {
             hram: [0; (INTERRUPT_ENABLE - HRAM) as usize],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
-            dma_state: DmaState::Off,
+            dma_request: false,
+            is_dma_active: false,
             bgp_register: 0,
             obp0: 0,
             obp1: 0,
@@ -206,7 +201,7 @@ impl State {
     }
     pub fn get_data_for_write(&self) -> DataForWrite {
         DataForWrite {
-            dma_active: self.dma_state == DmaState::Active,
+            dma_active: self.is_dma_active,
             lcd_status: self.lcd_status,
         }
     }
@@ -265,8 +260,12 @@ impl<'a> WriteOnlyState<'a> {
         self.0.oam[usize::from(index)] = value;
     }
 
-    pub fn set_dma_state(&mut self, state: DmaState) {
-        self.0.dma_state = state;
+    pub fn set_dma_active(&mut self, value: bool) {
+        self.0.is_dma_active = value;
+    }
+
+    pub fn set_dma_request(&mut self, value: bool) {
+        self.0.dma_request = value;
     }
 
     pub fn increment_system_counter(&mut self) {
@@ -389,7 +388,7 @@ impl MmuRead<'_> {
 
 impl<'a> MmuReadCpu<'a> {
     pub fn read(&self, index: u16) -> u8 {
-        if self.0.0.dma_state == DmaState::Active && (OAM..NOT_USABLE).contains(&index) {
+        if self.0.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return 0xff;
         }
         self.0.read(index)
@@ -476,9 +475,8 @@ impl MmuWrite<'_> {
             LY => {} // read only
             LYC => self.0.lyc = value,
             DMA => {
-                log::warn!("write DMA");
                 self.0.dma_register = value;
-                self.0.dma_state = DmaState::Starting;
+                self.0.dma_request = true;
             }
             BGP => self.0.bgp_register = value,
             OBP0 => self.0.obp0 = value,
