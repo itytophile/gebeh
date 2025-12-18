@@ -206,7 +206,7 @@ impl State {
     }
     pub fn get_data_for_write(&self) -> DataForWrite {
         DataForWrite {
-            dma_active: self.dma_state != DmaState::Off,
+            dma_active: self.dma_state == DmaState::Active,
             lcd_status: self.lcd_status,
         }
     }
@@ -389,7 +389,7 @@ impl MmuRead<'_> {
 
 impl<'a> MmuReadCpu<'a> {
     pub fn read(&self, index: u16) -> u8 {
-        if self.0.0.dma_state != DmaState::Off && (OAM..NOT_USABLE).contains(&index) {
+        if self.0.0.dma_state == DmaState::Active && (OAM..NOT_USABLE).contains(&index) {
             return 0xff;
         }
         self.0.read(index)
