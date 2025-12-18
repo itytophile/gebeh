@@ -96,7 +96,7 @@ const DMG_BOOT: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug, Copy)]
 pub enum DmaState {
     Starting,
     Active,

@@ -825,32 +825,50 @@ impl StateMachine for Cpu {
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
+        } else if !self.is_cb_mode
+            && let Some(address) = self.interrupt_to_execute.take()
+        {
+            // println!("Interrupt handling");
+            use NoReadInstruction::*;
+            self.instruction_register.0 = vec([
+                Nop.into(),
+                WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
+                WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
+                DecStackPointer.into(),
+            ]);
+            self.instruction_register.1 = Default::default();
+            DecPc.into()
         } else {
+            let InstructionsAndSetPc((head, tail), set_pc) =
+                get_instructions(self.current_opcode, self.is_cb_mode);
+            self.is_cb_mode = false;
+            self.instruction_register.0 = tail;
+            self.instruction_register.1 = set_pc;
+            head
+        };
+
+        // log::warn!("Will execute {inst:?}");
+
+        if self.instruction_register.0.is_empty() {
             // affecter et incrémenter le pc même dans le cas de l'interruption
             self.pc = self.get_16bit_register(self.instruction_register.1.0);
             let opcode = mmu.read(self.pc);
+            if self.pc == 0xfe00 {
+                log::warn!(
+                    "Damn, need to fetch at ${:04x} value 0x{opcode:02x}",
+                    self.pc
+                );
+            }
+
+            if opcode == 0xff {
+                log::warn!("${:04x} RST 0x38, DMA: {:?}", self.pc, state.dma_state);
+            }
+            if opcode == 0x77 {
+                log::warn!("${:04x} LD (HL), A, DMA: {:?}", self.pc, state.dma_state);
+            }
             self.current_opcode = opcode;
             self.pc = self.pc.wrapping_add(1);
-            if let Some(address) = self.interrupt_to_execute.take() {
-                // println!("Interrupt handling");
-                use NoReadInstruction::*;
-                self.instruction_register.0 = vec([
-                    Nop.into(),
-                    WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
-                    WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
-                    DecStackPointer.into(),
-                ]);
-                self.instruction_register.1 = Default::default();
-                DecPc.into()
-            } else {
-                let InstructionsAndSetPc((head, tail), set_pc) =
-                    get_instructions(opcode, self.is_cb_mode);
-                self.is_cb_mode = false;
-                self.instruction_register.0 = tail;
-                self.instruction_register.1 = set_pc;
-                head
-            }
-        };
+        }
 
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),

@@ -227,7 +227,7 @@ pub enum AfterReadInstruction {
 // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
 pub type Instructions = (Instruction, ArrayVec<Instruction, 5>);
 
-pub fn vec<const N: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, 5> {
+pub fn vec<const N: usize, const O: usize>(insts: [Instruction; N]) -> ArrayVec<Instruction, O> {
     ArrayVec::from_iter(insts)
 }
 
@@ -524,7 +524,7 @@ mod opcodes {
 
 use opcodes::*;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InstructionsAndSetPc(pub Instructions, pub SetPc);
 
 impl From<Instructions> for InstructionsAndSetPc {
