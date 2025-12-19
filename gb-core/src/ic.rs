@@ -15,3 +15,20 @@ bitflags::bitflags! {
         const JOYPAD = 1 << 4;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::ic::Ints;
+
+    #[test]
+    fn good_priority() {
+        let ints = Ints::all();
+        let mut ints = ints.iter();
+        assert_eq!(Some(Ints::VBLANK), ints.next());
+        assert_eq!(Some(Ints::LCD), ints.next());
+        assert_eq!(Some(Ints::TIMER), ints.next());
+        assert_eq!(Some(Ints::SERIAL), ints.next());
+        assert_eq!(Some(Ints::JOYPAD), ints.next());
+        assert_eq!(None, ints.next());
+    }
+}

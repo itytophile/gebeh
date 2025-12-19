@@ -90,6 +90,7 @@ pub enum NoReadInstruction {
     WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit),
     WriteLsbPcWhereSpPointsAndLoadCacheToPc,
     WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(u8),
+    FinalStepInterruptDispatch, // very similar to WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc
     Load {
         to: Register8Bit,
         from: Register8Bit,

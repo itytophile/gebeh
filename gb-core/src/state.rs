@@ -242,9 +242,6 @@ impl<'a> WriteOnlyState<'a> {
     pub fn set_ly(&mut self, value: u8) {
         self.0.ly = value;
     }
-    pub fn remove_if_bit(&mut self, bit: Ints) {
-        self.0.interrupt_flag.remove(bit);
-    }
     pub fn set_timer_counter(&mut self, timer_counter: u8) {
         self.0.timer_counter = timer_counter;
     }

@@ -45,7 +45,7 @@ impl Mbc {
     }
     pub fn write(&mut self, index: u16, value: u8) {
         match self {
-            Mbc::NoMbc(_) => panic!("Trying to write to rom"),
+            Mbc::NoMbc(_) => {}
             Mbc::Mbc1(mbc1) => mbc1.write(index, value),
         }
     }

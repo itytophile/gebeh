@@ -199,3 +199,8 @@ fn rst_timing() {
 fn daa() {
     test_mooneye("instr/daa.gb");
 }
+
+#[test]
+fn ie_push() {
+    test_mooneye("interrupts/ie_push.gb");
+}

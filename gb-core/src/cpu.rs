@@ -37,7 +37,6 @@ pub struct Cpu {
     pub instruction_register: (ArrayVec<Instruction, 5>, SetPc),
     pub ime: Ime,
     pub is_halted: bool,
-    pub interrupt_to_execute: Option<u8>,
     pub stop_mode: bool,
     // test purposes
     pub current_opcode: u8,
@@ -64,7 +63,6 @@ impl Default for Cpu {
             instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
             ime: Ime::Off,
             is_halted: Default::default(),
-            interrupt_to_execute: Default::default(),
             stop_mode: Default::default(),
             current_opcode: 0,
         }
@@ -178,7 +176,12 @@ impl Cpu {
         }
     }
 
-    fn execute_instruction(&mut self, mut mmu: MmuWrite, inst: AfterReadInstruction) {
+    fn execute_instruction(
+        &mut self,
+        mut mmu: MmuWrite,
+        inst: AfterReadInstruction,
+        interrupts_to_execute: Ints,
+    ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
@@ -377,6 +380,23 @@ impl Cpu {
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1]);
                 self.pc = u16::from(address);
+            }
+            NoRead(FinalStepInterruptDispatch) => {
+                mmu.write(self.sp, self.pc.to_be_bytes()[1]);
+                // thanks https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/cpu.rs#L139
+                let interrupt = interrupts_to_execute.iter().next();
+                // we have to check here the interrupts to pass the ie_push test
+                self.pc = match interrupt {
+                    Some(Ints::VBLANK) => 0x0040,
+                    Some(Ints::LCD) => 0x0048,
+                    Some(Ints::TIMER) => 0x0050,
+                    Some(Ints::SERIAL) => 0x0058,
+                    Some(Ints::JOYPAD) => 0x0060,
+                    _ => 0x0000,
+                };
+                if let Some(interrupt) = interrupt {
+                    mmu.inner().remove_if(interrupt);
+                }
             }
             NoRead(Res(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) & !(1 << bit));
@@ -783,56 +803,15 @@ impl StateMachine for Cpu {
 
         let mmu = MmuReadCpu(state.mmu());
 
-        let mut interrupt_flag_to_reset = Option::<Ints>::None;
-
-        // https://gbdev.io/pandocs/Interrupt_Sources.html
-        // interrupt_to_execute peut être défini en même temps que ime = true
-        // dans le cas du RETI
-        // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#ret-and-reti
-        // Malheureusement je ne comprends pas l'explication, donc je vais simplement
-        // désactiver la vérification des interruptions tant que interrupt_to_execute est défini
-        // Pas de write_once pour les interruptions car c'est trop spécifique (oui raison de merde)
-        if self.interrupt_to_execute.is_none()
-            && self.ime == Ime::On
-            && let Some((interrupt, address)) = [
-                (Ints::VBLANK, 0x40),
-                (Ints::LCD, 0x48),
-                (Ints::TIMER, 0x50),
-                (Ints::SERIAL, 0x58),
-                (Ints::JOYPAD, 0x60),
-            ]
-            .into_iter()
-            .find(|(flag, _)| interrupts_to_execute.contains(*flag))
-        {
-            // println!(
-            //     "Interrupt handler: {interrupt:?}, enable: {:?}, lcd_status: {:?}",
-            //     state.interrupt_enable, state.lcd_status
-            // );
-            // Citation: The IF bit corresponding to this interrupt and the IME flag are reset by the CPU
-            // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
-            interrupt_flag_to_reset = Some(interrupt);
-            self.ime = Ime::Off;
-            // interrupt will be handled at next opcode
-            // Citation: and interrupt servicing happens after fetching the next opcode,
-            // so PC has to be adjusted to point to the next executed instruction
-            // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#isr-and-nmi
-            self.interrupt_to_execute = Some(address);
-        }
-
-        if self.ime == Ime::Delay {
-            self.ime = Ime::On;
-        }
-
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
-        } else if !self.is_cb_mode
-            && let Some(address) = self.interrupt_to_execute.take()
-        {
+        } else if !self.is_cb_mode && self.ime == Ime::On && !interrupts_to_execute.is_empty() {
+            self.ime = Ime::Off;
             // println!("Interrupt handling");
             use NoReadInstruction::*;
             self.instruction_register.0 = vec([
                 Nop.into(),
-                WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address).into(),
+                FinalStepInterruptDispatch.into(),
                 WriteMsbOfRegisterWhereSpPointsAndDecSp(Register16Bit::PC).into(),
                 DecStackPointer.into(),
             ]);
@@ -846,6 +825,10 @@ impl StateMachine for Cpu {
             self.instruction_register.1 = set_pc;
             head
         };
+
+        if self.ime == Ime::Delay {
+            self.ime = Ime::On;
+        }
 
         // log::warn!("Will execute {inst:?}");
 
@@ -885,11 +868,7 @@ impl StateMachine for Cpu {
         let data_for_write = state.get_data_for_write();
 
         Some(move |mut state: WriteOnlyState<'_>| {
-            if let Some(flag) = interrupt_flag_to_reset {
-                state.remove_if_bit(flag);
-            }
-
-            self.execute_instruction(state.mmu(data_for_write), inst);
+            self.execute_instruction(state.mmu(data_for_write), inst, interrupts_to_execute);
 
             // https://gbdev.io/pandocs/halt.html#halt-bug
             if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
