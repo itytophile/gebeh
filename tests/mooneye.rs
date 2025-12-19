@@ -169,3 +169,28 @@ fn push_timing() {
 fn rapid_di_ei() {
     test_mooneye("rapid_di_ei.gb");
 }
+
+#[test]
+fn ret_cc_timing() {
+    test_mooneye("ret_cc_timing.gb");
+}
+
+#[test]
+fn reti_intr_timing() {
+    test_mooneye("reti_intr_timing.gb");
+}
+
+#[test]
+fn reti_timing() {
+    test_mooneye("reti_timing.gb");
+}
+
+#[test]
+fn ret_timing() {
+    test_mooneye("ret_timing.gb");
+}
+
+#[test]
+fn rst_timing() {
+    test_mooneye("rst_timing.gb");
+}
