@@ -164,3 +164,8 @@ fn pop_timing() {
 fn push_timing() {
     test_mooneye("push_timing.gb");
 }
+
+#[test]
+fn rapid_di_ei() {
+    test_mooneye("rapid_di_ei.gb");
+}
