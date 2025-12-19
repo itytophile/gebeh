@@ -149,3 +149,8 @@ fn oam_dma_restart() {
 fn oam_dma_start() {
     test_mooneye("oam_dma_start.gb");
 }
+
+#[test]
+fn oam_dma_timing() {
+    test_mooneye("oam_dma_timing.gb");
+}
