@@ -154,3 +154,8 @@ fn oam_dma_start() {
 fn oam_dma_timing() {
     test_mooneye("oam_dma_timing.gb");
 }
+
+#[test]
+fn pop_timing() {
+    test_mooneye("pop_timing.gb");
+}
