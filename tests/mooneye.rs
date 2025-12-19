@@ -194,3 +194,8 @@ fn ret_timing() {
 fn rst_timing() {
     test_mooneye("rst_timing.gb");
 }
+
+#[test]
+fn daa() {
+    test_mooneye("instr/daa.gb");
+}
