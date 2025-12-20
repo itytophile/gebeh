@@ -198,7 +198,7 @@ impl Mbc5 {
                     self.ram[usize::from(self.ram_offset + index - EXTERNAL_RAM)] = value;
                 }
             }
-            _ => {},
+            _ => {}
         }
     }
     fn get_rom_bank_number(&self) -> u16 {

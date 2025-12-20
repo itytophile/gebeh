@@ -257,7 +257,8 @@ fn draw_emulator(
     pixels: &mut [[u8; 4]],
     previous_ly: &mut Option<u8>,
 ) {
-    loop {
+    let start = Instant::now();
+    while start.elapsed() <= Duration::from_millis(33) {
         machine.execute(state).unwrap()(WriteOnlyState::new(state));
 
         if *previous_ly == Some(state.ly) {
