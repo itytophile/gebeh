@@ -2,7 +2,7 @@ use core::ops::{RangeFrom, RangeInclusive};
 
 use crate::{
     StateMachine,
-    state::{State, WriteOnlyState},
+    state::{ECHO_RAM, State, WORK_RAM, WriteOnlyState},
 };
 
 // about conflicts
@@ -33,7 +33,20 @@ impl StateMachine for Dma {
         let source = is_active
             .then_some(&mut self.0)
             .and_then(|range| range.next())
-            .map(|source| (source, state.mmu().read(source)));
+            .map(|source| {
+                (
+                    source,
+                    state.mmu().read(
+                        // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
+                        // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215
+                        if source >= ECHO_RAM {
+                            source - ECHO_RAM + WORK_RAM
+                        } else {
+                            source
+                        },
+                    ),
+                )
+            });
 
         // must check now or the DMA will be active one cycle longer
         let is_empty = self.0.is_empty();

@@ -215,7 +215,7 @@ fn oam_dma_reg_read() {
     test_mooneye("oam_dma/reg_read.gb");
 }
 
-// #[test]
-// fn oam_dma_sources_gs() {
-//     test_mooneye("oam_dma/sources-GS.gb");
-// }
+#[test]
+fn oam_dma_sources_gs() {
+    test_mooneye("oam_dma/sources-GS.gb");
+}
