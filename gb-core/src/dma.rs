@@ -30,9 +30,9 @@ impl StateMachine for Dma {
         // the mooneye emulator can set the register past 0xdf so we'll do the same
         let register = state.dma_register;
 
-        let source = self
-            .0
-            .next()
+        let source = is_active
+            .then_some(&mut self.0)
+            .and_then(|range| range.next())
             .map(|source| (source, state.mmu().read(source)));
 
         // must check now or the DMA will be active one cycle longer

@@ -139,12 +139,11 @@ impl Mbc1 {
 #[derive(Clone)]
 pub struct Mbc5 {
     rom: &'static [u8],
-    rom_bank_number: u16, // 9 bits
+    rom_offset: usize,
     // 128 KiB
     ram: [u8; 0x20000],
     ram_offset: u16,
     ram_enabled: bool,
-    rom_bank_count: u16,
     ram_bank_count: u8,
 }
 
@@ -152,9 +151,8 @@ impl Mbc5 {
     fn new(rom: &'static [u8]) -> Self {
         Self {
             rom,
-            rom_bank_number: 0,
+            rom_offset: usize::from(ROM_BANK_SIZE),
             ram_offset: 0,
-            rom_bank_count: get_factor_32_kib_rom(rom) * 2,
             ram_bank_count: get_factor_8_kib_ram(rom),
             ram: [0; 0x20000],
             ram_enabled: false,
@@ -162,13 +160,17 @@ impl Mbc5 {
     }
     fn read(&self, index: u16) -> u8 {
         match index {
-            ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
-            SWITCHABLE_ROM_BANK..VIDEO_RAM => {
-                self.rom
-                    [self.get_rom_offset() + usize::from(index) - usize::from(SWITCHABLE_ROM_BANK)]
+            // 0x0000-0x3FFF - ROM bank 00
+            0x0000..=0x3fff => self.rom[usize::from(index)],
+            // 0x4000-0x7FFF - ROM bank 00-1FF
+            0x4000..=0x7fff => self.rom[self.rom_offset + (index - 0x4000) as usize],
+            EXTERNAL_RAM..WORK_RAM => {
+                if !self.ram_enabled {
+                    return 0xff;
+                }
+                self.ram[usize::from(self.ram_offset) + (index - 0xa000) as usize]
             }
-            EXTERNAL_RAM..WORK_RAM => self.ram[usize::from(self.ram_offset - EXTERNAL_RAM + index)],
-            _ => panic!(),
+            _ => 0xff,
         }
     }
     fn write(&mut self, index: u16, value: u8) {
@@ -177,37 +179,45 @@ impl Mbc5 {
             0x0000..=0x1fff => {
                 self.ram_enabled = (value & 0x0f) == 0x0a;
             }
-            // https://gbdev.io/pandocs/MBC5.html#2000-2fff---8-least-significant-bits-of-rom-bank-number-write-only
-            0x2000..0x3000 => {
-                self.rom_bank_number = (self.rom_bank_number & 0xff00) | u16::from(value);
+            // 0x2000-0x2FFF - ROM bank selection 8 lower bits
+            0x2000..=0x2fff => {
+                // panic!("ROM BANK SELECTION 1 0x{value:02x}");
+                let rom_bank = value as u16;
+                self.set_rom_bank(rom_bank);
             }
-            // https://gbdev.io/pandocs/MBC5.html#3000-3fff---9th-bit-of-rom-bank-number-write-only
-            0x3000..0x4000 => {
-                self.rom_bank_number = (self.rom_bank_number & 0x00ff) | (u16::from(value) << 8);
+            // 0x3000-0x3FFF - ROM bank selection 9th bit
+            0x3000..=0x3fff => {
+                // panic!("ROM BANK SELECTION 2 0x{value:02x}");
+                let rom_bank = (self.rom_bank() & 0x00ff) + (((value & 0x01) as u16) << 8);
+                self.set_rom_bank(rom_bank);
             }
-            // 0x4000-0x5FFF - RAM bank selection and ROM bank selection upper bits
+            // 0x4000-0x5FFF - RAM bank selection
             0x4000..=0x5fff => {
-                let ram_bank = value & 0x03;
+                // log::warn!("RAM BANK SELECTION 0x{value:02x}");
+                let ram_bank = value & 0x0f;
+
                 if ram_bank >= self.ram_bank_count {
                     return;
                 }
+
                 self.set_ram_bank(ram_bank);
             }
             EXTERNAL_RAM..WORK_RAM => {
-                if self.ram_enabled {
-                    self.ram[usize::from(self.ram_offset + index - EXTERNAL_RAM)] = value;
+                if !self.ram_enabled {
+                    return;
                 }
+                self.ram[usize::from(self.ram_offset) + (index - 0xa000) as usize] = value;
             }
             _ => {}
         }
     }
-    fn get_rom_bank_number(&self) -> u16 {
-        (self.rom_bank_number & (0x1ff)).min(self.rom_bank_count - 1)
-    }
-    pub fn get_rom_offset(&self) -> usize {
-        usize::from(self.get_rom_bank_number()) * usize::from(ROM_BANK_SIZE)
+    pub fn set_rom_bank(&mut self, rom_bank: u16) {
+        self.rom_offset = rom_bank as usize * usize::from(ROM_BANK_SIZE);
     }
     pub fn set_ram_bank(&mut self, ram_bank: u8) {
         self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
+    }
+    pub fn rom_bank(&self) -> u16 {
+        (self.rom_offset / usize::from(ROM_BANK_SIZE)) as u16
     }
 }

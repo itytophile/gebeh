@@ -807,7 +807,6 @@ impl StateMachine for Cpu {
             inst
         } else if !self.is_cb_mode && self.ime == Ime::On && !interrupts_to_execute.is_empty() {
             self.ime = Ime::Off;
-            // println!("Interrupt handling");
             use NoReadInstruction::*;
             self.instruction_register.0 = vec([
                 Nop.into(),
