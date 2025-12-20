@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/interrupts/ie_push.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/oam_dma/sources-GS.gb",
     )
     .unwrap();
     // let rom =

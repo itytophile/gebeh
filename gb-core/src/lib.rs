@@ -14,7 +14,7 @@ pub mod timer;
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;
 
-pub fn get_factor_32_kib_rom(rom: &[u8]) -> u8 {
+pub fn get_factor_32_kib_rom(rom: &[u8]) -> u16 {
     1 << rom[0x148]
 }
 

@@ -19,9 +19,18 @@ const LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff11;
 const VOLUME_AND_ENVELOPE: u16 = 0xff12;
 const CHANNEL_1_PERIOD_LOW: u16 = 0xff13;
 const CHANNEL_1_PERIOD_HIGH_AND_CONTROL: u16 = 0xff14;
+const CHANNEL_2_LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff16;
+const CHANNEL_2_VOLUME_AND_ENVELOPE: u16 = 0xff17;
+const CHANNEL_2_PERIOD_LOW: u16 = 0xff18;
+const CHANNEL_2_PERIOD_HIGH_AND_CONTROL: u16 = 0xff19;
 const CHANNEL_3_DAC_ENABLE: u16 = 0xff1a;
+const CHANNEL_3_LENGTH_TIMER: u16 = 0xff1b;
 const CHANNEL_3_OUTPUT_LEVEL: u16 = 0xff1c;
+const CHANNEL_3_PERIOD_HIGH_AND_CONTROL: u16 = 0xff1e;
+const CHANNEL_3_PERIOD_LOW: u16 = 0xff1d;
 const CHANNEL_4_LENGTH_TIMER: u16 = 0xff20;
+const CHANNEL_4_VOLUME_AND_ENVELOPE: u16 = 0xff21;
+const CHANNEL_4_FREQUENCY_AND_RANDOMNESS: u16 = 0xff22;
 const CHANNEL_4_CONTROL: u16 = 0xff23;
 const MASTER_VOLUME_AND_VIN_PANNING: u16 = 0xff24;
 const SOUND_PANNING: u16 = 0xff25;
@@ -116,9 +125,18 @@ pub struct State {
     pub volume_and_envelope: u8,
     pub channel_1_period_low: u8,
     pub channel_1_period_high_and_control: u8,
+    pub channel_2_length_timer_and_duty_cycle: u8,
+    pub channel_2_volume_and_envelope: u8,
+    pub channel_2_period_low: u8,
+    pub channel_2_period_high_and_control: u8,
     pub channel_3_dac_enable: u8,
+    pub channel_3_length_timer: u8,
     pub channel_3_output_level: u8,
+    pub channel_3_period_high_and_control: u8,
+    pub channel_3_period_low: u8,
     pub channel_4_length_timer: u8,
+    pub channel_4_volume_and_envelope: u8,
+    pub channel_4_frequency_and_randomness: u8,
     pub channel_4_control: u8,
     pub master_volume_and_vin_panning: u8,
     pub sound_panning: u8,
@@ -166,9 +184,18 @@ impl State {
             volume_and_envelope: 0,
             channel_1_period_low: 0,
             channel_1_period_high_and_control: 0,
+            channel_2_length_timer_and_duty_cycle: 0,
+            channel_2_volume_and_envelope: 0,
+            channel_2_period_low: 0,
+            channel_2_period_high_and_control: 0,
             channel_3_dac_enable: 0,
+            channel_3_length_timer: 0,
             channel_3_output_level: 0,
+            channel_3_period_high_and_control: 0,
+            channel_3_period_low: 0,
             channel_4_length_timer: 0,
+            channel_4_volume_and_envelope: 0,
+            channel_4_frequency_and_randomness: 0,
             channel_4_control: 0,
             master_volume_and_vin_panning: 0,
             sound_panning: 0,
@@ -340,11 +367,25 @@ impl MmuRead<'_> {
             CHANNEL_1_PERIOD_HIGH_AND_CONTROL => {
                 self.0.channel_1_period_high_and_control | 0b10111111
             }
+
             0xff15 => 0xff,
+            CHANNEL_2_LENGTH_TIMER_AND_DUTY_CYCLE => self.0.channel_2_length_timer_and_duty_cycle,
+            CHANNEL_2_VOLUME_AND_ENVELOPE => self.0.channel_2_volume_and_envelope,
+            CHANNEL_2_PERIOD_LOW => 0xff,
+            CHANNEL_2_PERIOD_HIGH_AND_CONTROL => {
+                self.0.channel_2_period_high_and_control | 0b10111111
+            }
             CHANNEL_3_DAC_ENABLE => self.0.channel_3_dac_enable | 0b01111111,
+            CHANNEL_3_LENGTH_TIMER => 0xff,
             CHANNEL_3_OUTPUT_LEVEL => self.0.channel_3_output_level | 0b10011111,
+            CHANNEL_3_PERIOD_HIGH_AND_CONTROL => {
+                self.0.channel_3_period_high_and_control | 0b10111111
+            }
+            CHANNEL_3_PERIOD_LOW => 0xff,
             0xff1f => 0xff,
             CHANNEL_4_LENGTH_TIMER => 0xff,
+            CHANNEL_4_VOLUME_AND_ENVELOPE => self.0.channel_4_volume_and_envelope,
+            CHANNEL_4_FREQUENCY_AND_RANDOMNESS => self.0.channel_4_frequency_and_randomness,
             CHANNEL_4_CONTROL => self.0.channel_4_control | 0b10111111,
             MASTER_VOLUME_AND_VIN_PANNING => self.0.master_volume_and_vin_panning,
             SOUND_PANNING => self.0.sound_panning,
@@ -425,6 +466,7 @@ impl MmuWrite<'_> {
                     self.0.oam[usize::from(index - OAM)] = value
                 }
             }
+            NOT_USABLE..JOYPAD => {}
             JOYPAD => {
                 self.0
                     .joypad
@@ -449,10 +491,21 @@ impl MmuWrite<'_> {
             CHANNEL_1_PERIOD_LOW => self.0.channel_1_period_low = value,
             CHANNEL_1_PERIOD_HIGH_AND_CONTROL => self.0.channel_1_period_high_and_control = value,
             0xff15 => {}
+            CHANNEL_2_LENGTH_TIMER_AND_DUTY_CYCLE => {
+                self.0.channel_2_length_timer_and_duty_cycle = value
+            }
+            CHANNEL_2_VOLUME_AND_ENVELOPE => self.0.channel_2_volume_and_envelope = value,
+            CHANNEL_2_PERIOD_LOW => self.0.channel_2_period_low = value,
+            CHANNEL_2_PERIOD_HIGH_AND_CONTROL => self.0.channel_2_period_high_and_control = value,
             CHANNEL_3_DAC_ENABLE => self.0.channel_3_dac_enable = value,
+            CHANNEL_3_LENGTH_TIMER => self.0.channel_3_length_timer = value,
             CHANNEL_3_OUTPUT_LEVEL => self.0.channel_3_output_level = value,
+            CHANNEL_3_PERIOD_HIGH_AND_CONTROL => self.0.channel_3_period_high_and_control = value,
+            CHANNEL_3_PERIOD_LOW => self.0.channel_3_period_low = value,
             0xff1f => {}
             CHANNEL_4_LENGTH_TIMER => self.0.channel_4_length_timer = value,
+            CHANNEL_4_VOLUME_AND_ENVELOPE => self.0.channel_4_volume_and_envelope = value,
+            CHANNEL_4_FREQUENCY_AND_RANDOMNESS => self.0.channel_4_frequency_and_randomness = value,
             CHANNEL_4_CONTROL => self.0.channel_4_control = value,
             MASTER_VOLUME_AND_VIN_PANNING => self.0.master_volume_and_vin_panning = value,
             SOUND_PANNING => self.0.sound_panning = value,
@@ -481,16 +534,13 @@ impl MmuWrite<'_> {
             WY => self.0.wy = value,
             WX => self.0.wx = value,
             0xff4c => {}
-            0xff4d => {
-                log::warn!("Writing $ff4d (Prepare speed switch)");
-            }
+            0xff4d => {}
             0xff4e => {}
             0xff4f => {}
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => self.0.interrupt_enable = Ints::from_bits_retain(value),
-            _ => todo!("Writing 0x{value:02x} at ${index:04x}"),
         }
     }
 }
