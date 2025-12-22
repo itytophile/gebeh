@@ -35,7 +35,6 @@ pub fn machine_to_serial_iter(
             machine.execute(state).unwrap()(WriteOnlyState::new(state));
             let (_, TestSerial(byte)) = machine;
             if let Some(byte) = byte.take() {
-                println!("burp");
                 return Some(byte);
             }
         }

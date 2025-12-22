@@ -219,3 +219,10 @@ fn oam_dma_reg_read() {
 fn oam_dma_sources_gs() {
     test_mooneye("oam_dma/sources-GS.gb");
 }
+
+// d'après mooneye, quand le cpu lit une donnée, avant de faire la lecture il exécute un cycle sur le périphérique lu.
+// dans le cas du ppu, cela implique que si le ppu modifie ly dans le même cycle de lecture, le cpu lit la nouvelle valeur.
+#[test]
+fn hblank_ly_scx_timing_gs() {
+    test_mooneye("ppu/hblank_ly_scx_timing-GS.gb");
+}

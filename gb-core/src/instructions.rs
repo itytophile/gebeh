@@ -234,11 +234,14 @@ pub fn vec<const N: usize, const O: usize>(insts: [Instruction; N]) -> ArrayVec<
 
 // what to set pc with after the last instruction
 #[derive(Clone)]
-pub struct SetPc(pub Register16Bit);
+pub enum FetchStep {
+    WithIncrement(Register16Bit),
+    NoIncrement, // Halt https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#halt
+}
 
-impl Default for SetPc {
+impl Default for FetchStep {
     fn default() -> Self {
-        Self(Register16Bit::PC)
+        Self::WithIncrement(Register16Bit::PC)
     }
 }
 
@@ -526,7 +529,7 @@ mod opcodes {
 use opcodes::*;
 
 #[derive(Default, Clone)]
-pub struct InstructionsAndSetPc(pub Instructions, pub SetPc);
+pub struct InstructionsAndSetPc(pub Instructions, pub FetchStep);
 
 impl From<Instructions> for InstructionsAndSetPc {
     fn from(value: Instructions) -> Self {
@@ -603,7 +606,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
                     Read(CONSUME_PC, ReadIntoLsb),
                     vec([Nop.into(), OffsetPc.into()]),
                 ),
-                SetPc(WZ),
+                FetchStep::WithIncrement(WZ),
             );
         }
         0x19 => add_hl_rr(DE),
@@ -760,7 +763,9 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
         0x73 => ld_rr_r(HL, E),
         0x74 => ld_rr_r(HL, H),
         0x75 => ld_rr_r(HL, L),
-        0x76 => (Halt.into(), Default::default()),
+        0x76 => {
+            return InstructionsAndSetPc((Halt.into(), Default::default()), FetchStep::NoIncrement);
+        }
         0x77 => ld_rr_r(HL, A),
         0x78 => ld_r_r(A, B),
         0x79 => ld_r_r(A, C),
@@ -1013,7 +1018,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), Nop.into(), AddSpE.into()]),
         ),
-        0xe9 => return InstructionsAndSetPc(Default::default(), SetPc(HL)),
+        0xe9 => return InstructionsAndSetPc(Default::default(), FetchStep::WithIncrement(HL)),
         0xea => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([

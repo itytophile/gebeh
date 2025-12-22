@@ -2,9 +2,9 @@ use crate::{
     StateMachine,
     ic::Ints,
     instructions::{
-        AfterReadInstruction, Condition, Flag, Instruction, InstructionsAndSetPc,
+        AfterReadInstruction, Condition, FetchStep, Flag, Instruction, InstructionsAndSetPc,
         NoReadInstruction, OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit,
-        Register16Bit, SetPc, get_instructions, vec,
+        Register16Bit, get_instructions, vec,
     },
     state::{MmuReadCpu, MmuWrite, State, WriteOnlyState},
 };
@@ -34,7 +34,7 @@ pub struct Cpu {
     pub f: Flags,
     pub is_cb_mode: bool,
     pub pc: u16,
-    pub instruction_register: (ArrayVec<Instruction, 5>, SetPc),
+    pub instruction_register: (ArrayVec<Instruction, 5>, FetchStep),
     pub ime: Ime,
     pub is_halted: bool,
     pub stop_mode: bool,
@@ -196,7 +196,7 @@ impl Cpu {
                         if self.get_flag(flag) != not {
                             self.instruction_register = (
                                 vec([Instruction::NoRead(Nop), Instruction::NoRead(OffsetPc)]),
-                                SetPc(Register16Bit::WZ),
+                                FetchStep::WithIncrement(Register16Bit::WZ),
                             );
                         }
                     }
@@ -218,16 +218,22 @@ impl Cpu {
                     ConditionalJump(Condition { flag, not }) => {
                         self.msb = value; // msb not like jr
                         if self.get_flag(flag) != not {
+                            panic!("Conditional jump success");
                             self.instruction_register = (
                                 vec([Nop.into(), Store16Bit(Register16Bit::PC).into()]),
                                 Default::default(),
                             );
+                        } else {
+                            log::warn!("Conditional jump fail");
                         }
                     }
                 }
             }
             NoRead(Nop) => {}
             NoRead(Store8Bit(register)) => {
+                if register == Register8Bit::A {
+                    log::warn!("Setting A to 0x{:02x}", self.lsb);
+                }
                 self.set_8bit_register(register, self.lsb);
             }
             NoRead(Store16Bit(register)) => {
@@ -296,7 +302,17 @@ impl Cpu {
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1]);
+                log::warn!(
+                    "Set PC to ${:04x}",
+                    u16::from_be_bytes([self.msb, self.lsb])
+                );
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
+                if self.pc == 0x0416 {
+                    log::warn!("PC is at setup_and_wait");
+                }
+                if self.pc == 0x03fe {
+                    log::warn!("PC is at standard_delay");
+                }
             }
             NoRead(Load { to, from }) => {
                 self.set_8bit_register(to, self.get_8bit_register(from));
@@ -467,7 +483,8 @@ impl Cpu {
                 self.get_16bit_register(Register16Bit::HL),
                 self.lsb | (1 << bit),
             ),
-            NoRead(Halt) => self.is_halted = true,
+            // doesn't halt if there are interrupts https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#halt
+            NoRead(Halt) => self.is_halted = interrupts_to_execute.is_empty(),
             NoRead(Swap8Bit(register)) => {
                 let result = self.swap(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
@@ -491,6 +508,14 @@ impl Cpu {
                 let a = self.a;
                 let value = self.get_8bit_register(register);
                 let (result, carry) = a.overflowing_sub(value);
+                if register == Register8Bit::E || register == Register8Bit::D && self.pc <= 0x0187 {
+                    log::warn!(
+                        "${:04x} => CP {register:?} (0x{:02x}) and A (0x{:02x})",
+                        self.pc,
+                        value,
+                        self.a
+                    );
+                }
                 let flags = &mut self.f;
                 flags.set(Flags::Z, result == 0);
                 flags.insert(Flags::N);
@@ -784,17 +809,18 @@ impl StateMachine for Cpu {
 
         // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
         if self.stop_mode {
-            self.stop_mode = false;
-            // quand on va sortir du stop mode on va exécuter un nop
-            // et fetch le prochain opcode en parallèle
-            self.instruction_register = Default::default();
-            // permet de passer un cycle en stop mode sans rien faire
-            return None;
+            // self.stop_mode = false;
+            // // quand on va sortir du stop mode on va exécuter un nop
+            // // et fetch le prochain opcode en parallèle
+            // self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
+            todo!("stop")
         }
 
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted && !interrupts_to_execute.is_empty() {
             self.is_halted = false;
+            // like stop
+            self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
         }
 
         if self.is_halted {
@@ -808,6 +834,10 @@ impl StateMachine for Cpu {
         } else if !self.is_cb_mode && self.ime == Ime::On && !interrupts_to_execute.is_empty() {
             self.ime = Ime::Off;
             use NoReadInstruction::*;
+            log::warn!(
+                "Interrupt handling ${interrupts_to_execute:?} ${:?}",
+                state.lcd_status
+            );
             self.instruction_register.0 = vec([
                 Nop.into(),
                 FinalStepInterruptDispatch.into(),
@@ -831,11 +861,15 @@ impl StateMachine for Cpu {
 
         // log::warn!("Will execute {inst:?}");
 
+        // fetch step
         if self.instruction_register.0.is_empty() {
-            // affecter et incrémenter le pc même dans le cas de l'interruption
-            self.pc = self.get_16bit_register(self.instruction_register.1.0);
-            self.current_opcode = mmu.read(self.pc);
-            self.pc = self.pc.wrapping_add(1);
+            (self.pc, self.current_opcode) = match self.instruction_register.1 {
+                FetchStep::WithIncrement(register) => {
+                    let address = self.get_16bit_register(register);
+                    (address.wrapping_add(1), mmu.read(address))
+                }
+                FetchStep::NoIncrement => (self.pc, mmu.read(self.pc)),
+            };
         }
 
         let inst = match inst {
@@ -868,14 +902,6 @@ impl StateMachine for Cpu {
 
         Some(move |mut state: WriteOnlyState<'_>| {
             self.execute_instruction(state.mmu(data_for_write), inst, interrupts_to_execute);
-
-            // https://gbdev.io/pandocs/halt.html#halt-bug
-            if let AfterReadInstruction::NoRead(NoReadInstruction::Halt) = inst
-                && self.ime == Ime::Off
-                && !interrupts_to_execute.is_empty()
-            {
-                todo!("halt bug")
-            }
         })
     }
 }

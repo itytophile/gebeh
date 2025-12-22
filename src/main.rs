@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/oam_dma/sources-GS.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/hblank_ly_scx_timing-GS.gb",
     )
     .unwrap();
     // let rom =
@@ -146,6 +146,8 @@ fn main() {
 
     let mut last_save = Instant::now();
 
+    let mut cycle_count: u64 = 0;
+
     event_loop
         .run(|event, elwt| match event {
             Event::WindowEvent {
@@ -163,6 +165,7 @@ fn main() {
                         &mut machine,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut previous_ly,
+                        &mut cycle_count,
                     );
                     pixels.render().unwrap();
                 }
@@ -256,10 +259,13 @@ fn draw_emulator(
     mut machine: &mut (impl StateMachine, Speeder<Ppu>),
     pixels: &mut [[u8; 4]],
     previous_ly: &mut Option<u8>,
+    cycle_count: &mut u64,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
+        log::warn!("cycle {cycle_count}");
         machine.execute(state).unwrap()(WriteOnlyState::new(state));
+        *cycle_count += 1;
 
         if *previous_ly == Some(state.ly) {
             continue;

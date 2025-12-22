@@ -460,7 +460,14 @@ impl StateMachine2 for Ppu {
 
                 *dots_count += 1;
 
-                if *dots_count == 172 {
+                if *dots_count
+                    == 172
+                        + match state.scx % 8 {
+                            5..=7 => 2,
+                            1..=4 => 1,
+                            _ => 0,
+                        }
+                {
                     if *wx_condition
                         && *wy_condition
                         && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
@@ -468,8 +475,15 @@ impl StateMachine2 for Ppu {
                         *internal_y_window_counter += 1;
                     }
                     mode_changed = true;
+                    log::warn!(
+                        "Remaining dots for hblank: {} ({} M-cycles) with scx = {}",
+                        376 - *dots_count,
+                        (376 - *dots_count) / 4,
+                        state.scx
+                    );
                     *self = Ppu::HorizontalBlank {
-                        remaining_dots: NonZeroU8::new(204).unwrap(),
+                        remaining_dots: NonZeroU8::new((376 - *dots_count).try_into().unwrap())
+                            .unwrap(),
                         wy_condition: *wy_condition,
                         internal_y_window_counter: *internal_y_window_counter,
                         scanline: *scanline,
@@ -485,6 +499,11 @@ impl StateMachine2 for Ppu {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
+                    log::warn!(
+                        "Incrementing ly from 0x{:02x} to 0x{:02x}",
+                        work_state.ly,
+                        work_state.ly + 1
+                    );
                     work_state.ly += 1;
                     mode_changed = true;
                     if work_state.ly == 144 {
