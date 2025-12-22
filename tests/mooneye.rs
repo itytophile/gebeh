@@ -72,7 +72,7 @@ fn call_timing() {
 }
 
 #[test]
-fn call_timikkng2() {
+fn call_timing2() {
     test_mooneye("call_timing2.gb");
 }
 

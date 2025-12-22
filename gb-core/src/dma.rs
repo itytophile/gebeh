@@ -18,13 +18,8 @@ impl Default for Dma {
 }
 
 impl StateMachine for Dma {
-    fn execute<'a>(&'a mut self, state: &mut State) {
+    fn execute(&mut self, state: &mut State) {
         let is_requesting = state.dma_request;
-        let is_active = state.is_dma_active;
-
-        if !is_active && !is_requesting {
-            return;
-        }
 
         // https://gbdev.io/pandocs/OAM_DMA_Transfer.html#ff46--dma-oam-dma-source-address--start
         // the mooneye emulator can set the register past 0xdf so we'll do the same
@@ -48,7 +43,6 @@ impl StateMachine for Dma {
         let mut state = WriteOnlyState::new(state);
 
         if is_requesting {
-            state.set_dma_active(true);
             state.set_dma_request(false);
             // for next cycle
             *self = Self(u16::from_be_bytes([register, 0])..u16::from_be_bytes([register, 0xa0]));
@@ -56,6 +50,7 @@ impl StateMachine for Dma {
 
         if let Some((address, value)) = source {
             log::warn!("DMA ${address:04x} 0x{value:02x}");
+            state.set_dma_active(true);
             state.write_to_oam(address as u8, value);
         } else if !is_requesting {
             state.set_dma_active(false);

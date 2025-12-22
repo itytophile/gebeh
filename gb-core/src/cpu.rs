@@ -302,10 +302,10 @@ impl Cpu {
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1]);
-                log::warn!(
-                    "Set PC to ${:04x}",
-                    u16::from_be_bytes([self.msb, self.lsb])
-                );
+                // log::warn!(
+                //     "Set PC to ${:04x}",
+                //     u16::from_be_bytes([self.msb, self.lsb])
+                // );
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
                 if self.pc == 0x0416 {
                     log::warn!("PC is at setup_and_wait");
@@ -804,7 +804,7 @@ impl Cpu {
 }
 
 impl StateMachine for Cpu {
-    fn execute<'a>(&'a mut self, state: &mut State) {
+    fn execute(&mut self, state: &mut State) {
         let interrupts_to_execute = state.interrupt_enable & state.interrupt_flag;
 
         // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
@@ -866,7 +866,18 @@ impl StateMachine for Cpu {
             (self.pc, self.current_opcode) = match self.instruction_register.1 {
                 FetchStep::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
-                    (address.wrapping_add(1), mmu.read(address))
+                    let opcode = mmu.read(address);
+                    if opcode == 0x04 {
+                        log::warn!("${address:04x} => INC B");
+                    }
+                    if opcode == 0x77 {
+                        log::warn!("${address:04x} => LD (HL), A");
+                    }
+                    if opcode == 0xff {
+                        log::warn!("${address:04x} => RST 0x38");
+                    }
+
+                    (address.wrapping_add(1), opcode)
                 }
                 FetchStep::NoIncrement => (self.pc, mmu.read(self.pc)),
             };
