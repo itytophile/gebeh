@@ -21,8 +21,7 @@ fn test_mooneye(path: &str) {
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
     while machine.0.1.current_opcode != 0x40 {
-        log::warn!("clock");
-        machine.execute(&state).unwrap()(WriteOnlyState::new(&mut state));
+        machine.execute(&mut state);
     }
 
     let ((_, cpu), _) = machine;
@@ -67,11 +66,13 @@ fn call_cc_timing2() {
 
 #[test]
 fn call_timing() {
+    color_eyre::install().unwrap();
+    env_logger::init();
     test_mooneye("call_timing.gb");
 }
 
 #[test]
-fn call_timing2() {
+fn call_timikkng2() {
     test_mooneye("call_timing2.gb");
 }
 

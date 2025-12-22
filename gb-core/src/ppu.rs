@@ -475,12 +475,12 @@ impl StateMachine2 for Ppu {
                         *internal_y_window_counter += 1;
                     }
                     mode_changed = true;
-                    log::warn!(
-                        "Remaining dots for hblank: {} ({} M-cycles) with scx = {}",
-                        376 - *dots_count,
-                        (376 - *dots_count) / 4,
-                        state.scx
-                    );
+                    // log::warn!(
+                    //     "Remaining dots for hblank: {} ({} M-cycles) with scx = {}",
+                    //     376 - *dots_count,
+                    //     (376 - *dots_count) / 4,
+                    //     state.scx
+                    // );
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: NonZeroU8::new((376 - *dots_count).try_into().unwrap())
                             .unwrap(),
@@ -499,11 +499,11 @@ impl StateMachine2 for Ppu {
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
-                    log::warn!(
-                        "Incrementing ly from 0x{:02x} to 0x{:02x}",
-                        work_state.ly,
-                        work_state.ly + 1
-                    );
+                    // log::warn!(
+                    //     "Incrementing ly from 0x{:02x} to 0x{:02x}",
+                    //     work_state.ly,
+                    //     work_state.ly + 1
+                    // );
                     work_state.ly += 1;
                     mode_changed = true;
                     if work_state.ly == 144 {
@@ -657,10 +657,10 @@ fn get_colors(
 }
 
 impl<T: StateMachine2> StateMachine for T {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+    fn execute(&mut self, state: &mut State) {
         let mut work_state = T::get_work_state(state);
         self.execute(&mut work_state, state);
-        Some(move |state: WriteOnlyState| self.commit(work_state, state))
+        self.commit(work_state, WriteOnlyState::new(state))
     }
 }
 
@@ -668,13 +668,11 @@ impl<T: StateMachine2> StateMachine for T {
 pub struct Speeder<T: StateMachine2>(pub T, pub NonZeroU8);
 
 impl<T: StateMachine2> StateMachine for Speeder<T> {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+    fn execute(&mut self, state: &mut State) {
         let mut work_state = T::get_work_state(state);
         for _ in 0..self.1.get() {
             self.0.execute(&mut work_state, state);
         }
-        Some(move |state: WriteOnlyState| {
-            self.0.commit(work_state, state);
-        })
+        self.0.commit(work_state, WriteOnlyState::new(state));
     }
 }

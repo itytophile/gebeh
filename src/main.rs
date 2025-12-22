@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/hblank_ly_scx_timing-GS.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/call_timing.gb",
     )
     .unwrap();
     // let rom =
@@ -76,8 +76,6 @@ fn main() {
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     let mut state = State::new(rom.leak());
-    // the machine should not be affected by the composition order for state read.
-    // However for writes, order matters for the cpu and timer and dma (lol).
     let mut machine = Dma::default()
         .compose(Cpu::default())
         .compose(Timer)
@@ -263,8 +261,8 @@ fn draw_emulator(
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
-        log::warn!("cycle {cycle_count}");
-        machine.execute(state).unwrap()(WriteOnlyState::new(state));
+        // log::warn!("cycle {cycle_count}");
+        machine.execute(state);
         *cycle_count += 1;
 
         if *previous_ly == Some(state.ly) {

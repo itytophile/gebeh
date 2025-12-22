@@ -32,8 +32,7 @@ pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
 
 pub trait StateMachine: Clone {
     /// must take one M-cycle
-    #[must_use]
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a>;
+    fn execute(&mut self, state: &mut State);
     fn compose<T: StateMachine>(self, other: T) -> (Self, T)
     where
         Self: Sized,
@@ -43,16 +42,8 @@ pub trait StateMachine: Clone {
 }
 
 impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
-        let first = self.0.execute(state);
-        let second = self.1.execute(state);
-        Some(move |mut state: WriteOnlyState<'_>| {
-            if let Some(first) = first {
-                first(state.reborrow());
-            }
-            if let Some(second) = second {
-                second(state);
-            }
-        })
+    fn execute(&mut self, state: &mut State) {
+        self.0.execute(state);
+        self.1.execute(state);
     }
 }

@@ -18,12 +18,12 @@ impl Default for Dma {
 }
 
 impl StateMachine for Dma {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+    fn execute<'a>(&'a mut self, state: &mut State) {
         let is_requesting = state.dma_request;
         let is_active = state.is_dma_active;
 
         if !is_active && !is_requesting {
-            return None;
+            return;
         }
 
         // https://gbdev.io/pandocs/OAM_DMA_Transfer.html#ff46--dma-oam-dma-source-address--start
@@ -45,23 +45,20 @@ impl StateMachine for Dma {
             )
         });
 
-        // must check now or the DMA will be active one cycle longer
-        let is_empty = self.0.is_empty();
+        let mut state = WriteOnlyState::new(state);
 
-        Some(move |mut state: WriteOnlyState| {
-            if is_requesting {
-                state.set_dma_active(true);
-                state.set_dma_request(false);
-                // for next cycle
-                *self =
-                    Self(u16::from_be_bytes([register, 0])..u16::from_be_bytes([register, 0xa0]));
-            } else if is_empty {
-                state.set_dma_active(false);
-            }
+        if is_requesting {
+            state.set_dma_active(true);
+            state.set_dma_request(false);
+            // for next cycle
+            *self = Self(u16::from_be_bytes([register, 0])..u16::from_be_bytes([register, 0xa0]));
+        }
 
-            if let Some((address, value)) = source {
-                state.write_to_oam(address as u8, value);
-            }
-        })
+        if let Some((address, value)) = source {
+            log::warn!("DMA ${address:04x} 0x{value:02x}");
+            state.write_to_oam(address as u8, value);
+        } else if !is_requesting {
+            state.set_dma_active(false);
+        }
     }
 }

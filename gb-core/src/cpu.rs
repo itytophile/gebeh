@@ -218,7 +218,7 @@ impl Cpu {
                     ConditionalJump(Condition { flag, not }) => {
                         self.msb = value; // msb not like jr
                         if self.get_flag(flag) != not {
-                            panic!("Conditional jump success");
+                            // panic!("Conditional jump success");
                             self.instruction_register = (
                                 vec([Nop.into(), Store16Bit(Register16Bit::PC).into()]),
                                 Default::default(),
@@ -231,9 +231,9 @@ impl Cpu {
             }
             NoRead(Nop) => {}
             NoRead(Store8Bit(register)) => {
-                if register == Register8Bit::A {
-                    log::warn!("Setting A to 0x{:02x}", self.lsb);
-                }
+                // if register == Register8Bit::A {
+                //     log::warn!("Setting A to 0x{:02x}", self.lsb);
+                // }
                 self.set_8bit_register(register, self.lsb);
             }
             NoRead(Store16Bit(register)) => {
@@ -804,7 +804,7 @@ impl Cpu {
 }
 
 impl StateMachine for Cpu {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+    fn execute<'a>(&'a mut self, state: &mut State) {
         let interrupts_to_execute = state.interrupt_enable & state.interrupt_flag;
 
         // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
@@ -824,7 +824,7 @@ impl StateMachine for Cpu {
         }
 
         if self.is_halted {
-            return None;
+            return;
         }
 
         let mmu = MmuReadCpu(state.mmu());
@@ -900,8 +900,10 @@ impl StateMachine for Cpu {
 
         let data_for_write = state.get_data_for_write();
 
-        Some(move |mut state: WriteOnlyState<'_>| {
-            self.execute_instruction(state.mmu(data_for_write), inst, interrupts_to_execute);
-        })
+        self.execute_instruction(
+            WriteOnlyState::new(state).mmu(data_for_write),
+            inst,
+            interrupts_to_execute,
+        )
     }
 }

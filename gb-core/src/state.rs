@@ -267,9 +267,9 @@ impl<'a> WriteOnlyState<'a> {
         &mut self.0.sc
     }
     pub fn set_ly(&mut self, value: u8) {
-        if value != self.0.ly {
-            log::warn!("Setting ly to 0x{value:02x}");
-        }
+        // if value != self.0.ly {
+        //     log::warn!("Setting ly to 0x{value:02x}");
+        // }
         self.0.ly = value;
     }
     pub fn set_timer_counter(&mut self, timer_counter: u8) {

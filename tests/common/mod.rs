@@ -8,7 +8,7 @@ use std::iter;
 pub struct TestSerial(pub Option<u8>);
 
 impl StateMachine for TestSerial {
-    fn execute<'a>(&'a mut self, state: &State) -> Option<impl FnOnce(WriteOnlyState) + 'a> {
+    fn execute(&mut self, state: &mut State) {
         // if transfer enable
         let mut must_clear = false;
         if state
@@ -18,11 +18,11 @@ impl StateMachine for TestSerial {
             self.0 = Some(state.sb);
             must_clear = true;
         }
-        Some(move |mut state: WriteOnlyState| {
-            if must_clear {
-                state.get_sc_mut().remove(SerialControl::TRANSFER_ENABLE);
-            }
-        })
+        if must_clear {
+            WriteOnlyState::new(state)
+                .get_sc_mut()
+                .remove(SerialControl::TRANSFER_ENABLE);
+        }
     }
 }
 
@@ -32,7 +32,7 @@ pub fn machine_to_serial_iter(
 ) -> impl Iterator<Item = u8> {
     iter::from_fn(move || {
         loop {
-            machine.execute(state).unwrap()(WriteOnlyState::new(state));
+            machine.execute(state);
             let (_, TestSerial(byte)) = machine;
             if let Some(byte) = byte.take() {
                 return Some(byte);
