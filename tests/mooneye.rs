@@ -227,3 +227,18 @@ fn oam_dma_sources_gs() {
 fn hblank_ly_scx_timing_gs() {
     test_mooneye("ppu/hblank_ly_scx_timing-GS.gb");
 }
+
+#[test]
+fn intr_1_2_timing_gs() {
+    test_mooneye("ppu/intr_1_2_timing-GS.gb")
+}
+
+#[test]
+fn intr_2_0_timing() {
+    test_mooneye("ppu/intr_2_0_timing.gb");
+}
+
+#[test]
+fn intr_2_mode0_timing() {
+    test_mooneye("ppu/intr_2_mode0_timing.gb");
+}
