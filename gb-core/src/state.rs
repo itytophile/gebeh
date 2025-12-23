@@ -110,7 +110,6 @@ pub struct State {
     pub boot_rom: &'static [u8; 256],
     pub mbc: Mbc,
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-    pub hram: [u8; (INTERRUPT_ENABLE - HRAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
     pub dma_request: bool,
@@ -164,7 +163,6 @@ impl State {
         Self {
             boot_rom: &DMG_BOOT,
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-            hram: [0; (INTERRUPT_ENABLE - HRAM) as usize],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,

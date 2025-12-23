@@ -101,7 +101,7 @@ impl MmuRead<'_> {
             0xff4f => 0xff,
             BOOT_ROM_MAPPING_CONTROL => 0xff,
             0xff51..HRAM => 0xff,
-            HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)],
+            HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)],
             INTERRUPT_ENABLE => cpu.interrupt_enable.bits(),
             _ => todo!("Reading ${index:04x}"),
         }
@@ -211,7 +211,7 @@ impl MmuWrite<'_> {
             0xff4f => {}
             BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
             0xff51..HRAM => {}
-            HRAM..INTERRUPT_ENABLE => self.0.hram[usize::from(index - HRAM)] = value,
+            HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => cpu.interrupt_enable = Ints::from_bits_retain(value),
         }
     }

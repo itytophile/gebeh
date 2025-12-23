@@ -46,6 +46,7 @@ pub struct Cpu {
     pub is_dispatching_interrupt: bool,
     pub interrupt_flag: Ints,
     pub interrupt_enable: Ints,
+    pub hram: [u8; 0x7f],
 }
 
 impl Default for Cpu {
@@ -74,6 +75,7 @@ impl Default for Cpu {
             is_dispatching_interrupt: false,
             interrupt_flag: Ints::empty(),
             interrupt_enable: Ints::empty(),
+            hram: [0; 0x7f],
         }
     }
 }
