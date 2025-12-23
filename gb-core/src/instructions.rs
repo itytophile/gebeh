@@ -234,14 +234,23 @@ pub fn vec<const N: usize, const O: usize>(insts: [Instruction; N]) -> ArrayVec<
 
 // what to set pc with after the last instruction
 #[derive(Clone)]
-pub enum FetchStep {
+pub enum SetPc {
     WithIncrement(Register16Bit),
     NoIncrement, // Halt https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#halt
 }
 
-impl Default for FetchStep {
+#[derive(Clone)]
+pub struct Prefetch {
+    pub check_interrupts: bool, // false only for DI
+    pub set_pc: SetPc,
+}
+
+impl Default for Prefetch {
     fn default() -> Self {
-        Self::WithIncrement(Register16Bit::PC)
+        Self {
+            check_interrupts: true,
+            set_pc: SetPc::WithIncrement(Register16Bit::PC),
+        }
     }
 }
 
@@ -529,7 +538,7 @@ mod opcodes {
 use opcodes::*;
 
 #[derive(Default, Clone)]
-pub struct InstructionsAndSetPc(pub Instructions, pub FetchStep);
+pub struct InstructionsAndSetPc(pub Instructions, pub Prefetch);
 
 impl From<Instructions> for InstructionsAndSetPc {
     fn from(value: Instructions) -> Self {
@@ -606,7 +615,10 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
                     Read(CONSUME_PC, ReadIntoLsb),
                     vec([Nop.into(), OffsetPc.into()]),
                 ),
-                FetchStep::WithIncrement(WZ),
+                Prefetch {
+                    check_interrupts: true,
+                    set_pc: SetPc::WithIncrement(WZ),
+                },
             );
         }
         0x19 => add_hl_rr(DE),
@@ -764,7 +776,13 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
         0x74 => ld_rr_r(HL, H),
         0x75 => ld_rr_r(HL, L),
         0x76 => {
-            return InstructionsAndSetPc((Halt.into(), Default::default()), FetchStep::NoIncrement);
+            return InstructionsAndSetPc(
+                (Halt.into(), Default::default()),
+                Prefetch {
+                    check_interrupts: true,
+                    set_pc: SetPc::NoIncrement,
+                },
+            );
         }
         0x77 => ld_rr_r(HL, A),
         0x78 => ld_r_r(A, B),
@@ -951,7 +969,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
             flag: Flag::Z,
             not: false,
         }),
-        0xcb => (CbMode.into(), Default::default()),
+        0xcb => {
+            return InstructionsAndSetPc(
+                (CbMode.into(), Default::default()),
+                Prefetch {
+                    check_interrupts: false,
+                    set_pc: SetPc::WithIncrement(PC),
+                },
+            );
+        }
         0xcc => call_cc_nn(Condition {
             flag: Flag::Z,
             not: false,
@@ -1018,7 +1044,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
             Read(CONSUME_PC, ReadIntoLsb),
             vec([Nop.into(), Nop.into(), AddSpE.into()]),
         ),
-        0xe9 => return InstructionsAndSetPc(Default::default(), FetchStep::WithIncrement(HL)),
+        0xe9 => {
+            return InstructionsAndSetPc(
+                Default::default(),
+                Prefetch {
+                    check_interrupts: true,
+                    set_pc: SetPc::WithIncrement(HL),
+                },
+            );
+        }
         0xea => (
             Read(CONSUME_PC, ReadIntoLsb),
             vec([
@@ -1041,7 +1075,15 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
             Read(ReadAddress::Accumulator8Bit(C), ReadIntoLsb),
             vec([Store8Bit(A).into()]),
         ),
-        0xf3 => (Di.into(), Default::default()),
+        0xf3 => {
+            return InstructionsAndSetPc(
+                (Di.into(), Default::default()),
+                Prefetch {
+                    check_interrupts: false,
+                    set_pc: SetPc::WithIncrement(PC),
+                },
+            );
+        }
         0xf5 => push_rr(AF),
         0xf6 => (Read(CONSUME_PC, ReadIntoLsb), vec([Or8Bit(Z).into()])),
         0xf7 => rst_n(0x30),

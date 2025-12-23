@@ -2,9 +2,9 @@ use crate::{
     StateMachine,
     ic::Ints,
     instructions::{
-        AfterReadInstruction, Condition, FetchStep, Flag, Instruction, InstructionsAndSetPc,
-        NoReadInstruction, OpAfterRead, POP_SP, ReadAddress, ReadInstruction, Register8Bit,
-        Register16Bit, get_instructions, vec,
+        AfterReadInstruction, Condition, Flag, Instruction, InstructionsAndSetPc,
+        NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
+        Register8Bit, Register16Bit, SetPc, get_instructions, vec,
     },
     state::{MmuReadCpu, MmuWrite, State, WriteOnlyState},
 };
@@ -34,12 +34,13 @@ pub struct Cpu {
     pub f: Flags,
     pub is_cb_mode: bool,
     pub pc: u16,
-    pub instruction_register: (ArrayVec<Instruction, 5>, FetchStep),
-    pub ime: Ime,
+    pub instruction_register: (ArrayVec<Instruction, 5>, Prefetch),
+    pub ime: bool,
     pub is_halted: bool,
     pub stop_mode: bool,
     // test purposes
     pub current_opcode: u8,
+    pub is_dispatching_interrupt: bool,
 }
 
 impl Default for Cpu {
@@ -61,10 +62,11 @@ impl Default for Cpu {
             // yes the cpu can fetch opcodes in parallel of the execution but for the first boost we must
             // feed a nop or the cpu will fetch + execute the fist opcode in the same cycle
             instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
-            ime: Ime::Off,
+            ime: false,
             is_halted: Default::default(),
             stop_mode: Default::default(),
             current_opcode: 0,
+            is_dispatching_interrupt: false,
         }
     }
 }
@@ -171,9 +173,7 @@ impl Cpu {
     }
 
     fn enable_ime(&mut self) {
-        if self.ime == Ime::Off {
-            self.ime = Ime::Delay;
-        }
+        self.ime = true;
     }
 
     fn execute_instruction(
@@ -197,7 +197,10 @@ impl Cpu {
                         if self.get_flag(flag) != not {
                             self.instruction_register = (
                                 vec([Instruction::NoRead(Nop), Instruction::NoRead(OffsetPc)]),
-                                FetchStep::WithIncrement(Register16Bit::WZ),
+                                Prefetch {
+                                    check_interrupts: true,
+                                    set_pc: SetPc::WithIncrement(Register16Bit::WZ),
+                                },
                             );
                         }
                     }
@@ -407,7 +410,7 @@ impl Cpu {
             }
             NoRead(Di) => {
                 log::warn!("{cycle_count}: Executing DI");
-                self.ime = Ime::Off
+                self.ime = false
             }
             NoRead(Ei) => self.enable_ime(),
             NoRead(DecPc) => self.pc -= 1,
@@ -857,12 +860,6 @@ impl StateMachine for Cpu {
             todo!("stop")
         }
 
-        let is_ime_on = self.ime == Ime::On;
-
-        if self.ime == Ime::Delay {
-            self.ime = Ime::On;
-        }
-
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
@@ -877,8 +874,9 @@ impl StateMachine for Cpu {
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
-        } else if !self.is_cb_mode && is_ime_on && !interrupts_to_execute.is_empty() {
-            self.ime = Ime::Off;
+        } else if self.is_dispatching_interrupt {
+            self.ime = false;
+            // no need to set is_dispatching_interrupt to false
             use NoReadInstruction::*;
             log::warn!(
                 "{cycle_count}: Interrupt handling ${interrupts_to_execute:?} ${:?}",
@@ -908,8 +906,11 @@ impl StateMachine for Cpu {
 
         // fetch step
         if self.instruction_register.0.is_empty() {
-            (self.pc, self.current_opcode) = match self.instruction_register.1 {
-                FetchStep::WithIncrement(register) => {
+            self.is_dispatching_interrupt = self.ime
+                && self.instruction_register.1.check_interrupts
+                && !interrupts_to_execute.is_empty();
+            (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
+                SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode = mmu.read(address, cycle_count);
                     // if address == 0x4879 {
@@ -937,7 +938,7 @@ impl StateMachine for Cpu {
 
                     (address.wrapping_add(1), opcode)
                 }
-                FetchStep::NoIncrement => (self.pc, mmu.read(self.pc, cycle_count)),
+                SetPc::NoIncrement => (self.pc, mmu.read(self.pc, cycle_count)),
             };
         }
 
