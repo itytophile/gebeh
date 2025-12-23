@@ -9,7 +9,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
         Register8Bit, Register16Bit, SetPc, get_instructions, vec,
     },
-    state::{DMG_BOOT, State},
+    state::{BOOTIX_BOOT_ROM, State},
 };
 
 use arrayvec::ArrayVec;
@@ -79,7 +79,7 @@ impl Default for Cpu {
             interrupt_enable: Ints::empty(),
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
-            boot_rom: &DMG_BOOT,
+            boot_rom: &BOOTIX_BOOT_ROM,
         }
     }
 }
