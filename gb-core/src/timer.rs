@@ -16,9 +16,7 @@ use crate::{
 pub struct Timer;
 
 impl StateMachine for Timer {
-    fn execute<'a>(&'a mut self, state: &mut State) {
-        let reset = state.reset_system_clock;
-
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
         let increment_frequency: u16 = match state.timer_control & 0b11 {
             0 => 256,
             1 => 4,
@@ -28,11 +26,7 @@ impl StateMachine for Timer {
         };
         let mut timer_counter = state.timer_counter;
         let mut overflow = false;
-        let system_counter = if reset {
-            0
-        } else {
-            state.system_counter.wrapping_add(1)
-        };
+        let system_counter = state.system_counter.wrapping_add(1);
         if state.timer_control & 0b100 == 0b100
             && system_counter.is_multiple_of(increment_frequency)
         {
@@ -47,12 +41,7 @@ impl StateMachine for Timer {
         let mut state = WriteOnlyState::new(state);
 
         state.set_timer_counter(timer_counter);
-        if reset {
-            state.reset_system_counter();
-        } else {
-            state.increment_system_counter();
-        }
-        state.set_reset_system_clock(false);
+        state.increment_system_counter();
         if overflow {
             state.insert_if(Ints::TIMER);
         }

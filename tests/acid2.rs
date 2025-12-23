@@ -29,7 +29,7 @@ fn dmg_acid2() {
     let mut working_split = split.clone();
     let mut all_good = true;
     loop {
-        machine.execute(&mut state);
+        machine.execute(&mut state, 0);
         let ((_, Speeder(ppu, _)), _) = &mut machine;
         if let Some(scanline) = ppu.get_scanline_if_ready()
             && previous_ly != Some(state.ly)

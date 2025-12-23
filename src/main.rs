@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/oam_dma_start.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/di_timing-GS.gb",
     )
     .unwrap();
     // let rom =
@@ -77,9 +77,9 @@ fn main() {
 
     let mut state = State::new(rom.leak());
     let mut machine = Dma::default()
-        .compose(Cpu::default())
+        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
         .compose(Timer)
-        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()));
+        .compose(Cpu::default());
 
     let mut save_states = vec![(machine.clone(), state.clone())];
 
@@ -254,22 +254,21 @@ fn main() {
 
 fn draw_emulator(
     state: &mut State,
-    mut machine: &mut (impl StateMachine, Speeder<Ppu>),
+    mut machine: &mut (((Dma, Speeder<Ppu>), Timer), Cpu),
     pixels: &mut [[u8; 4]],
     previous_ly: &mut Option<u8>,
     cycle_count: &mut u64,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
-        // log::warn!("cycle {cycle_count}");
-        machine.execute(state);
+        machine.execute(state, *cycle_count);
         *cycle_count += 1;
 
         if *previous_ly == Some(state.ly) {
             continue;
         }
 
-        let (_, Speeder(ppu, _)) = &mut machine;
+        let (((_, Speeder(ppu, _)), _), _) = &mut machine;
 
         let Some(scanline) = ppu.get_scanline_if_ready() else {
             continue;

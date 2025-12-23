@@ -3,7 +3,7 @@ use gb_core::{
     cpu::Cpu,
     dma::Dma,
     ppu::{Ppu, Speeder},
-    state::{State, WriteOnlyState},
+    state::{DMG_BOOT, State, WriteOnlyState},
     timer::Timer,
 };
 use std::num::NonZeroU8;
@@ -21,7 +21,7 @@ fn test_mooneye(path: &str) {
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
     while machine.0.1.current_opcode != 0x40 {
-        machine.execute(&mut state);
+        machine.execute(&mut state, 0);
     }
 
     let ((_, cpu), _) = machine;

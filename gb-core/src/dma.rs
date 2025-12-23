@@ -18,7 +18,7 @@ impl Default for Dma {
 }
 
 impl StateMachine for Dma {
-    fn execute(&mut self, state: &mut State) {
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
         let is_requesting = state.dma_request;
 
         // https://gbdev.io/pandocs/OAM_DMA_Transfer.html#ff46--dma-oam-dma-source-address--start
@@ -36,6 +36,7 @@ impl StateMachine for Dma {
                     } else {
                         source
                     },
+                    cycle_count,
                 ),
             )
         });

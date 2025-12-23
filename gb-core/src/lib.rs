@@ -32,7 +32,7 @@ pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
 
 pub trait StateMachine: Clone {
     /// must take one M-cycle
-    fn execute(&mut self, state: &mut State);
+    fn execute(&mut self, state: &mut State, cycle_count: u64);
     fn compose<T: StateMachine>(self, other: T) -> (Self, T)
     where
         Self: Sized,
@@ -42,8 +42,8 @@ pub trait StateMachine: Clone {
 }
 
 impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
-    fn execute(&mut self, state: &mut State) {
-        self.0.execute(state);
-        self.1.execute(state);
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
+        self.0.execute(state, cycle_count);
+        self.1.execute(state, cycle_count);
     }
 }

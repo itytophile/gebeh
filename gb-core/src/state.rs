@@ -90,7 +90,7 @@ bitflags::bitflags! {
     }
 }
 
-const DMG_BOOT: [u8; 256] = [
+pub const DMG_BOOT: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
     12, 62, 243, 50, 226, 12, 62, 119, 50, 226, 17, 4, 1, 33, 16, 128, 26, 205, 184, 0, 26, 203,
     55, 205, 184, 0, 19, 123, 254, 52, 32, 240, 17, 204, 0, 6, 8, 26, 19, 34, 35, 5, 32, 249, 33,
@@ -158,7 +158,6 @@ pub struct State {
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
     pub system_counter: u16,
-    pub reset_system_clock: bool,
 }
 
 impl State {
@@ -219,7 +218,6 @@ impl State {
             joypad: JoypadFlags::empty(),
             // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
             system_counter: 0,
-            reset_system_clock: false,
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
@@ -302,10 +300,6 @@ impl<'a> WriteOnlyState<'a> {
     pub fn reset_system_counter(&mut self) {
         self.0.system_counter = 0;
     }
-
-    pub fn set_reset_system_clock(&mut self, value: bool) {
-        self.0.reset_system_clock = value;
-    }
 }
 
 pub struct MmuRead<'a>(&'a State);
@@ -313,7 +307,7 @@ pub struct MmuRead<'a>(&'a State);
 pub struct MmuReadCpu<'a>(pub MmuRead<'a>);
 
 impl MmuRead<'_> {
-    pub fn read(&self, index: u16) -> u8 {
+    pub fn read(&self, index: u16, cycle_count: u64) -> u8 {
         match index {
             0..VIDEO_RAM => {
                 if self.0.boot_rom_mapping_control == 0
@@ -357,7 +351,14 @@ impl MmuRead<'_> {
             SB => self.0.sb,
             SC => self.0.sc.bits() | 0b01111110,
             0xff03 => 0xff,
-            DIV => (self.0.system_counter >> 6 & 0xff).try_into().unwrap(),
+            DIV => {
+                log::warn!(
+                    "{cycle_count}: Reading div 0x{:04x} 0x{:02x}",
+                    self.0.system_counter,
+                    u8::try_from(self.0.system_counter >> 6 & 0xff).unwrap()
+                );
+                (self.0.system_counter >> 6 & 0xff).try_into().unwrap()
+            }
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
@@ -428,11 +429,11 @@ impl MmuRead<'_> {
 }
 
 impl<'a> MmuReadCpu<'a> {
-    pub fn read(&self, index: u16) -> u8 {
+    pub fn read(&self, index: u16, cycle_count: u64) -> u8 {
         if self.0.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return 0xff;
         }
-        self.0.read(index)
+        self.0.read(index, cycle_count)
     }
 }
 
@@ -448,7 +449,7 @@ impl MmuWrite<'_> {
     pub fn inner(&mut self) -> WriteOnlyState<'_> {
         WriteOnlyState(self.0)
     }
-    pub fn write(&mut self, index: u16, value: u8) {
+    pub fn write(&mut self, index: u16, value: u8, cycle_count: u64) {
         if self.1.dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
@@ -482,7 +483,10 @@ impl MmuWrite<'_> {
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00
-            DIV => self.0.system_counter = 0,
+            DIV => {
+                log::warn!("{cycle_count}: Writing div");
+                self.0.system_counter = 0
+            }
             TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,

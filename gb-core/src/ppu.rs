@@ -268,7 +268,7 @@ fn get_picture_pixel_and_tile_map_address(
 pub trait StateMachine2: Clone {
     type WorkState;
     fn get_work_state(state: &State) -> Self::WorkState;
-    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State);
+    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State, cycle_count: u64);
     fn commit(&self, work_state: Self::WorkState, state: WriteOnlyState);
 }
 
@@ -343,7 +343,7 @@ impl StateMachine2 for Ppu {
         }
     }
 
-    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State) {
+    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State, cycle_count: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
@@ -507,6 +507,7 @@ impl StateMachine2 for Ppu {
                     work_state.ly += 1;
                     mode_changed = true;
                     if work_state.ly == 144 {
+                        log::warn!("{cycle_count}: Changed mode to vblank");
                         *self = Ppu::VerticalBlankScanline {
                             remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                         };
@@ -657,9 +658,9 @@ fn get_colors(
 }
 
 impl<T: StateMachine2> StateMachine for T {
-    fn execute(&mut self, state: &mut State) {
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
         let mut work_state = T::get_work_state(state);
-        self.execute(&mut work_state, state);
+        self.execute(&mut work_state, state, cycle_count);
         self.commit(work_state, WriteOnlyState::new(state))
     }
 }
@@ -668,10 +669,10 @@ impl<T: StateMachine2> StateMachine for T {
 pub struct Speeder<T: StateMachine2>(pub T, pub NonZeroU8);
 
 impl<T: StateMachine2> StateMachine for Speeder<T> {
-    fn execute(&mut self, state: &mut State) {
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
         let mut work_state = T::get_work_state(state);
         for _ in 0..self.1.get() {
-            self.0.execute(&mut work_state, state);
+            self.0.execute(&mut work_state, state, cycle_count);
         }
         self.0.commit(work_state, WriteOnlyState::new(state));
     }
