@@ -265,19 +265,6 @@ fn get_picture_pixel_and_tile_map_address(
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
-pub trait StateMachine2: Clone {
-    type WorkState;
-    fn get_work_state(state: &State) -> Self::WorkState;
-    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State, cycle_count: u64);
-    fn commit(&self, work_state: Self::WorkState, state: &mut State, cycle_count: u64);
-}
-
-pub struct PpuWorkState {
-    ly: u8,
-    is_requesting_lcd_int: bool,
-    is_requesting_vblank_int: bool,
-}
-
 impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
@@ -332,18 +319,8 @@ impl From<Color> for [u8; 4] {
 }
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl StateMachine2 for Ppu {
-    type WorkState = PpuWorkState;
-
-    fn get_work_state(state: &State) -> Self::WorkState {
-        PpuWorkState {
-            is_requesting_lcd_int: false,
-            ly: state.ly,
-            is_requesting_vblank_int: false,
-        }
-    }
-
-    fn execute(&mut self, work_state: &mut Self::WorkState, state: &State, cycle_count: u64) {
+impl StateMachine for Ppu {
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
@@ -352,9 +329,9 @@ impl StateMachine2 for Ppu {
 
         if state.lcd_status.contains(LcdStatus::LYC_INT)
             && self.is_starting_line()
-            && work_state.ly == state.lyc
+            && state.ly == state.lyc
         {
-            work_state.is_requesting_lcd_int = true;
+            state.interrupt_flag.insert(Ints::LCD);
         }
 
         match self {
@@ -365,7 +342,7 @@ impl StateMachine2 for Ppu {
             } => {
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                *wy_condition |= *remaining_dots == OAM_SCAN_DURATION && work_state.ly == state.wy;
+                *wy_condition |= *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
                 if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
                 } else {
@@ -399,10 +376,7 @@ impl StateMachine2 for Ppu {
                         // Citation:
                         // the current X coordinate being rendered + 7 was equal to WX
                         *wx_condition |= x + 7 == state.wx;
-                        let scanline = Scanline {
-                            x,
-                            y: work_state.ly,
-                        };
+                        let scanline = Scanline { x, y: state.ly };
                         let color_index = get_color_bg_win(
                             scanline,
                             state,
@@ -426,8 +400,8 @@ impl StateMachine2 for Ppu {
                     if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
                         // TODO maybe performance hit here
                         for (incoming_x, obj, color) in get_colors(
-                            get_at_most_ten_objects_on_ly(work_state.ly, state),
-                            work_state.ly,
+                            get_at_most_ten_objects_on_ly(state.ly, state),
+                            state.ly,
                             state,
                         ) {
                             if incoming_x == *x && color != ColorIndex::Zero {
@@ -504,9 +478,9 @@ impl StateMachine2 for Ppu {
                     //     work_state.ly,
                     //     work_state.ly + 1
                     // );
-                    work_state.ly += 1;
+                    state.ly += 1;
                     mode_changed = true;
-                    if work_state.ly == 144 {
+                    if state.ly == 144 {
                         // log::warn!("{cycle_count}: Changed mode to vblank");
                         *self = Ppu::VerticalBlankScanline {
                             remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
@@ -523,18 +497,26 @@ impl StateMachine2 for Ppu {
             Ppu::VerticalBlankScanline { remaining_dots } => {
                 if let Some(dots) = NonZeroU16::new(remaining_dots.get() - 1) {
                     *remaining_dots = dots;
-                } else if work_state.ly == 153 {
+                } else if state.ly == 153 {
                     mode_changed = true;
-                    work_state.ly = 0;
+                    state.ly = 0;
                     *self = Default::default()
                 } else {
-                    work_state.ly += 1;
+                    state.ly += 1;
                     *self = Ppu::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }
                 }
             }
         };
+
+        let mode = match self {
+            Ppu::OamScan { .. } => LcdStatus::OAM_SCAN,
+            Ppu::DrawingPixels { .. } => LcdStatus::DRAWING,
+            Ppu::HorizontalBlank { .. } => LcdStatus::HBLANK,
+            Ppu::VerticalBlankScanline { .. } => LcdStatus::VBLANK,
+        };
+        state.set_ppu_mode(mode);
 
         if !mode_changed {
             return;
@@ -555,23 +537,11 @@ impl StateMachine2 for Ppu {
             Ppu::VerticalBlankScanline { .. } => state.lcd_status.contains(LcdStatus::VBLANK_INT),
         };
 
-        work_state.is_requesting_lcd_int |= is_requesting_interrupt;
-        work_state.is_requesting_vblank_int |= matches!(self, Ppu::VerticalBlankScanline { .. });
-    }
-
-    fn commit(&self, work_state: Self::WorkState, state: &mut State, _: u64) {
-        let mode = match self {
-            Ppu::OamScan { .. } => LcdStatus::OAM_SCAN,
-            Ppu::DrawingPixels { .. } => LcdStatus::DRAWING,
-            Ppu::HorizontalBlank { .. } => LcdStatus::HBLANK,
-            Ppu::VerticalBlankScanline { .. } => LcdStatus::VBLANK,
-        };
-        state.set_ppu_mode(mode);
-        state.ly = work_state.ly;
-        if work_state.is_requesting_lcd_int {
-            state.interrupt_flag.insert(Ints::LCD);
+        if is_requesting_interrupt {
+            state.interrupt_flag.insert(Ints::LCD)
         }
-        if work_state.is_requesting_vblank_int {
+
+        if matches!(self, Ppu::VerticalBlankScanline { .. }) {
             state.interrupt_flag.insert(Ints::VBLANK);
         }
     }
@@ -665,23 +635,13 @@ fn get_colors(
     })
 }
 
-impl<T: StateMachine2> StateMachine for T {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        let mut work_state = T::get_work_state(state);
-        self.execute(&mut work_state, state, cycle_count);
-        self.commit(work_state, state, cycle_count)
-    }
-}
-
 #[derive(Clone)]
-pub struct Speeder<T: StateMachine2>(pub T, pub NonZeroU8);
+pub struct Speeder<T: StateMachine>(pub T, pub NonZeroU8);
 
-impl<T: StateMachine2> StateMachine for Speeder<T> {
+impl<T: StateMachine> StateMachine for Speeder<T> {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        let mut work_state = T::get_work_state(state);
         for _ in 0..self.1.get() {
-            self.0.execute(&mut work_state, state, cycle_count);
+            self.0.execute(state, cycle_count);
         }
-        self.0.commit(work_state, state, cycle_count);
     }
 }
