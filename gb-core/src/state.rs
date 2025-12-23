@@ -264,10 +264,10 @@ impl<'a> WriteOnlyState<'a> {
     pub fn get_sc_mut(&mut self) -> &mut SerialControl {
         &mut self.0.sc
     }
-    pub fn set_ly(&mut self, value: u8) {
-        // if value != self.0.ly {
-        //     log::warn!("Setting ly to 0x{value:02x}");
-        // }
+    pub fn set_ly(&mut self, value: u8, cycle_count: u64) {
+        if value != self.0.ly {
+            log::warn!("{cycle_count}: Setting ly to 0x{value:02x}");
+        }
         self.0.ly = value;
     }
     pub fn set_timer_counter(&mut self, timer_counter: u8) {
@@ -404,7 +404,10 @@ impl MmuRead<'_> {
             }
             SCY => self.0.scy,
             SCX => self.0.scx,
-            LY => self.0.ly,
+            LY => {
+                // log::warn!("{cycle_count}: Reading LY");
+                self.0.ly
+            }
             LYC => self.0.lyc,
             DMA => self.0.dma_register,
             BGP => self.0.bgp_register,

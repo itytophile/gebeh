@@ -269,7 +269,7 @@ pub trait StateMachine2: Clone {
     type WorkState;
     fn get_work_state(state: &State) -> Self::WorkState;
     fn execute(&mut self, work_state: &mut Self::WorkState, state: &State, cycle_count: u64);
-    fn commit(&self, work_state: Self::WorkState, state: WriteOnlyState);
+    fn commit(&self, work_state: Self::WorkState, state: WriteOnlyState, cycle_count: u64);
 }
 
 pub struct PpuWorkState {
@@ -507,7 +507,7 @@ impl StateMachine2 for Ppu {
                     work_state.ly += 1;
                     mode_changed = true;
                     if work_state.ly == 144 {
-                        log::warn!("{cycle_count}: Changed mode to vblank");
+                        // log::warn!("{cycle_count}: Changed mode to vblank");
                         *self = Ppu::VerticalBlankScanline {
                             remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                         };
@@ -543,7 +543,12 @@ impl StateMachine2 for Ppu {
         let is_requesting_interrupt = match self {
             Ppu::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
             Ppu::DrawingPixels { .. } => false,
-            Ppu::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            Ppu::HorizontalBlank { .. } => {
+                if state.lcd_status.contains(LcdStatus::HBLANK_INT) {
+                    log::warn!("{cycle_count}: Setting hblank interrupt")
+                }
+                state.lcd_status.contains(LcdStatus::HBLANK_INT)
+            }
             Ppu::VerticalBlankScanline { .. } => state.lcd_status.contains(LcdStatus::VBLANK_INT),
         };
 
@@ -551,7 +556,7 @@ impl StateMachine2 for Ppu {
         work_state.is_requesting_vblank_int |= matches!(self, Ppu::VerticalBlankScanline { .. });
     }
 
-    fn commit(&self, work_state: Self::WorkState, mut state: WriteOnlyState) {
+    fn commit(&self, work_state: Self::WorkState, mut state: WriteOnlyState, cycle_count: u64) {
         let mode = match self {
             Ppu::OamScan { .. } => LcdStatus::OAM_SCAN,
             Ppu::DrawingPixels { .. } => LcdStatus::DRAWING,
@@ -559,7 +564,7 @@ impl StateMachine2 for Ppu {
             Ppu::VerticalBlankScanline { .. } => LcdStatus::VBLANK,
         };
         state.set_ppu_mode(mode);
-        state.set_ly(work_state.ly);
+        state.set_ly(work_state.ly, cycle_count);
         if work_state.is_requesting_lcd_int {
             state.insert_if(Ints::LCD);
         }
@@ -661,7 +666,7 @@ impl<T: StateMachine2> StateMachine for T {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
         let mut work_state = T::get_work_state(state);
         self.execute(&mut work_state, state, cycle_count);
-        self.commit(work_state, WriteOnlyState::new(state))
+        self.commit(work_state, WriteOnlyState::new(state), cycle_count)
     }
 }
 
@@ -674,6 +679,7 @@ impl<T: StateMachine2> StateMachine for Speeder<T> {
         for _ in 0..self.1.get() {
             self.0.execute(&mut work_state, state, cycle_count);
         }
-        self.0.commit(work_state, WriteOnlyState::new(state));
+        self.0
+            .commit(work_state, WriteOnlyState::new(state), cycle_count);
     }
 }

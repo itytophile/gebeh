@@ -102,6 +102,15 @@ bitflags::bitflags! {
     }
 }
 
+// Comment ça se passe avec mooneye
+// le cpu drive l'ensemble
+// pour une lecture d'un registre, il fait d'abord un cycle chez les périphériques, et ensuite il lit la valeur.
+// Donc quand le cycle d'un périphérique donne une interruption, cela n'affecte pas
+// le cpu dans le cycle actuel (puisqu'il est en train de faire l'action de lecture).
+// Donc il faut traiter l'interruption dans le prochain cycle.
+// Pour l'instant, il semble que les écritures/lectures du CPU sont toujours traités à la fin d'un cycle.
+// Par exemple, il écrase les modif du timer pendant le cycle courant, et il a conscience des changements immédiats du ppu
+
 impl Cpu {
     fn get_8bit_register(&self, register: Register8Bit) -> u8 {
         match register {
@@ -413,7 +422,10 @@ impl Cpu {
                 self.ime = false
             }
             NoRead(Ei) => self.enable_ime(),
-            NoRead(DecPc) => self.pc -= 1,
+            NoRead(DecPc) => {
+                log::warn!("{cycle_count}: Dec PC");
+                self.pc -= 1
+            }
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1], cycle_count);
                 self.pc = u16::from(address);
@@ -544,8 +556,7 @@ impl Cpu {
                 let (result, carry) = a.overflowing_sub(value);
                 if register == Register8Bit::E || register == Register8Bit::D && self.pc <= 0x0187 {
                     log::warn!(
-                        "${:04x} => CP {register:?} (0x{:02x}) and A (0x{:02x})",
-                        self.pc,
+                        "{cycle_count}: CP {register:?} (0x{:02x}) and A (0x{:02x})",
                         value,
                         self.a
                     );
@@ -913,9 +924,9 @@ impl StateMachine for Cpu {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode = mmu.read(address, cycle_count);
-                    // if address == 0x4879 {
-                    //     panic!("fail")
-                    // }
+                    if address == 0x4879 {
+                        panic!("fail")
+                    }
                     // log::warn!("${address:04x} => ${opcode:2x}");
                     if opcode == 0x04 {
                         log::warn!("${address:04x} => INC B");
@@ -929,9 +940,9 @@ impl StateMachine for Cpu {
                     if opcode == 0xf3 {
                         log::warn!("{cycle_count}: ${address:04x} => DI");
                     }
-                    if opcode == 0x00 {
-                        log::warn!("{cycle_count}: ${address:04x} => NOP");
-                    }
+                    // if opcode == 0x00 {
+                    //     log::warn!("{cycle_count}: ${address:04x} => NOP");
+                    // }
                     if opcode == 0xfb {
                         log::warn!("{cycle_count}: ${address:04x} => EI");
                     }

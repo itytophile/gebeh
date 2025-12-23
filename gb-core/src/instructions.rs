@@ -241,7 +241,7 @@ pub enum SetPc {
 
 #[derive(Clone)]
 pub struct Prefetch {
-    pub check_interrupts: bool, // false only for DI
+    pub check_interrupts: bool, // false only for DI and CB
     pub set_pc: SetPc,
 }
 
