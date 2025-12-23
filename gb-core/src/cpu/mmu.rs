@@ -5,7 +5,16 @@ pub struct MmuRead<'a>(pub &'a State);
 impl MmuRead<'_> {
     pub fn read(&self, index: u16, cycle_count: u64, cpu: &Cpu) -> u8 {
         match index {
-            ..OAM => CommonMmu(self.0).read(index),
+            0..VIDEO_RAM => {
+                if cpu.boot_rom_mapping_control == 0
+                    && let Some(value) = self.0.boot_rom.get(usize::from(index)).copied()
+                {
+                    value
+                } else {
+                    CommonMmu(self.0).read(index)
+                }
+            }
+            VIDEO_RAM..OAM => CommonMmu(self.0).read(index),
             OAM..NOT_USABLE => {
                 let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
                 if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.0.is_dma_active {
@@ -209,7 +218,7 @@ impl MmuWrite<'_> {
             0xff4d => {}
             0xff4e => {}
             0xff4f => {}
-            BOOT_ROM_MAPPING_CONTROL => self.0.boot_rom_mapping_control = value,
+            BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control = value,
             0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => cpu.interrupt_enable = Ints::from_bits_retain(value),

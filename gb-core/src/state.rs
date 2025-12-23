@@ -145,7 +145,6 @@ pub struct State {
     pub lcd_status: LcdStatus,
     pub ly: u8,
     pub lyc: u8,
-    pub boot_rom_mapping_control: u8,
     pub sb: u8,
     pub sc: SerialControl,
     pub wy: u8,
@@ -198,7 +197,6 @@ impl State {
             ly: 0,
             lyc: 0,
             mbc: Mbc::new(rom),
-            boot_rom_mapping_control: 0,
             sb: 0,
             sc: SerialControl::empty(),
             wy: 0,
@@ -230,15 +228,7 @@ pub struct CommonMmu<'a>(pub &'a State);
 impl CommonMmu<'_> {
     pub fn read(&self, index: u16) -> u8 {
         match index {
-            0..VIDEO_RAM => {
-                if self.0.boot_rom_mapping_control == 0
-                    && let Some(value) = self.0.boot_rom.get(usize::from(index)).copied()
-                {
-                    value
-                } else {
-                    self.0.mbc.read(index)
-                }
-            }
+            0..VIDEO_RAM => self.0.mbc.read(index),
             VIDEO_RAM..EXTERNAL_RAM => {
                 if (self.0.lcd_status & LcdStatus::PPU_MASK) == LcdStatus::DRAWING {
                     0xff

@@ -47,6 +47,7 @@ pub struct Cpu {
     pub interrupt_flag: Ints,
     pub interrupt_enable: Ints,
     pub hram: [u8; 0x7f],
+    pub boot_rom_mapping_control: u8,
 }
 
 impl Default for Cpu {
@@ -76,6 +77,7 @@ impl Default for Cpu {
             interrupt_flag: Ints::empty(),
             interrupt_enable: Ints::empty(),
             hram: [0; 0x7f],
+            boot_rom_mapping_control: 0,
         }
     }
 }
