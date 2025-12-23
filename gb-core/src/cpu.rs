@@ -581,7 +581,7 @@ impl Cpu {
                 let (result, carry) = a.overflowing_sub(value);
                 if register == Register8Bit::E || register == Register8Bit::D && self.pc <= 0x0187 {
                     log::warn!(
-                        "{cycle_count}: CP {register:?} (0x{:02x}) and A (0x{:02x})",
+                        "{cycle_count}: CP {register:?} (0x{:02x}) and A (0x{:02x}) with scx",
                         value,
                         self.a
                     );

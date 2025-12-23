@@ -529,7 +529,10 @@ impl MmuWrite<'_> {
                 // println!("SCY {value:x}");
                 self.0.scy = value
             }
-            SCX => self.0.scx = value,
+            SCX => {
+                log::warn!("{cycle_count}: Setting scx to 0x{value:02x}");
+                self.0.scx = value
+            }
             LY => {} // read only
             LYC => self.0.lyc = value,
             DMA => {

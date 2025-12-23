@@ -463,8 +463,8 @@ impl StateMachine2 for Ppu {
                 if *dots_count
                     == 172
                         + match state.scx % 8 {
-                            5..=7 => 2,
-                            1..=4 => 1,
+                            5..=7 => 8,
+                            1..=4 => 4,
                             _ => 0,
                         }
                 {
@@ -543,9 +543,12 @@ impl StateMachine2 for Ppu {
         let is_requesting_interrupt = match self {
             Ppu::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
             Ppu::DrawingPixels { .. } => false,
-            Ppu::HorizontalBlank { .. } => {
+            Ppu::HorizontalBlank { remaining_dots, .. } => {
                 if state.lcd_status.contains(LcdStatus::HBLANK_INT) {
-                    log::warn!("{cycle_count}: Setting hblank interrupt")
+                    log::warn!(
+                        "{cycle_count}: Setting hblank interrupt with {remaining_dots} remaining dots ({} M-cycles)",
+                        remaining_dots.get().div_ceil(4)
+                    )
                 }
                 state.lcd_status.contains(LcdStatus::HBLANK_INT)
             }
