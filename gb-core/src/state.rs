@@ -224,80 +224,12 @@ impl State {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
-    pub fn get_data_for_write(&self) -> DataForWrite {
-        DataForWrite {
-            dma_active: self.is_dma_active,
-            lcd_status: self.lcd_status,
-        }
+    pub fn set_ppu_mode(&mut self, mode: LcdStatus) {
+        self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
 }
 
 use crate::{cartridge::Mbc, ic::Ints, ppu::LcdControl};
-
-pub struct WriteOnlyState<'a>(&'a mut State);
-
-impl<'a> WriteOnlyState<'a> {
-    pub fn new(state: &'a mut State) -> Self {
-        Self(state)
-    }
-    pub fn reborrow<'c>(&'c mut self) -> WriteOnlyState<'c>
-    where
-        'a: 'c,
-    {
-        WriteOnlyState(&mut *self.0)
-    }
-    pub fn mmu(&mut self, data_for_write: DataForWrite) -> MmuWrite<'_> {
-        MmuWrite(self.0, data_for_write)
-    }
-    pub fn insert_ie(&mut self, flag: Ints) {
-        self.0.interrupt_enable.insert(flag);
-    }
-    pub fn remove_ie(&mut self, flag: Ints) {
-        self.0.interrupt_enable.remove(flag);
-    }
-    pub fn insert_if(&mut self, flag: Ints) {
-        self.0.interrupt_flag.insert(flag);
-    }
-    pub fn get_sc_mut(&mut self) -> &mut SerialControl {
-        &mut self.0.sc
-    }
-    pub fn set_ly(&mut self, value: u8, cycle_count: u64) {
-        if value != self.0.ly {
-            log::warn!("{cycle_count}: Setting ly to 0x{value:02x}");
-        }
-        self.0.ly = value;
-    }
-    pub fn set_timer_counter(&mut self, timer_counter: u8) {
-        self.0.timer_counter = timer_counter;
-    }
-    pub fn set_ppu_mode(&mut self, mode: LcdStatus) {
-        self.0.lcd_status =
-            (self.0.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
-    }
-    pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
-        self.0.set_interrupt_part_lcd_status(value);
-    }
-
-    pub fn write_to_oam(&mut self, index: u8, value: u8) {
-        self.0.oam[usize::from(index)] = value;
-    }
-
-    pub fn set_dma_active(&mut self, value: bool) {
-        self.0.is_dma_active = value;
-    }
-
-    pub fn set_dma_request(&mut self, value: bool) {
-        self.0.dma_request = value;
-    }
-
-    pub fn increment_system_counter(&mut self) {
-        self.0.system_counter = self.0.system_counter.wrapping_add(1);
-    }
-
-    pub fn reset_system_counter(&mut self) {
-        self.0.system_counter = 0;
-    }
-}
 
 pub struct MmuRead<'a>(&'a State);
 
@@ -437,28 +369,20 @@ impl<'a> MmuReadCpu<'a> {
     }
 }
 
-pub struct DataForWrite {
-    dma_active: bool,
-    lcd_status: LcdStatus,
-}
-
 // never read State for taking decisions (like conditions) when writing. Use DataForWrite instead.
 // TODO dégager le DataForWrite
-pub struct MmuWrite<'a>(&'a mut State, DataForWrite);
+pub struct MmuWrite<'a>(pub &'a mut State);
 
 impl MmuWrite<'_> {
-    pub fn inner(&mut self) -> WriteOnlyState<'_> {
-        WriteOnlyState(self.0)
-    }
     pub fn write(&mut self, index: u16, value: u8, cycle_count: u64, ints: &mut Ints) {
-        if self.1.dma_active && (OAM..NOT_USABLE).contains(&index) {
+        if self.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
 
         match index {
             0..VIDEO_RAM => self.0.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
-                if (self.1.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
+                if (self.0.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
                     self.0.video_ram[usize::from(index - VIDEO_RAM)] = value
                 }
             }
@@ -466,7 +390,7 @@ impl MmuWrite<'_> {
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
-                let ppu = self.1.lcd_status & LcdStatus::PPU_MASK;
+                let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
                 if ppu != LcdStatus::DRAWING && ppu != LcdStatus::OAM_SCAN {
                     self.0.oam[usize::from(index - OAM)] = value
                 }

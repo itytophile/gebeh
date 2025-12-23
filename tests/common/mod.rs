@@ -1,6 +1,6 @@
 use gb_core::{
     StateMachine,
-    state::{SerialControl, State, WriteOnlyState},
+    state::{SerialControl, State},
 };
 use std::iter;
 
@@ -19,9 +19,7 @@ impl StateMachine for TestSerial {
             must_clear = true;
         }
         if must_clear {
-            WriteOnlyState::new(state)
-                .get_sc_mut()
-                .remove(SerialControl::TRANSFER_ENABLE);
+            state.sc.remove(SerialControl::TRANSFER_ENABLE);
         }
     }
 }

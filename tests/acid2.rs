@@ -4,7 +4,7 @@ use gb_core::{
     HEIGHT, StateMachine,
     cpu::Cpu,
     ppu::{Color, Ppu, Speeder},
-    state::{State, WriteOnlyState},
+    state::State,
     timer::Timer,
 };
 

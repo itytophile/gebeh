@@ -3,7 +3,7 @@ use gb_core::{
     cpu::Cpu,
     dma::Dma,
     ppu::{Ppu, Speeder},
-    state::{DMG_BOOT, State, WriteOnlyState},
+    state::State,
     timer::Timer,
 };
 use std::num::NonZeroU8;

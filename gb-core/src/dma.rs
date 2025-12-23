@@ -3,7 +3,7 @@ use core::ops::Range;
 use crate::{
     StateMachine,
     ic::Ints,
-    state::{ECHO_RAM, State, WORK_RAM, WriteOnlyState},
+    state::{ECHO_RAM, State, WORK_RAM},
 };
 
 // about conflicts
@@ -43,20 +43,18 @@ impl StateMachine for Dma {
             )
         });
 
-        let mut state = WriteOnlyState::new(state);
-
         if is_requesting {
-            state.set_dma_request(false);
+            state.dma_request = false;
             // for next cycle
             *self = Self(u16::from_be_bytes([register, 0])..u16::from_be_bytes([register, 0xa0]));
         }
 
         if let Some((address, value)) = source {
             log::warn!("DMA ${address:04x} 0x{value:02x}");
-            state.set_dma_active(true);
-            state.write_to_oam(address as u8, value);
+            state.is_dma_active = true;
+            state.oam[usize::from(address as u8)] = value;
         } else if !is_requesting {
-            state.set_dma_active(false);
+            state.is_dma_active = false;
         }
     }
 }

@@ -1,6 +1,6 @@
 #![no_std]
 
-use crate::state::{State, WriteOnlyState};
+use crate::state::State;
 
 pub mod cartridge;
 pub mod cpu;

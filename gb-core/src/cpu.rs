@@ -6,7 +6,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
         Register8Bit, Register16Bit, SetPc, get_instructions, vec,
     },
-    state::{MmuReadCpu, MmuWrite, State, WriteOnlyState},
+    state::{MmuReadCpu, MmuWrite, State},
 };
 
 use arrayvec::ArrayVec;
@@ -1035,14 +1035,7 @@ impl StateMachine for Cpu {
             }
         };
 
-        let data_for_write = state.get_data_for_write();
-
-        self.execute_instruction(
-            WriteOnlyState::new(state).mmu(data_for_write),
-            inst,
-            interrupts_to_execute,
-            cycle_count,
-        );
+        self.execute_instruction(MmuWrite(state), inst, interrupts_to_execute, cycle_count);
 
         self.interrupt_flag |= state.interrupt_flag;
         state.interrupt_flag = Ints::empty();

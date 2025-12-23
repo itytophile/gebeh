@@ -1,8 +1,4 @@
-use crate::{
-    StateMachine,
-    ic::Ints,
-    state::{State, WriteOnlyState},
-};
+use crate::{StateMachine, ic::Ints, state::State};
 
 // There is a system counter which is 14 bits wide
 // The div register is the height most significant bits of this system counter
@@ -38,12 +34,11 @@ impl StateMachine for Timer {
             };
         }
 
-        let mut state = WriteOnlyState::new(state);
+        state.timer_counter = timer_counter;
+        state.system_counter = state.system_counter.wrapping_add(1);
 
-        state.set_timer_counter(timer_counter);
-        state.increment_system_counter();
         if overflow {
-            state.insert_if(Ints::TIMER);
+            state.interrupt_flag.insert(Ints::TIMER);
         }
     }
 }
