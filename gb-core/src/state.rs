@@ -258,9 +258,6 @@ impl<'a> WriteOnlyState<'a> {
     pub fn insert_if(&mut self, flag: Ints) {
         self.0.interrupt_flag.insert(flag);
     }
-    pub fn remove_if(&mut self, flag: Ints) {
-        self.0.interrupt_flag.remove(flag);
-    }
     pub fn get_sc_mut(&mut self) -> &mut SerialControl {
         &mut self.0.sc
     }
@@ -307,7 +304,7 @@ pub struct MmuRead<'a>(&'a State);
 pub struct MmuReadCpu<'a>(pub MmuRead<'a>);
 
 impl MmuRead<'_> {
-    pub fn read(&self, index: u16, cycle_count: u64) -> u8 {
+    pub fn read(&self, index: u16, cycle_count: u64, ints: Ints) -> u8 {
         match index {
             0..VIDEO_RAM => {
                 if self.0.boot_rom_mapping_control == 0
@@ -363,7 +360,7 @@ impl MmuRead<'_> {
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
             0xff08..INTERRUPT_FLAG => 0xff,
-            INTERRUPT_FLAG => self.0.interrupt_flag.bits() | 0b11100000,
+            INTERRUPT_FLAG => ints.bits() | 0b11100000,
             SWEEP => self.0.sweep | 0b10000000,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle,
             VOLUME_AND_ENVELOPE => self.0.volume_and_envelope,
@@ -432,11 +429,11 @@ impl MmuRead<'_> {
 }
 
 impl<'a> MmuReadCpu<'a> {
-    pub fn read(&self, index: u16, cycle_count: u64) -> u8 {
+    pub fn read(&self, index: u16, cycle_count: u64, ints: Ints) -> u8 {
         if self.0.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return 0xff;
         }
-        self.0.read(index, cycle_count)
+        self.0.read(index, cycle_count, ints)
     }
 }
 
@@ -446,13 +443,14 @@ pub struct DataForWrite {
 }
 
 // never read State for taking decisions (like conditions) when writing. Use DataForWrite instead.
+// TODO dégager le DataForWrite
 pub struct MmuWrite<'a>(&'a mut State, DataForWrite);
 
 impl MmuWrite<'_> {
     pub fn inner(&mut self) -> WriteOnlyState<'_> {
         WriteOnlyState(self.0)
     }
-    pub fn write(&mut self, index: u16, value: u8, cycle_count: u64) {
+    pub fn write(&mut self, index: u16, value: u8, cycle_count: u64, ints: &mut Ints) {
         if self.1.dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
@@ -494,7 +492,7 @@ impl MmuWrite<'_> {
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
             0xff08..INTERRUPT_FLAG => {}
-            INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_truncate(value),
+            INTERRUPT_FLAG => *ints = Ints::from_bits_truncate(value),
             SWEEP => self.0.sweep = value,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle = value,
             VOLUME_AND_ENVELOPE => self.0.volume_and_envelope = value,

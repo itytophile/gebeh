@@ -2,6 +2,7 @@ use core::ops::Range;
 
 use crate::{
     StateMachine,
+    ic::Ints,
     state::{ECHO_RAM, State, WORK_RAM, WriteOnlyState},
 };
 
@@ -37,6 +38,7 @@ impl StateMachine for Dma {
                         source
                     },
                     cycle_count,
+                    Ints::empty(),
                 ),
             )
         });
