@@ -5,16 +5,9 @@ pub struct MmuRead<'a>(pub &'a State);
 impl MmuRead<'_> {
     pub fn read(&self, index: u16, cycle_count: u64, cpu: &Cpu) -> u8 {
         match index {
-            0..VIDEO_RAM => {
-                if cpu.boot_rom_mapping_control == 0
-                    && let Some(value) = self.0.boot_rom.get(usize::from(index)).copied()
-                {
-                    value
-                } else {
-                    CommonMmu(self.0).read(index)
-                }
-            }
-            VIDEO_RAM..OAM => CommonMmu(self.0).read(index),
+            // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
+            ..0x100 if !cpu.boot_rom_mapping_control => self.0.boot_rom[usize::from(index)],
+            ..OAM => CommonMmu(self.0).read(index),
             OAM..NOT_USABLE => {
                 let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
                 if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.0.is_dma_active {
@@ -218,7 +211,7 @@ impl MmuWrite<'_> {
             0xff4d => {}
             0xff4e => {}
             0xff4f => {}
-            BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control = value,
+            BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control = value & 0b1 != 0,
             0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => cpu.interrupt_enable = Ints::from_bits_retain(value),
