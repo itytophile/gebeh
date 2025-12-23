@@ -107,7 +107,6 @@ pub const DMG_BOOT: [u8; 256] = [
 
 #[derive(Clone)]
 pub struct State {
-    pub boot_rom: &'static [u8; 256],
     pub mbc: Mbc,
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
@@ -160,7 +159,6 @@ pub struct State {
 impl State {
     pub fn new(rom: &'static [u8]) -> Self {
         Self {
-            boot_rom: &DMG_BOOT,
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,

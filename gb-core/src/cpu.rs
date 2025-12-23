@@ -9,7 +9,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
         Register8Bit, Register16Bit, SetPc, get_instructions, vec,
     },
-    state::State,
+    state::{DMG_BOOT, State},
 };
 
 use arrayvec::ArrayVec;
@@ -48,6 +48,7 @@ pub struct Cpu {
     pub interrupt_enable: Ints,
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
+    pub boot_rom: &'static [u8; 256],
 }
 
 impl Default for Cpu {
@@ -78,6 +79,7 @@ impl Default for Cpu {
             interrupt_enable: Ints::empty(),
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
+            boot_rom: &DMG_BOOT,
         }
     }
 }

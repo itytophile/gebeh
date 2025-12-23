@@ -6,7 +6,7 @@ impl MmuRead<'_> {
     pub fn read(&self, index: u16, cycle_count: u64, cpu: &Cpu) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
-            ..0x100 if !cpu.boot_rom_mapping_control => self.0.boot_rom[usize::from(index)],
+            ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
             ..OAM => CommonMmu(self.0).read(index),
             OAM..NOT_USABLE => {
                 let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
