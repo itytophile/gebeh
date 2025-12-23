@@ -1,10 +1,3 @@
-/// Sharable handle for I/O devices to request/cancel interrupts
-#[derive(Default)]
-pub struct Irq {
-    pub enable: Ints,
-    pub request: Ints,
-}
-
 bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
     pub struct Ints: u8 {
