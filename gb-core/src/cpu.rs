@@ -6,7 +6,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
         Register8Bit, Register16Bit, SetPc, get_instructions, vec,
     },
-    state::{MmuReadCpu, MmuWrite, State},
+    state::{MmuWrite, State},
 };
 
 use arrayvec::ArrayVec;
@@ -922,7 +922,7 @@ impl StateMachine for Cpu {
             log::warn!("{cycle_count}: Exiting HALT mode");
         }
 
-        let mmu = MmuReadCpu(state.mmu());
+        let mmu = state.mmu();
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst

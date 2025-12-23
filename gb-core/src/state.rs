@@ -233,10 +233,11 @@ use crate::{cartridge::Mbc, ic::Ints, ppu::LcdControl};
 
 pub struct MmuRead<'a>(&'a State);
 
-pub struct MmuReadCpu<'a>(pub MmuRead<'a>);
+pub struct CommonMmu<'a>(pub &'a State);
 
-impl MmuRead<'_> {
-    pub fn read(&self, index: u16, cycle_count: u64, ints: Ints) -> u8 {
+// useful for OAM
+impl CommonMmu<'_> {
+    pub fn read(&self, index: u16) -> u8 {
         match index {
             0..VIDEO_RAM => {
                 if self.0.boot_rom_mapping_control == 0
@@ -256,10 +257,20 @@ impl MmuRead<'_> {
             }
             EXTERNAL_RAM..WORK_RAM => self.0.mbc.read(index),
             WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
-            ECHO_RAM..OAM => self.0.wram[usize::from(index - ECHO_RAM)],
+            // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
+            // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215
+            ECHO_RAM.. => self.0.wram[usize::from(index - ECHO_RAM)],
+        }
+    }
+}
+
+impl MmuRead<'_> {
+    pub fn read(&self, index: u16, cycle_count: u64, ints: Ints) -> u8 {
+        match index {
+            ..OAM => CommonMmu(self.0).read(index),
             OAM..NOT_USABLE => {
                 let ppu = self.0.lcd_status & LcdStatus::PPU_MASK;
-                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN {
+                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.0.is_dma_active {
                     0xff
                 } else {
                     self.0.oam[usize::from(index - OAM)]
@@ -357,15 +368,6 @@ impl MmuRead<'_> {
             INTERRUPT_ENABLE => self.0.interrupt_enable.bits(),
             _ => todo!("Reading ${index:04x}"),
         }
-    }
-}
-
-impl<'a> MmuReadCpu<'a> {
-    pub fn read(&self, index: u16, cycle_count: u64, ints: Ints) -> u8 {
-        if self.0.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
-            return 0xff;
-        }
-        self.0.read(index, cycle_count, ints)
     }
 }
 
