@@ -12,7 +12,7 @@ use crate::{StateMachine, ic::Ints, state::State};
 pub struct Timer;
 
 impl StateMachine for Timer {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
+    fn execute(&mut self, state: &mut State, _: u64) {
         let increment_frequency: u16 = match state.timer_control & 0b11 {
             0 => 256,
             1 => 4,
@@ -20,25 +20,20 @@ impl StateMachine for Timer {
             0b11 => 64,
             _ => unreachable!(),
         };
-        let mut timer_counter = state.timer_counter;
-        let mut overflow = false;
-        let system_counter = state.system_counter.wrapping_add(1);
-        if state.timer_control & 0b100 == 0b100
-            && system_counter.is_multiple_of(increment_frequency)
-        {
-            timer_counter = if let Some(value) = timer_counter.checked_add(1) {
-                value
-            } else {
-                overflow = true;
-                state.timer_modulo
-            };
-        }
 
-        state.timer_counter = timer_counter;
         state.system_counter = state.system_counter.wrapping_add(1);
 
-        if overflow {
-            state.interrupt_flag.insert(Ints::TIMER);
+        if state.timer_control & 0b100 != 0b100
+            || !state.system_counter.is_multiple_of(increment_frequency)
+        {
+            return;
         }
+
+        state.timer_counter = if let Some(value) = state.timer_counter.checked_add(1) {
+            value
+        } else {
+            state.interrupt_flag.insert(Ints::TIMER);
+            state.timer_modulo
+        };
     }
 }
