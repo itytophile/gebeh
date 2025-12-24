@@ -1,12 +1,4 @@
-use gb_core::{
-    StateMachine,
-    cpu::Cpu,
-    dma::Dma,
-    ppu::{Ppu, Speeder},
-    state::State,
-    timer::Timer,
-};
-use std::num::NonZeroU8;
+use gb_core::{Emulator, StateMachine, state::State};
 
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(
@@ -14,17 +6,14 @@ fn test_mooneye(path: &str) {
     ))
     .unwrap();
     let mut state = State::new(rom.leak());
-    let mut machine = Dma::default()
-        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
-        .compose(Cpu::default())
-        .compose(Timer);
+    let mut emulator = Emulator::default();
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
-    while machine.0.1.current_opcode != 0x40 {
-        machine.execute(&mut state, 0);
+    while emulator.get_cpu().current_opcode != 0x40 {
+        emulator.execute(&mut state, 0);
     }
 
-    let ((_, cpu), _) = machine;
+    let cpu = emulator.get_cpu();
 
     assert_eq!(3, cpu.b);
     assert_eq!(5, cpu.c);

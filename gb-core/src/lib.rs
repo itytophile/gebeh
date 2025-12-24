@@ -65,6 +65,9 @@ impl Emulator {
     pub fn get_ppu(&self) -> &Ppu {
         &self.ppu_bundle.1.0
     }
+    pub fn get_cpu(&self) -> &Cpu {
+        &self.cpu
+    }
 }
 
 impl Default for Emulator {
