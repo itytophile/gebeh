@@ -44,7 +44,6 @@ pub struct Cpu {
     // test purposes
     pub current_opcode: u8,
     pub is_dispatching_interrupt: bool,
-    pub interrupt_flag: Ints,
     pub interrupt_enable: Ints,
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
@@ -75,7 +74,6 @@ impl Default for Cpu {
             stop_mode: Default::default(),
             current_opcode: 0,
             is_dispatching_interrupt: false,
-            interrupt_flag: Ints::empty(),
             interrupt_enable: Ints::empty(),
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
@@ -200,7 +198,7 @@ impl Cpu {
 
     fn execute_instruction(
         &mut self,
-        mut mmu: MmuWrite,
+        state: &mut State,
         inst: AfterReadInstruction,
         interrupts_to_execute: Ints,
         cycle_count: u64,
@@ -208,6 +206,8 @@ impl Cpu {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
         use ReadInstruction::*;
+
+        let mut mmu = MmuWrite(state);
 
         match inst {
             Read(value, inst) => {
@@ -465,7 +465,7 @@ impl Cpu {
                     _ => 0x0000,
                 };
                 if let Some(interrupt) = interrupt {
-                    self.interrupt_flag.remove(interrupt);
+                    state.interrupt_flag.remove(interrupt);
                 }
             }
             NoRead(Res(bit, register)) => {
@@ -898,7 +898,7 @@ impl Cpu {
 impl StateMachine for Cpu {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
         let interrupts_to_execute =
-            Ints::from_bits_truncate(self.interrupt_enable.bits()) & self.interrupt_flag;
+            Ints::from_bits_truncate(self.interrupt_enable.bits()) & state.interrupt_flag;
 
         // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
         if self.stop_mode {
@@ -912,8 +912,6 @@ impl StateMachine for Cpu {
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
-                self.interrupt_flag |= state.interrupt_flag;
-                state.interrupt_flag = Ints::empty();
                 return;
             }
             self.is_halted = false;
@@ -1025,9 +1023,6 @@ impl StateMachine for Cpu {
             }
         };
 
-        self.execute_instruction(MmuWrite(state), inst, interrupts_to_execute, cycle_count);
-
-        self.interrupt_flag |= state.interrupt_flag;
-        state.interrupt_flag = Ints::empty();
+        self.execute_instruction(state, inst, interrupts_to_execute, cycle_count);
     }
 }

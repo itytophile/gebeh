@@ -37,7 +37,7 @@ pub enum Mbc {
 
 impl Mbc {
     pub fn new(rom: &'static [u8]) -> Self {
-        match CartridgeType::try_from(rom[0x147]).unwrap() {
+        match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).unwrap() {
             CartridgeType::RomOnly => Self::NoMbc(rom),
             CartridgeType::Mbc1 | CartridgeType::Mbc1Ram => Self::Mbc1(Mbc1::new(rom)),
             CartridgeType::Mbc5RamBattery => Self::Mbc5(Mbc5::new(rom)),

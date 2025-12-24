@@ -43,7 +43,7 @@ impl MmuRead<'_> {
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
             0xff08..INTERRUPT_FLAG => 0xff,
-            INTERRUPT_FLAG => cpu.interrupt_flag.bits() | 0b11100000,
+            INTERRUPT_FLAG => self.0.interrupt_flag.bits() | 0b11100000,
             SWEEP => self.0.sweep | 0b10000000,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle,
             VOLUME_AND_ENVELOPE => self.0.volume_and_envelope,
@@ -76,11 +76,8 @@ impl MmuRead<'_> {
             0xff27..WAVE => 0xff,
             LCD_CONTROL => self.0.lcd_control.bits(),
             LCD_STATUS => {
-                let mut status = self.0.lcd_status;
-                // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
-                status.set(LcdStatus::LYC_EQUAL_TO_LY, self.0.ly == self.0.lyc);
-                log::warn!("{cycle_count}: Reading status {status:?}");
-                status.bits() | 0b10000000
+                log::warn!("{cycle_count}: Reading status {:?}", self.0.lcd_status);
+                self.0.lcd_status.bits() | 0b10000000
             }
             SCY => self.0.scy,
             SCX => self.0.scx,
@@ -156,7 +153,7 @@ impl MmuWrite<'_> {
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
             0xff08..INTERRUPT_FLAG => {}
-            INTERRUPT_FLAG => cpu.interrupt_flag = Ints::from_bits_truncate(value),
+            INTERRUPT_FLAG => self.0.interrupt_flag = Ints::from_bits_truncate(value),
             SWEEP => self.0.sweep = value,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.0.length_timer_and_duty_cycle = value,
             VOLUME_AND_ENVELOPE => self.0.volume_and_envelope = value,

@@ -1,3 +1,5 @@
+mod ly_handler;
+
 use core::num::{NonZeroU8, NonZeroU16};
 
 use arrayvec::ArrayVec;
@@ -5,6 +7,7 @@ use arrayvec::ArrayVec;
 use crate::{
     StateMachine, WIDTH,
     ic::Ints,
+    ppu::ly_handler::LyHandler,
     state::{LcdStatus, State, VIDEO_RAM},
 };
 
@@ -326,6 +329,12 @@ fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus) {
     }
 }
 
+// D'après "The cycle accurate gameboy docs":
+// - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
+// - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
+// - Le OAM scan commence seulement au deuxième M-cycle d'une ligne. En effet, les modes sont décalés par rapport à la ligne, le Hblank déborde
+//  à la fin et est exécuté au premier M-cycle de la ligne prochaine. Cela implique qu'un même Hblank peut connaître deux valeurs de LY différentes.
+
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl StateMachine for Ppu {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
@@ -637,4 +646,9 @@ impl<T: StateMachine> StateMachine for Speeder<T> {
             self.0.execute(state, cycle_count);
         }
     }
+}
+
+// separated systems because the ppu is faster than the other component and the behavior of each system is strange.
+pub fn get_ppu_bundle(ppu_speed: NonZeroU8) -> (LyHandler, Speeder<Ppu>) {
+    (LyHandler::default(), Speeder(Ppu::default(), ppu_speed))
 }
