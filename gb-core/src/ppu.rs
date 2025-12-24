@@ -11,7 +11,7 @@ use crate::{
 #[derive(Clone)]
 pub enum Ppu {
     OamScan {
-        remaining_dots: NonZeroU8,
+        remaining_dots: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         wy_condition: bool,
         internal_y_window_counter: u8,
@@ -23,16 +23,18 @@ pub enum Ppu {
         wx_condition: bool,
         internal_y_window_counter: u8,
         x: u8,
+        // todo replace that with x check
+        finished: bool,
     }, // <= 289
     HorizontalBlank {
-        remaining_dots: NonZeroU8,
+        remaining_dots: u8,
         wy_condition: bool,
         internal_y_window_counter: u8,
         // can be read by the lcd
         scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
-        remaining_dots: NonZeroU16,
+        remaining_dots: u16,
         // no wy_condition because vblank means the frame ends
     }, // <= 456
 }
@@ -51,8 +53,8 @@ bitflags::bitflags! {
     }
 }
 
-const OAM_SCAN_DURATION: NonZeroU8 = NonZeroU8::new(80).unwrap();
-const VERTICAL_BLANK_SCANLINE_DURATION: NonZeroU16 = NonZeroU16::new(456).unwrap();
+const OAM_SCAN_DURATION: u8 = 80;
+const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456;
 
 impl Default for Ppu {
     fn default() -> Self {
@@ -318,6 +320,12 @@ impl From<Color> for [u8; 4] {
     }
 }
 
+fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus) {
+    if state.lcd_status.contains(mode_interrupt) {
+        state.interrupt_flag.insert(Ints::LCD);
+    }
+}
+
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl StateMachine for Ppu {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
@@ -325,7 +333,78 @@ impl StateMachine for Ppu {
             return;
         }
 
-        let mut mode_changed = false;
+        // changing mode
+        match self {
+            Ppu::OamScan {
+                remaining_dots: 0,
+                wy_condition,
+                internal_y_window_counter,
+            } => {
+                *self = Ppu::DrawingPixels {
+                    dots_count: 0,
+                    scanline: [Color::Black; 160],
+                    wy_condition: *wy_condition,
+                    wx_condition: false,
+                    internal_y_window_counter: *internal_y_window_counter,
+                    x: 0,
+                    finished: false,
+                }
+            }
+            Ppu::DrawingPixels {
+                finished: true,
+                dots_count,
+                wy_condition,
+                internal_y_window_counter,
+                scanline,
+                ..
+            } => {
+                request_interrupt(state, LcdStatus::HBLANK_INT);
+                *self = Ppu::HorizontalBlank {
+                    remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                    wy_condition: *wy_condition,
+                    internal_y_window_counter: *internal_y_window_counter,
+                    scanline: *scanline,
+                }
+            }
+            Ppu::HorizontalBlank {
+                remaining_dots: 0,
+                wy_condition,
+                internal_y_window_counter,
+                ..
+            } => {
+                *self = if state.ly == 143 {
+                    request_interrupt(state, LcdStatus::VBLANK_INT);
+                    state.interrupt_flag.insert(Ints::VBLANK);
+                    Ppu::VerticalBlankScanline {
+                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
+                    }
+                } else {
+                    Ppu::OamScan {
+                        remaining_dots: OAM_SCAN_DURATION,
+                        wy_condition: *wy_condition,
+                        internal_y_window_counter: *internal_y_window_counter,
+                    }
+                };
+                state.ly += 1;
+            }
+            Ppu::VerticalBlankScanline {
+                remaining_dots: 0, ..
+            } => {
+                *self = if state.ly == 153 {
+                    state.ly = 0;
+                    // according to SameBoy https://github.com/LIJI32/SameBoy/blob/3000269e73a2043fd121ec39d866de99465db178/Core/display.c#L1778
+                    // The OAM STAT interrupt occurs 1 T-cycle before STAT actually changes, except on line 0.
+                    request_interrupt(state, LcdStatus::OAM_INT);
+                    Default::default()
+                } else {
+                    state.ly += 1;
+                    Ppu::VerticalBlankScanline {
+                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
+                    }
+                };
+            }
+            _ => {}
+        };
 
         if state.lcd_status.contains(LcdStatus::LYC_INT)
             && self.is_starting_line()
@@ -338,24 +417,12 @@ impl StateMachine for Ppu {
             Ppu::OamScan {
                 remaining_dots,
                 wy_condition,
-                internal_y_window_counter,
+                ..
             } => {
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
                 *wy_condition |= *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
-                if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
-                    *remaining_dots = dots;
-                } else {
-                    mode_changed = true;
-                    *self = Ppu::DrawingPixels {
-                        dots_count: 0,
-                        scanline: [Color::Black; 160],
-                        wy_condition: *wy_condition,
-                        wx_condition: false,
-                        internal_y_window_counter: *internal_y_window_counter,
-                        x: 0,
-                    };
-                }
+                *remaining_dots -= 1;
             }
             Ppu::DrawingPixels {
                 dots_count,
@@ -366,6 +433,7 @@ impl StateMachine for Ppu {
                 x,
                 // https://gbdev.io/pandocs/Scrolling.html#window
                 wx_condition,
+                finished,
             } => {
                 // https://gbdev.io/pandocs/Rendering.html#first12
                 if *dots_count >= 12 && *x < WIDTH {
@@ -448,66 +516,18 @@ impl StateMachine for Ppu {
                     {
                         *internal_y_window_counter += 1;
                     }
-                    mode_changed = true;
-                    // log::warn!(
-                    //     "Remaining dots for hblank: {} ({} M-cycles) with scx = {}",
-                    //     376 - *dots_count,
-                    //     (376 - *dots_count) / 4,
-                    //     state.scx
-                    // );
-                    *self = Ppu::HorizontalBlank {
-                        remaining_dots: NonZeroU8::new((376 - *dots_count).try_into().unwrap())
-                            .unwrap(),
-                        wy_condition: *wy_condition,
-                        internal_y_window_counter: *internal_y_window_counter,
-                        scanline: *scanline,
-                    }
+                    *finished = true;
                 }
             }
-            Ppu::HorizontalBlank {
-                remaining_dots,
-                wy_condition,
-                internal_y_window_counter,
-                ..
-            } => {
-                if let Some(dots) = NonZeroU8::new(remaining_dots.get() - 1) {
-                    *remaining_dots = dots;
-                } else {
-                    // log::warn!(
-                    //     "Incrementing ly from 0x{:02x} to 0x{:02x}",
-                    //     work_state.ly,
-                    //     work_state.ly + 1
-                    // );
-                    state.ly += 1;
-                    mode_changed = true;
-                    if state.ly == 144 {
-                        // log::warn!("{cycle_count}: Changed mode to vblank");
-                        *self = Ppu::VerticalBlankScanline {
-                            remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-                        };
-                    } else {
-                        *self = Ppu::OamScan {
-                            remaining_dots: OAM_SCAN_DURATION,
-                            wy_condition: *wy_condition,
-                            internal_y_window_counter: *internal_y_window_counter,
-                        }
-                    }
+            Ppu::HorizontalBlank { remaining_dots, .. } => {
+                *remaining_dots -= 1;
+                // according to SameBoy https://github.com/LIJI32/SameBoy/blob/3000269e73a2043fd121ec39d866de99465db178/Core/display.c#L1778
+                // The OAM STAT interrupt occurs 1 T-cycle before STAT actually changes, except on line 0.
+                if *remaining_dots == 0 && state.ly < 143 {
+                    request_interrupt(state, LcdStatus::OAM_INT);
                 }
             }
-            Ppu::VerticalBlankScanline { remaining_dots } => {
-                if let Some(dots) = NonZeroU16::new(remaining_dots.get() - 1) {
-                    *remaining_dots = dots;
-                } else if state.ly == 153 {
-                    mode_changed = true;
-                    state.ly = 0;
-                    *self = Default::default()
-                } else {
-                    state.ly += 1;
-                    *self = Ppu::VerticalBlankScanline {
-                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-                    }
-                }
-            }
+            Ppu::VerticalBlankScanline { remaining_dots } => *remaining_dots -= 1,
         };
 
         let mode = match self {
@@ -517,33 +537,6 @@ impl StateMachine for Ppu {
             Ppu::VerticalBlankScanline { .. } => LcdStatus::VBLANK,
         };
         state.set_ppu_mode(mode);
-
-        if !mode_changed {
-            return;
-        }
-
-        let is_requesting_interrupt = match self {
-            Ppu::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
-            Ppu::DrawingPixels { .. } => false,
-            Ppu::HorizontalBlank { remaining_dots, .. } => {
-                if state.lcd_status.contains(LcdStatus::HBLANK_INT) {
-                    log::warn!(
-                        "{cycle_count}: Setting hblank interrupt with {remaining_dots} remaining dots ({} M-cycles)",
-                        remaining_dots.get().div_ceil(4)
-                    )
-                }
-                state.lcd_status.contains(LcdStatus::HBLANK_INT)
-            }
-            Ppu::VerticalBlankScanline { .. } => state.lcd_status.contains(LcdStatus::VBLANK_INT),
-        };
-
-        if is_requesting_interrupt {
-            state.interrupt_flag.insert(Ints::LCD)
-        }
-
-        if matches!(self, Ppu::VerticalBlankScanline { .. }) {
-            state.interrupt_flag.insert(Ints::VBLANK);
-        }
     }
 }
 

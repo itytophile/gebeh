@@ -79,6 +79,7 @@ impl MmuRead<'_> {
                 let mut status = self.0.lcd_status;
                 // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
                 status.set(LcdStatus::LYC_EQUAL_TO_LY, self.0.ly == self.0.lyc);
+                log::warn!("{cycle_count}: Reading status {status:?}");
                 status.bits() | 0b10000000
             }
             SCY => self.0.scy,

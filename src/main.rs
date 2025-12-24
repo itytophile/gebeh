@@ -38,7 +38,7 @@ fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     PixelsBuilder::new(width, height, surface_texture)
-        .enable_vsync(false)
+        .enable_vsync(true)
         .build()
         .unwrap()
 }
@@ -52,7 +52,7 @@ fn main() {
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/hblank_ly_scx_timing-GS.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/intr_2_mode0_timing.gb",
     )
     .unwrap();
     // let rom =

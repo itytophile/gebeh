@@ -311,6 +311,9 @@ impl Cpu {
                 );
             }
             NoRead(Inc(register)) => {
+                if register == Register8Bit::B {
+                    log::warn!("{cycle_count}: Incrementing B")
+                }
                 let incremented = self.inc(self.get_8bit_register(register));
                 self.set_8bit_register(register, incremented);
             }
@@ -961,7 +964,7 @@ impl StateMachine for Cpu {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode = mmu.read(address, cycle_count, self);
-                    // if address == 0x4879 {
+                    // if address == 0x4ab4 {
                     //     panic!("fail")
                     // }
                     // log::warn!("${address:04x} => ${opcode:2x}");
