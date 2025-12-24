@@ -1,6 +1,12 @@
 #![no_std]
 
-use crate::state::State;
+use crate::{
+    cpu::Cpu,
+    dma::Dma,
+    ppu::{Ppu, PpuBundle, get_ppu_bundle},
+    state::State,
+    timer::Timer,
+};
 
 pub mod cartridge;
 pub mod cpu;
@@ -45,5 +51,37 @@ impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
         self.0.execute(state, cycle_count);
         self.1.execute(state, cycle_count);
+    }
+}
+
+#[derive(Clone)]
+pub struct Emulator {
+    ppu_bundle: PpuBundle,
+    dma: Dma,
+    cpu: Cpu,
+}
+
+impl Emulator {
+    pub fn get_ppu(&self) -> &Ppu {
+        &self.ppu_bundle.1.0
+    }
+}
+
+impl Default for Emulator {
+    fn default() -> Self {
+        Self {
+            ppu_bundle: get_ppu_bundle(),
+            dma: Default::default(),
+            cpu: Default::default(),
+        }
+    }
+}
+
+impl StateMachine for Emulator {
+    fn execute(&mut self, state: &mut State, cycle_count: u64) {
+        self.dma.execute(state, cycle_count);
+        self.ppu_bundle.execute(state, cycle_count);
+        Timer.execute(state, cycle_count);
+        self.cpu.execute(state, cycle_count);
     }
 }

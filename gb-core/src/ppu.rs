@@ -626,7 +626,9 @@ impl<T: StateMachine> StateMachine for Speeder<T> {
 }
 
 // separated systems because the ppu is faster than the other component and the behavior of each system is strange.
-pub fn get_ppu_bundle() -> (LyHandler, Speeder<Ppu>) {
+pub type PpuBundle = (LyHandler, Speeder<Ppu>);
+
+pub fn get_ppu_bundle() -> PpuBundle {
     (
         LyHandler::default(),
         Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),

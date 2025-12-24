@@ -1,20 +1,11 @@
-use std::{
-    num::NonZeroU8,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use gb_core::{
-    HEIGHT, StateMachine, WIDTH,
+    Emulator, HEIGHT, StateMachine, WIDTH,
     cartridge::CartridgeType,
-    cpu::Cpu,
-    dma::Dma,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
-    ppu::{
-        LcdControl, Ppu, Speeder, get_bg_win_tile, get_color_from_line, get_line_from_tile,
-        get_ppu_bundle,
-    },
+    ppu::{LcdControl, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
-    timer::Timer,
 };
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
@@ -80,12 +71,9 @@ fn main() {
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     let mut state = State::new(rom.leak());
-    let mut machine = Dma::default()
-        .compose(get_ppu_bundle())
-        .compose(Timer)
-        .compose(Cpu::default());
+    let mut emulator = Emulator::default();
 
-    let mut save_states = vec![(machine.clone(), state.clone())];
+    let mut save_states = vec![(emulator.clone(), state.clone())];
 
     let event_loop = EventLoop::new().unwrap();
 
@@ -160,11 +148,11 @@ fn main() {
                 if !is_paused {
                     if last_save.elapsed() >= Duration::from_secs(2) {
                         last_save = Instant::now();
-                        save_states.push((machine.clone(), state.clone()));
+                        save_states.push((emulator.clone(), state.clone()));
                     }
                     draw_emulator(
                         &mut state,
-                        &mut machine,
+                        &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut previous_ly,
                         &mut cycle_count,
@@ -232,7 +220,7 @@ fn main() {
                 ..
             } => {
                 if let Some(old) = save_states.pop() {
-                    (machine, state) = old
+                    (emulator, state) = old
                 }
             }
             Event::WindowEvent {
@@ -258,23 +246,21 @@ fn main() {
 
 fn draw_emulator(
     state: &mut State,
-    mut machine: &mut (((Dma, (impl StateMachine, Speeder<Ppu>)), Timer), Cpu),
+    emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
     previous_ly: &mut Option<u8>,
     cycle_count: &mut u64,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
-        machine.execute(state, *cycle_count);
+        emulator.execute(state, *cycle_count);
         *cycle_count += 1;
 
         if *previous_ly == Some(state.ly) {
             continue;
         }
 
-        let (((_, (_, Speeder(ppu, _))), _), _) = &mut machine;
-
-        let Some(scanline) = ppu.get_scanline_if_ready() else {
+        let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
             continue;
         };
 
