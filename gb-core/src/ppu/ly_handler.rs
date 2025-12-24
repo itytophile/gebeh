@@ -1,4 +1,4 @@
-use crate::{StateMachine, ic::Ints, state::LcdStatus};
+use crate::{StateMachine, ic::Ints, ppu::LcdControl, state::LcdStatus};
 
 const LINE_DURATION_M_CYCLE: u8 = 114;
 
@@ -7,7 +7,7 @@ pub struct LyHandler {
     // ly increment logic
     logical_ly: u8,
     clock_count_in_line: u8,
-    // lyc logic (needs logical_ly to works)
+    // lyc logic (needs logical_ly to work)
     delayed_ly: u8,
     already_checked: bool,
 }
@@ -22,6 +22,9 @@ impl LyHandler {
 
 impl StateMachine for LyHandler {
     fn execute(&mut self, state: &mut crate::state::State, _: u64) {
+        if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
+            return;
+        }
         // ly increment logic
         match self.clock_count_in_line {
             LINE_DURATION_M_CYCLE => {

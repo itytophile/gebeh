@@ -9,7 +9,10 @@ use gb_core::{
     cpu::Cpu,
     dma::Dma,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
-    ppu::{LcdControl, Ppu, Speeder, get_bg_win_tile, get_color_from_line, get_line_from_tile},
+    ppu::{
+        LcdControl, Ppu, Speeder, get_bg_win_tile, get_color_from_line, get_line_from_tile,
+        get_ppu_bundle,
+    },
     state::State,
     timer::Timer,
 };
@@ -50,12 +53,12 @@ fn main() {
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
     //         .unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
+    let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
-    let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/intr_2_mode0_timing.gb",
-    )
-    .unwrap();
+    // let rom = std::fs::read(
+    //     "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/intr_2_mode0_timing.gb",
+    // )
+    // .unwrap();
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/individual/10-bit ops.gb")
     //         .unwrap();
@@ -78,7 +81,7 @@ fn main() {
 
     let mut state = State::new(rom.leak());
     let mut machine = Dma::default()
-        .compose(Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()))
+        .compose(get_ppu_bundle())
         .compose(Timer)
         .compose(Cpu::default());
 
@@ -255,7 +258,7 @@ fn main() {
 
 fn draw_emulator(
     state: &mut State,
-    mut machine: &mut (((Dma, Speeder<Ppu>), Timer), Cpu),
+    mut machine: &mut (((Dma, (impl StateMachine, Speeder<Ppu>)), Timer), Cpu),
     pixels: &mut [[u8; 4]],
     previous_ly: &mut Option<u8>,
     cycle_count: &mut u64,
@@ -269,7 +272,7 @@ fn draw_emulator(
             continue;
         }
 
-        let (((_, Speeder(ppu, _)), _), _) = &mut machine;
+        let (((_, (_, Speeder(ppu, _))), _), _) = &mut machine;
 
         let Some(scanline) = ppu.get_scanline_if_ready() else {
             continue;

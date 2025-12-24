@@ -1,6 +1,6 @@
 mod ly_handler;
 
-use core::num::{NonZeroU8, NonZeroU16};
+use core::num::NonZeroU8;
 
 use arrayvec::ArrayVec;
 
@@ -13,6 +13,9 @@ use crate::{
 
 #[derive(Clone)]
 pub enum Ppu {
+    FirstCycleFirstLine {
+        remaining_dots: u8,
+    },
     OamScan {
         remaining_dots: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
@@ -33,8 +36,6 @@ pub enum Ppu {
         remaining_dots: u8,
         wy_condition: bool,
         internal_y_window_counter: u8,
-        // can be read by the lcd
-        scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: u16,
@@ -57,15 +58,12 @@ bitflags::bitflags! {
 }
 
 const OAM_SCAN_DURATION: u8 = 80;
-const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456;
+// don't overlap on line 0 "like Hblank". It "gives" its last 4 remaining dots to FirstCycleFirstLine
+const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456 * 10 - 4;
 
 impl Default for Ppu {
     fn default() -> Self {
-        Self::OamScan {
-            remaining_dots: OAM_SCAN_DURATION,
-            wy_condition: false,
-            internal_y_window_counter: 0,
-        }
+        Self::FirstCycleFirstLine { remaining_dots: 4 }
     }
 }
 
@@ -274,22 +272,13 @@ impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
         match self {
-            Self::HorizontalBlank { scanline, .. } => Some(scanline),
+            Self::DrawingPixels {
+                finished: true,
+                scanline,
+                ..
+            } => Some(scanline),
             _ => None,
         }
-    }
-
-    #[must_use]
-    pub fn is_starting_line(&self) -> bool {
-        matches!(
-            self,
-            Ppu::OamScan {
-                remaining_dots: OAM_SCAN_DURATION,
-                ..
-            } | Ppu::VerticalBlankScanline {
-                remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-            }
-        )
     }
 }
 
@@ -344,6 +333,14 @@ impl StateMachine for Ppu {
 
         // changing mode
         match self {
+            Ppu::FirstCycleFirstLine { remaining_dots: 0 } => {
+                request_interrupt(state, LcdStatus::OAM_INT);
+                *self = Ppu::OamScan {
+                    remaining_dots: OAM_SCAN_DURATION,
+                    wy_condition: false,
+                    internal_y_window_counter: 0,
+                };
+            }
             Ppu::OamScan {
                 remaining_dots: 0,
                 wy_condition,
@@ -364,7 +361,6 @@ impl StateMachine for Ppu {
                 dots_count,
                 wy_condition,
                 internal_y_window_counter,
-                scanline,
                 ..
             } => {
                 request_interrupt(state, LcdStatus::HBLANK_INT);
@@ -372,7 +368,6 @@ impl StateMachine for Ppu {
                     remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                     wy_condition: *wy_condition,
                     internal_y_window_counter: *internal_y_window_counter,
-                    scanline: *scanline,
                 }
             }
             Ppu::HorizontalBlank {
@@ -384,6 +379,7 @@ impl StateMachine for Ppu {
                 *self = if state.ly == 143 {
                     request_interrupt(state, LcdStatus::VBLANK_INT);
                     state.interrupt_flag.insert(Ints::VBLANK);
+                    log::warn!("{cycle_count}: Entering vblank");
                     Ppu::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }
@@ -394,35 +390,15 @@ impl StateMachine for Ppu {
                         internal_y_window_counter: *internal_y_window_counter,
                     }
                 };
-                state.ly += 1;
             }
             Ppu::VerticalBlankScanline {
                 remaining_dots: 0, ..
-            } => {
-                *self = if state.ly == 153 {
-                    state.ly = 0;
-                    // according to SameBoy https://github.com/LIJI32/SameBoy/blob/3000269e73a2043fd121ec39d866de99465db178/Core/display.c#L1778
-                    // The OAM STAT interrupt occurs 1 T-cycle before STAT actually changes, except on line 0.
-                    request_interrupt(state, LcdStatus::OAM_INT);
-                    Default::default()
-                } else {
-                    state.ly += 1;
-                    Ppu::VerticalBlankScanline {
-                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-                    }
-                };
-            }
+            } => *self = Ppu::FirstCycleFirstLine { remaining_dots: 4 },
             _ => {}
         };
 
-        if state.lcd_status.contains(LcdStatus::LYC_INT)
-            && self.is_starting_line()
-            && state.ly == state.lyc
-        {
-            state.interrupt_flag.insert(Ints::LCD);
-        }
-
         match self {
+            Ppu::FirstCycleFirstLine { remaining_dots } => *remaining_dots -= 1,
             Ppu::OamScan {
                 remaining_dots,
                 wy_condition,
@@ -540,6 +516,7 @@ impl StateMachine for Ppu {
         };
 
         let mode = match self {
+            Ppu::FirstCycleFirstLine { .. } => LcdStatus::HBLANK,
             Ppu::OamScan { .. } => LcdStatus::OAM_SCAN,
             Ppu::DrawingPixels { .. } => LcdStatus::DRAWING,
             Ppu::HorizontalBlank { .. } => LcdStatus::HBLANK,
@@ -649,6 +626,9 @@ impl<T: StateMachine> StateMachine for Speeder<T> {
 }
 
 // separated systems because the ppu is faster than the other component and the behavior of each system is strange.
-pub fn get_ppu_bundle(ppu_speed: NonZeroU8) -> (LyHandler, Speeder<Ppu>) {
-    (LyHandler::default(), Speeder(Ppu::default(), ppu_speed))
+pub fn get_ppu_bundle() -> (LyHandler, Speeder<Ppu>) {
+    (
+        LyHandler::default(),
+        Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
+    )
 }
