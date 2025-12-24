@@ -282,7 +282,7 @@ impl Ppu {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum Color {
     White,
     LightGray,
@@ -376,7 +376,8 @@ impl StateMachine for Ppu {
                 internal_y_window_counter,
                 ..
             } => {
-                *self = if state.ly == 143 {
+                // hblank is still active the first cycle of line 144
+                *self = if state.ly == 144 {
                     request_interrupt(state, LcdStatus::VBLANK_INT);
                     state.interrupt_flag.insert(Ints::VBLANK);
                     log::warn!("{cycle_count}: Entering vblank");

@@ -35,9 +35,7 @@ impl StateMachine for LyHandler {
                 }
                 self.logical_ly = (self.logical_ly + 1) % 154;
             }
-            1 if state.ly == 153 => {
-                state.ly = 0;
-            }
+            1 if state.ly == 153 => state.ly = 0,
             _ => {}
         }
 
