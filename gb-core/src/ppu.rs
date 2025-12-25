@@ -312,8 +312,9 @@ impl From<Color> for [u8; 4] {
     }
 }
 
-fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus) {
+fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, cycle_count: u64) {
     if state.lcd_status.contains(mode_interrupt) {
+        log::warn!("{cycle_count}: Requesting {mode_interrupt:?}");
         state.interrupt_flag.insert(Ints::LCD);
     }
 }
@@ -323,6 +324,26 @@ fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus) {
 // - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
 // - Le OAM scan commence seulement au deuxième M-cycle d'une ligne. En effet, les modes sont décalés par rapport à la ligne, le Hblank déborde
 //  à la fin et est exécuté au premier M-cycle de la ligne prochaine. Cela implique qu'un même Hblank peut connaître deux valeurs de LY différentes.
+
+// ce que veut mooneye: écart entre OAM_INT et STAT MODE HBLANK = 63 M-cycles ou 252 dots (80 + 172)
+// cependant d'après "The cycle accurate gameboy docs", l'interruption de OAM_INT arrive un cycle plus tôt
+
+// D'après un commentaire dans SameBoy: It seems that the STAT register's mode bits are always "late" by 4 T-cycles.
+// Donc les modes ne sont pas décalés en fin de compte ?
+// Supposons que les modes ne soient pas décalés mais que cela soit le STAT qui soit à la bourre.
+// Cela expliquerait pourquoi l'interruption du Mode 2 arrive un cycle avant Stat=2 (sauf ligne 0)
+// Or l'interruption vblank arrive toujours pile poil quand son stat passe à 1.
+// Mooneye veut aussi que l'écart en OAM_INT et HBLANK_INT = 63 M-cycles
+// Donc à partir de ces informations je peux conclure:
+// - le OAM scan (mode 2) commence bien au cycle 0
+// - son interruption est lancée cycle 0 (bien synchronisée) (cycle 1 à la ligne 0)
+// - son STAT est en retard d'un M-cycle
+// - Le Drawing (mode 3) commence bien au cycle 20, juste après OAM scan
+// - son STAT est en retard d'un M-cycle
+// - le Hblank (mode 0) commence après le Drawing de façon normale
+// - son interruption est lancée dès le premier cycle (bien synchronisée)
+// - son STAT n'est pas en retard, il est changé dès le premier cycle (bien synchronisé même cycle que l'interruption)
+// - VBLANK a un retard d'un cycle sur son STAT et sur son interruption (j'en peux plus)
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl StateMachine for Ppu {
@@ -334,7 +355,7 @@ impl StateMachine for Ppu {
         // changing mode
         match self {
             Ppu::FirstCycleFirstLine { remaining_dots: 0 } => {
-                request_interrupt(state, LcdStatus::OAM_INT);
+                request_interrupt(state, LcdStatus::OAM_INT, cycle_count);
                 *self = Ppu::OamScan {
                     remaining_dots: OAM_SCAN_DURATION,
                     wy_condition: false,
@@ -363,7 +384,7 @@ impl StateMachine for Ppu {
                 internal_y_window_counter,
                 ..
             } => {
-                request_interrupt(state, LcdStatus::HBLANK_INT);
+                log::warn!("{cycle_count}: Entering hblank");
                 *self = Ppu::HorizontalBlank {
                     remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                     wy_condition: *wy_condition,
@@ -378,13 +399,14 @@ impl StateMachine for Ppu {
             } => {
                 // hblank is still active the first cycle of line 144
                 *self = if state.ly == 144 {
-                    request_interrupt(state, LcdStatus::VBLANK_INT);
+                    request_interrupt(state, LcdStatus::VBLANK_INT, cycle_count);
                     state.interrupt_flag.insert(Ints::VBLANK);
                     log::warn!("{cycle_count}: Entering vblank");
                     Ppu::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }
                 } else {
+                    log::warn!("{cycle_count}: Entering oam scan");
                     Ppu::OamScan {
                         remaining_dots: OAM_SCAN_DURATION,
                         wy_condition: *wy_condition,
@@ -502,6 +524,7 @@ impl StateMachine for Ppu {
                     {
                         *internal_y_window_counter += 1;
                     }
+                    request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count);
                     *finished = true;
                 }
             }
@@ -510,7 +533,7 @@ impl StateMachine for Ppu {
                 // according to SameBoy https://github.com/LIJI32/SameBoy/blob/3000269e73a2043fd121ec39d866de99465db178/Core/display.c#L1778
                 // The OAM STAT interrupt occurs 1 T-cycle before STAT actually changes, except on line 0.
                 if *remaining_dots == 0 && state.ly < 143 {
-                    request_interrupt(state, LcdStatus::OAM_INT);
+                    request_interrupt(state, LcdStatus::OAM_INT, cycle_count);
                 }
             }
             Ppu::VerticalBlankScanline { remaining_dots } => *remaining_dots -= 1,

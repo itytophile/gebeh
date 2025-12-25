@@ -962,13 +962,11 @@ impl StateMachine for Cpu {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode = mmu.read(address, cycle_count, self);
+                    // D vaut deux au lieu de 1
                     // if address == 0x4ab4 {
                     //     panic!("fail")
                     // }
                     // log::warn!("${address:04x} => ${opcode:2x}");
-                    if opcode == 0x04 {
-                        log::warn!("${address:04x} => INC B");
-                    }
                     if opcode == 0x77 {
                         log::warn!("${address:04x} => LD (HL), A");
                     }
