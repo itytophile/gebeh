@@ -13,13 +13,13 @@ use crate::{
 
 // used by oam scan, drawing, hblank, discarded during vblank
 #[derive(Clone, Copy, Default)]
-struct CurrentFrameData {
+pub struct CurrentFrameData {
     wy_condition: bool,
     internal_y_window_counter: u8,
 }
 
 #[derive(Clone)]
-struct DrawingState {
+pub struct DrawingState {
     scanline: [Color; 160],
     // https://gbdev.io/pandocs/Scrolling.html#window
     wx_condition: bool,
