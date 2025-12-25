@@ -348,6 +348,15 @@ fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, cycle_count: 
 // - son interruption est lancée dès le premier cycle (bien synchronisée)
 // - son STAT n'est pas en retard, il est changé dès le premier cycle (bien synchronisé même cycle que l'interruption)
 // - VBLANK a un retard d'un cycle sur son STAT et sur son interruption (j'en peux plus)
+//
+// Nouvelle info de Mooneye, il veut un écart parfait entre l'interruption de OAM scan et le changement de STAT en mode 3 (drawing)
+// cependant actuellement le STAT du mode 3 est en retard, alors que l'interruption de OAM scan est parfait.
+// Tout ça me donne l'impression que si le PPU actionne une interruption alors le CPU a un délai d'un cycle avant de le traiter.
+// En effet, pour corriger ce timing Interruption Mode 2 => STAT Mode 3 il faudrait corriger le retard de STAT mode 3. Mais cela
+// serait en contradiction avec "The cycle accurate gameboy docs" qui dit bien que le STAT Mode 3 a le retard.
+// Donc on va tenter un délai d'un M-cycle pour le traitement d'une interruption de la part du CPU. Cela implique que le Hblank a
+// aussi son STAT en retard, comme indiqué par le commentaire de SameBoy.
+// De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl StateMachine for Ppu {
@@ -363,7 +372,7 @@ impl StateMachine for Ppu {
                 wy_condition,
                 internal_y_window_counter,
             } => {
-                log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
+                // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
                 *self = Ppu::DrawingPixels {
                     dots_count: 0,
                     scanline: [Color::Black; 160],
@@ -381,7 +390,7 @@ impl StateMachine for Ppu {
                 internal_y_window_counter,
                 ..
             } => {
-                log::warn!("{cycle_count}: Entering hblank");
+                // log::warn!("{cycle_count}: Entering hblank");
                 request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count);
                 state.set_ppu_mode(LcdStatus::HBLANK);
                 *self = Ppu::HorizontalBlank {
@@ -397,7 +406,7 @@ impl StateMachine for Ppu {
                 ..
             } => {
                 *self = if state.ly == 144 {
-                    log::warn!("{cycle_count}: Entering vblank");
+                    // log::warn!("{cycle_count}: Entering vblank");
                     Ppu::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }

@@ -1,5 +1,3 @@
-use core::iter::Cycle;
-
 use crate::{StateMachine, ic::Ints, ppu::LcdControl, state::LcdStatus};
 
 const LINE_DURATION_M_CYCLE: u8 = 114;
@@ -34,7 +32,7 @@ impl StateMachine for LyHandler {
                 if self.logical_ly != 153 {
                     // the increment is handled differently on line 153
                     state.ly += 1;
-                    log::warn!("{cycle_count}: LY is now {}", state.ly);
+                    // log::warn!("{cycle_count}: LY is now {}", state.ly);
                 }
                 self.logical_ly = (self.logical_ly + 1) % 154;
             }

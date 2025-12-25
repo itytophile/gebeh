@@ -231,3 +231,43 @@ fn intr_2_0_timing() {
 fn intr_2_mode0_timing() {
     test_mooneye("ppu/intr_2_mode0_timing.gb");
 }
+
+// #[test]
+// fn intr_2_mode0_timing_sprites() {
+//     test_mooneye("ppu/intr_2_mode0_timing_sprites.gb");
+// }
+
+#[test]
+fn intr_2_mode3_timing() {
+    test_mooneye("ppu/intr_2_mode3_timing.gb");
+}
+
+#[test]
+fn intr_2_oam_ok_timing() {
+    test_mooneye("ppu/intr_2_oam_ok_timing.gb");
+}
+
+// #[test]
+// fn lcdon_timing_gs() {
+//     test_mooneye("ppu/lcdon_timing-GS.gb");
+// }
+
+// #[test]
+// fn lcdon_write_timing_gs() {
+//     test_mooneye("ppu/lcdon_write_timing-GS.gb");
+// }
+
+// #[test]
+// fn stat_irq_blocking() {
+//     test_mooneye("ppu/stat_irq_blocking.gb");
+// }
+
+// #[test]
+// fn stat_lyc_onoff() {
+//     test_mooneye("ppu/stat_lyc_onoff.gb");
+// }
+
+// #[test]
+// fn vblank_stat_intr_gs() {
+//     test_mooneye("ppu/vblank_stat_intr-GS.gb");
+// }

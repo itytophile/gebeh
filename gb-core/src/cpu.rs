@@ -249,8 +249,6 @@ impl Cpu {
                                 vec([Nop.into(), Store16Bit(Register16Bit::PC).into()]),
                                 Default::default(),
                             );
-                        } else {
-                            log::warn!("Conditional jump fail");
                         }
                     }
                 }
@@ -580,9 +578,10 @@ impl Cpu {
                 let (result, carry) = a.overflowing_sub(value);
                 if register == Register8Bit::E || register == Register8Bit::D && self.pc <= 0x0187 {
                     log::warn!(
-                        "{cycle_count}: CP {register:?} (0x{:02x}) and A (0x{:02x}) with scx",
+                        "{cycle_count}: CP {register:?} (0x{:02x}) and A (0x{:02x}) with scx {}",
                         value,
-                        self.a
+                        self.a,
+                        state.scx
                     );
                 }
                 let flags = &mut self.f;
