@@ -26,14 +26,13 @@ pub enum Ppu {
         wx_condition: bool,
         internal_y_window_counter: u8,
         x: u8,
-        // todo replace that with x check
-        finished: bool,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
         wy_condition: bool,
         internal_y_window_counter: u8,
+        scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: u16,
@@ -273,8 +272,9 @@ impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
         match self {
-            Self::DrawingPixels {
-                finished: true,
+            // dots_count 0 is impossible to see from outside
+            Self::HorizontalBlank {
+                dots_count: ..5,
                 scanline,
                 ..
             } => Some(scanline),
@@ -381,23 +381,22 @@ impl StateMachine for Ppu {
                     wx_condition: false,
                     internal_y_window_counter: *internal_y_window_counter,
                     x: 0,
-                    finished: false,
                 }
             }
             Ppu::DrawingPixels {
-                finished: true,
+                x: WIDTH,
                 dots_count,
                 wy_condition,
                 internal_y_window_counter,
+                scanline,
                 ..
             } => {
-                // log::warn!("{cycle_count}: Entering hblank");
-                request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count);
                 *self = Ppu::HorizontalBlank {
                     remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                     wy_condition: *wy_condition,
                     internal_y_window_counter: *internal_y_window_counter,
                     dots_count: 0,
+                    scanline: *scanline,
                 }
             }
             Ppu::HorizontalBlank {
@@ -405,6 +404,7 @@ impl StateMachine for Ppu {
                 wy_condition,
                 internal_y_window_counter,
                 dots_count,
+                ..
             } if remaining_dots == dots_count => {
                 *self = if state.ly == 144 {
                     // log::warn!("{cycle_count}: Entering vblank");
@@ -457,18 +457,18 @@ impl StateMachine for Ppu {
                 scanline,
                 wy_condition,
                 internal_y_window_counter,
-                // we could recompute x from dots_count but no
                 x,
                 // https://gbdev.io/pandocs/Scrolling.html#window
                 wx_condition,
-                finished,
             } => {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::DRAWING);
                 }
                 // https://gbdev.io/pandocs/Rendering.html#first12
-                if *dots_count >= 12 && *x < WIDTH {
+                // https://gbdev.io/pandocs/Rendering.html#mode-3-length
+                // rendering is paused for SCX % 8 dots
+                if *dots_count >= 12 + u16::from(state.scx % 8) && *x < WIDTH {
                     let mut bg_win_color = Option::<Color>::None;
 
                     if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
@@ -534,26 +534,21 @@ impl StateMachine for Ppu {
 
                 *dots_count += 1;
 
-                if *dots_count
-                    == 172
-                        + match state.scx % 8 {
-                            5..=7 => 8,
-                            1..=4 => 4,
-                            _ => 0,
-                        }
+                if *x == WIDTH
+                    && *wx_condition
+                    && *wy_condition
+                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
                 {
-                    if *wx_condition
-                        && *wy_condition
-                        && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                    {
-                        *internal_y_window_counter += 1;
-                    }
-                    *finished = true;
+                    *internal_y_window_counter += 1;
                 }
             }
             Ppu::HorizontalBlank { dots_count, .. } => {
-                if *dots_count == 4 {
-                    state.set_ppu_mode(LcdStatus::HBLANK);
+                match *dots_count {
+                    // we know from mooneye's hblank_ly_scx_timing-GS that if hblank is one dot late, then the interrupt is one
+                    // whole M-cycle late. So I assume that the interrupt is triggered during the fourth dot of hblank
+                    3 => request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count),
+                    4 => state.set_ppu_mode(LcdStatus::HBLANK),
+                    _ => {}
                 }
                 *dots_count += 1
             }

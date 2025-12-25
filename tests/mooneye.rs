@@ -232,10 +232,10 @@ fn intr_2_mode0_timing() {
     test_mooneye("ppu/intr_2_mode0_timing.gb");
 }
 
-// #[test]
-// fn intr_2_mode0_timing_sprites() {
-//     test_mooneye("ppu/intr_2_mode0_timing_sprites.gb");
-// }
+#[test]
+fn intr_2_mode0_timing_sprites() {
+    test_mooneye("ppu/intr_2_mode0_timing_sprites.gb");
+}
 
 #[test]
 fn intr_2_mode3_timing() {

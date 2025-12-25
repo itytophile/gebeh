@@ -47,7 +47,7 @@ fn main() {
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/intr_2_mode3_timing.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/hblank_ly_scx_timing-GS.gb",
     )
     .unwrap();
     // let rom =
@@ -130,8 +130,6 @@ fn main() {
 
     let mut pixels = get_pixels_from_window(&window, WIDTH.into(), HEIGHT.into());
 
-    let mut previous_ly = None;
-
     let mut is_paused = false;
 
     let mut last_save = Instant::now();
@@ -154,7 +152,6 @@ fn main() {
                         &mut state,
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
-                        &mut previous_ly,
                         &mut cycle_count,
                     );
                     pixels.render().unwrap();
@@ -248,7 +245,6 @@ fn draw_emulator(
     state: &mut State,
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
-    previous_ly: &mut Option<u8>,
     cycle_count: &mut u64,
 ) {
     let start = Instant::now();
@@ -256,15 +252,10 @@ fn draw_emulator(
         emulator.execute(state, *cycle_count);
         *cycle_count += 1;
 
-        if *previous_ly == Some(state.ly) {
-            continue;
-        }
-
         let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
             continue;
         };
 
-        *previous_ly = Some(state.ly);
         let base = usize::from(state.ly) * usize::from(WIDTH);
         for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
             *pixel = (*color).into();
