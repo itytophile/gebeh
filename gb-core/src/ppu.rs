@@ -31,6 +31,7 @@ pub enum Ppu {
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
+        dots_count: u8,
         wy_condition: bool,
         internal_y_window_counter: u8,
     }, // <= 204
@@ -392,19 +393,19 @@ impl StateMachine for Ppu {
             } => {
                 // log::warn!("{cycle_count}: Entering hblank");
                 request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count);
-                state.set_ppu_mode(LcdStatus::HBLANK);
                 *self = Ppu::HorizontalBlank {
                     remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                     wy_condition: *wy_condition,
                     internal_y_window_counter: *internal_y_window_counter,
+                    dots_count: 0,
                 }
             }
             Ppu::HorizontalBlank {
-                remaining_dots: 0,
+                remaining_dots,
                 wy_condition,
                 internal_y_window_counter,
-                ..
-            } => {
+                dots_count,
+            } if remaining_dots == dots_count => {
                 *self = if state.ly == 144 {
                     // log::warn!("{cycle_count}: Entering vblank");
                     Ppu::VerticalBlankScanline {
@@ -550,7 +551,12 @@ impl StateMachine for Ppu {
                     *finished = true;
                 }
             }
-            Ppu::HorizontalBlank { remaining_dots, .. } => *remaining_dots -= 1,
+            Ppu::HorizontalBlank { dots_count, .. } => {
+                if *dots_count == 4 {
+                    state.set_ppu_mode(LcdStatus::HBLANK);
+                }
+                *dots_count += 1
+            }
             Ppu::VerticalBlankScanline { remaining_dots } => {
                 if *remaining_dots == VERTICAL_BLANK_SCANLINE_DURATION - 4 {
                     request_interrupt(state, LcdStatus::VBLANK_INT, cycle_count);
