@@ -215,6 +215,10 @@ impl State {
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
     pub fn set_ppu_mode(&mut self, mode: LcdStatus) {
+        assert!(matches!(
+            mode,
+            LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
+        ));
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
 }
