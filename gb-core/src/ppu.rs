@@ -11,27 +11,119 @@ use crate::{
     state::{LcdStatus, State, VIDEO_RAM},
 };
 
+// used by oam scan, drawing, hblank, discarded during vblank
+#[derive(Clone, Copy, Default)]
+struct CurrentFrameData {
+    wy_condition: bool,
+    internal_y_window_counter: u8,
+}
+
+#[derive(Clone)]
+struct DrawingState {
+    scanline: [Color; 160],
+    // https://gbdev.io/pandocs/Scrolling.html#window
+    wx_condition: bool,
+    current_frame_data: CurrentFrameData,
+    x: u8,
+}
+
+impl DrawingState {
+    fn new(current_frame_data: CurrentFrameData) -> Self {
+        Self {
+            current_frame_data,
+            scanline: [Color::Black; 160],
+            wx_condition: false,
+            x: 0,
+        }
+    }
+
+    fn execute(&mut self, state: &State) {
+        let mut bg_win_color = Option::<Color>::None;
+
+        if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+            // Citation:
+            // the current X coordinate being rendered + 7 was equal to WX
+            self.wx_condition |= self.x + 7 == state.wx;
+            let scanline = Scanline {
+                x: self.x,
+                y: state.ly,
+            };
+            let color_index = get_color_bg_win(
+                scanline,
+                state,
+                (self.wx_condition
+                    && self.current_frame_data.wy_condition
+                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
+                .then_some(self.current_frame_data.internal_y_window_counter),
+            );
+            bg_win_color = if color_index == ColorIndex::Zero {
+                None
+            } else {
+                Some(color_index.get_color(state.bgp_register))
+            };
+        }
+
+        // https://gbdev.io/pandocs/OAM.html#drawing-priority
+        // the objects that have the priority "BG over OBJ" enabled must override the other objects if
+        // their "normal" priority is higher
+        let mut obj_color = Option::<(Color, bool)>::None;
+
+        if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
+            // TODO maybe performance hit here
+            for (incoming_x, obj, color) in get_colors(
+                get_at_most_ten_objects_on_ly(state.ly, state),
+                state.ly,
+                state,
+            ) {
+                if incoming_x == self.x && color != ColorIndex::Zero {
+                    obj_color = Some((
+                        color.get_color(if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
+                            state.obp1
+                        } else {
+                            state.obp0
+                        }),
+                        obj.flags.contains(ObjectFlags::PRIORITY),
+                    ));
+                }
+            }
+        }
+
+        let bg_color = if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
+            ColorIndex::Zero.get_color(state.bgp_register)
+        } else {
+            Color::White
+        };
+        self.scanline[usize::from(self.x)] = match (bg_win_color, obj_color) {
+            (None, None) => bg_color,
+            (None, Some((color, _))) | (_, Some((color, false))) => color,
+            (Some(color), Some((_, true)) | None) => color,
+        };
+        self.x += 1;
+        if self.x == WIDTH
+            && self.wx_condition
+            && self.current_frame_data.wy_condition
+            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+        {
+            self.current_frame_data.internal_y_window_counter += 1;
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum Ppu {
     OamScan {
         remaining_dots: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
-        wy_condition: bool,
-        internal_y_window_counter: u8,
+        current_frame_data: CurrentFrameData,
     }, // <= 80
     DrawingPixels {
         dots_count: u16,
-        scanline: [Color; 160],
-        wy_condition: bool,
-        wx_condition: bool,
-        internal_y_window_counter: u8,
-        x: u8,
+        drawing_state: DrawingState,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
-        wy_condition: bool,
-        internal_y_window_counter: u8,
+        current_frame_data: CurrentFrameData,
         scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
@@ -61,8 +153,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self::OamScan {
             remaining_dots: OAM_SCAN_DURATION,
-            wy_condition: false,
-            internal_y_window_counter: 0,
+            current_frame_data: Default::default(),
         }
     }
 }
@@ -286,39 +377,34 @@ impl Ppu {
         match self {
             Ppu::OamScan {
                 remaining_dots: 0,
-                wy_condition,
-                internal_y_window_counter,
+                current_frame_data,
             } => {
                 // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
                 *self = Ppu::DrawingPixels {
                     dots_count: 0,
-                    scanline: [Color::Black; 160],
-                    wy_condition: *wy_condition,
-                    wx_condition: false,
-                    internal_y_window_counter: *internal_y_window_counter,
-                    x: 0,
+                    drawing_state: DrawingState::new(*current_frame_data),
                 }
             }
             Ppu::DrawingPixels {
-                x: WIDTH,
                 dots_count,
-                wy_condition,
-                internal_y_window_counter,
-                scanline,
-                ..
+                drawing_state:
+                    DrawingState {
+                        scanline,
+                        current_frame_data,
+                        x: WIDTH,
+                        ..
+                    },
             } => {
                 *self = Ppu::HorizontalBlank {
                     remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
-                    wy_condition: *wy_condition,
-                    internal_y_window_counter: *internal_y_window_counter,
+                    current_frame_data: *current_frame_data,
                     dots_count: 0,
                     scanline: *scanline,
                 }
             }
             Ppu::HorizontalBlank {
                 remaining_dots,
-                wy_condition,
-                internal_y_window_counter,
+                current_frame_data,
                 dots_count,
                 ..
             } if remaining_dots == dots_count => {
@@ -331,8 +417,7 @@ impl Ppu {
                     log::warn!("{cycle_count}: Entering oam scan");
                     Ppu::OamScan {
                         remaining_dots: OAM_SCAN_DURATION,
-                        wy_condition: *wy_condition,
-                        internal_y_window_counter: *internal_y_window_counter,
+                        current_frame_data: *current_frame_data,
                     }
                 };
             }
@@ -435,8 +520,7 @@ impl StateMachine for Ppu {
         match self {
             Ppu::OamScan {
                 remaining_dots,
-                wy_condition,
-                ..
+                current_frame_data,
             } => {
                 const DELAYED: u8 = OAM_SCAN_DURATION - 4;
                 // interruption is delayed only on line 0
@@ -452,17 +536,13 @@ impl StateMachine for Ppu {
                 }
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                *wy_condition |= *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
+                current_frame_data.wy_condition |=
+                    *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
                 *remaining_dots -= 1;
             }
             Ppu::DrawingPixels {
                 dots_count,
-                scanline,
-                wy_condition,
-                internal_y_window_counter,
-                x,
-                // https://gbdev.io/pandocs/Scrolling.html#window
-                wx_condition,
+                drawing_state,
             } => {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
@@ -471,79 +551,11 @@ impl StateMachine for Ppu {
                 // https://gbdev.io/pandocs/Rendering.html#first12
                 // https://gbdev.io/pandocs/Rendering.html#mode-3-length
                 // rendering is paused for SCX % 8 dots
-                if *dots_count >= 12 + u16::from(state.scx % 8) && *x < WIDTH {
-                    let mut bg_win_color = Option::<Color>::None;
-
-                    if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-                        let x = *x;
-                        // Citation:
-                        // the current X coordinate being rendered + 7 was equal to WX
-                        *wx_condition |= x + 7 == state.wx;
-                        let scanline = Scanline { x, y: state.ly };
-                        let color_index = get_color_bg_win(
-                            scanline,
-                            state,
-                            (*wx_condition
-                                && *wy_condition
-                                && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
-                            .then_some(*internal_y_window_counter),
-                        );
-                        bg_win_color = if color_index == ColorIndex::Zero {
-                            None
-                        } else {
-                            Some(color_index.get_color(state.bgp_register))
-                        };
-                    }
-
-                    // https://gbdev.io/pandocs/OAM.html#drawing-priority
-                    // the objects that have the priority "BG over OBJ" enabled must override the other objects if
-                    // their "normal" priority is higher
-                    let mut obj_color = Option::<(Color, bool)>::None;
-
-                    if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
-                        // TODO maybe performance hit here
-                        for (incoming_x, obj, color) in get_colors(
-                            get_at_most_ten_objects_on_ly(state.ly, state),
-                            state.ly,
-                            state,
-                        ) {
-                            if incoming_x == *x && color != ColorIndex::Zero {
-                                obj_color = Some((
-                                    color.get_color(
-                                        if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
-                                            state.obp1
-                                        } else {
-                                            state.obp0
-                                        },
-                                    ),
-                                    obj.flags.contains(ObjectFlags::PRIORITY),
-                                ));
-                            }
-                        }
-                    }
-
-                    let bg_color = if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-                        ColorIndex::Zero.get_color(state.bgp_register)
-                    } else {
-                        Color::White
-                    };
-                    scanline[usize::from(*x)] = match (bg_win_color, obj_color) {
-                        (None, None) => bg_color,
-                        (None, Some((color, _))) | (_, Some((color, false))) => color,
-                        (Some(color), Some((_, true)) | None) => color,
-                    };
-                    *x += 1;
+                if *dots_count >= 12 + u16::from(state.scx % 8) {
+                    drawing_state.execute(state);
                 }
 
                 *dots_count += 1;
-
-                if *x == WIDTH
-                    && *wx_condition
-                    && *wy_condition
-                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                {
-                    *internal_y_window_counter += 1;
-                }
             }
             Ppu::HorizontalBlank { dots_count, .. } => {
                 match *dots_count {
