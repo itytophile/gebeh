@@ -281,6 +281,70 @@ impl Ppu {
             _ => None,
         }
     }
+
+    fn switch_from_finished_mode(&mut self, ly: u8, cycle_count: u64) {
+        match self {
+            Ppu::OamScan {
+                remaining_dots: 0,
+                wy_condition,
+                internal_y_window_counter,
+            } => {
+                // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
+                *self = Ppu::DrawingPixels {
+                    dots_count: 0,
+                    scanline: [Color::Black; 160],
+                    wy_condition: *wy_condition,
+                    wx_condition: false,
+                    internal_y_window_counter: *internal_y_window_counter,
+                    x: 0,
+                }
+            }
+            Ppu::DrawingPixels {
+                x: WIDTH,
+                dots_count,
+                wy_condition,
+                internal_y_window_counter,
+                scanline,
+                ..
+            } => {
+                *self = Ppu::HorizontalBlank {
+                    remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                    wy_condition: *wy_condition,
+                    internal_y_window_counter: *internal_y_window_counter,
+                    dots_count: 0,
+                    scanline: *scanline,
+                }
+            }
+            Ppu::HorizontalBlank {
+                remaining_dots,
+                wy_condition,
+                internal_y_window_counter,
+                dots_count,
+                ..
+            } if remaining_dots == dots_count => {
+                *self = if ly == 144 {
+                    // log::warn!("{cycle_count}: Entering vblank");
+                    Ppu::VerticalBlankScanline {
+                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
+                    }
+                } else {
+                    log::warn!("{cycle_count}: Entering oam scan");
+                    Ppu::OamScan {
+                        remaining_dots: OAM_SCAN_DURATION,
+                        wy_condition: *wy_condition,
+                        internal_y_window_counter: *internal_y_window_counter,
+                    }
+                };
+            }
+            Ppu::VerticalBlankScanline {
+                remaining_dots: 0, ..
+            } => {
+                log::warn!("{cycle_count}: Entering oam scan");
+                *self = Default::default()
+            }
+            _ => {}
+        };
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -366,68 +430,7 @@ impl StateMachine for Ppu {
             return;
         }
 
-        // changing mode
-        match self {
-            Ppu::OamScan {
-                remaining_dots: 0,
-                wy_condition,
-                internal_y_window_counter,
-            } => {
-                // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
-                *self = Ppu::DrawingPixels {
-                    dots_count: 0,
-                    scanline: [Color::Black; 160],
-                    wy_condition: *wy_condition,
-                    wx_condition: false,
-                    internal_y_window_counter: *internal_y_window_counter,
-                    x: 0,
-                }
-            }
-            Ppu::DrawingPixels {
-                x: WIDTH,
-                dots_count,
-                wy_condition,
-                internal_y_window_counter,
-                scanline,
-                ..
-            } => {
-                *self = Ppu::HorizontalBlank {
-                    remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
-                    wy_condition: *wy_condition,
-                    internal_y_window_counter: *internal_y_window_counter,
-                    dots_count: 0,
-                    scanline: *scanline,
-                }
-            }
-            Ppu::HorizontalBlank {
-                remaining_dots,
-                wy_condition,
-                internal_y_window_counter,
-                dots_count,
-                ..
-            } if remaining_dots == dots_count => {
-                *self = if state.ly == 144 {
-                    // log::warn!("{cycle_count}: Entering vblank");
-                    Ppu::VerticalBlankScanline {
-                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-                    }
-                } else {
-                    log::warn!("{cycle_count}: Entering oam scan");
-                    Ppu::OamScan {
-                        remaining_dots: OAM_SCAN_DURATION,
-                        wy_condition: *wy_condition,
-                        internal_y_window_counter: *internal_y_window_counter,
-                    }
-                };
-            }
-            Ppu::VerticalBlankScanline {
-                remaining_dots: 0, ..
-            } => {
-                log::warn!("{cycle_count}: Entering oam scan");
-                *self = Default::default()
-            }
-            _ => {}
-        };
+        self.switch_from_finished_mode(state.ly, cycle_count);
 
         match self {
             Ppu::OamScan {
