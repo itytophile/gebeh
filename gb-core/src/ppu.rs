@@ -120,10 +120,7 @@ pub enum Ppu {
         // the low 3 bits of SCX, which are only read at the beginning of the scanline
         scx_at_scanline_start: u8,
     }, // <= 80
-    // renamed from Drawing to AccessVram because when all the necessary vram reads have been done,
-    // the pixel fifo is still drawing to the lcd (thus during hblank)
-    // mooneye uses the same name
-    AccessVram {
+    Drawing {
         dots_count: u16,
         drawing_state: DrawingState,
         pixel_fetcher: Either<PixelFetcher, ReadyPixelFetcher>,
@@ -137,9 +134,7 @@ pub enum Ppu {
         remaining_dots: u8,
         dots_count: u8,
         current_frame_data: CurrentFrameData,
-        low_fifo: u8,
-        high_fifo: u8,
-        scanline: ArrayVec<Color, 160>,
+        scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: u16,
@@ -398,13 +393,12 @@ impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
         match self {
-            // dots_count 0 is impossible to see from outside
             Self::HorizontalBlank {
                 dots_count,
                 remaining_dots,
                 scanline,
                 ..
-            } if dots_count == remaining_dots => Some(scanline.as_slice().try_into().unwrap()),
+            } if dots_count == remaining_dots => Some(scanline),
             _ => None,
         }
     }
@@ -417,7 +411,7 @@ impl Ppu {
                 scx_at_scanline_start,
             } => {
                 // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
-                *self = Ppu::AccessVram {
+                *self = Ppu::Drawing {
                     dots_count: 0,
                     drawing_state: DrawingState::new(*current_frame_data),
                     high_fifo: 0,
@@ -427,29 +421,23 @@ impl Ppu {
                     scx_at_scanline_start: *scx_at_scanline_start,
                 }
             }
-            Ppu::AccessVram {
+            Ppu::Drawing {
                 dots_count,
                 scanline,
                 drawing_state:
                     DrawingState {
                         current_frame_data, ..
                     },
-                high_fifo,
-                low_fifo,
                 ..
-            } if scanline.len() == usize::from(WIDTH - 2) => {
-                // I assume we don't draw the last two pixels during mode 3 but in mode 0
-                // Actually, it's useless to assume anything because the ppu is using an inverted clock somewhere
-                // (http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt)
-                // and we are not emulating that
-                log::warn!("Access VRAM took {} dots", dots_count);
-                *self = Ppu::HorizontalBlank {
-                    remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
-                    current_frame_data: *current_frame_data,
-                    dots_count: 0,
-                    scanline: core::mem::take(scanline),
-                    high_fifo: *high_fifo,
-                    low_fifo: *low_fifo,
+            } => {
+                if let Ok(scanline) = scanline.as_slice().try_into() {
+                    log::warn!("Mode 3 took {} dots", dots_count);
+                    *self = Ppu::HorizontalBlank {
+                        remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                        current_frame_data: *current_frame_data,
+                        dots_count: 0,
+                        scanline,
+                    }
                 }
             }
             Ppu::HorizontalBlank {
@@ -596,7 +584,7 @@ impl StateMachine for Ppu {
                     *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
                 *remaining_dots -= 1;
             }
-            Ppu::AccessVram {
+            Ppu::Drawing {
                 dots_count,
                 drawing_state,
                 pixel_fetcher,
@@ -610,8 +598,9 @@ impl StateMachine for Ppu {
                     state.set_ppu_mode(LcdStatus::DRAWING);
                 }
 
-                // 6 dots (initial discarded tile fetch) + 8 dots (complete tile fetch + sleep)
-                const CAN_DRAW_AFTER: u16 = 14;
+                // According to pandocs. However it's contradicting "Nitty Gritty Gameboy VRAM Timing" but everything falls into
+                // place with this delay.
+                const CAN_DRAW_AFTER: u16 = 12;
 
                 // https://gbdev.io/pandocs/Rendering.html#first12
                 // https://gbdev.io/pandocs/Rendering.html#mode-3-length
@@ -621,7 +610,7 @@ impl StateMachine for Ppu {
                 // }
 
                 // (dot_count - 6 + 8) % 8 == 0
-                if *dots_count >= CAN_DRAW_AFTER && (*dots_count + 2) % 8 == 0 {
+                if *dots_count >= CAN_DRAW_AFTER && (*dots_count + 4) % 8 == 0 {
                     let Either::Right(ready) = pixel_fetcher else {
                         panic!("Unsynchronized pixel fetching");
                     };
@@ -639,36 +628,21 @@ impl StateMachine for Ppu {
                 *low_fifo <<= 1;
                 *high_fifo <<= 1;
 
-                if let Either::Left(not_ready) = pixel_fetcher {
+                if *dots_count >= 4
+                    && let Either::Left(not_ready) = pixel_fetcher
+                {
                     *pixel_fetcher = not_ready.next(state);
                 }
 
                 *dots_count += 1;
             }
-            Ppu::HorizontalBlank {
-                dots_count,
-                low_fifo,
-                high_fifo,
-                scanline,
-                ..
-            } => {
+            Ppu::HorizontalBlank { dots_count, .. } => {
                 match *dots_count {
                     // we know from mooneye's hblank_ly_scx_timing-GS that if hblank is one dot late, then the interrupt is one
                     // whole M-cycle late. So I assume that the interrupt is triggered during the fourth dot of hblank
                     3 => request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count),
                     4 => state.set_ppu_mode(LcdStatus::HBLANK),
                     _ => {}
-                }
-
-                if scanline
-                    .try_push(
-                        ColorIndex::new(*low_fifo & 0b10000000 != 0, *high_fifo & 0b10000000 != 0)
-                            .get_color(state.bgp_register),
-                    )
-                    .is_ok()
-                {
-                    *low_fifo <<= 1;
-                    *high_fifo <<= 1;
                 }
 
                 *dots_count += 1
