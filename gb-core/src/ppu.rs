@@ -867,7 +867,7 @@ impl PixelFetcher {
             FetchingTileIndex { scx, scy } => {
                 let address = state.lcd_control.get_bg_tile_map_address()
                     + u16::from((self.x + scx / 8) & 0x1f)
-                    + 32 * ((u16::from(state.ly + scy) & 0xff) / 8); // don't simplify the product or division
+                    + 32 * (((u16::from(state.ly) + u16::from(scy)) & 0xff) / 8); // don't simplify the product or division
                 FetchingTileLow {
                     one_dot_delay: false,
                     tile_index: state.video_ram[usize::from(address - VIDEO_RAM)],
