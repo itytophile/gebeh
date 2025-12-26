@@ -120,7 +120,10 @@ pub enum Ppu {
         // the low 3 bits of SCX, which are only read at the beginning of the scanline
         scx_at_scanline_start: u8,
     }, // <= 80
-    DrawingPixels {
+    // renamed from Drawing to AccessVram because when all the necessary vram reads have been done,
+    // the pixel fifo is still drawing to the lcd (thus during hblank)
+    // mooneye uses the same name
+    AccessVram {
         dots_count: u16,
         drawing_state: DrawingState,
         pixel_fetcher: Either<PixelFetcher, ReadyPixelFetcher>,
@@ -134,7 +137,9 @@ pub enum Ppu {
         remaining_dots: u8,
         dots_count: u8,
         current_frame_data: CurrentFrameData,
-        scanline: [Color; 160],
+        low_fifo: u8,
+        high_fifo: u8,
+        scanline: ArrayVec<Color, 160>,
     }, // <= 204
     VerticalBlankScanline {
         remaining_dots: u16,
@@ -395,10 +400,11 @@ impl Ppu {
         match self {
             // dots_count 0 is impossible to see from outside
             Self::HorizontalBlank {
-                dots_count: ..5,
+                dots_count,
+                remaining_dots,
                 scanline,
                 ..
-            } => Some(scanline),
+            } if dots_count == remaining_dots => Some(scanline.as_slice().try_into().unwrap()),
             _ => None,
         }
     }
@@ -411,7 +417,7 @@ impl Ppu {
                 scx_at_scanline_start,
             } => {
                 // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
-                *self = Ppu::DrawingPixels {
+                *self = Ppu::AccessVram {
                     dots_count: 0,
                     drawing_state: DrawingState::new(*current_frame_data),
                     high_fifo: 0,
@@ -421,21 +427,30 @@ impl Ppu {
                     scx_at_scanline_start: *scx_at_scanline_start,
                 }
             }
-            Ppu::DrawingPixels {
+            Ppu::AccessVram {
                 dots_count,
                 scanline,
-                drawing_state: DrawingState { current_frame_data, .. },
+                drawing_state:
+                    DrawingState {
+                        current_frame_data, ..
+                    },
+                high_fifo,
+                low_fifo,
                 ..
-            } => {
-                if let Ok(scanline) = scanline.as_slice().try_into() {
-                    *self = Ppu::HorizontalBlank {
-                        remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
-                        current_frame_data: *current_frame_data,
-                        dots_count: 0,
-                        scanline,
-                    }
+            } if scanline.len() == usize::from(WIDTH - 2) => {
+                // I assume we don't draw the last two pixels during mode 3 but in mode 0
+                // Actually, it's useless to assume anything because the ppu is using an inverted clock somewhere
+                // (http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt)
+                // and we are not emulating that
+                log::warn!("Access VRAM took {} dots", dots_count);
+                *self = Ppu::HorizontalBlank {
+                    remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                    current_frame_data: *current_frame_data,
+                    dots_count: 0,
+                    scanline: core::mem::take(scanline),
+                    high_fifo: *high_fifo,
+                    low_fifo: *low_fifo,
                 }
-                
             }
             Ppu::HorizontalBlank {
                 remaining_dots,
@@ -581,7 +596,7 @@ impl StateMachine for Ppu {
                     *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
                 *remaining_dots -= 1;
             }
-            Ppu::DrawingPixels {
+            Ppu::AccessVram {
                 dots_count,
                 drawing_state,
                 pixel_fetcher,
@@ -610,10 +625,8 @@ impl StateMachine for Ppu {
                     let Either::Right(ready) = pixel_fetcher else {
                         panic!("Unsynchronized pixel fetching");
                     };
-                    let (new_pixel_fetcher, [low, high]) = ready.consume();
-                    *low_fifo = low;
-                    *high_fifo = high;
-                    *pixel_fetcher = Either::Left(new_pixel_fetcher);
+                    [*low_fifo, *high_fifo] = ready.tile_line;
+                    *pixel_fetcher = Either::Left(ready.consume());
                 }
 
                 if *dots_count >= CAN_DRAW_AFTER + u16::from(*scx_at_scanline_start % 8) {
@@ -632,7 +645,13 @@ impl StateMachine for Ppu {
 
                 *dots_count += 1;
             }
-            Ppu::HorizontalBlank { dots_count, .. } => {
+            Ppu::HorizontalBlank {
+                dots_count,
+                low_fifo,
+                high_fifo,
+                scanline,
+                ..
+            } => {
                 match *dots_count {
                     // we know from mooneye's hblank_ly_scx_timing-GS that if hblank is one dot late, then the interrupt is one
                     // whole M-cycle late. So I assume that the interrupt is triggered during the fourth dot of hblank
@@ -640,6 +659,18 @@ impl StateMachine for Ppu {
                     4 => state.set_ppu_mode(LcdStatus::HBLANK),
                     _ => {}
                 }
+
+                if scanline
+                    .try_push(
+                        ColorIndex::new(*low_fifo & 0b10000000 != 0, *high_fifo & 0b10000000 != 0)
+                            .get_color(state.bgp_register),
+                    )
+                    .is_ok()
+                {
+                    *low_fifo <<= 1;
+                    *high_fifo <<= 1;
+                }
+
                 *dots_count += 1
             }
             Ppu::VerticalBlankScanline { remaining_dots } => {
@@ -912,13 +943,10 @@ pub struct ReadyPixelFetcher {
 }
 
 impl ReadyPixelFetcher {
-    fn consume(self) -> (PixelFetcher, [u8; 2]) {
-        (
-            PixelFetcher {
-                step: PixelFetcherStep::WaitingForScrollRegisters,
-                x: self.x + 1,
-            },
-            self.tile_line,
-        )
+    fn consume(self) -> PixelFetcher {
+        PixelFetcher {
+            step: PixelFetcherStep::WaitingForScrollRegisters,
+            x: self.x + 1,
+        }
     }
 }
