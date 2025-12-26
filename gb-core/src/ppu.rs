@@ -419,6 +419,12 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 objects,
             } => {
+                let mut objects_to_sort: ArrayVec<_, 10> =
+                    objects.iter().copied().enumerate().collect();
+                // https://gbdev.io/pandocs/OAM.html#drawing-priority
+                // Citation: the smaller the X coordinate, the higher the priority.
+                // When X coordinates are identical, the object located first in OAM has higher priority.
+                objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
                 *self = Ppu::Drawing {
                     dots_count: 0,
                     drawing_state: DrawingState::new(*current_frame_data),
@@ -428,7 +434,11 @@ impl Ppu {
                     scanline: Default::default(),
                     scx_at_scanline_start: *scx_at_scanline_start,
                     wx_condition: None,
-                    objects: core::mem::take(objects),
+                    objects: objects_to_sort
+                        .into_iter()
+                        .rev() // because we will pop the objects
+                        .map(|(_, object)| object)
+                        .collect(),
                 }
             }
             Ppu::Drawing {
