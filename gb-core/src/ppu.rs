@@ -37,7 +37,7 @@ impl DrawingState {
         }
     }
 
-    fn execute(&mut self, state: &State) {
+    fn render(&mut self, state: &State) {
         let mut bg_win_color = Option::<Color>::None;
 
         if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
@@ -115,10 +115,20 @@ pub enum Ppu {
         remaining_dots: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         current_frame_data: CurrentFrameData,
+        // https://gbdev.io/pandocs/Scrolling.html#scrolling
+        // Citation: The scroll registers are re-read on each tile fetch, except for
+        // the low 3 bits of SCX, which are only read at the beginning of the scanline
+        scx_at_scanline_start: u8,
     }, // <= 80
     DrawingPixels {
         dots_count: u16,
         drawing_state: DrawingState,
+        pixel_fetcher: Either<PixelFetcher, ReadyPixelFetcher>,
+        low_fifo: u8,
+        high_fifo: u8,
+        // we need to push inside so that's why we use an ArrayVec
+        scanline: ArrayVec<Color, 160>,
+        scx_at_scanline_start: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
@@ -146,6 +156,16 @@ bitflags::bitflags! {
     }
 }
 
+impl LcdControl {
+    pub fn get_bg_tile_map_address(self) -> u16 {
+        if self.contains(LcdControl::BG_TILE_MAP) {
+            0x9c00
+        } else {
+            0x9800
+        }
+    }
+}
+
 const OAM_SCAN_DURATION: u8 = 80;
 const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456 * 10;
 
@@ -154,6 +174,7 @@ impl Default for Ppu {
         Self::OamScan {
             remaining_dots: OAM_SCAN_DURATION,
             current_frame_data: Default::default(),
+            scx_at_scanline_start: 0,
         }
     }
 }
@@ -283,7 +304,7 @@ struct Scanline {
 }
 
 #[derive(Clone, Copy)]
-struct Background {
+struct Scrolling {
     // 0 < x < 256
     x: u8,
     // 0 < y < 256
@@ -324,7 +345,7 @@ fn get_picture_pixel_and_tile_map_address(
     lcdc: LcdControl,
     scanline: Scanline,
     window: Window,
-    background: Background,
+    background: Scrolling,
 ) -> (PicturePixel, u16) {
     assert!(scanline.x < 160);
     assert!(scanline.y < 144);
@@ -357,6 +378,15 @@ fn get_picture_pixel_and_tile_map_address(
     }
 }
 
+#[must_use]
+fn get_tile_map_address_bg(lcdc: LcdControl) -> u16 {
+    if lcdc.contains(LcdControl::BG_TILE_MAP) {
+        0x9c00
+    } else {
+        0x9800
+    }
+}
+
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
 impl Ppu {
@@ -373,34 +403,39 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, ly: u8, cycle_count: u64) {
+    fn switch_from_finished_mode(&mut self, state: &State, cycle_count: u64) {
         match self {
             Ppu::OamScan {
                 remaining_dots: 0,
                 current_frame_data,
+                scx_at_scanline_start,
             } => {
                 // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
                 *self = Ppu::DrawingPixels {
                     dots_count: 0,
                     drawing_state: DrawingState::new(*current_frame_data),
+                    high_fifo: 0,
+                    low_fifo: 0,
+                    pixel_fetcher: Either::Left(PixelFetcher::default()),
+                    scanline: Default::default(),
+                    scx_at_scanline_start: *scx_at_scanline_start,
                 }
             }
             Ppu::DrawingPixels {
                 dots_count,
-                drawing_state:
-                    DrawingState {
-                        scanline,
-                        current_frame_data,
-                        x: WIDTH,
-                        ..
-                    },
+                scanline,
+                drawing_state: DrawingState { current_frame_data, .. },
+                ..
             } => {
-                *self = Ppu::HorizontalBlank {
-                    remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
-                    current_frame_data: *current_frame_data,
-                    dots_count: 0,
-                    scanline: *scanline,
+                if let Ok(scanline) = scanline.as_slice().try_into() {
+                    *self = Ppu::HorizontalBlank {
+                        remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                        current_frame_data: *current_frame_data,
+                        dots_count: 0,
+                        scanline,
+                    }
                 }
+                
             }
             Ppu::HorizontalBlank {
                 remaining_dots,
@@ -408,7 +443,7 @@ impl Ppu {
                 dots_count,
                 ..
             } if remaining_dots == dots_count => {
-                *self = if ly == 144 {
+                *self = if state.ly == 144 {
                     // log::warn!("{cycle_count}: Entering vblank");
                     Ppu::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
@@ -418,6 +453,7 @@ impl Ppu {
                     Ppu::OamScan {
                         remaining_dots: OAM_SCAN_DURATION,
                         current_frame_data: *current_frame_data,
+                        scx_at_scanline_start: state.scx,
                     }
                 };
             }
@@ -425,7 +461,11 @@ impl Ppu {
                 remaining_dots: 0, ..
             } => {
                 log::warn!("{cycle_count}: Entering oam scan");
-                *self = Default::default()
+                *self = Ppu::OamScan {
+                    remaining_dots: OAM_SCAN_DURATION,
+                    current_frame_data: Default::default(),
+                    scx_at_scanline_start: state.scx,
+                }
             }
             _ => {}
         };
@@ -515,12 +555,13 @@ impl StateMachine for Ppu {
             return;
         }
 
-        self.switch_from_finished_mode(state.ly, cycle_count);
+        self.switch_from_finished_mode(state, cycle_count);
 
         match self {
             Ppu::OamScan {
                 remaining_dots,
                 current_frame_data,
+                ..
             } => {
                 const DELAYED: u8 = OAM_SCAN_DURATION - 4;
                 // interruption is delayed only on line 0
@@ -543,16 +584,50 @@ impl StateMachine for Ppu {
             Ppu::DrawingPixels {
                 dots_count,
                 drawing_state,
+                pixel_fetcher,
+                high_fifo,
+                low_fifo,
+                scanline,
+                scx_at_scanline_start,
             } => {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::DRAWING);
                 }
+
+                // 6 dots (initial discarded tile fetch) + 8 dots (complete tile fetch + sleep)
+                const CAN_DRAW_AFTER: u16 = 14;
+
                 // https://gbdev.io/pandocs/Rendering.html#first12
                 // https://gbdev.io/pandocs/Rendering.html#mode-3-length
                 // rendering is paused for SCX % 8 dots
-                if *dots_count >= 12 + u16::from(state.scx % 8) {
-                    drawing_state.execute(state);
+                // if *dots_count >= 12 + u16::from(state.scx % 8) {
+                //     drawing_state.render(state);
+                // }
+
+                // (dot_count - 6 + 8) % 8 == 0
+                if *dots_count >= CAN_DRAW_AFTER && (*dots_count + 2) % 8 == 0 {
+                    let Either::Right(ready) = pixel_fetcher else {
+                        panic!("Unsynchronized pixel fetching");
+                    };
+                    let (new_pixel_fetcher, [low, high]) = ready.consume();
+                    *low_fifo = low;
+                    *high_fifo = high;
+                    *pixel_fetcher = Either::Left(new_pixel_fetcher);
+                }
+
+                if *dots_count >= CAN_DRAW_AFTER + u16::from(*scx_at_scanline_start % 8) {
+                    scanline.push(
+                        ColorIndex::new(*low_fifo & 0b10000000 != 0, *high_fifo & 0b10000000 != 0)
+                            .get_color(state.bgp_register),
+                    );
+                }
+
+                *low_fifo <<= 1;
+                *high_fifo <<= 1;
+
+                if let Either::Left(not_ready) = pixel_fetcher {
+                    *pixel_fetcher = not_ready.next(state);
                 }
 
                 *dots_count += 1;
@@ -591,7 +666,7 @@ fn get_color_bg_win(
             x: state.wx,
             internal_y_window_counter,
         },
-        Background {
+        Scrolling {
             x: state.scx,
             y: state.scy,
         },
@@ -686,4 +761,164 @@ pub fn get_ppu_bundle() -> PpuBundle {
         LyHandler::default(),
         Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
     )
+}
+
+// relevant docs https://github.com/Ashiepaws/GBEDG/blob/97f198d330a51be558aa8fc9f3f0760846d02d95/ppu/index.md#background-pixel-fetching
+// https://gbdev.io/pandocs/pixel_fifo.html#fifo-pixel-fetcher
+
+// when rust will have effects or generators or whatever
+#[derive(Clone, Copy)]
+enum PixelFetcherStep {
+    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+    // Citation: The scroll registers are re-read on each tile fetch, except for the low 3 bits of SCX
+    WaitingForScrollRegisters,
+    // no delay for him because we have the beautiful WaitingForScrollRegisters
+    FetchingTileIndex {
+        scx: u8,
+        scy: u8,
+    },
+    FetchingTileLow {
+        one_dot_delay: bool,
+        tile_index: u8,
+        scy: u8,
+    },
+    FetchingTileHigh {
+        one_dot_delay: bool,
+        tile_index: u8,
+        tile_low: u8,
+        scy: u8,
+    },
+}
+
+#[derive(Clone, Copy)]
+pub struct PixelFetcher {
+    // offset the address used to read the tile index from the tilemap
+    // incremented when we push pixels to the FIFO
+    // Reset when we reach the window (not documented? or I didn't see it)
+    // Don't forget that we can't have background pixels right (greater x) to
+    // the window (window is always displayed after or over the background)
+    x: u8,
+    step: PixelFetcherStep,
+}
+
+impl Default for PixelFetcher {
+    fn default() -> Self {
+        Self {
+            x: 0,
+            step: PixelFetcherStep::WaitingForScrollRegisters,
+        }
+    }
+}
+
+// about very precise lcd timing
+// http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt
+//
+// about the discarded tile fetch
+// Citation: The first access is just thrown away and is never used. It's here, because it helps during windowing
+//
+//
+
+#[derive(Clone)]
+pub enum Either<T, U> {
+    Left(T),
+    Right(U),
+}
+
+impl PixelFetcher {
+    #[must_use]
+    fn next(mut self, state: &State) -> Either<Self, ReadyPixelFetcher> {
+        use PixelFetcherStep::*;
+        self.step = match self.step {
+            WaitingForScrollRegisters => FetchingTileIndex {
+                scx: state.scx,
+                scy: state.scy,
+            },
+            FetchingTileIndex { scx, scy } => {
+                let address = state.lcd_control.get_bg_tile_map_address()
+                    + u16::from((self.x + scx / 8) & 0x1f)
+                    + 32 * ((u16::from(state.ly + scy) & 0xff) / 8); // don't simplify the product or division
+                FetchingTileLow {
+                    one_dot_delay: false,
+                    tile_index: state.video_ram[usize::from(address - VIDEO_RAM)],
+                    scy,
+                }
+            }
+            FetchingTileLow {
+                one_dot_delay: false,
+                tile_index,
+                scy,
+            } => FetchingTileLow {
+                one_dot_delay: true,
+                tile_index,
+                scy,
+            },
+            FetchingTileLow {
+                one_dot_delay: true,
+                tile_index,
+                scy,
+            } => {
+                let tile = get_bg_win_tile(
+                    state.video_ram[..0x1800].try_into().unwrap(),
+                    tile_index,
+                    !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+                );
+                FetchingTileHigh {
+                    one_dot_delay: false,
+                    tile_index,
+                    tile_low: tile[2 * ((usize::from(state.ly) + usize::from(scy)) % 8)],
+                    scy,
+                }
+            }
+            FetchingTileHigh {
+                one_dot_delay: false,
+                tile_index,
+                tile_low,
+                scy,
+            } => FetchingTileHigh {
+                one_dot_delay: true,
+                tile_index,
+                tile_low,
+                scy,
+            },
+            FetchingTileHigh {
+                one_dot_delay: true,
+                tile_index,
+                tile_low,
+                scy,
+            } => {
+                let tile = get_bg_win_tile(
+                    state.video_ram[..0x1800].try_into().unwrap(),
+                    tile_index,
+                    !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+                );
+                return Either::Right(ReadyPixelFetcher {
+                    x: self.x,
+                    tile_line: [
+                        tile_low,
+                        tile[2 * ((usize::from(state.ly) + usize::from(scy)) % 8) + 1],
+                    ],
+                });
+            }
+        };
+
+        Either::Left(self)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ReadyPixelFetcher {
+    x: u8,
+    tile_line: [u8; 2],
+}
+
+impl ReadyPixelFetcher {
+    fn consume(self) -> (PixelFetcher, [u8; 2]) {
+        (
+            PixelFetcher {
+                step: PixelFetcherStep::WaitingForScrollRegisters,
+                x: self.x + 1,
+            },
+            self.tile_line,
+        )
+    }
 }
