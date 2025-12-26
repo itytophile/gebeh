@@ -157,10 +157,18 @@ pub struct State {
     pub system_counter: u16,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Scrolling {
+    // 0 < x < 256
+    pub x: u8,
+    // 0 < y < 256
+    pub y: u8,
+}
+
 impl State {
     pub fn new(rom: &'static [u8]) -> Self {
         Self {
-            video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+            video_ram: [0; 0x2000],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,
@@ -220,6 +228,12 @@ impl State {
             LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
         ));
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
+    }
+    pub fn get_scrolling(&self) -> Scrolling {
+        Scrolling {
+            x: self.scx,
+            y: self.scy,
+        }
     }
 }
 
