@@ -116,13 +116,14 @@ impl DrawingState {
 #[derive(Clone)]
 pub enum Ppu {
     OamScan {
-        remaining_dots: u8,
+        dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         current_frame_data: CurrentFrameData,
         // https://gbdev.io/pandocs/Scrolling.html#scrolling
         // Citation: The scroll registers are re-read on each tile fetch, except for
         // the low 3 bits of SCX, which are only read at the beginning of the scanline
         scx_at_scanline_start: u8,
+        objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 80
     Drawing {
         dots_count: u16,
@@ -134,6 +135,7 @@ pub enum Ppu {
         scanline: ArrayVec<Color, 160>,
         scx_at_scanline_start: u8,
         wx_condition: Option<u16>,
+        objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
@@ -185,9 +187,10 @@ const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456 * 10;
 impl Default for Ppu {
     fn default() -> Self {
         Self::OamScan {
-            remaining_dots: OAM_SCAN_DURATION,
+            dots_count: 0,
             current_frame_data: Default::default(),
             scx_at_scanline_start: 0,
+            objects: Default::default(),
         }
     }
 }
@@ -411,11 +414,11 @@ impl Ppu {
     fn switch_from_finished_mode(&mut self, state: &State, cycle_count: u64) {
         match self {
             Ppu::OamScan {
-                remaining_dots: 0,
                 current_frame_data,
                 scx_at_scanline_start,
+                dots_count: OAM_SCAN_DURATION,
+                objects,
             } => {
-                // log::warn!("{cycle_count}: Will draw on LY {}", state.ly);
                 *self = Ppu::Drawing {
                     dots_count: 0,
                     drawing_state: DrawingState::new(*current_frame_data),
@@ -425,6 +428,7 @@ impl Ppu {
                     scanline: Default::default(),
                     scx_at_scanline_start: *scx_at_scanline_start,
                     wx_condition: None,
+                    objects: core::mem::take(objects),
                 }
             }
             Ppu::Drawing {
@@ -435,7 +439,7 @@ impl Ppu {
                         current_frame_data, ..
                     },
                 wx_condition,
-                scx_at_scanline_start,..
+                ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
                     log::warn!("Mode 3 took {} dots", dots_count);
@@ -465,9 +469,10 @@ impl Ppu {
                 } else {
                     log::warn!("{cycle_count}: Entering oam scan");
                     Ppu::OamScan {
-                        remaining_dots: OAM_SCAN_DURATION,
                         current_frame_data: *current_frame_data,
                         scx_at_scanline_start: state.scx,
+                        dots_count: 0,
+                        objects: Default::default(),
                     }
                 };
             }
@@ -476,9 +481,10 @@ impl Ppu {
             } => {
                 log::warn!("{cycle_count}: Entering oam scan");
                 *self = Ppu::OamScan {
-                    remaining_dots: OAM_SCAN_DURATION,
                     current_frame_data: Default::default(),
                     scx_at_scanline_start: state.scx,
+                    dots_count: 0,
+                    objects: Default::default(),
                 }
             }
             _ => {}
@@ -573,27 +579,37 @@ impl StateMachine for Ppu {
 
         match self {
             Ppu::OamScan {
-                remaining_dots,
+                dots_count,
                 current_frame_data,
+                objects,
                 ..
             } => {
-                const DELAYED: u8 = OAM_SCAN_DURATION - 4;
                 // interruption is delayed only on line 0
-                if matches!(
-                    (*remaining_dots, state.ly),
-                    (DELAYED, 0) | (OAM_SCAN_DURATION, 1..)
-                ) {
+                if matches!((*dots_count, state.ly), (4, 0) | (0, 1..)) {
                     request_interrupt(state, LcdStatus::OAM_INT, cycle_count)
                 }
                 // STAT delayed by one M-cycle
-                if *remaining_dots == DELAYED {
+                if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::OAM_SCAN);
                 }
+
+                if *dots_count % 2 == 0 && objects.len() < objects.capacity() {
+                    let base = usize::from(*dots_count * 2);
+                    let obj = ObjectAttribute::from(
+                        <[u8; 4]>::try_from(&state.oam[base..base + 4]).unwrap(),
+                    );
+                    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
+                    if obj.y <= state.ly + 16
+                        && state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+                    {
+                        objects.push(obj);
+                    }
+                }
+
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                current_frame_data.wy_condition |=
-                    *remaining_dots == OAM_SCAN_DURATION && state.ly == state.wy;
-                *remaining_dots -= 1;
+                current_frame_data.wy_condition |= *dots_count == 0 && state.ly == state.wy;
+                *dots_count += 1;
             }
             Ppu::Drawing {
                 dots_count,
@@ -604,6 +620,7 @@ impl StateMachine for Ppu {
                 scx_at_scanline_start,
                 wx_condition,
                 drawing_state,
+                objects,
             } => {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
@@ -613,13 +630,6 @@ impl StateMachine for Ppu {
                 // According to pandocs. However it's "contradicting" "Nitty Gritty Gameboy VRAM Timing" but everything falls into
                 // place with this delay.
                 const CAN_DRAW_AFTER: u16 = 12;
-
-                // https://gbdev.io/pandocs/Rendering.html#first12
-                // https://gbdev.io/pandocs/Rendering.html#mode-3-length
-                // rendering is paused for SCX % 8 dots
-                // if *dots_count >= 12 + u16::from(state.scx % 8) {
-                //     drawing_state.render(state);
-                // }
 
                 // I don't know how the glitch described by pandocs is playing with the window internal y counter
                 // so let's ignore it
@@ -631,8 +641,12 @@ impl StateMachine for Ppu {
                 if *dots_count >= CAN_DRAW_AFTER
                     && wx_condition.is_none()
                     && drawing_state.current_frame_data.wy_condition
-                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                    && scanline.len() + 7 == usize::from(state.wx)
+                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE | LcdControl::BG_AND_WINDOW_ENABLE)
+                    // WX condition according to pandocs: the current X coordinate being rendered + 7 was equal to WX
+                    // so never triggered when wx < 7 ? lol
+                    // https://github.com/Ashiepaws/GBEDG/blob/97f198d330a51be558aa8fc9f3f0760846d02d95/ppu/index.md#window-fetching seems to answer that
+                    // Citation: The current X-position of the shifter is greater than or equal to WX - 7
+                    && scanline.len() + 7 >= usize::from(state.wx)
                 {
                     *wx_condition = Some(*dots_count);
                     *pixel_fetcher = Either::Left(Default::default());
