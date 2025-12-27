@@ -20,8 +20,8 @@
 use arrayvec::ArrayVec;
 
 use crate::{
-    ppu::{Color, Either, get_bg_win_tile},
-    state::{Scrolling, VIDEO_RAM},
+    ppu::{Color, ColorIndex, Either, ObjectAttribute, get_bg_win_tile},
+    state::{Scrolling, State, VIDEO_RAM},
 };
 
 // when rust will have effects or generators or whatever
@@ -184,28 +184,33 @@ impl Renderer {
         Self {
             state: RenderingState {
                 // We begin the rendering at x = -8, so we have to discard those negative pixels
-                pixel_shift_behavior: PixelShiftBehavior::Discarding,
+                is_lcd_accepting_pixels: false,
+                // we are shifting zeros at first but we don't care because the lcd is not accepting pixels
+                is_shifting: true,
                 // will be disabled right away by the first background fetch
                 is_sprite_fetching_enable: true,
-                fifos: Default::default()
+                fifos: Default::default(),
             },
             background_pixel_fetcher: Default::default(),
             sprite_pixel_fetcher: Default::default(),
         }
     }
 
-    fn execute(&mut self, scanline: &mut ArrayVec<Color, 160>) {
+    fn execute(&mut self, scanline: &mut ArrayVec<Color, 160>, state: &State) {
         // those systems can run "concurrently"
         self.background_pixel_fetcher.execute(&mut self.state);
         self.sprite_pixel_fetcher.execute(&mut self.state);
-        
+        if self.state.is_lcd_accepting_pixels {
+            scanline.push(self.state.fifos.render_pixel(
+                state.bgp_register,
+                state.obp0,
+                state.obp1,
+            ));
+        }
+        if self.state.is_shifting {
+            self.state.fifos.shift();
+        }
     }
-}
-
-enum PixelShiftBehavior {
-    Discarding,
-    Accepting,
-    Paused,
 }
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
@@ -221,14 +226,62 @@ struct Fifos {
     sp1: u8,
     // if the background must be drawn over the sprite
     mask: u8,
-    // sprite palette, the background palette is checked globally before pushing to the LCD 
-    palette: u8
+    // sprite palette, the background palette is checked globally before pushing to the LCD
+    palette: u8,
+}
+
+impl Fifos {
+    fn shift(&mut self) {
+        self.bg0 <<= 1;
+        self.bg1 <<= 1;
+        self.sp0 <<= 1;
+        self.sp1 <<= 1;
+        self.mask <<= 1;
+        self.palette <<= 1;
+    }
+
+    fn load_sprite(&mut self, tile: [u8; 2], priority: bool, palette: bool) {
+        let existing_sprite_mask = self.sp0 | self.sp1;
+        // we must keep the existing sprite so we unset the bits already present from the new mask
+        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
+        if priority {
+            self.mask |= new_sprite_mask;
+        } else {
+            self.mask &= !new_sprite_mask;
+        }
+        if palette {
+            self.palette |= new_sprite_mask;
+        } else {
+            self.palette &= !new_sprite_mask;
+        }
+        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
+        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
+    }
+
+    fn replace_background(&mut self, tile: [u8; 2]) {
+        self.bg0 = tile[0];
+        self.bg1 = tile[1];
+    }
+
+    fn render_pixel(&self, bgp: u8, obp0: u8, obp1: u8) -> Color {
+        let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
+        let sp_color_index = ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0);
+
+        if sp_color_index == ColorIndex::Zero
+            || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero)
+        {
+            return bg_color_index.get_color(bgp);
+        }
+
+        sp_color_index.get_color(if self.palette & 0x80 != 0 { obp1 } else { obp0 })
+    }
 }
 
 struct RenderingState {
-    pixel_shift_behavior: PixelShiftBehavior,
+    is_shifting: bool,
+    is_lcd_accepting_pixels: bool,
     is_sprite_fetching_enable: bool,
-    fifos: Fifos
+    fifos: Fifos,
 }
 
 #[derive(Default)]
