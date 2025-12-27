@@ -2,9 +2,25 @@
 // https://github.com/Ashiepaws/GBEDG/blob/97f198d330a51be558aa8fc9f3f0760846d02d95/ppu/index.md#background-pixel-fetching
 // https://gbdev.io/pandocs/pixel_fifo.html#fifo-pixel-fetcher
 // http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt
+// https://www.reddit.com/r/EmuDev/comments/s6cpis/gameboy_trying_to_understand_sprite_fifo_behavior/ <- spitting facts
+//
+// The ppu can't do two tile fetches at the same time, so if we fetch a sprite for an object
+// then we must pause the background/window tile fetch.
+// A sprite fetch is triggered only if the background fifo has pixels.
+// according to "Gameboy Emulator Development Guide", the background pixel fetcher is not only paused, but reset.
+// During the object sprite fetch, both the LCD AND the background FIFO are paused.
+// The Sprite FIFO has not the same behavior as the Background FIFO. The background pixel fetcher always wait for
+// the background fifo to be empty before refilling it. However the sprite pixel fetcher, is only replacing the "empty slots"
+// of the Sprite FIFO, to keep the pixels of the previous sprite.
+// We know from pandocs (https://gbdev.io/pandocs/OAM.html#drawing-priority) that if two sprites overlap, opaque colors are drawn over
+// the transparent ones (yes) so I assume the sprite pixel fetcher refills the sprite FIFO with an OR operation.
+// But what about the priority flag ? (https://gbdev.io/pandocs/OAM.html#byte-3--attributesflags) we will keep a fifo for that
+// and try to guess along the way.
+
+use arrayvec::ArrayVec;
 
 use crate::{
-    ppu::{Either, get_bg_win_tile},
+    ppu::{Color, Either, get_bg_win_tile},
     state::{Scrolling, VIDEO_RAM},
 };
 
@@ -153,4 +169,79 @@ impl ReadyPixelFetcher {
             x: self.x + 1,
         }
     }
+}
+
+// 2
+
+struct Renderer {
+    background_pixel_fetcher: BackgroundPixelFetcher,
+    sprite_pixel_fetcher: SpritePixelFetcher,
+    state: RenderingState,
+}
+
+impl Renderer {
+    fn new() -> Self {
+        Self {
+            state: RenderingState {
+                // We begin the rendering at x = -8, so we have to discard those negative pixels
+                pixel_shift_behavior: PixelShiftBehavior::Discarding,
+                // will be disabled right away by the first background fetch
+                is_sprite_fetching_enable: true,
+                fifos: Default::default()
+            },
+            background_pixel_fetcher: Default::default(),
+            sprite_pixel_fetcher: Default::default(),
+        }
+    }
+
+    fn execute(&mut self, scanline: &mut ArrayVec<Color, 160>) {
+        // those systems can run "concurrently"
+        self.background_pixel_fetcher.execute(&mut self.state);
+        self.sprite_pixel_fetcher.execute(&mut self.state);
+        
+    }
+}
+
+enum PixelShiftBehavior {
+    Discarding,
+    Accepting,
+    Paused,
+}
+
+// according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
+#[derive(Default)]
+struct Fifos {
+    // for low background tile data
+    bg0: u8,
+    // for high background tile data
+    bg1: u8,
+    // for low sprite tile data
+    sp0: u8,
+    // for high sprite tile data
+    sp1: u8,
+    // if the background must be drawn over the sprite
+    mask: u8,
+    // sprite palette, the background palette is checked globally before pushing to the LCD 
+    palette: u8
+}
+
+struct RenderingState {
+    pixel_shift_behavior: PixelShiftBehavior,
+    is_sprite_fetching_enable: bool,
+    fifos: Fifos
+}
+
+#[derive(Default)]
+// background and window to be precise
+struct BackgroundPixelFetcher;
+
+impl BackgroundPixelFetcher {
+    fn execute(&mut self, state: &mut RenderingState) {}
+}
+
+#[derive(Default)]
+struct SpritePixelFetcher;
+
+impl SpritePixelFetcher {
+    fn execute(&mut self, state: &mut RenderingState) {}
 }
