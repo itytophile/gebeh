@@ -17,6 +17,8 @@
 // But what about the priority flag ? (https://gbdev.io/pandocs/OAM.html#byte-3--attributesflags) we will keep a fifo for that
 // and try to guess along the way.
 
+use core::num::{NonZero, NonZeroU8};
+
 use arrayvec::ArrayVec;
 
 use crate::{
@@ -185,8 +187,7 @@ impl Renderer {
             state: RenderingState {
                 // We begin the rendering at x = -8, so we have to discard those negative pixels
                 is_lcd_accepting_pixels: false,
-                // we are shifting zeros at first but we don't care because the lcd is not accepting pixels
-                is_shifting: true,
+                is_shifting: false,
                 // will be disabled right away by the first background fetch
                 is_sprite_fetching_enable: true,
                 fifos: Default::default(),
@@ -228,6 +229,8 @@ struct Fifos {
     mask: u8,
     // sprite palette, the background palette is checked globally before pushing to the LCD
     palette: u8,
+    // to know if the fifo is empty
+    shifted_count: u8,
 }
 
 impl Fifos {
@@ -238,6 +241,7 @@ impl Fifos {
         self.sp1 <<= 1;
         self.mask <<= 1;
         self.palette <<= 1;
+        self.shifted_count = self.shifted_count.wrapping_add(1);
     }
 
     fn load_sprite(&mut self, tile: [u8; 2], priority: bool, palette: bool) {
@@ -275,6 +279,10 @@ impl Fifos {
 
         sp_color_index.get_color(if self.palette & 0x80 != 0 { obp1 } else { obp0 })
     }
+
+    fn is_background_empty(&self) -> bool {
+        self.shifted_count.is_multiple_of(8)
+    }
 }
 
 struct RenderingState {
@@ -284,12 +292,141 @@ struct RenderingState {
     fifos: Fifos,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy)]
+pub enum BackgroundPixelFetcherStep {
+    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+    // Citation: The scroll registers are re-read on each tile fetch, except for the low 3 bits of SCX
+    // scrolling set at 0 when handling window tiles
+    WaitingForScrollRegisters,
+    // no delay for him because we have the beautiful WaitingForScrollRegisters
+    FetchingTileIndex {
+        scx: u8,
+        scy: u8,
+    },
+    FetchingTileLow {
+        one_dot_delay: bool,
+        tile_index: u8,
+        scy: u8,
+    },
+    FetchingTileHigh {
+        one_dot_delay: bool,
+        tile_index: u8,
+        tile_low: u8,
+        scy: u8,
+    },
+    Ready([u8; 2]),
+}
+
 // background and window to be precise
-struct BackgroundPixelFetcher;
+struct BackgroundPixelFetcher {
+    step: BackgroundPixelFetcherStep,
+    x: u8, // will be used like x.max(1) - 0 thus 0 is the dummy fetch
+}
+
+impl Default for BackgroundPixelFetcher {
+    fn default() -> Self {
+        Self {
+            step: BackgroundPixelFetcherStep::WaitingForScrollRegisters,
+            x: 0,
+        }
+    }
+}
 
 impl BackgroundPixelFetcher {
-    fn execute(&mut self, state: &mut RenderingState) {}
+    fn execute(
+        &mut self,
+        rendering_state: &mut RenderingState,
+        vram: &[u8; 0x2000],
+        tile_map_address: u16,
+        scrolling: Scrolling,
+        y: u8,
+        is_signed_addressing: bool,
+    ) {
+        use BackgroundPixelFetcherStep::*;
+        if let Ready(tile) = self.step {
+            if !rendering_state.fifos.is_background_empty() {
+                return;
+            }
+            rendering_state.fifos.replace_background(tile);
+            // we enable it here to start the very first shifting process for the "dummy tile"
+            rendering_state.is_shifting = true;
+            // we will start another fetching process, too bad for the sprite fetcher
+            rendering_state.is_sprite_fetching_enable = false;
+            self.step = WaitingForScrollRegisters;
+        }
+        self.step = match self.step {
+            WaitingForScrollRegisters => FetchingTileIndex {
+                scx: scrolling.x,
+                scy: scrolling.y,
+            },
+            FetchingTileIndex { scx, scy } => {
+                let address = tile_map_address
+                    + u16::from((self.x.max(1) - 1 + scx / 8) & 0x1f)
+                    + 32 * (((u16::from(y) + u16::from(scy)) & 0xff) / 8); // don't simplify 32 / 8 to 4
+                FetchingTileLow {
+                    one_dot_delay: false,
+                    tile_index: vram[usize::from(address - VIDEO_RAM)],
+                    scy,
+                }
+            }
+            FetchingTileLow {
+                one_dot_delay: false,
+                tile_index,
+                scy,
+            } => FetchingTileLow {
+                one_dot_delay: true,
+                tile_index,
+                scy,
+            },
+            FetchingTileLow {
+                one_dot_delay: true,
+                tile_index,
+                scy,
+            } => {
+                let tile = get_bg_win_tile(
+                    vram[..0x1800].try_into().unwrap(),
+                    tile_index,
+                    is_signed_addressing,
+                );
+                FetchingTileHigh {
+                    one_dot_delay: false,
+                    tile_index,
+                    tile_low: tile[2 * ((usize::from(y) + usize::from(scy)) % 8)],
+                    scy,
+                }
+            }
+            FetchingTileHigh {
+                one_dot_delay: false,
+                tile_index,
+                tile_low,
+                scy,
+            } => FetchingTileHigh {
+                one_dot_delay: true,
+                tile_index,
+                tile_low,
+                scy,
+            },
+            FetchingTileHigh {
+                one_dot_delay: true,
+                tile_index,
+                tile_low,
+                scy,
+            } => {
+                // sprite fetcher can start fetching one cycle before the end of background fecthing
+                rendering_state.is_sprite_fetching_enable = true;
+                let tile = get_bg_win_tile(
+                    vram[..0x1800].try_into().unwrap(),
+                    tile_index,
+                    is_signed_addressing,
+                );
+                Ready([
+                    tile_low,
+                    tile[2 * ((usize::from(y) + usize::from(scy)) % 8) + 1],
+                ])
+            }
+            sleeping => sleeping,
+        };
+    }
 }
 
 #[derive(Default)]
