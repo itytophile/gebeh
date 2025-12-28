@@ -92,8 +92,7 @@ impl SpriteFetcher {
                 // we have to fetch the tile line in two steps because the LcdControl::OBJ_SIZE
                 // can be changed between fetches (don't know if it works exactly like this)
                 let tile_high = get_object_tile_line(state, obj)[1];
-                // TODO gérer quand plusieurs sprites empilés
-                rendering_state.is_shifting = true;
+
                 rendering_state.fifos.load_sprite(
                     if obj.flags.contains(ObjectFlags::X_FLIP) {
                         [tile_low.reverse_bits(), tile_high.reverse_bits()]
@@ -103,7 +102,16 @@ impl SpriteFetcher {
                     obj.flags.contains(ObjectFlags::PRIORITY),
                     obj.flags.contains(ObjectFlags::DMG_PALETTE),
                 );
+
                 objects.pop();
+
+                // if the next object has the same x as the previous one, then we are not
+                // shifting yet. We have to fetch the next object first.
+                rendering_state.is_shifting = objects
+                    .last()
+                    .map(|next_obj| i16::from(next_obj.x) != cursor)
+                    .unwrap_or(true);
+
                 FetchingTileLow { delay: 0 }
             }
         };
