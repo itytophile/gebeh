@@ -8,26 +8,16 @@ use arrayvec::ArrayVec;
 use crate::{
     StateMachine,
     ic::Ints,
-    ppu::{
-        ly_handler::LyHandler,
-        pixel_fetcher::{PixelFetcher, Renderer},
-    },
+    ppu::{ly_handler::LyHandler, pixel_fetcher::Renderer},
     state::{LcdStatus, Scrolling, State, VIDEO_RAM},
 };
-
-// used by oam scan, drawing, hblank, discarded during vblank
-#[derive(Clone, Copy, Default)]
-pub struct CurrentFrameData {
-    wy_condition: bool,
-    internal_y_window_counter: u8,
-}
 
 #[derive(Clone)]
 pub enum Ppu {
     OamScan {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
-        current_frame_data: CurrentFrameData,
+        window_y: Option<u8>,
         // https://gbdev.io/pandocs/Scrolling.html#scrolling
         // Citation: The scroll registers are re-read on each tile fetch, except for
         // the low 3 bits of SCX, which are only read at the beginning of the scanline
@@ -36,14 +26,14 @@ pub enum Ppu {
     }, // <= 80
     Drawing {
         dots_count: u16,
-        current_frame_data: CurrentFrameData,
+        window_y: Option<u8>,
         renderer: Renderer,
         objects_count: usize,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
-        current_frame_data: CurrentFrameData,
+        window_y: Option<u8>,
         scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
@@ -91,7 +81,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self::OamScan {
             dots_count: 0,
-            current_frame_data: Default::default(),
+            window_y: Default::default(),
             scx_at_scanline_start: 0,
             objects: Default::default(),
         }
@@ -317,7 +307,7 @@ impl Ppu {
     fn switch_from_finished_mode(&mut self, state: &State, cycle_count: u64) {
         match self {
             Ppu::OamScan {
-                current_frame_data,
+                window_y,
                 scx_at_scanline_start,
                 dots_count: OAM_SCAN_DURATION,
                 objects,
@@ -340,20 +330,20 @@ impl Ppu {
                 // the renderer implementation takes 174 dots to complete the minimum time to draw a scanline
                 // however, according to several sources and rom tests, Mode 3 is only 172 dots long.
                 // Besides, Pandocs says that Mode 3 starts drawing after 12 dots. The renderer starts drawing after 14 dots.
-                renderer.execute(state, u16::MAX - 1);
-                renderer.execute(state, u16::MAX);
+                renderer.execute(state, u16::MAX - 1, window_y);
+                renderer.execute(state, u16::MAX, window_y);
 
                 *self = Ppu::Drawing {
                     dots_count: 0,
                     renderer,
-                    current_frame_data: *current_frame_data,
+                    window_y: *window_y,
                     objects_count,
                 }
             }
             Ppu::Drawing {
                 dots_count,
                 renderer: Renderer { scanline, .. },
-                current_frame_data,
+                window_y,
                 objects_count,
                 ..
             } => {
@@ -366,12 +356,7 @@ impl Ppu {
 
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
-                        current_frame_data: CurrentFrameData {
-                            wy_condition: current_frame_data.wy_condition,
-                            // TODO
-                            internal_y_window_counter: current_frame_data.internal_y_window_counter
-                                + false as u8,
-                        },
+                        window_y: *window_y,
                         dots_count: 0,
                         scanline,
                     }
@@ -379,7 +364,7 @@ impl Ppu {
             }
             Ppu::HorizontalBlank {
                 remaining_dots,
-                current_frame_data,
+                window_y,
                 dots_count,
                 ..
             } if remaining_dots == dots_count => {
@@ -391,7 +376,7 @@ impl Ppu {
                 } else {
                     log::warn!("{cycle_count}: Entering oam scan");
                     Ppu::OamScan {
-                        current_frame_data: *current_frame_data,
+                        window_y: *window_y,
                         scx_at_scanline_start: state.scx,
                         dots_count: 0,
                         objects: Default::default(),
@@ -403,7 +388,7 @@ impl Ppu {
             } => {
                 log::warn!("{cycle_count}: Entering oam scan");
                 *self = Ppu::OamScan {
-                    current_frame_data: Default::default(),
+                    window_y: Default::default(),
                     scx_at_scanline_start: state.scx,
                     dots_count: 0,
                     objects: Default::default(),
@@ -502,7 +487,7 @@ impl StateMachine for Ppu {
         match self {
             Ppu::OamScan {
                 dots_count,
-                current_frame_data,
+                window_y,
                 objects,
                 ..
             } => {
@@ -533,12 +518,15 @@ impl StateMachine for Ppu {
 
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                current_frame_data.wy_condition |= *dots_count == 0 && state.ly == state.wy;
+                if window_y.is_none() && *dots_count == 0 && state.ly == state.wy {
+                    *window_y = Some(0);
+                }
                 *dots_count += 1;
             }
             Ppu::Drawing {
                 dots_count,
                 renderer,
+                window_y,
                 ..
             } => {
                 // STAT delayed by one M-cycle
@@ -546,7 +534,7 @@ impl StateMachine for Ppu {
                     state.set_ppu_mode(LcdStatus::DRAWING);
                 }
 
-                renderer.execute(state, *dots_count);
+                renderer.execute(state, *dots_count, window_y);
 
                 *dots_count += 1;
             }

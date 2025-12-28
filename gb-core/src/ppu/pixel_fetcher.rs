@@ -184,6 +184,7 @@ pub struct Renderer {
     pub objects: ArrayVec<ObjectAttribute, 10>,
     pub scanline: ArrayVec<Color, 160>,
     first_pixels_to_skip: u8,
+    wx_condition: bool,
 }
 
 impl Renderer {
@@ -203,32 +204,70 @@ impl Renderer {
             scanline: Default::default(),
             objects,
             first_pixels_to_skip: scx_at_scanline_start % 8,
+            wx_condition: false,
         }
     }
 
-    pub fn execute(&mut self, state: &State, dots_count: u16) {
-        self.rendering_state.is_lcd_accepting_pixels =
-            self.rendering_state.fifos.shifted_count >= 8 + self.first_pixels_to_skip;
+    pub fn execute(&mut self, state: &State, dots_count: u16, window_y: &mut Option<u8>) {
+        let cursor = i16::from(self.rendering_state.fifos.shifted_count)
+            - i16::from(self.first_pixels_to_skip);
+        self.rendering_state.is_lcd_accepting_pixels = cursor >= 8;
+
+        // yes can be triggered multiple times if wx changes during the same scanline
+        if state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            && cursor == i16::from(state.wx + 1)
+            && let Some(window_y) = window_y
+            && !self.wx_condition
+        {
+            self.background_pixel_fetcher = BackgroundPixelFetcher {
+                step: BackgroundPixelFetcherStep::WaitingForScrollRegisters,
+                x: 1,
+            };
+            self.rendering_state.fifos.reset_background();
+            self.rendering_state.is_shifting = false;
+            self.wx_condition = true;
+            *window_y += 1;
+        }
+
         // those systems can run "concurrently"
-        self.background_pixel_fetcher.execute(
-            &mut self.rendering_state,
-            &state.video_ram,
-            state.lcd_control.get_bg_tile_map_address(),
-            state.get_scrolling(),
-            state.ly,
-            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES)
-        );
+
+        // will hopefully reproduce the glitch described by https://gbdev.io/pandocs/Scrolling.html#window
+        if let Some(window_y) = window_y
+            && self.wx_condition
+            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+        {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &state.video_ram,
+                state.lcd_control.get_window_tile_map_address(),
+                Scrolling::default(),
+                // - 1 because we increment it at window initialization
+                *window_y - 1,
+                !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+            );
+        } else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &state.video_ram,
+                state.lcd_control.get_bg_tile_map_address(),
+                state.get_scrolling(),
+                state.ly,
+                !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+            );
+        }
+
         self.sprite_pixel_fetcher.execute(
-            i16::from(self.rendering_state.fifos.shifted_count)
-                - i16::from(self.first_pixels_to_skip),
+            cursor,
             &mut self.rendering_state,
             &mut self.objects,
             state,
             dots_count,
         );
-        
-        if self.rendering_state.is_lcd_accepting_pixels {
-            assert!(!self.rendering_state.fifos.is_background_empty());
+
+        // background can be empty if window is loading for the first time
+        if self.rendering_state.is_lcd_accepting_pixels
+            && !self.rendering_state.fifos.is_background_empty()
+        {
             log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
@@ -316,6 +355,10 @@ impl Fifos {
 
     fn is_background_empty(&self) -> bool {
         self.background_pixels_count == 0
+    }
+
+    fn reset_background(&mut self) {
+        self.background_pixels_count = 0;
     }
 }
 
