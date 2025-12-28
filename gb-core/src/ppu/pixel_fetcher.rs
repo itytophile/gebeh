@@ -115,11 +115,10 @@ impl Renderer {
             dots_count,
         );
 
-        if self.rendering_state.fifos.is_background_empty() {
+        if self.rendering_state.fifos.is_background_empty() || !self.rendering_state.is_shifting {
             return;
         }
 
-        // background can be empty if window is loading for the first time
         if self.rendering_state.is_lcd_accepting_pixels {
             log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
@@ -129,10 +128,9 @@ impl Renderer {
                 state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE),
             ));
         }
-        if self.rendering_state.is_shifting {
-            log::warn!("{dots_count}: shifting");
-            self.rendering_state.fifos.shift();
-        }
+
+        log::warn!("{dots_count}: shifting");
+        self.rendering_state.fifos.shift();
     }
 }
 
