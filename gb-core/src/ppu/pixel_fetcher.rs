@@ -181,38 +181,43 @@ impl ReadyPixelFetcher {
 struct Renderer {
     background_pixel_fetcher: BackgroundPixelFetcher,
     sprite_pixel_fetcher: SpritePixelFetcher,
-    state: RenderingState,
+    rendering_state: RenderingState,
+    objects: ArrayVec<ObjectAttribute, 10>,
+    scanline: ArrayVec<Color, 160>,
 }
 
 impl Renderer {
-    fn new() -> Self {
+    fn new(objects: ArrayVec<ObjectAttribute, 10>) -> Self {
         Self {
-            state: RenderingState {
-                // We begin the rendering at x = -8, so we have to discard those negative pixels
-                is_lcd_accepting_pixels: false,
-                is_shifting: false,
-                // will be disabled right away by the first background fetch
-                is_sprite_fetching_enable: true,
-                fifos: Default::default(),
-            },
             background_pixel_fetcher: Default::default(),
+            rendering_state: Default::default(),
             sprite_pixel_fetcher: Default::default(),
+            scanline: Default::default(),
+            objects,
         }
     }
 
-    fn execute(&mut self, scanline: &mut ArrayVec<Color, 160>, state: &State) {
+    fn execute(&mut self, state: &State) {
         // those systems can run "concurrently"
-        self.background_pixel_fetcher.execute(&mut self.state);
-        self.sprite_pixel_fetcher.execute(&mut self.state);
-        if self.state.is_lcd_accepting_pixels {
-            scanline.push(self.state.fifos.render_pixel(
+        self.background_pixel_fetcher.execute(
+            &mut self.rendering_state,
+            &state.video_ram,
+            state.lcd_control.get_bg_tile_map_address(),
+            state.get_scrolling(),
+            state.ly,
+            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+        );
+        self.sprite_pixel_fetcher
+            .execute(&mut self.rendering_state, &mut self.objects, state);
+        if self.rendering_state.is_lcd_accepting_pixels {
+            self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
                 state.obp0,
                 state.obp1,
             ));
         }
-        if self.state.is_shifting {
-            self.state.fifos.shift();
+        if self.rendering_state.is_shifting {
+            self.rendering_state.fifos.shift();
         }
     }
 }
@@ -288,6 +293,7 @@ impl Fifos {
     }
 }
 
+#[derive(Default)]
 struct RenderingState {
     is_shifting: bool,
     is_lcd_accepting_pixels: bool,
@@ -415,7 +421,7 @@ impl BackgroundPixelFetcher {
                 tile_low,
                 scy,
             } => {
-                // sprite fetcher can start fetching one cycle before the end of background fecthing
+                // sprite fetcher can start fetching one cycle before the end of background fetching
                 rendering_state.is_sprite_fetching_enable = true;
                 let tile = get_bg_win_tile(
                     vram[..0x1800].try_into().unwrap(),
@@ -455,7 +461,6 @@ impl SpritePixelFetcher {
     fn execute(
         &mut self,
         rendering_state: &mut RenderingState,
-        cursor: u8,
         objects: &mut ArrayVec<ObjectAttribute, 10>,
         state: &State,
     ) {
@@ -463,7 +468,10 @@ impl SpritePixelFetcher {
             return;
         };
 
-        if obj.x != cursor || rendering_state.fifos.is_background_empty() {
+        // the shifted count is like the "true" cursor of the drawn pixels. That cursor starts at x = -8 and increments to 159
+        if obj.x != rendering_state.fifos.shifted_count
+            || rendering_state.fifos.is_background_empty()
+        {
             return;
         }
 
