@@ -144,15 +144,6 @@ pub fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
     ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
 }
 
-// https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
-#[must_use]
-fn get_object_tile(vram: &TileVramObj, index: u8) -> &Tile {
-    let base = usize::from(index) * usize::from(TILE_LENGTH);
-    vram[base..base + usize::from(TILE_LENGTH)]
-        .try_into()
-        .unwrap()
-}
-
 #[must_use]
 pub fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
     let base = if is_signed_addressing {

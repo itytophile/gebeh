@@ -2,8 +2,8 @@ use arrayvec::ArrayVec;
 
 use crate::{
     ppu::{
-        LcdControl, ObjectAttribute, ObjectFlags, get_line_from_tile, get_object_tile,
-        renderer::RenderingState,
+        LcdControl, ObjectAttribute, ObjectFlags, TILE_LENGTH, Tile, TileVramObj,
+        get_line_from_tile, renderer::RenderingState,
     },
     state::{State, VIDEO_RAM},
 };
@@ -110,6 +110,7 @@ impl SpriteFetcher {
     }
 }
 
+#[must_use]
 fn get_object_tile_line(state: &State, obj: &ObjectAttribute) -> [u8; 2] {
     let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
     let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
@@ -125,4 +126,13 @@ fn get_object_tile_line(state: &State, obj: &ObjectAttribute) -> [u8; 2] {
     y = if y_flip { 7 - y } else { y };
 
     get_line_from_tile(tile, y)
+}
+
+// https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
+#[must_use]
+fn get_object_tile(vram: &TileVramObj, index: u8) -> &Tile {
+    let base = usize::from(index) * usize::from(TILE_LENGTH);
+    vram[base..base + usize::from(TILE_LENGTH)]
+        .try_into()
+        .unwrap()
 }
