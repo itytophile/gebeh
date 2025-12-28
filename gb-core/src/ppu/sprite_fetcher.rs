@@ -13,6 +13,7 @@ pub enum SpriteFetcher {
     // we have access to the object tile_index so it's useless to have it here
     FetchingTileLow { delay: u8 },
     FetchingTileHigh { one_dot_delay: bool, tile_low: u8 },
+    Ready([u8; 2]),
 }
 
 impl Default for SpriteFetcher {
@@ -32,15 +33,26 @@ impl SpriteFetcher {
         state: &State,
         dots_count: u16,
     ) {
+        use SpriteFetcher::*;
+
+        if let Ready(tile) = *self {
+            let obj = objects.pop().unwrap();
+            rendering_state.fifos.load_sprite(
+                if obj.flags.contains(ObjectFlags::X_FLIP) {
+                    [tile[0].reverse_bits(), tile[1].reverse_bits()]
+                } else {
+                    tile
+                },
+                obj.flags.contains(ObjectFlags::PRIORITY),
+                obj.flags.contains(ObjectFlags::DMG_PALETTE),
+            );
+            rendering_state.is_shifting = true;
+            *self = FetchingTileLow { delay: 0 };
+        }
+
         let Some(obj) = objects.last() else {
             return;
         };
-
-        log::warn!(
-            "{dots_count}: obj_x {} cursor {cursor} is_empty {}",
-            obj.x,
-            rendering_state.fifos.is_background_empty()
-        );
 
         if i16::from(obj.x) != cursor {
             return;
@@ -62,8 +74,6 @@ impl SpriteFetcher {
         }
 
         log::warn!("{dots_count}: sprite fetching for object at {}", obj.x);
-
-        use SpriteFetcher::*;
 
         // 0 -> fetch tile index
         // 1 -> fetch tile index
@@ -91,29 +101,9 @@ impl SpriteFetcher {
             } => {
                 // we have to fetch the tile line in two steps because the LcdControl::OBJ_SIZE
                 // can be changed between fetches (don't know if it works exactly like this)
-                let tile_high = get_object_tile_line(state, obj)[1];
-
-                rendering_state.fifos.load_sprite(
-                    if obj.flags.contains(ObjectFlags::X_FLIP) {
-                        [tile_low.reverse_bits(), tile_high.reverse_bits()]
-                    } else {
-                        [tile_low, tile_high]
-                    },
-                    obj.flags.contains(ObjectFlags::PRIORITY),
-                    obj.flags.contains(ObjectFlags::DMG_PALETTE),
-                );
-
-                objects.pop();
-
-                // if the next object has the same x as the previous one, then we are not
-                // shifting yet. We have to fetch the next object first.
-                rendering_state.is_shifting = objects
-                    .last()
-                    .map(|next_obj| i16::from(next_obj.x) != cursor)
-                    .unwrap_or(true);
-
-                FetchingTileLow { delay: 0 }
+                Ready([tile_low, get_object_tile_line(state, obj)[1]])
             }
+            Ready(_) => unreachable!(),
         };
     }
 }

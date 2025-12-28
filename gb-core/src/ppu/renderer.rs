@@ -151,7 +151,6 @@ mod tests {
 
     use crate::{
         WIDTH,
-        instructions::vec,
         ppu::{LcdControl, ObjectAttribute, ObjectFlags, renderer::Renderer},
         state::State,
     };
