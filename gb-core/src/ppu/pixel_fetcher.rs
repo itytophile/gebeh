@@ -52,7 +52,6 @@ impl Renderer {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
                 is_shifting: true,
-                is_lcd_accepting_pixels: false,
                 is_sprite_fetching_enable: false,
                 fifos: Default::default(),
             },
@@ -67,7 +66,6 @@ impl Renderer {
     pub fn execute(&mut self, state: &State, dots_count: u16, window_y: &mut Option<u8>) {
         let cursor = i16::from(self.rendering_state.fifos.shifted_count)
             - i16::from(self.first_pixels_to_skip);
-        self.rendering_state.is_lcd_accepting_pixels = cursor >= 8;
 
         // yes can be triggered multiple times if wx changes during the same scanline
         if state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
@@ -123,7 +121,7 @@ impl Renderer {
             return;
         }
 
-        if self.rendering_state.is_lcd_accepting_pixels {
+        if cursor >= 8 {
             log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
@@ -220,7 +218,6 @@ impl Fifos {
 #[derive(Clone)]
 struct RenderingState {
     is_shifting: bool,
-    is_lcd_accepting_pixels: bool,
     is_sprite_fetching_enable: bool,
     fifos: Fifos,
 }
@@ -403,7 +400,6 @@ impl SpritePixelFetcher {
         let is_obj_canceled = !state.lcd_control.contains(LcdControl::OBJ_ENABLE);
 
         rendering_state.is_shifting = is_obj_canceled;
-        rendering_state.is_lcd_accepting_pixels = is_obj_canceled;
 
         if is_obj_canceled {
             objects.pop();
@@ -448,7 +444,6 @@ impl SpritePixelFetcher {
                 // can be changed between fetches (don't know if it works exactly like this)
                 let tile_high = get_object_tile_line(state, obj)[1];
                 rendering_state.is_shifting = true;
-                rendering_state.is_lcd_accepting_pixels = true;
                 rendering_state.fifos.load_sprite(
                     if obj.flags.contains(ObjectFlags::X_FLIP) {
                         [tile_low.reverse_bits(), tile_high.reverse_bits()]
