@@ -166,8 +166,11 @@ fn main() {
                 window_id,
                 ..
             } if window_id == debug_window.id() => {
-                draw_tiles_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
-                debug_pixels.render().unwrap();
+                if !is_paused {
+                    draw_tiles_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                    debug_pixels.render().unwrap();
+                }
+
                 debug_window.request_redraw();
             }
             Event::WindowEvent {
