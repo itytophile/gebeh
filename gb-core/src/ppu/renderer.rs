@@ -147,17 +147,24 @@ pub struct RenderingState {
 
 #[cfg(test)]
 mod tests {
+    use arrayvec::ArrayVec;
+
     use crate::{
         WIDTH,
-        ppu::{LcdControl, renderer::Renderer},
+        instructions::vec,
+        ppu::{LcdControl, ObjectAttribute, ObjectFlags, renderer::Renderer},
         state::State,
     };
 
     // all timings are +2 compared to pandocs timings
     const MINIMUM_TIME: u16 = 174;
 
-    fn get_timing(state: &State, mut window_y: Option<u8>) -> u16 {
-        let mut renderer = Renderer::new(Default::default(), 0);
+    fn get_timing(
+        state: &State,
+        mut window_y: Option<u8>,
+        objects: ArrayVec<ObjectAttribute, 10>,
+    ) -> u16 {
+        let mut renderer = Renderer::new(objects, 0);
         let mut dots = 0;
         while renderer.scanline.len() < usize::from(WIDTH) {
             renderer.execute(state, dots, &mut window_y);
@@ -168,7 +175,10 @@ mod tests {
 
     #[test]
     fn normal_timing() {
-        assert_eq!(get_timing(&State::new(&[]), None), MINIMUM_TIME);
+        assert_eq!(
+            get_timing(&State::new(&[]), None, Default::default()),
+            MINIMUM_TIME
+        );
     }
 
     #[test]
@@ -183,7 +193,7 @@ mod tests {
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
             // Citation: After the last non-window pixel is emitted, a 6-dot penalty is incurred
             assert_eq!(
-                get_timing(&state, Some(0)),
+                get_timing(&state, Some(0), Default::default()),
                 MINIMUM_TIME + 6,
                 "Bad timing with WX = {wx}"
             );
@@ -192,9 +202,24 @@ mod tests {
         // the window is not visible
         state.wx = 167;
         assert_eq!(
-            get_timing(&state, Some(0)),
+            get_timing(&state, Some(0), Default::default()),
             MINIMUM_TIME,
             "Bad timing with WX = 167"
         );
+    }
+
+    #[test]
+    fn with_objects() {
+        let mut state = State::new(&[]);
+        state.lcd_control.insert(LcdControl::OBJ_ENABLE);
+        let objects = ArrayVec::from_iter([ObjectAttribute {
+            flags: ObjectFlags::empty(),
+            tile_index: 0,
+            x: 0,
+            y: 0,
+        }]);
+        // https://gbdev.io/pandocs/Rendering.html#obj-penalty-algorithm
+        // Citation: an OBJ with an OAM X position of 0 always incurs a 11-dot penalty
+        assert_eq!(get_timing(&state, None, objects), MINIMUM_TIME + 11);
     }
 }
