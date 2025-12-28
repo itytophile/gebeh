@@ -50,7 +50,12 @@ impl Renderer {
         }
         Self {
             background_pixel_fetcher: Default::default(),
-            rendering_state: Default::default(),
+            rendering_state: RenderingState {
+                is_shifting: true,
+                is_lcd_accepting_pixels: false,
+                is_sprite_fetching_enable: false,
+                fifos: Default::default(),
+            },
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
@@ -75,7 +80,6 @@ impl Renderer {
                 x: 1,
             };
             self.rendering_state.fifos.reset_background();
-            self.rendering_state.is_shifting = false;
             self.wx_condition = true;
             *window_y += 1;
         }
@@ -213,7 +217,7 @@ impl Fifos {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct RenderingState {
     is_shifting: bool,
     is_lcd_accepting_pixels: bool,
@@ -278,8 +282,6 @@ impl BackgroundPixelFetcher {
                 return;
             }
             rendering_state.fifos.replace_background(tile);
-            // we enable it here to start the very first shifting process for the "dummy tile"
-            rendering_state.is_shifting = true;
             // we will start another fetching process, too bad for the sprite fetcher
             rendering_state.is_sprite_fetching_enable = false;
             self.step = WaitingForScrollRegisters;
