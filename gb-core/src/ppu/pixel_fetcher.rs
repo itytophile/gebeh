@@ -507,8 +507,15 @@ impl SpritePixelFetcher {
             return;
         }
 
-        rendering_state.is_shifting = false;
-        rendering_state.is_lcd_accepting_pixels = false;
+        let is_obj_canceled = !state.lcd_control.contains(LcdControl::OBJ_ENABLE);
+
+        rendering_state.is_shifting = is_obj_canceled;
+        rendering_state.is_lcd_accepting_pixels = is_obj_canceled;
+
+        if is_obj_canceled {
+            objects.pop();
+            return;
+        }
 
         // stop if background fifo empty to not begin the fetch before the end of the dummy fetch
         if !rendering_state.is_sprite_fetching_enable || rendering_state.fifos.is_background_empty()
