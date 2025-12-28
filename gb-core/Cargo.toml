@@ -8,3 +8,6 @@ publish = false
 arrayvec = "0.7.6"
 bitflags = "2.10.0"
 log = "0.4.29"
+
+[dev-dependencies]
+env_logger = "0.11.8"

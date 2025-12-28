@@ -592,6 +592,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.10.0",
+ "env_logger",
  "log",
 ]
 

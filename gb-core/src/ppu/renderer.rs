@@ -147,14 +147,20 @@ pub struct RenderingState {
 
 #[cfg(test)]
 mod tests {
-    use crate::{WIDTH, ppu::renderer::Renderer, state::State};
+    use crate::{
+        WIDTH,
+        ppu::{LcdControl, renderer::Renderer},
+        state::State,
+    };
 
     // all timings are +2 compared to pandocs timings
-    fn get_timing(state: &State) -> u16 {
+    const MINIMUM_TIME: u16 = 174;
+
+    fn get_timing(state: &State, mut window_y: Option<u8>) -> u16 {
         let mut renderer = Renderer::new(Default::default(), 0);
         let mut dots = 0;
         while renderer.scanline.len() < usize::from(WIDTH) {
-            renderer.execute(state, 0, &mut None);
+            renderer.execute(state, dots, &mut window_y);
             dots += 1;
         }
         dots
@@ -162,6 +168,31 @@ mod tests {
 
     #[test]
     fn normal_timing() {
-        assert_eq!(get_timing(&State::new(&[])), 174);
+        assert_eq!(get_timing(&State::new(&[]), None), MINIMUM_TIME);
+    }
+
+    #[test]
+    fn with_window() {
+        let mut state = State::new(&[]);
+        state.lcd_control.insert(LcdControl::WINDOW_ENABLE);
+
+        for wx in 0..167 {
+            state.wx = wx;
+            // https://gbdev.io/pandocs/Rendering.html#mode-3-length
+            // Citation: After the last non-window pixel is emitted, a 6-dot penalty is incurred
+            assert_eq!(
+                get_timing(&state, Some(0)),
+                MINIMUM_TIME + 6,
+                "Bad timing with WX = {wx}"
+            );
+        }
+
+        // the window is not visible
+        state.wx = 167;
+        assert_eq!(
+            get_timing(&state, Some(0)),
+            MINIMUM_TIME,
+            "Bad timing with WX = 167"
+        );
     }
 }
