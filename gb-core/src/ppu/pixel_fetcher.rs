@@ -22,7 +22,10 @@ use core::num::{NonZero, NonZeroU8};
 use arrayvec::ArrayVec;
 
 use crate::{
-    ppu::{Color, ColorIndex, Either, ObjectAttribute, get_bg_win_tile},
+    ppu::{
+        Color, ColorIndex, Either, LcdControl, ObjectAttribute, ObjectFlags, get_bg_win_tile,
+        get_line_from_tile, get_object_tile,
+    },
     state::{Scrolling, State, VIDEO_RAM},
 };
 
@@ -429,9 +432,106 @@ impl BackgroundPixelFetcher {
     }
 }
 
-#[derive(Default)]
-struct SpritePixelFetcher;
+enum SpritePixelFetcherStep {
+    // we have access to the object tile_index so it's useless to have it here
+    FetchingTileLow { delay: u8 },
+    FetchingTileHigh { one_dot_delay: bool, tile_low: u8 },
+}
+
+struct SpritePixelFetcher {
+    step: SpritePixelFetcherStep,
+}
+
+impl Default for SpritePixelFetcher {
+    fn default() -> Self {
+        Self {
+            step: SpritePixelFetcherStep::FetchingTileLow { delay: 0 },
+        }
+    }
+}
 
 impl SpritePixelFetcher {
-    fn execute(&mut self, state: &mut RenderingState) {}
+    // the cursor is in the space as the object coordinates. So cursor = 0 <=> scanline x = -8
+    fn execute(
+        &mut self,
+        rendering_state: &mut RenderingState,
+        cursor: u8,
+        objects: &mut ArrayVec<ObjectAttribute, 10>,
+        state: &State,
+    ) {
+        let Some(obj) = objects.last() else {
+            return;
+        };
+
+        if obj.x != cursor || rendering_state.fifos.is_background_empty() {
+            return;
+        }
+
+        rendering_state.is_shifting = false;
+        rendering_state.is_lcd_accepting_pixels = false;
+
+        // stop if background fifo empty to not begin the fetch before the end of the dummy fetch
+        if !rendering_state.is_sprite_fetching_enable || rendering_state.fifos.is_background_empty()
+        {
+            return;
+        }
+
+        use SpritePixelFetcherStep::*;
+
+        // 0 -> fetch tile index
+        // 1 -> fetch tile index
+        // 2 -> fetch tile low
+        // 3 -> fetch tile low
+        // 4 -> fetch tile high
+        // 5 -> fetch tile high (end)
+
+        self.step = match self.step {
+            FetchingTileLow { delay: 3 } => FetchingTileHigh {
+                one_dot_delay: false,
+                tile_low: get_object_tile_line(state, obj)[0],
+            },
+            FetchingTileLow { delay } => FetchingTileLow { delay: delay + 1 },
+            FetchingTileHigh {
+                one_dot_delay: false,
+                tile_low,
+            } => FetchingTileHigh {
+                one_dot_delay: true,
+                tile_low,
+            },
+            FetchingTileHigh {
+                one_dot_delay: true,
+                tile_low,
+            } => {
+                // we have to fetch the tile line in two steps because the LcdControl::OBJ_SIZE
+                // can be changed between fetches (don't know if it works exactly like this)
+                let tile_high = get_object_tile_line(state, obj)[1];
+                rendering_state.is_shifting = true;
+                rendering_state.is_lcd_accepting_pixels = true;
+                rendering_state.fifos.load_sprite(
+                    [tile_low, tile_high],
+                    obj.flags.contains(ObjectFlags::PRIORITY),
+                    obj.flags.contains(ObjectFlags::DMG_PALETTE),
+                );
+                objects.pop();
+                FetchingTileLow { delay: 0 }
+            }
+        };
+    }
+}
+
+fn get_object_tile_line(state: &State, obj: &ObjectAttribute) -> [u8; 2] {
+    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
+    let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
+    let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
+        + (is_big && (state.ly + 8 >= obj.y) != y_flip) as u8;
+    let tile = get_object_tile(
+        state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
+            .try_into()
+            .unwrap(),
+        tile_index,
+    );
+    let mut y = (state.ly + 16 - obj.y) % 8;
+    y = if y_flip { 7 - y } else { y };
+    let line = get_line_from_tile(tile, y);
+    line
 }
