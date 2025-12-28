@@ -17,8 +17,6 @@
 // But what about the priority flag ? (https://gbdev.io/pandocs/OAM.html#byte-3--attributesflags) we will keep a fifo for that
 // and try to guess along the way.
 
-use core::num::{NonZero, NonZeroU8};
-
 use arrayvec::ArrayVec;
 
 use crate::{
@@ -218,8 +216,7 @@ impl Renderer {
             state.lcd_control.get_bg_tile_map_address(),
             state.get_scrolling(),
             state.ly,
-            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
-            dots_count,
+            !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES)
         );
         self.sprite_pixel_fetcher.execute(
             i16::from(self.rendering_state.fifos.shifted_count)
@@ -229,7 +226,9 @@ impl Renderer {
             state,
             dots_count,
         );
+        
         if self.rendering_state.is_lcd_accepting_pixels {
+            assert!(!self.rendering_state.fifos.is_background_empty());
             log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
@@ -378,7 +377,6 @@ impl BackgroundPixelFetcher {
         scrolling: Scrolling,
         y: u8,
         is_signed_addressing: bool,
-        dots_count: u16,
     ) {
         use BackgroundPixelFetcherStep::*;
         if let Ready(tile) = self.step {
@@ -457,7 +455,6 @@ impl BackgroundPixelFetcher {
                     tile_index,
                     is_signed_addressing,
                 );
-                assert_ne!(self.x, u8::MAX, "will overflow, dots_count: {dots_count}");
                 self.x += 1;
                 Ready([
                     tile_low,
