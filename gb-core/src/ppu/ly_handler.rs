@@ -32,7 +32,6 @@ impl StateMachine for LyHandler {
                 if self.logical_ly != 153 {
                     // the increment is handled differently on line 153
                     state.ly += 1;
-                    // log::warn!("{cycle_count}: LY is now {}", state.ly);
                 }
                 self.logical_ly = (self.logical_ly + 1) % 154;
             }

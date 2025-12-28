@@ -31,7 +31,7 @@ impl SpriteFetcher {
         rendering_state: &mut RenderingState,
         objects: &mut ArrayVec<ObjectAttribute, 10>,
         state: &State,
-        dots_count: u16,
+        _: u16,
     ) {
         use SpriteFetcher::*;
 
@@ -72,8 +72,6 @@ impl SpriteFetcher {
         {
             return;
         }
-
-        log::warn!("{dots_count}: sprite fetching for object at {}", obj.x);
 
         // 0 -> fetch tile index
         // 1 -> fetch tile index

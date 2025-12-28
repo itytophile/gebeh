@@ -193,7 +193,6 @@ impl Mbc5 {
             }
             // 0x4000-0x5FFF - RAM bank selection
             0x4000..=0x5fff => {
-                // log::warn!("RAM BANK SELECTION 0x{value:02x}");
                 let ram_bank = value & 0x0f;
 
                 if ram_bank >= self.ram_bank_count {

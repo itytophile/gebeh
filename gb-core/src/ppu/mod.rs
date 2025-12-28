@@ -201,7 +201,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, cycle_count: u64) {
+    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
         match self {
             Ppu::OamScan {
                 window_y,
@@ -242,12 +242,6 @@ impl Ppu {
                 ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
-                    log::warn!("Mode 3 took {} dots", dots_count);
-                    // assert!(
-                    //     *objects_count == 0 || *dots_count >= 178,
-                    //     "If there is at least one object then mode 3 must take at least 178 dots"
-                    // );
-
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                         window_y: *window_y,
@@ -263,12 +257,10 @@ impl Ppu {
                 ..
             } if remaining_dots == dots_count => {
                 *self = if state.ly == 144 {
-                    // log::warn!("{cycle_count}: Entering vblank");
                     Ppu::VerticalBlankScanline {
                         remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
                     }
                 } else {
-                    log::warn!("{cycle_count}: Entering oam scan");
                     Ppu::OamScan {
                         window_y: *window_y,
                         scx_at_scanline_start: state.scx,
@@ -280,7 +272,6 @@ impl Ppu {
             Ppu::VerticalBlankScanline {
                 remaining_dots: 0, ..
             } => {
-                log::warn!("{cycle_count}: Entering oam scan");
                 *self = Ppu::OamScan {
                     window_y: Default::default(),
                     scx_at_scanline_start: state.scx,
@@ -323,13 +314,12 @@ impl From<Color> for [u8; 4] {
     }
 }
 
-fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, cycle_count: u64) {
+fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, _: u64) {
     assert!(matches!(
         mode_interrupt,
         LcdStatus::HBLANK_INT | LcdStatus::OAM_INT | LcdStatus::VBLANK_INT
     ));
     if state.lcd_status.contains(mode_interrupt) {
-        log::warn!("{cycle_count}: Requesting {mode_interrupt:?}");
         state.interrupt_flag.insert(Ints::LCD);
     }
 }

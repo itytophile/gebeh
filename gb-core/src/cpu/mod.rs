@@ -256,14 +256,9 @@ impl Cpu {
                 }
             }
             NoRead(Nop) => {}
-            NoRead(Store8Bit(register)) => {
-                // if register == Register8Bit::A {
-                //     log::warn!("Setting A to 0x{:02x}", self.lsb);
-                // }
-                self.set_8bit_register(register, self.lsb);
-            }
+            NoRead(Store8Bit(register)) => self.set_8bit_register(register, self.lsb),
             NoRead(Store16Bit(register)) => {
-                self.set_16bit_register(register, u16::from_be_bytes([self.msb, self.lsb]));
+                self.set_16bit_register(register, u16::from_be_bytes([self.msb, self.lsb]))
             }
             NoRead(Xor8Bit(register)) => {
                 self.a ^= self.get_8bit_register(register);
@@ -311,9 +306,6 @@ impl Cpu {
                 );
             }
             NoRead(Inc(register)) => {
-                if register == Register8Bit::B {
-                    log::warn!("{cycle_count}: Incrementing B")
-                }
                 let incremented = self.inc(self.get_8bit_register(register));
                 self.set_8bit_register(register, incremented);
             }
@@ -340,17 +332,7 @@ impl Cpu {
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self);
-                // log::warn!(
-                //     "Set PC to ${:04x}",
-                //     u16::from_be_bytes([self.msb, self.lsb])
-                // );
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
-                if self.pc == 0x0416 {
-                    log::warn!("PC is at setup_and_wait");
-                }
-                if self.pc == 0x03fe {
-                    log::warn!("PC is at standard_delay");
-                }
             }
             NoRead(Load { to, from }) => {
                 self.set_8bit_register(to, self.get_8bit_register(from));
@@ -438,15 +420,9 @@ impl Cpu {
                 flags.set(Flags::C, carry);
                 self.a = result;
             }
-            NoRead(Di) => {
-                log::warn!("{cycle_count}: Executing DI");
-                self.ime = false
-            }
+            NoRead(Di) => self.ime = false,
             NoRead(Ei) => self.enable_ime(),
-            NoRead(DecPc) => {
-                log::warn!("{cycle_count}: Dec PC");
-                self.pc -= 1
-            }
+            NoRead(DecPc) => self.pc -= 1,
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
                 mmu.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self);
                 self.pc = u16::from(address);
@@ -547,14 +523,7 @@ impl Cpu {
                 self,
             ),
             // doesn't halt if there are interrupts https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#halt
-            NoRead(Halt) => {
-                log::warn!(
-                    "{cycle_count}: HALT {} {:?}",
-                    interrupts_to_execute.is_empty(),
-                    self.ime
-                );
-                self.is_halted = interrupts_to_execute.is_empty();
-            }
+            NoRead(Halt) => self.is_halted = interrupts_to_execute.is_empty(),
             NoRead(Swap8Bit(register)) => {
                 let result = self.swap(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
@@ -578,14 +547,6 @@ impl Cpu {
                 let a = self.a;
                 let value = self.get_8bit_register(register);
                 let (result, carry) = a.overflowing_sub(value);
-                if register == Register8Bit::E || register == Register8Bit::D && self.pc <= 0x0187 {
-                    log::warn!(
-                        "{cycle_count}: CP {register:?} (0x{:02x}) and A (0x{:02x}) with scx {}",
-                        value,
-                        self.a,
-                        state.scx
-                    );
-                }
                 let flags = &mut self.f;
                 flags.set(Flags::Z, result == 0);
                 flags.insert(Flags::N);
@@ -921,7 +882,6 @@ impl StateMachine for Cpu {
             }
             self.is_halted = false;
             self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
-            log::warn!("{cycle_count}: Exiting HALT mode");
         }
 
         let mmu = MmuRead(state);
@@ -932,10 +892,6 @@ impl StateMachine for Cpu {
             self.ime = false;
             // no need to set is_dispatching_interrupt to false
             use NoReadInstruction::*;
-            log::warn!(
-                "{cycle_count}: Interrupt handling ${interrupts_to_execute:?} ${:?}",
-                state.lcd_status
-            );
             self.instruction_register.0 = vec([
                 Nop.into(),
                 FinalStepInterruptDispatch.into(),
@@ -953,11 +909,6 @@ impl StateMachine for Cpu {
             head
         };
 
-        // if cycle_count > 5981848 && cycle_count < 5999410 {
-        //     log::warn!("{cycle_count}: Will execute {inst:?}");
-
-        // }
-
         // fetch step
         if self.instruction_register.0.is_empty() {
             self.is_dispatching_interrupt = self.ime
@@ -967,27 +918,6 @@ impl StateMachine for Cpu {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode = mmu.read(address, cycle_count, self);
-                    // D vaut deux au lieu de 1
-                    // if address == 0x4ab4 {
-                    //     panic!("fail")
-                    // }
-                    // log::warn!("${address:04x} => ${opcode:2x}");
-                    if opcode == 0x77 {
-                        log::warn!("${address:04x} => LD (HL), A");
-                    }
-                    if opcode == 0xff {
-                        log::warn!("${address:04x} => RST 0x38");
-                    }
-                    if opcode == 0xf3 {
-                        log::warn!("{cycle_count}: ${address:04x} => DI");
-                    }
-                    // if opcode == 0x00 {
-                    //     log::warn!("{cycle_count}: ${address:04x} => NOP");
-                    // }
-                    if opcode == 0xfb {
-                        log::warn!("{cycle_count}: ${address:04x} => EI");
-                    }
-
                     (address.wrapping_add(1), opcode)
                 }
                 SetPc::NoIncrement => (self.pc, mmu.read(self.pc, cycle_count, self)),

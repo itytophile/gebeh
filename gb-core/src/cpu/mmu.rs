@@ -3,7 +3,7 @@ use crate::{cpu::Cpu, ic::Ints, ppu::LcdControl, state::*};
 pub struct MmuRead<'a>(pub &'a State);
 
 impl MmuRead<'_> {
-    pub fn read(&self, index: u16, cycle_count: u64, cpu: &Cpu) -> u8 {
+    pub fn read(&self, index: u16, _: u64, cpu: &Cpu) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
@@ -31,14 +31,7 @@ impl MmuRead<'_> {
             SB => self.0.sb,
             SC => self.0.sc.bits() | 0b01111110,
             0xff03 => 0xff,
-            DIV => {
-                log::warn!(
-                    "{cycle_count}: Reading div 0x{:04x} 0x{:02x}",
-                    self.0.system_counter,
-                    u8::try_from(self.0.system_counter >> 6 & 0xff).unwrap()
-                );
-                (self.0.system_counter >> 6 & 0xff).try_into().unwrap()
-            }
+            DIV => (self.0.system_counter >> 6 & 0xff).try_into().unwrap(),
             TIMER_COUNTER => self.0.timer_counter,
             TIMER_MODULO => self.0.timer_modulo,
             TIMER_CONTROL => self.0.timer_control | 0b11111000,
@@ -75,16 +68,10 @@ impl MmuRead<'_> {
             AUDIO_MASTER_CONTROL => self.0.audio_master_control | 0b01110000,
             0xff27..WAVE => 0xff,
             LCD_CONTROL => self.0.lcd_control.bits(),
-            LCD_STATUS => {
-                log::warn!("{cycle_count}: Reading status {:?}", self.0.lcd_status);
-                self.0.lcd_status.bits() | 0b10000000
-            }
+            LCD_STATUS => self.0.lcd_status.bits() | 0b10000000,
             SCY => self.0.scy,
             SCX => self.0.scx,
-            LY => {
-                // log::warn!("{cycle_count}: Reading LY");
-                self.0.ly
-            }
+            LY => self.0.ly,
             LYC => self.0.lyc,
             DMA => self.0.dma_register,
             BGP => self.0.bgp_register,
@@ -93,10 +80,7 @@ impl MmuRead<'_> {
             WY => self.0.wy,
             WX => self.0.wx,
             0xff4c => 0xff,
-            0xff4d => {
-                log::warn!("Reading $ff4d (Prepare speed switch)");
-                0xff
-            }
+            0xff4d => 0xff,
             0xff4e => 0xff,
             0xff4f => 0xff,
             BOOT_ROM_MAPPING_CONTROL => 0xff,
@@ -111,7 +95,7 @@ impl MmuRead<'_> {
 pub struct MmuWrite<'a>(pub &'a mut State);
 
 impl MmuWrite<'_> {
-    pub fn write(&mut self, index: u16, value: u8, cycle_count: u64, cpu: &mut Cpu) {
+    pub fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu) {
         if self.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
@@ -145,10 +129,7 @@ impl MmuWrite<'_> {
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00
-            DIV => {
-                log::warn!("{cycle_count}: Writing div");
-                self.0.system_counter = 0
-            }
+            DIV => self.0.system_counter = 0,
             TIMER_COUNTER => self.0.timer_counter = value,
             TIMER_MODULO => self.0.timer_modulo = value,
             TIMER_CONTROL => self.0.timer_control = value,
@@ -186,14 +167,8 @@ impl MmuWrite<'_> {
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
-            SCY => {
-                // println!("SCY {value:x}");
-                self.0.scy = value
-            }
-            SCX => {
-                log::warn!("{cycle_count}: Setting scx to 0x{value:02x}");
-                self.0.scx = value
-            }
+            SCY => self.0.scy = value,
+            SCX => self.0.scx = value,
             LY => {} // read only
             LYC => self.0.lyc = value,
             DMA => {

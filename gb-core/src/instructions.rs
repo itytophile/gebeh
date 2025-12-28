@@ -599,10 +599,7 @@ pub fn get_instructions(opcode: u8, is_cb_mode: bool) -> InstructionsAndSetPc {
             ]),
         ),
         0x0f => (Rrca.into(), Default::default()),
-        0x10 => {
-            log::warn!("stop");
-            (Stop.into(), Default::default())
-        }
+        0x10 => (Stop.into(), Default::default()),
         0x11 => ld_rr_n(DE),
         0x12 => ld_rr_r(DE, A),
         0x13 => inc_rr(DE),

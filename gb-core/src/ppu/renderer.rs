@@ -42,14 +42,6 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(objects: ArrayVec<ObjectAttribute, 10>, scx_at_scanline_start: u8) -> Self {
-        log::warn!(
-            "Will render with {} objects and initial scrolling of {}",
-            objects.len(),
-            scx_at_scanline_start
-        );
-        if let Some(obj) = objects.last() {
-            log::warn!("First object at {}", obj.x);
-        }
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
@@ -124,7 +116,6 @@ impl Renderer {
         }
 
         if cursor >= 8 {
-            log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
                 state.obp0,
@@ -133,7 +124,6 @@ impl Renderer {
             ));
         }
 
-        log::warn!("{dots_count}: shifting");
         self.rendering_state.fifos.shift();
     }
 }
