@@ -115,10 +115,12 @@ impl Renderer {
             dots_count,
         );
 
+        if self.rendering_state.fifos.is_background_empty() {
+            return;
+        }
+
         // background can be empty if window is loading for the first time
-        if self.rendering_state.is_lcd_accepting_pixels
-            && !self.rendering_state.fifos.is_background_empty()
-        {
+        if self.rendering_state.is_lcd_accepting_pixels {
             log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
