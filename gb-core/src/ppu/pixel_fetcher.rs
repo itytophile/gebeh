@@ -201,6 +201,7 @@ impl Renderer {
     }
 
     pub fn execute(&mut self, state: &State) {
+        // TODO revoir coordonnées x des objets avec le scroll
         self.rendering_state.is_lcd_accepting_pixels =
             self.rendering_state.fifos.shifted_count >= 8 + self.scx_at_scanline_start;
         // those systems can run "concurrently"
@@ -219,6 +220,7 @@ impl Renderer {
                 state.bgp_register,
                 state.obp0,
                 state.obp1,
+                state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE),
             ));
         }
         if self.rendering_state.is_shifting {
@@ -280,12 +282,13 @@ impl Fifos {
         self.bg1 = tile[1];
     }
 
-    fn render_pixel(&self, bgp: u8, obp0: u8, obp1: u8) -> Color {
+    fn render_pixel(&self, bgp: u8, obp0: u8, obp1: u8, is_background_enabled: bool) -> Color {
         let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
         let sp_color_index = ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0);
 
-        if sp_color_index == ColorIndex::Zero
-            || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero)
+        if is_background_enabled
+            && (sp_color_index == ColorIndex::Zero
+                || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero))
         {
             return bg_color_index.get_color(bgp);
         }

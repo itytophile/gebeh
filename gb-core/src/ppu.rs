@@ -354,6 +354,7 @@ impl Ppu {
                 ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
+                    assert!(*dots_count == 172);
                     log::warn!("Mode 3 took {} dots", dots_count);
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
@@ -506,7 +507,10 @@ impl StateMachine for Ppu {
                     state.set_ppu_mode(LcdStatus::OAM_SCAN);
                 }
 
-                if *dots_count % 2 == 0 && objects.len() < objects.capacity() {
+                if state.lcd_control.contains(LcdControl::OBJ_ENABLE)
+                    && *dots_count % 2 == 0
+                    && objects.len() < objects.capacity()
+                {
                     let base = usize::from(*dots_count * 2);
                     let obj = ObjectAttribute::from(
                         <[u8; 4]>::try_from(&state.oam[base..base + 4]).unwrap(),
