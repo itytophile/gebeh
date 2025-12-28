@@ -1,6 +1,8 @@
+mod background_fetcher;
 mod fifos;
 mod ly_handler;
-mod pixel_fetcher;
+mod renderer;
+mod sprite_fetcher;
 
 use core::num::NonZeroU8;
 
@@ -9,7 +11,7 @@ use arrayvec::ArrayVec;
 use crate::{
     StateMachine,
     ic::Ints,
-    ppu::{ly_handler::LyHandler, pixel_fetcher::Renderer},
+    ppu::{ly_handler::LyHandler, renderer::Renderer},
     state::{LcdStatus, State},
 };
 
