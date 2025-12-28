@@ -21,7 +21,7 @@ impl LyHandler {
 }
 
 impl StateMachine for LyHandler {
-    fn execute(&mut self, state: &mut crate::state::State, cycle_count: u64) {
+    fn execute(&mut self, state: &mut crate::state::State, _: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }

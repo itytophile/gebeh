@@ -1,7 +1,7 @@
 mod ly_handler;
 mod pixel_fetcher;
 
-use core::{num::NonZeroU8, u16};
+use core::num::NonZeroU8;
 
 use arrayvec::ArrayVec;
 
@@ -9,7 +9,7 @@ use crate::{
     StateMachine,
     ic::Ints,
     ppu::{ly_handler::LyHandler, pixel_fetcher::Renderer},
-    state::{LcdStatus, Scrolling, State, VIDEO_RAM},
+    state::{LcdStatus, State},
 };
 
 #[derive(Clone)]
@@ -28,7 +28,6 @@ pub enum Ppu {
         dots_count: u16,
         window_y: Option<u8>,
         renderer: Renderer,
-        objects_count: usize,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
@@ -142,11 +141,6 @@ pub fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
     ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
 }
 
-#[must_use]
-fn get_color_from_tile(tile: &Tile, x: u8, y: u8) -> ColorIndex {
-    get_color_from_line(get_line_from_tile(tile, y), x)
-}
-
 // https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
 #[must_use]
 fn get_object_tile(vram: &TileVramObj, index: u8) -> &Tile {
@@ -197,97 +191,6 @@ impl From<[u8; 4]> for ObjectAttribute {
     }
 }
 
-// Pixel FIFO
-
-#[derive(Clone, Copy)]
-struct Window {
-    x: u8,
-    internal_y_window_counter: Option<u8>,
-}
-#[derive(Clone, Copy)]
-struct Scanline {
-    // 0 <= x < 160
-    x: u8,
-    // 0 <= y < 144
-    y: u8,
-}
-
-// A pixel inside the 256x256 pixels picture held by the tile map
-#[derive(Clone, Copy, Debug)]
-struct PicturePixel {
-    x: u8,
-    y: u8,
-}
-
-impl PicturePixel {
-    fn get_relative_tile_map_index(self) -> u16 {
-        u16::from(self.x / 8) + u16::from(self.y) / 8 * 32 // don't simplify this product lol
-    }
-}
-
-// TODO If WX is set to 166, the window will span the entirety of the following scanline.
-
-// Window is just a static image that can be moved on the screen
-// so it's always refering to the same tiles
-
-// https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
-// The Window is visible (if enabled) when both coordinates are in the ranges WX=0..166, WY=0..143 respectively.
-// Values WX=7, WY=0 place the Window at the top left of the screen, completely covering the background.
-
-// Background is not a static image, it can scroll over the tiles.
-
-// https://gbdev.io/pandocs/Tile_Maps.html#tile-indexes
-// Since one tile has 8×8 pixels, each map holds a 256×256 pixels picture.
-// Only 160×144 of those pixels are displayed on the LCD at any given time.
-
-// https://gbdev.io/pandocs/pixel_fifo.html#get-tile
-#[must_use]
-fn get_picture_pixel_and_tile_map_address(
-    lcdc: LcdControl,
-    scanline: Scanline,
-    window: Window,
-    background: Scrolling,
-) -> (PicturePixel, u16) {
-    assert!(scanline.x < 160);
-    assert!(scanline.y < 144);
-
-    if let Some(y) = window.internal_y_window_counter {
-        // is in window
-        (
-            PicturePixel {
-                x: scanline.x + 7 - window.x, // no overflow because wx_condition was triggered
-                y,
-            },
-            if lcdc.contains(LcdControl::WINDOW_TILE_MAP) {
-                0x9c00
-            } else {
-                0x9800
-            },
-        )
-    } else {
-        (
-            PicturePixel {
-                x: scanline.x.wrapping_add(background.x),
-                y: scanline.y.wrapping_add(background.y),
-            },
-            if lcdc.contains(LcdControl::BG_TILE_MAP) {
-                0x9c00
-            } else {
-                0x9800
-            },
-        )
-    }
-}
-
-#[must_use]
-fn get_tile_map_address_bg(lcdc: LcdControl) -> u16 {
-    if lcdc.contains(LcdControl::BG_TILE_MAP) {
-        0x9c00
-    } else {
-        0x9800
-    }
-}
-
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
 impl Ppu {
@@ -312,7 +215,6 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 objects,
             } => {
-                let objects_count = objects.len();
                 let mut objects_to_sort: ArrayVec<_, 10> =
                     objects.iter().copied().enumerate().collect();
                 // https://gbdev.io/pandocs/OAM.html#drawing-priority
@@ -337,14 +239,12 @@ impl Ppu {
                     dots_count: 0,
                     renderer,
                     window_y: *window_y,
-                    objects_count,
                 }
             }
             Ppu::Drawing {
                 dots_count,
                 renderer: Renderer { scanline, .. },
                 window_y,
-                objects_count,
                 ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
@@ -561,94 +461,6 @@ impl StateMachine for Ppu {
     }
 }
 
-fn get_color_bg_win(
-    scanline: Scanline,
-    state: &State,
-    internal_y_window_counter: Option<u8>,
-) -> ColorIndex {
-    let (picture_pixel, tile_map_address) = get_picture_pixel_and_tile_map_address(
-        state.lcd_control,
-        scanline,
-        Window {
-            x: state.wx,
-            internal_y_window_counter,
-        },
-        Scrolling {
-            x: state.scx,
-            y: state.scy,
-        },
-    );
-    let tile_index = state.video_ram
-        [usize::from(tile_map_address - VIDEO_RAM + picture_pixel.get_relative_tile_map_index())];
-    let tile = get_bg_win_tile(
-        state.video_ram[..0x1800].try_into().unwrap(),
-        tile_index,
-        !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
-    );
-
-    get_color_from_tile(tile, picture_pixel.x % 8, picture_pixel.y % 8)
-}
-
-// https://gbdev.io/pandocs/OAM.html#selection-priority
-fn get_at_most_ten_objects_on_ly(ly: u8, state: &State) -> impl Iterator<Item = ObjectAttribute> {
-    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
-    state
-        .oam
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .map(|slice| ObjectAttribute::from(*slice))
-        .filter(move |obj| obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 }))
-        .take(10)
-}
-
-// emit the color and the object priority flag for x on the current scanline. Can emit multiple time the same x.
-// If multiple x emitted, the lastest takes priority. So don't think and write to the scanline in the same order as the
-// x are emitted.
-fn get_colors(
-    objects_on_ly: impl IntoIterator<Item = ObjectAttribute>,
-    ly: u8,
-    state: &State,
-) -> impl Iterator<Item = (u8, ObjectAttribute, ColorIndex)> {
-    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
-    // Citation:
-    // In Non-CGB mode, the smaller the X coordinate, the higher the priority.
-    // When X coordinates are identical, the object located first in OAM has higher priority.
-    let mut objects_on_ly: ArrayVec<_, 10> = objects_on_ly.into_iter().enumerate().collect();
-    objects_on_ly.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-    // rev to emit the most prioritary the lastest
-    objects_on_ly.into_iter().rev().flat_map(move |(_, obj)| {
-        // if is_big then the tile_index must be corrected to be always even
-        // then we check if scanline.y reaches the second tile
-        let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
-        let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
-            + (is_big && (ly + 8 >= obj.y) != y_flip) as u8;
-        let tile = get_object_tile(
-            state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
-                .try_into()
-                .unwrap(),
-            tile_index,
-        );
-        let mut y = (ly + 16 - obj.y) % 8;
-        y = if y_flip { 7 - y } else { y };
-        let line = get_line_from_tile(tile, y);
-        (0..8).filter_map(move |x| {
-            Some((
-                (obj.x + x).checked_sub(8)?,
-                obj,
-                get_color_from_line(
-                    line,
-                    if obj.flags.contains(ObjectFlags::X_FLIP) {
-                        7 - x
-                    } else {
-                        x
-                    },
-                ),
-            ))
-        })
-    })
-}
-
 #[derive(Clone)]
 pub struct Speeder<T: StateMachine>(pub T, pub NonZeroU8);
 
@@ -668,18 +480,4 @@ pub fn get_ppu_bundle() -> PpuBundle {
         LyHandler::default(),
         Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
     )
-}
-
-// about very precise lcd timing
-// http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt
-//
-// about the discarded tile fetch
-// Citation: The first access is just thrown away and is never used. It's here, because it helps during windowing
-//
-//
-
-#[derive(Clone)]
-pub enum Either<T, U> {
-    Left(T),
-    Right(U),
 }
