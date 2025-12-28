@@ -211,4 +211,19 @@ mod tests {
         // Citation: an OBJ with an OAM X position of 0 always incurs a 11-dot penalty
         assert_eq!(get_timing(&state, None, objects), MINIMUM_TIME + 11);
     }
+
+    #[test]
+    fn with_scroll_x() {
+        let mut state = State::new(&[]);
+
+        for scx in 0..=u8::MAX {
+            state.scx = scx;
+            // https://gbdev.io/pandocs/Rendering.html#mode-3-length
+            // Citation: At the very beginning of Mode 3, rendering is paused for SCX % 8 dots
+            assert_eq!(
+                get_timing(&state, None, Default::default()),
+                MINIMUM_TIME + u16::from(scx % 8)
+            );
+        }
+    }
 }

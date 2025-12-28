@@ -37,6 +37,13 @@ fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_
         .unwrap()
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DebugMode {
+    None,
+    Scanline,
+    Pixel(usize), // previous scanline len
+}
+
 fn main() {
     color_eyre::install().unwrap();
     env_logger::init();
@@ -138,7 +145,7 @@ fn main() {
 
     let mut cycle_count: u64 = 0;
 
-    let mut is_scanline_debug = false;
+    let mut debug_mode = DebugMode::None;
 
     event_loop
         .run(|event, elwt| match event {
@@ -157,7 +164,7 @@ fn main() {
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut cycle_count,
-                        is_scanline_debug,
+                        &mut debug_mode,
                     );
                     pixels.render().unwrap();
                 }
@@ -223,7 +230,30 @@ fn main() {
                         ..
                     },
                 ..
-            } => is_scanline_debug = !is_scanline_debug,
+            } => {
+                debug_mode = match debug_mode {
+                    DebugMode::Scanline => DebugMode::None,
+                    _ => DebugMode::Scanline,
+                }
+            }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                physical_key: PhysicalKey::Code(KeyCode::KeyP),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                debug_mode = match debug_mode {
+                    DebugMode::Pixel(_) => DebugMode::None,
+                    _ => DebugMode::Pixel(0),
+                }
+            }
             Event::WindowEvent {
                 event:
                     WindowEvent::KeyboardInput {
@@ -267,14 +297,14 @@ fn draw_emulator(
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
     cycle_count: &mut u64,
-    is_scanline_debug: bool,
+    debug_mode: &mut DebugMode,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
         emulator.execute(state, *cycle_count);
         *cycle_count += 1;
 
-        if is_scanline_debug
+        if *debug_mode == DebugMode::Scanline
             && let Ppu::Drawing {
                 dots_count: 4,
                 renderer,
@@ -282,22 +312,46 @@ fn draw_emulator(
             } = emulator.get_ppu()
         {
             log::info!(
-                "LY = {}, SCX = {}, first pixels to skip = {}",
+                "LY = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
                 state.ly,
                 state.scx,
+                state.scy,
                 renderer.first_pixels_to_skip
             );
         }
 
-        let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
-            continue;
+        let scanline = match debug_mode {
+            DebugMode::Pixel(previous_len) => {
+                let Ppu::Drawing { renderer, .. } = emulator.get_ppu() else {
+                    continue;
+                };
+                if renderer.scanline.len() == *previous_len {
+                    continue;
+                }
+                log::info!(
+                    "LY = {:03}, len = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
+                    state.ly,
+                    renderer.scanline.len(),
+                    state.scx,
+                    state.scy,
+                    renderer.first_pixels_to_skip
+                );
+                *previous_len = renderer.scanline.len();
+                renderer.scanline.as_slice()
+            }
+            _ => {
+                let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
+                    continue;
+                };
+                scanline.as_slice()
+            }
         };
 
         let base = usize::from(state.ly) * usize::from(WIDTH);
         for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
             *pixel = (*color).into();
         }
-        if state.ly == HEIGHT - 1 || is_scanline_debug {
+        if state.ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
             break;
         }
     }
