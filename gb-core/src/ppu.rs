@@ -1,7 +1,7 @@
 mod ly_handler;
 mod pixel_fetcher;
 
-use core::num::NonZeroU8;
+use core::{num::NonZeroU8, u16};
 
 use arrayvec::ArrayVec;
 
@@ -38,6 +38,7 @@ pub enum Ppu {
         dots_count: u16,
         current_frame_data: CurrentFrameData,
         renderer: Renderer,
+        objects_count: usize,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
@@ -321,6 +322,7 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 objects,
             } => {
+                let objects_count = objects.len();
                 let mut objects_to_sort: ArrayVec<_, 10> =
                     objects.iter().copied().enumerate().collect();
                 // https://gbdev.io/pandocs/OAM.html#drawing-priority
@@ -338,24 +340,30 @@ impl Ppu {
                 // the renderer implementation takes 174 dots to complete the minimum time to draw a scanline
                 // however, according to several sources and rom tests, Mode 3 is only 172 dots long.
                 // Besides, Pandocs says that Mode 3 starts drawing after 12 dots. The renderer starts drawing after 14 dots.
-                renderer.execute(state);
-                renderer.execute(state);
+                renderer.execute(state, u16::MAX - 1);
+                renderer.execute(state, u16::MAX);
 
                 *self = Ppu::Drawing {
                     dots_count: 0,
                     renderer,
                     current_frame_data: *current_frame_data,
+                    objects_count,
                 }
             }
             Ppu::Drawing {
                 dots_count,
                 renderer: Renderer { scanline, .. },
                 current_frame_data,
+                objects_count,
                 ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
-                    assert!(*dots_count == 172);
                     log::warn!("Mode 3 took {} dots", dots_count);
+                    // assert!(
+                    //     *objects_count == 0 || *dots_count >= 178,
+                    //     "If there is at least one object then mode 3 must take at least 178 dots"
+                    // );
+
                     *self = Ppu::HorizontalBlank {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                         current_frame_data: CurrentFrameData {
@@ -538,7 +546,7 @@ impl StateMachine for Ppu {
                     state.set_ppu_mode(LcdStatus::DRAWING);
                 }
 
-                renderer.execute(state);
+                renderer.execute(state, *dots_count);
 
                 *dots_count += 1;
             }

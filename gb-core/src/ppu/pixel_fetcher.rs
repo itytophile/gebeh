@@ -183,27 +183,34 @@ pub struct Renderer {
     background_pixel_fetcher: BackgroundPixelFetcher,
     sprite_pixel_fetcher: SpritePixelFetcher,
     rendering_state: RenderingState,
-    objects: ArrayVec<ObjectAttribute, 10>,
+    pub objects: ArrayVec<ObjectAttribute, 10>,
     pub scanline: ArrayVec<Color, 160>,
-    scx_at_scanline_start: u8,
+    first_pixels_to_skip: u8,
 }
 
 impl Renderer {
     pub fn new(objects: ArrayVec<ObjectAttribute, 10>, scx_at_scanline_start: u8) -> Self {
+        log::warn!(
+            "Will render with {} objects and initial scrolling of {}",
+            objects.len(),
+            scx_at_scanline_start
+        );
+        if let Some(obj) = objects.last() {
+            log::warn!("First object at {}", obj.x);
+        }
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: Default::default(),
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
-            scx_at_scanline_start,
+            first_pixels_to_skip: scx_at_scanline_start % 8,
         }
     }
 
-    pub fn execute(&mut self, state: &State) {
-        // TODO revoir coordonnées x des objets avec le scroll
+    pub fn execute(&mut self, state: &State, dots_count: u16) {
         self.rendering_state.is_lcd_accepting_pixels =
-            self.rendering_state.fifos.shifted_count >= 8 + self.scx_at_scanline_start;
+            self.rendering_state.fifos.shifted_count >= 8 + self.first_pixels_to_skip;
         // those systems can run "concurrently"
         self.background_pixel_fetcher.execute(
             &mut self.rendering_state,
@@ -212,10 +219,18 @@ impl Renderer {
             state.get_scrolling(),
             state.ly,
             !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+            dots_count,
         );
-        self.sprite_pixel_fetcher
-            .execute(&mut self.rendering_state, &mut self.objects, state);
+        self.sprite_pixel_fetcher.execute(
+            i16::from(self.rendering_state.fifos.shifted_count)
+                - i16::from(self.first_pixels_to_skip),
+            &mut self.rendering_state,
+            &mut self.objects,
+            state,
+            dots_count,
+        );
         if self.rendering_state.is_lcd_accepting_pixels {
+            log::warn!("{dots_count}: pushing to lcd");
             self.scanline.push(self.rendering_state.fifos.render_pixel(
                 state.bgp_register,
                 state.obp0,
@@ -224,6 +239,7 @@ impl Renderer {
             ));
         }
         if self.rendering_state.is_shifting {
+            log::warn!("{dots_count}: shifting");
             self.rendering_state.fifos.shift();
         }
     }
@@ -244,7 +260,7 @@ struct Fifos {
     mask: u8,
     // sprite palette, the background palette is checked globally before pushing to the LCD
     palette: u8,
-    // to know if the fifo is empty
+    background_pixels_count: u8,
     shifted_count: u8,
 }
 
@@ -256,6 +272,8 @@ impl Fifos {
         self.sp1 <<= 1;
         self.mask <<= 1;
         self.palette <<= 1;
+
+        self.background_pixels_count -= 1;
         self.shifted_count = self.shifted_count.wrapping_add(1);
     }
 
@@ -280,6 +298,7 @@ impl Fifos {
     fn replace_background(&mut self, tile: [u8; 2]) {
         self.bg0 = tile[0];
         self.bg1 = tile[1];
+        self.background_pixels_count = 8;
     }
 
     fn render_pixel(&self, bgp: u8, obp0: u8, obp1: u8, is_background_enabled: bool) -> Color {
@@ -297,7 +316,7 @@ impl Fifos {
     }
 
     fn is_background_empty(&self) -> bool {
-        self.shifted_count.is_multiple_of(8)
+        self.background_pixels_count == 0
     }
 }
 
@@ -359,6 +378,7 @@ impl BackgroundPixelFetcher {
         scrolling: Scrolling,
         y: u8,
         is_signed_addressing: bool,
+        dots_count: u16,
     ) {
         use BackgroundPixelFetcherStep::*;
         if let Ready(tile) = self.step {
@@ -437,6 +457,8 @@ impl BackgroundPixelFetcher {
                     tile_index,
                     is_signed_addressing,
                 );
+                assert_ne!(self.x, u8::MAX, "will overflow, dots_count: {dots_count}");
+                self.x += 1;
                 Ready([
                     tile_low,
                     tile[2 * ((usize::from(y) + usize::from(scy)) % 8) + 1],
@@ -461,21 +483,27 @@ impl Default for SpritePixelFetcher {
 }
 
 impl SpritePixelFetcher {
-    // the cursor is in the space as the object coordinates. So cursor = 0 <=> scanline x = -8
     fn execute(
         &mut self,
+        // the cursor is in the same "space" as the sprites x coordinates
+        // it can be negative if there is some scrolling
+        cursor: i16,
         rendering_state: &mut RenderingState,
         objects: &mut ArrayVec<ObjectAttribute, 10>,
         state: &State,
+        dots_count: u16,
     ) {
         let Some(obj) = objects.last() else {
             return;
         };
 
-        // the shifted count is like the "true" cursor of the drawn pixels. That cursor starts at x = -8 and increments to 159
-        if obj.x != rendering_state.fifos.shifted_count
-            || rendering_state.fifos.is_background_empty()
-        {
+        log::warn!(
+            "{dots_count}: obj_x {} cursor {cursor} is_empty {}",
+            obj.x,
+            rendering_state.fifos.is_background_empty()
+        );
+
+        if i16::from(obj.x) != cursor {
             return;
         }
 
@@ -487,6 +515,8 @@ impl SpritePixelFetcher {
         {
             return;
         }
+
+        log::warn!("{dots_count}: sprite fetching for object at {}", obj.x);
 
         use SpritePixelFetcher::*;
 
@@ -520,7 +550,11 @@ impl SpritePixelFetcher {
                 rendering_state.is_shifting = true;
                 rendering_state.is_lcd_accepting_pixels = true;
                 rendering_state.fifos.load_sprite(
-                    [tile_low, tile_high],
+                    if obj.flags.contains(ObjectFlags::X_FLIP) {
+                        [tile_low.reverse_bits(), tile_high.reverse_bits()]
+                    } else {
+                        [tile_low, tile_high]
+                    },
                     obj.flags.contains(ObjectFlags::PRIORITY),
                     obj.flags.contains(ObjectFlags::DMG_PALETTE),
                 );
@@ -544,6 +578,6 @@ fn get_object_tile_line(state: &State, obj: &ObjectAttribute) -> [u8; 2] {
     );
     let mut y = (state.ly + 16 - obj.y) % 8;
     y = if y_flip { 7 - y } else { y };
-    let line = get_line_from_tile(tile, y);
-    line
+
+    get_line_from_tile(tile, y)
 }
