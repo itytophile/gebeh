@@ -1,3 +1,4 @@
+mod fifos;
 mod ly_handler;
 mod pixel_fetcher;
 
