@@ -198,6 +198,8 @@ impl Renderer {
     }
 
     fn execute(&mut self, state: &State) {
+        self.rendering_state.is_lcd_accepting_pixels =
+            self.rendering_state.fifos.shifted_count >= 8 + state.scx;
         // those systems can run "concurrently"
         self.background_pixel_fetcher.execute(
             &mut self.rendering_state,
