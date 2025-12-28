@@ -144,3 +144,24 @@ pub struct RenderingState {
     pub is_sprite_fetching_enable: bool,
     pub fifos: Fifos,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{WIDTH, ppu::renderer::Renderer, state::State};
+
+    // all timings are +2 compared to pandocs timings
+    fn get_timing(state: &State) -> u16 {
+        let mut renderer = Renderer::new(Default::default(), 0);
+        let mut dots = 0;
+        while renderer.scanline.len() < usize::from(WIDTH) {
+            renderer.execute(state, 0, &mut None);
+            dots += 1;
+        }
+        dots
+    }
+
+    #[test]
+    fn normal_timing() {
+        assert_eq!(get_timing(&State::new(&[])), 174);
+    }
+}
