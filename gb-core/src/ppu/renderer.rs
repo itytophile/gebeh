@@ -36,7 +36,7 @@ pub struct Renderer {
     rendering_state: RenderingState,
     pub objects: ArrayVec<ObjectAttribute, 10>,
     pub scanline: ArrayVec<Color, 160>,
-    first_pixels_to_skip: u8,
+    pub first_pixels_to_skip: u8,
     wx_condition: bool,
 }
 

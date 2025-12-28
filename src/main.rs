@@ -4,7 +4,7 @@ use gb_core::{
     Emulator, HEIGHT, StateMachine, WIDTH,
     cartridge::CartridgeType,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
-    ppu::{LcdControl, get_bg_win_tile, get_color_from_line, get_line_from_tile},
+    ppu::{LcdControl, Ppu, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
 };
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
@@ -138,6 +138,8 @@ fn main() {
 
     let mut cycle_count: u64 = 0;
 
+    let mut is_scanline_debug = false;
+
     event_loop
         .run(|event, elwt| match event {
             Event::WindowEvent {
@@ -155,6 +157,7 @@ fn main() {
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut cycle_count,
+                        is_scanline_debug,
                     );
                     pixels.render().unwrap();
                 }
@@ -214,6 +217,19 @@ fn main() {
                         event:
                             KeyEvent {
                                 state: ElementState::Pressed,
+                                physical_key: PhysicalKey::Code(KeyCode::KeyS),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => is_scanline_debug = !is_scanline_debug,
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
                                 physical_key: PhysicalKey::Code(KeyCode::ArrowLeft),
                                 ..
                             },
@@ -251,11 +267,27 @@ fn draw_emulator(
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
     cycle_count: &mut u64,
+    is_scanline_debug: bool,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
         emulator.execute(state, *cycle_count);
         *cycle_count += 1;
+
+        if is_scanline_debug
+            && let Ppu::Drawing {
+                dots_count: 4,
+                renderer,
+                ..
+            } = emulator.get_ppu()
+        {
+            log::info!(
+                "LY = {}, SCX = {}, first pixels to skip = {}",
+                state.ly,
+                state.scx,
+                renderer.first_pixels_to_skip
+            );
+        }
 
         let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
             continue;
@@ -265,7 +297,7 @@ fn draw_emulator(
         for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
             *pixel = (*color).into();
         }
-        if state.ly == HEIGHT - 1 {
+        if state.ly == HEIGHT - 1 || is_scanline_debug {
             break;
         }
     }

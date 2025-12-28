@@ -21,10 +21,6 @@ pub enum Ppu {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         window_y: Option<u8>,
-        // https://gbdev.io/pandocs/Scrolling.html#scrolling
-        // Citation: The scroll registers are re-read on each tile fetch, except for
-        // the low 3 bits of SCX, which are only read at the beginning of the scanline
-        scx_at_scanline_start: u8,
         objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 80
     Drawing {
@@ -84,7 +80,6 @@ impl Default for Ppu {
         Self::OamScan {
             dots_count: 0,
             window_y: Default::default(),
-            scx_at_scanline_start: 0,
             objects: Default::default(),
         }
     }
@@ -205,7 +200,6 @@ impl Ppu {
         match self {
             Ppu::OamScan {
                 window_y,
-                scx_at_scanline_start,
                 dots_count: OAM_SCAN_DURATION,
                 objects,
             } => {
@@ -221,7 +215,11 @@ impl Ppu {
                         .rev() // because we will pop the objects
                         .map(|(_, object)| object)
                         .collect(),
-                    *scx_at_scanline_start,
+                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+                    // Citation: The scroll registers are re-read on each tile fetch, except for
+                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
+                    // (I have a visual glitch on the OH demo when I set this at the start of OAM scan so I'll do it here instead)
+                    state.scx,
                 );
                 // the renderer implementation takes 174 dots to complete the minimum time to draw a scanline
                 // however, according to several sources and rom tests, Mode 3 is only 172 dots long.
@@ -263,7 +261,6 @@ impl Ppu {
                 } else {
                     Ppu::OamScan {
                         window_y: *window_y,
-                        scx_at_scanline_start: state.scx,
                         dots_count: 0,
                         objects: Default::default(),
                     }
@@ -274,7 +271,6 @@ impl Ppu {
             } => {
                 *self = Ppu::OamScan {
                     window_y: Default::default(),
-                    scx_at_scanline_start: state.scx,
                     dots_count: 0,
                     objects: Default::default(),
                 }
