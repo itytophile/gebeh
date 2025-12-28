@@ -1,5 +1,5 @@
 [workspace]
-members = ["gb-core","macros", "my-lib"]
+members = ["gb-core"]
 
 [package]
 name = "testouille-emulator-future"

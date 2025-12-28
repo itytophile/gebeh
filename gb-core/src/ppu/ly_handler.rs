@@ -62,12 +62,17 @@ impl StateMachine for LyHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::{StateMachine, ppu::ly_handler::LyHandler, state::State};
+    use crate::{
+        StateMachine,
+        ppu::{LcdControl, ly_handler::LyHandler},
+        state::State,
+    };
 
     #[test]
     fn ly_incrementer() {
         let mut ly_incrementer = LyHandler::default();
         let mut state = State::new(&[]);
+        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
         // cycle 0 (line 0)
         ly_incrementer.execute(&mut state, 0);
         assert_eq!(0, state.ly);
