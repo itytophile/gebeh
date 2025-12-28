@@ -153,7 +153,7 @@ mod tests {
         mut window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
     ) -> u16 {
-        let mut renderer = Renderer::new(objects, 0);
+        let mut renderer = Renderer::new(objects, state.scx);
         let mut dots = 0;
         while renderer.scanline.len() < usize::from(WIDTH) {
             renderer.execute(state, dots, &mut window_y);
@@ -222,7 +222,8 @@ mod tests {
             // Citation: At the very beginning of Mode 3, rendering is paused for SCX % 8 dots
             assert_eq!(
                 get_timing(&state, None, Default::default()),
-                MINIMUM_TIME + u16::from(scx % 8)
+                MINIMUM_TIME + u16::from(scx % 8),
+                "Failed with scx {scx}"
             );
         }
     }
