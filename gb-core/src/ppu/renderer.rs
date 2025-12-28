@@ -21,9 +21,7 @@ use arrayvec::ArrayVec;
 
 use crate::{
     ppu::{
-        Color, LcdControl, ObjectAttribute,
-        background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
-        fifos::Fifos,
+        Color, LcdControl, ObjectAttribute, background_fetcher::BackgroundFetcher, fifos::Fifos,
         sprite_fetcher::SpriteFetcher,
     },
     state::{Scrolling, State},
@@ -68,7 +66,7 @@ impl Renderer {
             && !self.wx_condition
         {
             self.background_pixel_fetcher = BackgroundFetcher {
-                step: BackgroundFetcherStep::WaitingForScrollRegisters,
+                step: Default::default(),
                 x: 1,
             };
             self.rendering_state.fifos.reset_background();

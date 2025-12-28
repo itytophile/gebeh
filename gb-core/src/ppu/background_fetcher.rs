@@ -3,11 +3,12 @@ use crate::{
     state::{Scrolling, VIDEO_RAM},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum BackgroundFetcherStep {
     // https://gbdev.io/pandocs/Scrolling.html#scrolling
     // Citation: The scroll registers are re-read on each tile fetch, except for the low 3 bits of SCX
     // scrolling set at 0 when handling window tiles
+    #[default]
     WaitingForScrollRegisters,
     // no delay for him because we have the beautiful WaitingForScrollRegisters
     FetchingTileIndex {
@@ -29,19 +30,10 @@ pub enum BackgroundFetcherStep {
 }
 
 // background and window to be precise
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct BackgroundFetcher {
     pub step: BackgroundFetcherStep,
     pub x: u8, // will be used like x.max(1) - 0 thus 0 is the dummy fetch
-}
-
-impl Default for BackgroundFetcher {
-    fn default() -> Self {
-        Self {
-            step: BackgroundFetcherStep::WaitingForScrollRegisters,
-            x: 0,
-        }
-    }
 }
 
 impl BackgroundFetcher {
@@ -72,7 +64,7 @@ impl BackgroundFetcher {
             FetchingTileIndex { scx, scy } => {
                 let address = tile_map_address
                     + u16::from((self.x.max(1) - 1 + scx / 8) & 0x1f)
-                    + 32 * (((u16::from(y) + u16::from(scy)) & 0xff) / 8); // don't simplify 32 / 8 to 4
+                    + 32 * u16::from(y.wrapping_add(scy) / 8); // don't simplify 32 / 8 to 4
                 FetchingTileLow {
                     one_dot_delay: false,
                     tile_index: vram[usize::from(address - VIDEO_RAM)],
