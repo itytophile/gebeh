@@ -176,6 +176,8 @@ mod tests {
         let mut state = State::new(&[]);
         state.lcd_control.insert(LcdControl::WINDOW_ENABLE);
 
+        // https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
+        // Citation: The Window is visible (if enabled) when both coordinates are in the ranges WX=0..166, WY=0..143 respectively
         for wx in 0..167 {
             state.wx = wx;
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
