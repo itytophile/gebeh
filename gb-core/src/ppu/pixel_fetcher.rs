@@ -178,28 +178,31 @@ impl ReadyPixelFetcher {
 
 // 2
 
-struct Renderer {
+#[derive(Clone)]
+pub struct Renderer {
     background_pixel_fetcher: BackgroundPixelFetcher,
     sprite_pixel_fetcher: SpritePixelFetcher,
     rendering_state: RenderingState,
     objects: ArrayVec<ObjectAttribute, 10>,
-    scanline: ArrayVec<Color, 160>,
+    pub scanline: ArrayVec<Color, 160>,
+    scx_at_scanline_start: u8,
 }
 
 impl Renderer {
-    fn new(objects: ArrayVec<ObjectAttribute, 10>) -> Self {
+    pub fn new(objects: ArrayVec<ObjectAttribute, 10>, scx_at_scanline_start: u8) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: Default::default(),
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
+            scx_at_scanline_start,
         }
     }
 
-    fn execute(&mut self, state: &State) {
+    pub fn execute(&mut self, state: &State) {
         self.rendering_state.is_lcd_accepting_pixels =
-            self.rendering_state.fifos.shifted_count >= 8 + state.scx;
+            self.rendering_state.fifos.shifted_count >= 8 + self.scx_at_scanline_start;
         // those systems can run "concurrently"
         self.background_pixel_fetcher.execute(
             &mut self.rendering_state,
@@ -225,7 +228,7 @@ impl Renderer {
 }
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Fifos {
     // for low background tile data
     bg0: u8,
@@ -295,7 +298,7 @@ impl Fifos {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct RenderingState {
     is_shifting: bool,
     is_lcd_accepting_pixels: bool,
@@ -329,6 +332,7 @@ pub enum BackgroundPixelFetcherStep {
 }
 
 // background and window to be precise
+#[derive(Clone)]
 struct BackgroundPixelFetcher {
     step: BackgroundPixelFetcherStep,
     x: u8, // will be used like x.max(1) - 0 thus 0 is the dummy fetch
@@ -440,21 +444,16 @@ impl BackgroundPixelFetcher {
     }
 }
 
-enum SpritePixelFetcherStep {
+#[derive(Clone)]
+enum SpritePixelFetcher {
     // we have access to the object tile_index so it's useless to have it here
     FetchingTileLow { delay: u8 },
     FetchingTileHigh { one_dot_delay: bool, tile_low: u8 },
 }
 
-struct SpritePixelFetcher {
-    step: SpritePixelFetcherStep,
-}
-
 impl Default for SpritePixelFetcher {
     fn default() -> Self {
-        Self {
-            step: SpritePixelFetcherStep::FetchingTileLow { delay: 0 },
-        }
+        Self::FetchingTileLow { delay: 0 }
     }
 }
 
@@ -486,7 +485,7 @@ impl SpritePixelFetcher {
             return;
         }
 
-        use SpritePixelFetcherStep::*;
+        use SpritePixelFetcher::*;
 
         // 0 -> fetch tile index
         // 1 -> fetch tile index
@@ -495,7 +494,7 @@ impl SpritePixelFetcher {
         // 4 -> fetch tile high
         // 5 -> fetch tile high (end)
 
-        self.step = match self.step {
+        *self = match *self {
             FetchingTileLow { delay: 3 } => FetchingTileHigh {
                 one_dot_delay: false,
                 tile_low: get_object_tile_line(state, obj)[0],

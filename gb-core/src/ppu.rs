@@ -6,11 +6,11 @@ use core::num::NonZeroU8;
 use arrayvec::ArrayVec;
 
 use crate::{
-    StateMachine, WIDTH,
+    StateMachine,
     ic::Ints,
     ppu::{
         ly_handler::LyHandler,
-        pixel_fetcher::{PixelFetcher, ReadyPixelFetcher},
+        pixel_fetcher::{PixelFetcher, Renderer},
     },
     state::{LcdStatus, Scrolling, State, VIDEO_RAM},
 };
@@ -20,97 +20,6 @@ use crate::{
 pub struct CurrentFrameData {
     wy_condition: bool,
     internal_y_window_counter: u8,
-}
-
-#[derive(Clone)]
-pub struct DrawingState {
-    scanline: [Color; 160],
-    // https://gbdev.io/pandocs/Scrolling.html#window
-    wx_condition: bool,
-    current_frame_data: CurrentFrameData,
-    x: u8,
-}
-
-impl DrawingState {
-    fn new(current_frame_data: CurrentFrameData) -> Self {
-        Self {
-            current_frame_data,
-            scanline: [Color::Black; 160],
-            wx_condition: false,
-            x: 0,
-        }
-    }
-
-    fn render(&mut self, state: &State) {
-        let mut bg_win_color = Option::<Color>::None;
-
-        if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-            // Citation:
-            // the current X coordinate being rendered + 7 was equal to WX
-            self.wx_condition |= self.x + 7 == state.wx;
-            let scanline = Scanline {
-                x: self.x,
-                y: state.ly,
-            };
-            let color_index = get_color_bg_win(
-                scanline,
-                state,
-                (self.wx_condition
-                    && self.current_frame_data.wy_condition
-                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE))
-                .then_some(self.current_frame_data.internal_y_window_counter),
-            );
-            bg_win_color = if color_index == ColorIndex::Zero {
-                None
-            } else {
-                Some(color_index.get_color(state.bgp_register))
-            };
-        }
-
-        // https://gbdev.io/pandocs/OAM.html#drawing-priority
-        // the objects that have the priority "BG over OBJ" enabled must override the other objects if
-        // their "normal" priority is higher
-        let mut obj_color = Option::<(Color, bool)>::None;
-
-        if state.lcd_control.contains(LcdControl::OBJ_ENABLE) {
-            // TODO maybe performance hit here
-            for (incoming_x, obj, color) in get_colors(
-                get_at_most_ten_objects_on_ly(state.ly, state),
-                state.ly,
-                state,
-            ) {
-                if incoming_x == self.x && color != ColorIndex::Zero {
-                    obj_color = Some((
-                        color.get_color(if obj.flags.contains(ObjectFlags::DMG_PALETTE) {
-                            state.obp1
-                        } else {
-                            state.obp0
-                        }),
-                        obj.flags.contains(ObjectFlags::PRIORITY),
-                    ));
-                }
-            }
-        }
-
-        let bg_color = if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-            ColorIndex::Zero.get_color(state.bgp_register)
-        } else {
-            Color::White
-        };
-        self.scanline[usize::from(self.x)] = match (bg_win_color, obj_color) {
-            (None, None) => bg_color,
-            (None, Some((color, _))) | (_, Some((color, false))) => color,
-            (Some(color), Some((_, true)) | None) => color,
-        };
-        self.x += 1;
-        if self.x == WIDTH
-            && self.wx_condition
-            && self.current_frame_data.wy_condition
-            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-        {
-            self.current_frame_data.internal_y_window_counter += 1;
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -127,15 +36,8 @@ pub enum Ppu {
     }, // <= 80
     Drawing {
         dots_count: u16,
-        drawing_state: DrawingState,
-        pixel_fetcher: Either<PixelFetcher, ReadyPixelFetcher>,
-        low_fifo: u8,
-        high_fifo: u8,
-        // we need to push inside so that's why we use an ArrayVec
-        scanline: ArrayVec<Color, 160>,
-        scx_at_scanline_start: u8,
-        wx_condition: Option<u16>,
-        objects: ArrayVec<ObjectAttribute, 10>,
+        current_frame_data: CurrentFrameData,
+        renderer: Renderer,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
@@ -286,7 +188,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Copy)]
-struct ObjectAttribute {
+pub struct ObjectAttribute {
     y: u8,
     x: u8,
     tile_index: u8,
@@ -425,30 +327,30 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                *self = Ppu::Drawing {
-                    dots_count: 0,
-                    drawing_state: DrawingState::new(*current_frame_data),
-                    high_fifo: 0,
-                    low_fifo: 0,
-                    pixel_fetcher: Either::Left(PixelFetcher::default()),
-                    scanline: Default::default(),
-                    scx_at_scanline_start: *scx_at_scanline_start,
-                    wx_condition: None,
-                    objects: objects_to_sort
+                let mut renderer = Renderer::new(
+                    objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
                         .map(|(_, object)| object)
                         .collect(),
+                    *scx_at_scanline_start,
+                );
+                // the renderer implementation takes 174 dots to complete the minimum time to draw a scanline
+                // however, according to several sources and rom tests, Mode 3 is only 172 dots long.
+                // Besides, Pandocs says that Mode 3 starts drawing after 12 dots. The renderer starts drawing after 14 dots.
+                renderer.execute(state);
+                renderer.execute(state);
+
+                *self = Ppu::Drawing {
+                    dots_count: 0,
+                    renderer,
+                    current_frame_data: *current_frame_data,
                 }
             }
             Ppu::Drawing {
                 dots_count,
-                scanline,
-                drawing_state:
-                    DrawingState {
-                        current_frame_data, ..
-                    },
-                wx_condition,
+                renderer: Renderer { scanline, .. },
+                current_frame_data,
                 ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
@@ -457,8 +359,9 @@ impl Ppu {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                         current_frame_data: CurrentFrameData {
                             wy_condition: current_frame_data.wy_condition,
+                            // TODO
                             internal_y_window_counter: current_frame_data.internal_y_window_counter
-                                + wx_condition.is_some() as u8,
+                                + false as u8,
                         },
                         dots_count: 0,
                         scanline,
@@ -623,100 +526,15 @@ impl StateMachine for Ppu {
             }
             Ppu::Drawing {
                 dots_count,
-                pixel_fetcher,
-                high_fifo,
-                low_fifo,
-                scanline,
-                scx_at_scanline_start,
-                wx_condition,
-                drawing_state,
-                objects,
+                renderer,
+                ..
             } => {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::DRAWING);
                 }
 
-                // According to pandocs. However it's "contradicting" "Nitty Gritty Gameboy VRAM Timing" but everything falls into
-                // place with this delay.
-                const CAN_DRAW_AFTER: u16 = 12;
-
-                // I don't know how the glitch described by pandocs is playing with the window internal y counter
-                // so let's ignore it
-                // https://gbdev.io/pandocs/Scrolling.html#window
-                // Citation: If the WY condition has already been triggered and at the start
-                // of a row the window enable bit was set, then resetting that bit before the
-                // WX condition gets triggered on that row yields a nice window glitch pixel
-                // where the window would have been activated
-                if *dots_count >= CAN_DRAW_AFTER
-                    && wx_condition.is_none()
-                    && drawing_state.current_frame_data.wy_condition
-                    && state.lcd_control.contains(LcdControl::WINDOW_ENABLE | LcdControl::BG_AND_WINDOW_ENABLE)
-                    // WX condition according to pandocs: the current X coordinate being rendered + 7 was equal to WX
-                    // so never triggered when wx < 7 ? lol
-                    // https://github.com/Ashiepaws/GBEDG/blob/97f198d330a51be558aa8fc9f3f0760846d02d95/ppu/index.md#window-fetching seems to answer that
-                    // Citation: The current X-position of the shifter is greater than or equal to WX - 7
-                    && scanline.len() + 7 >= usize::from(state.wx)
-                {
-                    *wx_condition = Some(*dots_count);
-                    *pixel_fetcher = Either::Left(Default::default());
-                }
-
-                if (wx_condition.is_none()
-                    && *dots_count >= CAN_DRAW_AFTER
-                    && (*dots_count + 4) % 8 == 0)
-                    || wx_condition
-                        .map(|start| (*dots_count - start + 2) % 8 == 0)
-                        .unwrap_or(false)
-                {
-                    let Either::Right(ready) = pixel_fetcher else {
-                        panic!("Unsynchronized pixel fetching");
-                    };
-                    if state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE) {
-                        [*low_fifo, *high_fifo] = ready.tile_line;
-                    }
-                    *pixel_fetcher = Either::Left(ready.consume());
-                }
-
-                if (wx_condition.is_none()
-                    && *dots_count >= CAN_DRAW_AFTER + u16::from(*scx_at_scanline_start % 8))
-                    || (wx_condition
-                        .map(|start| *dots_count - start >= 6)
-                        .unwrap_or(false))
-                {
-                    scanline.push(
-                        ColorIndex::new(*low_fifo & 0b10000000 != 0, *high_fifo & 0b10000000 != 0)
-                            .get_color(state.bgp_register),
-                    );
-                }
-
-                *low_fifo <<= 1;
-                *high_fifo <<= 1;
-
-                const INITIAL_FETCH_DELAY: u16 = 8;
-                if *dots_count >= CAN_DRAW_AFTER - INITIAL_FETCH_DELAY
-                    && let Either::Left(not_ready) = pixel_fetcher
-                {
-                    *pixel_fetcher = not_ready.next(
-                        &state.video_ram,
-                        if wx_condition.is_some() {
-                            state.lcd_control.get_window_tile_map_address()
-                        } else {
-                            state.lcd_control.get_bg_tile_map_address()
-                        },
-                        if wx_condition.is_some() {
-                            Default::default()
-                        } else {
-                            state.get_scrolling()
-                        },
-                        if wx_condition.is_some() {
-                            drawing_state.current_frame_data.internal_y_window_counter
-                        } else {
-                            state.ly
-                        },
-                        !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
-                    );
-                }
+                renderer.execute(state);
 
                 *dots_count += 1;
             }
