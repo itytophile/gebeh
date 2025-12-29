@@ -55,13 +55,7 @@ impl Renderer {
         }
     }
 
-    pub fn execute(
-        &mut self,
-        state: &State,
-        dots_count: u16,
-        window_y: &mut Option<u8>,
-        cycles: u64,
-    ) {
+    pub fn execute(&mut self, state: &State, dots_count: u16, window_y: &mut Option<u8>) {
         let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
             - i16::from(self.first_pixels_to_skip);
 
@@ -95,8 +89,6 @@ impl Renderer {
                 // - 1 because we increment it at window initialization
                 *window_y - 1,
                 !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
-                dots_count,
-                cycles,
             );
         } else {
             self.background_pixel_fetcher.execute(
@@ -106,8 +98,6 @@ impl Renderer {
                 state.get_scrolling(),
                 state.ly,
                 !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
-                dots_count,
-                cycles,
             );
         }
 
@@ -164,7 +154,7 @@ mod tests {
         let mut renderer = Renderer::new(objects, state.scx);
         let mut dots = 0;
         while renderer.scanline.len() < usize::from(WIDTH) {
-            renderer.execute(state, dots, &mut window_y, 0);
+            renderer.execute(state, dots, &mut window_y);
             dots += 1;
         }
         dots

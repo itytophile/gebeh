@@ -197,7 +197,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, cycles: u64) {
+    fn switch_from_finished_mode(&mut self, state: &State) {
         match self {
             Ppu::OamScan {
                 window_y,
@@ -361,7 +361,7 @@ impl Ppu {
             return;
         }
 
-        self.switch_from_finished_mode(state, cycle_count);
+        self.switch_from_finished_mode(state);
 
         match self {
             Ppu::OamScan {
@@ -414,12 +414,12 @@ impl Ppu {
                     // don't forget that the renderer takes 174 dots to render a screen (minimum) so we must
                     // run it two times more
                     for _ in 0..6 {
-                        renderer.execute(state, *dots_count, window_y, cycle_count);
+                        renderer.execute(state, *dots_count, window_y);
                     }
                 }
 
                 if *dots_count >= 4 {
-                    renderer.execute(state, *dots_count, window_y, cycle_count);
+                    renderer.execute(state, *dots_count, window_y);
                 }
 
                 *dots_count += 1;

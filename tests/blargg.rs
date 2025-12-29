@@ -1,6 +1,6 @@
 use crate::common::{TestSerial, machine_to_serial_iter};
 use arrayvec::ArrayVec;
-use gb_core::{Emulator, state::State};
+use gb_core::Emulator;
 use testouille_emulator_future::get_mbc;
 
 mod common;

@@ -45,8 +45,6 @@ impl BackgroundFetcher {
         scrolling: Scrolling,
         y: u8,
         is_signed_addressing: bool,
-        dots: u16,
-        cycles: u64,
     ) {
         use BackgroundFetcherStep::*;
         if let Ready(tile) = self.step {
