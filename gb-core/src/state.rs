@@ -239,25 +239,26 @@ impl State {
 
 use crate::{cartridge::Mbc, ic::Ints, ppu::LcdControl};
 
-pub struct CommonMmu<'a>(pub &'a State);
+pub trait MmuExt {
+    fn read(&self, index: u16) -> u8;
+}
 
-// useful for OAM
-impl CommonMmu<'_> {
-    pub fn read(&self, index: u16) -> u8 {
+impl MmuExt for State {
+    fn read(&self, index: u16) -> u8 {
         match index {
-            0..VIDEO_RAM => self.0.mbc.read(index),
+            0..VIDEO_RAM => self.mbc.read(index),
             VIDEO_RAM..EXTERNAL_RAM => {
-                if (self.0.lcd_status & LcdStatus::PPU_MASK) == LcdStatus::DRAWING {
+                if (self.lcd_status & LcdStatus::PPU_MASK) == LcdStatus::DRAWING {
                     0xff
                 } else {
-                    self.0.video_ram[usize::from(index - VIDEO_RAM)]
+                    self.video_ram[usize::from(index - VIDEO_RAM)]
                 }
             }
-            EXTERNAL_RAM..WORK_RAM => self.0.mbc.read(index),
-            WORK_RAM..ECHO_RAM => self.0.wram[usize::from(index - WORK_RAM)],
+            EXTERNAL_RAM..WORK_RAM => self.mbc.read(index),
+            WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)],
             // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
             // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215
-            ECHO_RAM.. => self.0.wram[usize::from(index - ECHO_RAM)],
+            ECHO_RAM.. => self.wram[usize::from(index - ECHO_RAM)],
         }
     }
 }

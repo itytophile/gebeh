@@ -2,7 +2,7 @@ use core::ops::Range;
 
 use crate::{
     StateMachine,
-    state::{CommonMmu, State},
+    state::{MmuExt, State},
 };
 
 // about conflicts
@@ -21,7 +21,7 @@ impl StateMachine for Dma {
     fn execute(&mut self, state: &mut State, _: u64) {
         if let Some(address) = self.0.next() {
             state.is_dma_active = true;
-            state.oam[usize::from(address as u8)] = CommonMmu(state).read(address);
+            state.oam[usize::from(address as u8)] = state.read(address);
         } else {
             state.is_dma_active = false;
         }

@@ -13,6 +13,7 @@ pub mod cpu;
 pub mod dma;
 pub mod ic;
 pub mod instructions;
+pub mod mbc;
 pub mod ppu;
 pub mod state;
 pub mod timer;
