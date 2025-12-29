@@ -168,11 +168,11 @@ impl MmuWrite<'_> {
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
             SCY => {
-                log::warn!("{cycles}: setting scy with {value}");
+                // log::warn!("{cycles}: setting scy with {value}");
                 self.0.scy = value
             }
             SCX => {
-                log::warn!("{cycles}: setting scx with {value}");
+                // log::warn!("{cycles}: setting scx with {value}");
                 self.0.scx = value
             }
             LY => {} // read only

@@ -885,11 +885,11 @@ impl StateMachine for Cpu {
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
         } else if self.is_dispatching_interrupt {
-            log::warn!(
-                "{cycle_count}: interrupt {interrupts_to_execute:?} {:?} with lyc = {}",
-                state.lcd_status,
-                state.lyc
-            );
+            // log::warn!(
+            //     "{cycle_count}: interrupt {interrupts_to_execute:?} {:?} with lyc = {}",
+            //     state.lcd_status,
+            //     state.lyc
+            // );
             self.ime = false;
             // no need to set is_dispatching_interrupt to false
             use NoReadInstruction::*;

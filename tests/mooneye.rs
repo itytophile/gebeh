@@ -267,7 +267,7 @@ fn intr_2_oam_ok_timing() {
 //     test_mooneye("ppu/stat_lyc_onoff.gb");
 // }
 
-// #[test]
-// fn vblank_stat_intr_gs() {
-//     test_mooneye("ppu/vblank_stat_intr-GS.gb");
-// }
+#[test]
+fn vblank_stat_intr_gs() {
+    test_mooneye("ppu/vblank_stat_intr-GS.gb");
+}

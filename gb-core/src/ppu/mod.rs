@@ -223,7 +223,7 @@ impl Ppu {
                     state.scx,
                 );
 
-                log::warn!("{cycles}: entering drawing with ly = {}", state.ly);
+                // log::warn!("{cycles}: entering drawing with ly = {}", state.ly);
 
                 *self = Ppu::Drawing {
                     dots_count: 0,
@@ -437,6 +437,8 @@ impl StateMachine for Ppu {
             Ppu::VerticalBlankScanline { remaining_dots } => {
                 if *remaining_dots == VERTICAL_BLANK_SCANLINE_DURATION - 4 {
                     request_interrupt(state, LcdStatus::VBLANK_INT, cycle_count);
+                    // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
+                    request_interrupt(state, LcdStatus::OAM_INT, cycle_count);
                     state.interrupt_flag.insert(Ints::VBLANK);
                     state.set_ppu_mode(LcdStatus::VBLANK);
                 }

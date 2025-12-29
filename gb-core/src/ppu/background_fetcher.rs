@@ -60,11 +60,11 @@ impl BackgroundFetcher {
         }
         self.step = match self.step {
             WaitingForScrollRegisters => {
-                log::info!(
-                    "{cycles}: {dots:03}: Fetching with scy = {} and scx = {}",
-                    scrolling.y,
-                    scrolling.x
-                );
+                // log::info!(
+                //     "{cycles}: {dots:03}: Fetching with scy = {} and scx = {}",
+                //     scrolling.y,
+                //     scrolling.x
+                // );
                 FetchingTileIndex {
                     scx: scrolling.x,
                     scy: scrolling.y,
