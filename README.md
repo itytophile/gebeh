@@ -25,6 +25,7 @@ Pronounced gebeh.
 
 - [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)
 - [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/gb-test-roms)
+- [Acid2](https://github.com/mattcurrie/dmg-acid2)
 
 ### Reference emulators
 
