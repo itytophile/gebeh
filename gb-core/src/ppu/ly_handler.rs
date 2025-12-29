@@ -7,9 +7,7 @@ pub struct LyHandler {
     // ly increment logic
     logical_ly: u8,
     clock_count_in_line: u8,
-    // lyc logic (needs logical_ly to work)
-    delayed_ly: u8,
-    already_checked: bool,
+    ly_interrupt_disabled: bool,
 }
 
 impl LyHandler {
@@ -32,28 +30,28 @@ impl StateMachine for LyHandler {
                 if self.logical_ly != 153 {
                     // the increment is handled differently on line 153
                     state.ly += 1;
+                    self.ly_interrupt_disabled = false;
                 }
                 self.logical_ly = (self.logical_ly + 1) % 154;
             }
-            1 if state.ly == 153 => state.ly = 0,
+            1 if state.ly == 153 => {
+                state.ly = 0;
+                self.ly_interrupt_disabled = false;
+            }
             _ => {}
         }
 
-        // lyc logic
-        if state.lyc == self.delayed_ly && !self.is_ly_check_disabled() {
-            if !self.already_checked && state.lcd_status.contains(LcdStatus::LYC_INT) {
-                state.interrupt_flag.insert(Ints::LCD);
-                self.already_checked = true
-            }
-            state.lcd_status.insert(LcdStatus::LYC_EQUAL_TO_LY);
-        } else {
-            state.lcd_status.remove(LcdStatus::LYC_EQUAL_TO_LY);
+        if state.lyc == state.ly
+            && state.lcd_status.contains(LcdStatus::LYC_INT)
+            && !self.ly_interrupt_disabled
+        {
+            state.prout.insert(Ints::LCD);
+            self.ly_interrupt_disabled = true;
         }
 
-        if state.ly != self.delayed_ly {
-            self.delayed_ly = state.ly;
-            self.already_checked = false;
-        }
+        state
+            .lcd_status
+            .set(LcdStatus::LYC_EQUAL_TO_LY, state.lyc == state.ly);
 
         self.clock_count_in_line += 1;
     }

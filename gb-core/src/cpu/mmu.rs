@@ -95,7 +95,7 @@ impl MmuRead<'_> {
 pub struct MmuWrite<'a>(pub &'a mut State);
 
 impl MmuWrite<'_> {
-    pub fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu) {
+    pub fn write(&mut self, index: u16, value: u8, cycles: u64, cpu: &mut Cpu) {
         if self.0.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
@@ -167,8 +167,14 @@ impl MmuWrite<'_> {
             LCD_CONTROL => self.0.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.0.set_interrupt_part_lcd_status(value),
-            SCY => self.0.scy = value,
-            SCX => self.0.scx = value,
+            SCY => {
+                log::warn!("{cycles}: setting scy with {value}");
+                self.0.scy = value
+            }
+            SCX => {
+                log::warn!("{cycles}: setting scx with {value}");
+                self.0.scx = value
+            }
             LY => {} // read only
             LYC => self.0.lyc = value,
             DMA => {

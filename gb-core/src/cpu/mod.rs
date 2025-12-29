@@ -859,6 +859,8 @@ impl Cpu {
 
 impl StateMachine for Cpu {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
+        self.interrupt_flag |= state.prout;
+        state.prout = Ints::empty();
         let interrupts_to_execute =
             Ints::from_bits_truncate(self.interrupt_enable.bits()) & self.interrupt_flag;
         // Peripherals interrupts are not handled the same cycle they are triggered.
@@ -889,6 +891,11 @@ impl StateMachine for Cpu {
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
         } else if self.is_dispatching_interrupt {
+            log::warn!(
+                "{cycle_count}: interrupt {interrupts_to_execute:?} {:?} with lyc = {}",
+                state.lcd_status,
+                state.lyc
+            );
             self.ime = false;
             // no need to set is_dispatching_interrupt to false
             use NoReadInstruction::*;

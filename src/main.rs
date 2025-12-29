@@ -328,14 +328,14 @@ fn draw_emulator(
                 if renderer.scanline.len() == *previous_len {
                     continue;
                 }
-                log::info!(
-                    "LY = {:03}, len = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
-                    state.ly,
-                    renderer.scanline.len(),
-                    state.scx,
-                    state.scy,
-                    renderer.first_pixels_to_skip
-                );
+                // log::info!(
+                //     "LY = {:03}, len = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
+                //     state.ly,
+                //     renderer.scanline.len(),
+                //     state.scx,
+                //     state.scy,
+                //     renderer.first_pixels_to_skip
+                // );
                 *previous_len = renderer.scanline.len();
                 renderer.scanline.as_slice()
             }

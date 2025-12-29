@@ -45,6 +45,8 @@ impl BackgroundFetcher {
         scrolling: Scrolling,
         y: u8,
         is_signed_addressing: bool,
+        dots: u16,
+        cycles: u64,
     ) {
         use BackgroundFetcherStep::*;
         if let Ready(tile) = self.step {
@@ -57,10 +59,17 @@ impl BackgroundFetcher {
             self.step = WaitingForScrollRegisters;
         }
         self.step = match self.step {
-            WaitingForScrollRegisters => FetchingTileIndex {
-                scx: scrolling.x,
-                scy: scrolling.y,
-            },
+            WaitingForScrollRegisters => {
+                log::info!(
+                    "{cycles}: {dots:03}: Fetching with scy = {} and scx = {}",
+                    scrolling.y,
+                    scrolling.x
+                );
+                FetchingTileIndex {
+                    scx: scrolling.x,
+                    scy: scrolling.y,
+                }
+            }
             FetchingTileIndex { scx, scy } => {
                 let address = tile_map_address
                     + u16::from((self.x.max(1) - 1 + scx / 8) & 0x1f)

@@ -196,7 +196,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
+    fn switch_from_finished_mode(&mut self, state: &State, cycles: u64) {
         match self {
             Ppu::OamScan {
                 window_y,
@@ -209,7 +209,7 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let mut renderer = Renderer::new(
+                let renderer = Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
@@ -219,13 +219,11 @@ impl Ppu {
                     // Citation: The scroll registers are re-read on each tile fetch, except for
                     // the low 3 bits of SCX, which are only read at the beginning of the scanline
                     // (I have a visual glitch on the OH demo when I set this at the start of OAM scan so I'll do it here instead)
+                    // EDIT: i'm still one cycle late
                     state.scx,
                 );
-                // the renderer implementation takes 174 dots to complete the minimum time to draw a scanline
-                // however, according to several sources and rom tests, Mode 3 is only 172 dots long.
-                // Besides, Pandocs says that Mode 3 starts drawing after 12 dots. The renderer starts drawing after 14 dots.
-                renderer.execute(state, u16::MAX - 1, window_y);
-                renderer.execute(state, u16::MAX, window_y);
+
+                log::warn!("{cycles}: entering drawing with ly = {}", state.ly);
 
                 *self = Ppu::Drawing {
                     dots_count: 0,
@@ -412,9 +410,19 @@ impl StateMachine for Ppu {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::DRAWING);
+                    // hot fix, we sometimes miss the scx value by one M-cycle
+                    // so we reset the renderer here
+                    *renderer = Renderer::new(core::mem::take(&mut renderer.objects), state.scx);
+                    // don't forget that the renderer takes 174 dots to render a screen (minimum) so we must
+                    // run it two times more
+                    for _ in 0..6 {
+                        renderer.execute(state, *dots_count, window_y, cycle_count);
+                    }
                 }
 
-                renderer.execute(state, *dots_count, window_y);
+                if *dots_count >= 4 {
+                    renderer.execute(state, *dots_count, window_y, cycle_count);
+                }
 
                 *dots_count += 1;
             }
