@@ -10,13 +10,13 @@ pub struct LyHandler {
     ly_interrupt_disabled: bool,
 }
 
-impl LyHandler {
-    // weird behavior of dmg described by the cycle accurate gameboy docs
-    fn is_ly_check_disabled(&self) -> bool {
-        self.logical_ly > 0 && self.clock_count_in_line == 0
-            || self.logical_ly == 153 && self.clock_count_in_line == 2
-    }
-}
+// impl LyHandler {
+//     // weird behavior of dmg described by the cycle accurate gameboy docs
+//     fn is_ly_check_disabled(&self) -> bool {
+//         self.logical_ly > 0 && self.clock_count_in_line == 0
+//             || self.logical_ly == 153 && self.clock_count_in_line == 2
+//     }
+// }
 
 impl StateMachine for LyHandler {
     fn execute(&mut self, state: &mut crate::state::State, _: u64) {
