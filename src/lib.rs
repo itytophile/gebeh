@@ -1,9 +1,6 @@
 use std::ops::Deref;
 
-use gb_core::{
-    cartridge::{CartridgeType, Mbc1, Mbc3, Mbc5},
-    mbc::Mbc,
-};
+use gb_core::mbc::*;
 
 pub trait CloneMbc<'a>: Mbc {
     fn clone_boxed(&self) -> Box<dyn CloneMbc<'a> + 'a>;

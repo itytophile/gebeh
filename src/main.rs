@@ -2,9 +2,7 @@ use std::time::{Duration, Instant};
 
 use gb_core::{
     Emulator, HEIGHT, WIDTH,
-    cartridge::CartridgeType,
-    get_factor_8_kib_ram, get_factor_32_kib_rom,
-    mbc::Mbc,
+    mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::{LcdControl, Ppu, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
 };
