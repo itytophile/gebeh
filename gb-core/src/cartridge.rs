@@ -10,6 +10,7 @@ pub enum CartridgeType {
     RomOnly,
     Mbc1,
     Mbc1Ram,
+    Mbc3RamBattery,
     Mbc5RamBattery,
 }
 
@@ -21,6 +22,7 @@ impl TryFrom<u8> for CartridgeType {
             0 => Ok(Self::RomOnly),
             1 => Ok(Self::Mbc1),
             2 => Ok(Self::Mbc1Ram),
+            0x13 => Ok(Self::Mbc3RamBattery),
             0x1b => Ok(Self::Mbc5RamBattery),
             _ => Err(value),
         }
@@ -32,7 +34,88 @@ impl TryFrom<u8> for CartridgeType {
 pub enum Mbc {
     NoMbc(&'static [u8]),
     Mbc1(Mbc1),
+    Mbc3(Mbc3),
     Mbc5(Mbc5),
+}
+
+#[derive(Clone)]
+struct Mbc3 {
+    rom: &'static [u8],
+    rom_offset: usize,
+    // 32 KiB
+    ram: [u8; 0x8000],
+    ram_offset: u16,
+    ram_enabled: bool,
+    rom_bank_count: u8,
+    ram_bank_count: u8,
+}
+
+impl Mbc3 {
+    fn new(rom: &'static [u8]) -> Self {
+        Self {
+            rom,
+            rom_offset: usize::from(ROM_BANK_SIZE),
+            ram_offset: 0,
+            ram_bank_count: get_factor_8_kib_ram(rom),
+            rom_bank_count: u8::try_from(get_factor_32_kib_rom(rom)).unwrap() * 2,
+            ram: [0; 0x8000],
+            ram_enabled: false,
+        }
+    }
+    fn read(&self, index: u16) -> u8 {
+        match index {
+            ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
+            SWITCHABLE_ROM_BANK..VIDEO_RAM => *self
+                .rom
+                .get(self.rom_offset + (index - 0x4000) as usize)
+                .unwrap_or(&0x0),
+            EXTERNAL_RAM..WORK_RAM => {
+                if !self.ram_enabled {
+                    return 0xff;
+                }
+                self.ram[usize::from(self.ram_offset) + (index - 0xa000) as usize]
+            }
+            _ => panic!(),
+        }
+    }
+    fn write(&mut self, index: u16, value: u8) {
+        match index {
+            // 0x0000-0x1FFF - RAM enabled flag
+            0x0000..=0x1fff => {
+                self.ram_enabled = (value & 0x0f) == 0x0a;
+            }
+            // 0x2000-0x3FFF - ROM bank selection 5 lower bits
+            0x2000..=0x3fff => {
+                let mut rom_bank = value as u16 & 0x7f;
+                rom_bank &= u16::from(self.rom_bank_count) * 2 - 1;
+                if rom_bank == 0 {
+                    rom_bank = 1;
+                }
+                self.set_rom_bank(rom_bank);
+            }
+            // 0x4000-0x5FFF - RAM bank selection and ROM bank selection upper bits
+            0x4000..=0x5fff => {
+                let ram_bank = value & 0x03;
+                if ram_bank >= self.ram_bank_count {
+                    return;
+                }
+                self.set_ram_bank(ram_bank);
+            }
+            EXTERNAL_RAM..WORK_RAM => {
+                if !self.ram_enabled {
+                    return;
+                }
+                self.ram[usize::from(self.ram_offset) + (index - 0xa000) as usize] = value;
+            }
+            _ => panic!(),
+        }
+    }
+    pub fn set_ram_bank(&mut self, ram_bank: u8) {
+        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
+    }
+    pub fn set_rom_bank(&mut self, rom_bank: u16) {
+        self.rom_offset = usize::from(rom_bank) * usize::from(ROM_BANK_SIZE);
+    }
 }
 
 impl Mbc {
@@ -40,6 +123,7 @@ impl Mbc {
         match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).unwrap() {
             CartridgeType::RomOnly => Self::NoMbc(rom),
             CartridgeType::Mbc1 | CartridgeType::Mbc1Ram => Self::Mbc1(Mbc1::new(rom)),
+            CartridgeType::Mbc3RamBattery => Self::Mbc3(Mbc3::new(rom)),
             CartridgeType::Mbc5RamBattery => Self::Mbc5(Mbc5::new(rom)),
         }
     }
@@ -47,6 +131,7 @@ impl Mbc {
         match self {
             Mbc::NoMbc(rom) => rom[usize::from(index)],
             Mbc::Mbc1(mbc1) => mbc1.read(index),
+            Mbc::Mbc3(mbc3) => mbc3.read(index),
             Mbc::Mbc5(mbc5) => mbc5.read(index),
         }
     }
@@ -54,6 +139,7 @@ impl Mbc {
         match self {
             Mbc::NoMbc(_) => {}
             Mbc::Mbc1(mbc1) => mbc1.write(index, value),
+            Mbc::Mbc3(mbc3) => mbc3.write(index, value),
             Mbc::Mbc5(mbc5) => mbc5.write(index, value),
         }
     }
