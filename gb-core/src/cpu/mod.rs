@@ -1,7 +1,6 @@
 mod mmu;
 
 use crate::{
-    StateMachine,
     cpu::mmu::MmuCpuExt,
     ic::Ints,
     instructions::{
@@ -9,6 +8,7 @@ use crate::{
         NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
         Register8Bit, Register16Bit, SetPc, get_instructions, vec,
     },
+    mbc::Mbc,
     state::{BOOTIX_BOOT_ROM, State},
 };
 
@@ -202,6 +202,7 @@ impl Cpu {
         inst: AfterReadInstruction,
         interrupts_to_execute: Ints,
         cycle_count: u64,
+        mbc: &mut dyn Mbc,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
@@ -266,12 +267,12 @@ impl Cpu {
             }
             NoRead(LoadToAddressHlFromADec) => {
                 let hl = self.get_16bit_register(Register16Bit::HL);
-                state.write(hl, self.a, cycle_count, self);
+                state.write(hl, self.a, cycle_count, self, mbc);
                 [self.h, self.l] = hl.wrapping_sub(1).to_be_bytes();
             }
             NoRead(LoadToAddressHlFromAInc) => {
                 let hl = self.get_16bit_register(Register16Bit::HL);
-                state.write(hl, self.a, cycle_count, self);
+                state.write(hl, self.a, cycle_count, self, mbc);
                 [self.h, self.l] = hl.wrapping_add(1).to_be_bytes();
             }
             NoRead(Bit8Bit(bit, register)) => {
@@ -299,6 +300,7 @@ impl Cpu {
                     self.a,
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(Inc(register)) => {
@@ -314,6 +316,7 @@ impl Cpu {
                     self.get_8bit_register(value),
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(DecStackPointer) => self.sp = self.sp.wrapping_sub(1),
@@ -323,11 +326,12 @@ impl Cpu {
                     self.get_16bit_register(register).to_be_bytes()[0],
                     cycle_count,
                     self,
+                    mbc,
                 );
                 self.sp = self.sp.wrapping_sub(1);
             }
             NoRead(WriteLsbPcWhereSpPointsAndLoadCacheToPc) => {
-                state.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self);
+                state.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self, mbc);
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
             }
             NoRead(Load { to, from }) => {
@@ -380,6 +384,7 @@ impl Cpu {
                     decremented,
                     cycle_count,
                     self,
+                    mbc,
                 );
                 let flags = &mut self.f;
                 flags.set(Flags::Z, decremented == 0);
@@ -392,6 +397,7 @@ impl Cpu {
                     self.a,
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(Sub8Bit(register)) => {
@@ -420,11 +426,11 @@ impl Cpu {
             NoRead(Ei) => self.enable_ime(),
             NoRead(DecPc) => self.pc -= 1,
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
-                state.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self);
+                state.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self, mbc);
                 self.pc = u16::from(address);
             }
             NoRead(FinalStepInterruptDispatch) => {
-                state.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self);
+                state.write(self.sp, self.pc.to_be_bytes()[1], cycle_count, self, mbc);
                 // thanks https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/cpu.rs#L139
                 let interrupt = interrupts_to_execute.iter().next();
                 // we have to check here the interrupts to pass the ie_push test
@@ -449,6 +455,7 @@ impl Cpu {
                     self.lsb & !(1 << bit),
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(LoadToAddressHlN) => {
@@ -457,6 +464,7 @@ impl Cpu {
                     self.lsb,
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(Dec16Bit(register)) => {
@@ -517,6 +525,7 @@ impl Cpu {
                 self.lsb | (1 << bit),
                 cycle_count,
                 self,
+                mbc,
             ),
             // doesn't halt if there are interrupts https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#halt
             NoRead(Halt) => self.is_halted = interrupts_to_execute.is_empty(),
@@ -565,7 +574,7 @@ impl Cpu {
             NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
                 let [_, lsb] = self.sp.to_be_bytes();
                 let wz = u16::from_be_bytes([self.msb, self.lsb]);
-                state.write(wz, lsb, cycle_count, self);
+                state.write(wz, lsb, cycle_count, self, mbc);
                 [self.msb, self.lsb] = wz.wrapping_add(1).to_be_bytes();
             }
             NoRead(WriteMsbSpToCachedAddress) => {
@@ -575,6 +584,7 @@ impl Cpu {
                     msb,
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(AddSpE) => {
@@ -651,6 +661,7 @@ impl Cpu {
                 self.rlc(self.lsb),
                 cycle_count,
                 self,
+                mbc,
             ),
             NoRead(RrcHl) => {
                 state.write(
@@ -658,6 +669,7 @@ impl Cpu {
                     self.rrc(self.lsb),
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(RlHl) => state.write(
@@ -665,12 +677,14 @@ impl Cpu {
                 self.rl(self.lsb),
                 cycle_count,
                 self,
+                mbc,
             ),
             NoRead(RrHl) => state.write(
                 self.get_16bit_register(Register16Bit::HL),
                 self.rr(self.lsb),
                 cycle_count,
                 self,
+                mbc,
             ),
             NoRead(SlaHl) => {
                 state.write(
@@ -678,6 +692,7 @@ impl Cpu {
                     self.sla(self.lsb),
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(SraHl) => {
@@ -686,6 +701,7 @@ impl Cpu {
                     self.sra(self.lsb),
                     cycle_count,
                     self,
+                    mbc,
                 );
             }
             NoRead(SwapHl) => state.write(
@@ -693,18 +709,21 @@ impl Cpu {
                 self.swap(self.lsb),
                 cycle_count,
                 self,
+                mbc,
             ),
             NoRead(SrlHl) => state.write(
                 self.get_16bit_register(Register16Bit::HL),
                 self.srl(self.lsb),
                 cycle_count,
                 self,
+                mbc,
             ),
             NoRead(IncHl) => state.write(
                 self.get_16bit_register(Register16Bit::HL),
                 self.inc(self.lsb),
                 cycle_count,
                 self,
+                mbc,
             ),
             NoRead(Daa) => {
                 // https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7#DAA
@@ -853,8 +872,8 @@ impl Cpu {
     }
 }
 
-impl StateMachine for Cpu {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
+impl Cpu {
+    pub fn execute(&mut self, state: &mut State, mbc: &mut dyn Mbc, cycle_count: u64) {
         let interrupts_to_execute =
             Ints::from_bits_truncate(self.interrupt_enable.bits()) & state.interrupt_flag;
         // Peripherals interrupts are not handled the same cycle they are triggered.
@@ -914,10 +933,10 @@ impl StateMachine for Cpu {
             (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
-                    let opcode = state.read(address, cycle_count, self);
+                    let opcode = state.read(address, cycle_count, self, mbc);
                     (address.wrapping_add(1), opcode)
                 }
-                SetPc::NoIncrement => (self.pc, state.read(self.pc, cycle_count, self)),
+                SetPc::NoIncrement => (self.pc, state.read(self.pc, cycle_count, self, mbc)),
             };
         }
 
@@ -925,7 +944,7 @@ impl StateMachine for Cpu {
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => AfterReadInstruction::Read(
-                state.read(0xff00 | u16::from(self.lsb), cycle_count, self),
+                state.read(0xff00 | u16::from(self.lsb), cycle_count, self, mbc),
                 inst,
             ),
             Instruction::Read(ReadAddress::Accumulator8Bit(register), inst) => {
@@ -934,6 +953,7 @@ impl StateMachine for Cpu {
                         0xff00 | u16::from(self.get_8bit_register(register)),
                         cycle_count,
                         self,
+                        mbc,
                     ),
                     inst,
                 )
@@ -949,10 +969,10 @@ impl StateMachine for Cpu {
                         self.set_16bit_register(register, register_value.wrapping_sub(1))
                     }
                 }
-                AfterReadInstruction::Read(state.read(register_value, cycle_count, self), inst)
+                AfterReadInstruction::Read(state.read(register_value, cycle_count, self, mbc), inst)
             }
         };
 
-        self.execute_instruction(state, inst, interrupts_to_execute, cycle_count);
+        self.execute_instruction(state, inst, interrupts_to_execute, cycle_count, mbc);
     }
 }

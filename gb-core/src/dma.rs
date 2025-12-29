@@ -1,7 +1,7 @@
 use core::ops::Range;
 
 use crate::{
-    StateMachine,
+    mbc::Mbc,
     state::{MmuExt, State},
 };
 
@@ -17,11 +17,11 @@ impl Default for Dma {
     }
 }
 
-impl StateMachine for Dma {
-    fn execute(&mut self, state: &mut State, _: u64) {
+impl Dma {
+    pub fn execute(&mut self, state: &mut State, mbc: &dyn Mbc, _: u64) {
         if let Some(address) = self.0.next() {
             state.is_dma_active = true;
-            state.oam[usize::from(address as u8)] = state.read(address);
+            state.oam[usize::from(address as u8)] = state.read(address, mbc);
         } else {
             state.is_dma_active = false;
         }

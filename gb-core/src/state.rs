@@ -1,3 +1,5 @@
+use crate::{ic::Ints, mbc::Mbc, ppu::LcdControl};
+
 pub const ROM_BANK: u16 = 0x0000;
 pub const SWITCHABLE_ROM_BANK: u16 = 0x4000;
 pub const VIDEO_RAM: u16 = 0x8000;
@@ -108,7 +110,6 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 
 #[derive(Clone)]
 pub struct State {
-    pub mbc: Mbc,
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
@@ -165,8 +166,8 @@ pub struct Scrolling {
     pub y: u8,
 }
 
-impl State {
-    pub fn new(rom: &'static [u8]) -> Self {
+impl Default for State {
+    fn default() -> Self {
         Self {
             video_ram: [0; 0x2000],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
@@ -203,7 +204,6 @@ impl State {
             lcd_control: LcdControl::empty(),
             ly: 0,
             lyc: 0,
-            mbc: Mbc::new(rom),
             sb: 0,
             sc: SerialControl::empty(),
             wy: 0,
@@ -218,6 +218,9 @@ impl State {
             system_counter: 0,
         }
     }
+}
+
+impl State {
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
@@ -237,16 +240,14 @@ impl State {
     }
 }
 
-use crate::{cartridge::Mbc, ic::Ints, ppu::LcdControl};
-
 pub trait MmuExt {
-    fn read(&self, index: u16) -> u8;
+    fn read(&self, index: u16, mbc: &dyn Mbc) -> u8;
 }
 
 impl MmuExt for State {
-    fn read(&self, index: u16) -> u8 {
+    fn read(&self, index: u16, mbc: &dyn Mbc) -> u8 {
         match index {
-            0..VIDEO_RAM => self.mbc.read(index),
+            0..VIDEO_RAM => mbc.read(index),
             VIDEO_RAM..EXTERNAL_RAM => {
                 if (self.lcd_status & LcdStatus::PPU_MASK) == LcdStatus::DRAWING {
                     0xff
@@ -254,7 +255,7 @@ impl MmuExt for State {
                     self.video_ram[usize::from(index - VIDEO_RAM)]
                 }
             }
-            EXTERNAL_RAM..WORK_RAM => self.mbc.read(index),
+            EXTERNAL_RAM..WORK_RAM => mbc.read(index),
             WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)],
             // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
             // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215

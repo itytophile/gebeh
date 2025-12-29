@@ -1,16 +1,16 @@
-use crate::{cpu::Cpu, ic::Ints, ppu::LcdControl, state::*};
+use crate::{cpu::Cpu, ic::Ints, mbc::Mbc, ppu::LcdControl, state::*};
 
 pub trait MmuCpuExt {
-    fn read(&self, index: u16, cycles: u64, cpu: &Cpu) -> u8;
-    fn write(&mut self, index: u16, value: u8, cycles: u64, cpu: &mut Cpu);
+    fn read(&self, index: u16, cycles: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8;
+    fn write(&mut self, index: u16, value: u8, cycles: u64, cpu: &mut Cpu, mbc: &mut dyn Mbc);
 }
 
 impl MmuCpuExt for State {
-    fn read(&self, index: u16, _: u64, cpu: &Cpu) -> u8 {
+    fn read(&self, index: u16, _: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
-            ..OAM => MmuExt::read(self, index),
+            ..OAM => MmuExt::read(self, index, mbc),
             OAM..NOT_USABLE => {
                 let ppu = self.lcd_status & LcdStatus::PPU_MASK;
                 if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.is_dma_active {
@@ -93,19 +93,19 @@ impl MmuCpuExt for State {
         }
     }
 
-    fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu) {
+    fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu, mbc: &mut dyn Mbc) {
         if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
 
         match index {
-            0..VIDEO_RAM => self.mbc.write(index, value),
+            0..VIDEO_RAM => mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
                 if (self.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
                     self.video_ram[usize::from(index - VIDEO_RAM)] = value
                 }
             }
-            EXTERNAL_RAM..WORK_RAM => self.mbc.write(index, value),
+            EXTERNAL_RAM..WORK_RAM => mbc.write(index, value),
             WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {

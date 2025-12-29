@@ -1,7 +1,10 @@
 // Mbc implementations stolen from https://github.com/joamag/boytacean
 
+use core::ops::Deref;
+
 use crate::{
     get_factor_8_kib_ram, get_factor_32_kib_rom,
+    mbc::Mbc,
     state::{EXTERNAL_RAM, ROM_BANK, SWITCHABLE_ROM_BANK, VIDEO_RAM, WORK_RAM},
 };
 
@@ -29,18 +32,9 @@ impl TryFrom<u8> for CartridgeType {
     }
 }
 
-// Memory Bank Controller
 #[derive(Clone)]
-pub enum Mbc {
-    NoMbc(&'static [u8]),
-    Mbc1(Mbc1),
-    Mbc3(Mbc3),
-    Mbc5(Mbc5),
-}
-
-#[derive(Clone)]
-struct Mbc3 {
-    rom: &'static [u8],
+pub struct Mbc3<T> {
+    rom: T,
     rom_offset: usize,
     // 32 KiB
     ram: [u8; 0x8000],
@@ -50,18 +44,28 @@ struct Mbc3 {
     ram_bank_count: u8,
 }
 
-impl Mbc3 {
-    fn new(rom: &'static [u8]) -> Self {
+impl<T: Deref<Target = [u8]>> Mbc3<T> {
+    pub fn new(rom: T) -> Self {
         Self {
+            ram_bank_count: get_factor_8_kib_ram(rom.deref()),
+            rom_bank_count: u8::try_from(get_factor_32_kib_rom(rom.deref())).unwrap() * 2,
             rom,
             rom_offset: usize::from(ROM_BANK_SIZE),
             ram_offset: 0,
-            ram_bank_count: get_factor_8_kib_ram(rom),
-            rom_bank_count: u8::try_from(get_factor_32_kib_rom(rom)).unwrap() * 2,
             ram: [0; 0x8000],
             ram_enabled: false,
         }
     }
+
+    pub fn set_ram_bank(&mut self, ram_bank: u8) {
+        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
+    }
+    pub fn set_rom_bank(&mut self, rom_bank: u16) {
+        self.rom_offset = usize::from(rom_bank) * usize::from(ROM_BANK_SIZE);
+    }
+}
+
+impl<T: Deref<Target = [u8]>> Mbc for Mbc3<T> {
     fn read(&self, index: u16) -> u8 {
         match index {
             ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
@@ -110,44 +114,11 @@ impl Mbc3 {
             _ => panic!(),
         }
     }
-    pub fn set_ram_bank(&mut self, ram_bank: u8) {
-        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
-    }
-    pub fn set_rom_bank(&mut self, rom_bank: u16) {
-        self.rom_offset = usize::from(rom_bank) * usize::from(ROM_BANK_SIZE);
-    }
-}
-
-impl Mbc {
-    pub fn new(rom: &'static [u8]) -> Self {
-        match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).unwrap() {
-            CartridgeType::RomOnly => Self::NoMbc(rom),
-            CartridgeType::Mbc1 | CartridgeType::Mbc1Ram => Self::Mbc1(Mbc1::new(rom)),
-            CartridgeType::Mbc3RamBattery => Self::Mbc3(Mbc3::new(rom)),
-            CartridgeType::Mbc5RamBattery => Self::Mbc5(Mbc5::new(rom)),
-        }
-    }
-    pub fn read(&self, index: u16) -> u8 {
-        match self {
-            Mbc::NoMbc(rom) => rom[usize::from(index)],
-            Mbc::Mbc1(mbc1) => mbc1.read(index),
-            Mbc::Mbc3(mbc3) => mbc3.read(index),
-            Mbc::Mbc5(mbc5) => mbc5.read(index),
-        }
-    }
-    pub fn write(&mut self, index: u16, value: u8) {
-        match self {
-            Mbc::NoMbc(_) => {}
-            Mbc::Mbc1(mbc1) => mbc1.write(index, value),
-            Mbc::Mbc3(mbc3) => mbc3.write(index, value),
-            Mbc::Mbc5(mbc5) => mbc5.write(index, value),
-        }
-    }
 }
 
 #[derive(Clone)]
-pub struct Mbc1 {
-    rom: &'static [u8],
+pub struct Mbc1<T> {
+    rom: T,
     rom_offset: usize,
     // 32 KiB
     ram: [u8; 0x8000],
@@ -160,18 +131,28 @@ pub struct Mbc1 {
 pub const ROM_BANK_SIZE: u16 = 16384;
 pub const RAM_BANK_SIZE: u16 = 8192;
 
-impl Mbc1 {
-    fn new(rom: &'static [u8]) -> Self {
+impl<T: Deref<Target = [u8]>> Mbc1<T> {
+    pub fn new(rom: T) -> Self {
         Self {
+            rom_bank_count: u8::try_from(get_factor_32_kib_rom(rom.deref())).unwrap() * 2,
+            ram_bank_count: get_factor_8_kib_ram(rom.deref()),
             rom,
             rom_offset: SWITCHABLE_ROM_BANK.into(),
             ram_offset: 0,
-            rom_bank_count: u8::try_from(get_factor_32_kib_rom(rom)).unwrap() * 2,
-            ram_bank_count: get_factor_8_kib_ram(rom),
             ram: [0; 0x8000],
             ram_enabled: false,
         }
     }
+
+    pub fn set_rom_bank(&mut self, rom_bank: u8) {
+        self.rom_offset = usize::from(rom_bank) * usize::from(ROM_BANK_SIZE);
+    }
+    pub fn set_ram_bank(&mut self, ram_bank: u8) {
+        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
+    }
+}
+
+impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
     fn read(&self, index: u16) -> u8 {
         match index {
             ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
@@ -214,17 +195,11 @@ impl Mbc1 {
             _ => panic!(),
         }
     }
-    pub fn set_rom_bank(&mut self, rom_bank: u8) {
-        self.rom_offset = usize::from(rom_bank) * usize::from(ROM_BANK_SIZE);
-    }
-    pub fn set_ram_bank(&mut self, ram_bank: u8) {
-        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
-    }
 }
 
 #[derive(Clone)]
-pub struct Mbc5 {
-    rom: &'static [u8],
+pub struct Mbc5<T> {
+    rom: T,
     rom_offset: usize,
     // 128 KiB
     ram: [u8; 0x20000],
@@ -233,17 +208,30 @@ pub struct Mbc5 {
     ram_bank_count: u8,
 }
 
-impl Mbc5 {
-    fn new(rom: &'static [u8]) -> Self {
+impl<T: Deref<Target = [u8]>> Mbc5<T> {
+    pub fn new(rom: T) -> Self {
         Self {
+            ram_bank_count: get_factor_8_kib_ram(rom.deref()),
             rom,
             rom_offset: usize::from(ROM_BANK_SIZE),
             ram_offset: 0,
-            ram_bank_count: get_factor_8_kib_ram(rom),
             ram: [0; 0x20000],
             ram_enabled: false,
         }
     }
+
+    pub fn set_rom_bank(&mut self, rom_bank: u16) {
+        self.rom_offset = rom_bank as usize * usize::from(ROM_BANK_SIZE);
+    }
+    pub fn set_ram_bank(&mut self, ram_bank: u8) {
+        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
+    }
+    pub fn rom_bank(&self) -> u16 {
+        (self.rom_offset / usize::from(ROM_BANK_SIZE)) as u16
+    }
+}
+
+impl<T: Deref<Target = [u8]>> Mbc for Mbc5<T> {
     fn read(&self, index: u16) -> u8 {
         match index {
             // 0x0000-0x3FFF - ROM bank 00
@@ -295,14 +283,5 @@ impl Mbc5 {
             }
             _ => {}
         }
-    }
-    pub fn set_rom_bank(&mut self, rom_bank: u16) {
-        self.rom_offset = rom_bank as usize * usize::from(ROM_BANK_SIZE);
-    }
-    pub fn set_ram_bank(&mut self, ram_bank: u8) {
-        self.ram_offset = u16::from(ram_bank) * RAM_BANK_SIZE;
-    }
-    pub fn rom_bank(&self) -> u16 {
-        (self.rom_offset / usize::from(ROM_BANK_SIZE)) as u16
     }
 }

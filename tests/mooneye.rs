@@ -1,16 +1,18 @@
-use gb_core::{Emulator, StateMachine, state::State};
+use gb_core::Emulator;
+use testouille_emulator_future::get_mbc;
 
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(
         "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/{path}"
     ))
     .unwrap();
-    let mut state = State::new(rom.leak());
+    let rom = rom.as_slice();
     let mut emulator = Emulator::default();
+    let mut mbc = get_mbc(rom).unwrap();
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
     while emulator.get_cpu().current_opcode != 0x40 {
-        emulator.execute(&mut state, 0);
+        emulator.execute(mbc.as_mut(), 0);
     }
 
     let cpu = emulator.get_cpu();

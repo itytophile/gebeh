@@ -9,11 +9,12 @@ use core::num::NonZeroU8;
 use arrayvec::ArrayVec;
 
 use crate::{
-    StateMachine,
     ic::Ints,
-    ppu::{ly_handler::LyHandler, renderer::Renderer},
+    ppu::renderer::Renderer,
     state::{LcdStatus, State},
 };
+
+pub use ly_handler::LyHandler;
 
 #[derive(Clone)]
 pub enum Ppu {
@@ -354,8 +355,8 @@ fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, _: u64) {
 // De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl StateMachine for Ppu {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
+impl Ppu {
+    pub fn execute(&mut self, state: &mut State, cycle_count: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
@@ -449,22 +450,12 @@ impl StateMachine for Ppu {
 }
 
 #[derive(Clone)]
-pub struct Speeder<T: StateMachine>(pub T, pub NonZeroU8);
+pub struct Speeder(pub Ppu, pub NonZeroU8);
 
-impl<T: StateMachine> StateMachine for Speeder<T> {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
+impl Speeder {
+    pub fn execute(&mut self, state: &mut State, cycle_count: u64) {
         for _ in 0..self.1.get() {
             self.0.execute(state, cycle_count);
         }
     }
-}
-
-// separated systems because the ppu is faster than the other component and the behavior of each system is strange.
-pub type PpuBundle = (LyHandler, Speeder<Ppu>);
-
-pub fn get_ppu_bundle() -> PpuBundle {
-    (
-        LyHandler::default(),
-        Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
-    )
 }

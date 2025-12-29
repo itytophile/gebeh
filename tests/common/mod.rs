@@ -1,14 +1,15 @@
 use gb_core::{
-    StateMachine,
+    Emulator,
+    mbc::Mbc,
     state::{SerialControl, State},
 };
 use std::iter;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TestSerial(pub Option<u8>);
 
-impl StateMachine for TestSerial {
-    fn execute(&mut self, state: &mut State, _: u64) {
+impl TestSerial {
+    pub fn execute(&mut self, state: &mut State) {
         // if transfer enable
         let mut must_clear = false;
         if state
@@ -25,14 +26,15 @@ impl StateMachine for TestSerial {
 }
 
 pub fn machine_to_serial_iter(
-    machine: &mut (impl StateMachine, TestSerial),
-    state: &mut State,
+    emulator: &mut Emulator,
+    serial: &mut TestSerial,
+    mbc: &mut dyn Mbc,
 ) -> impl Iterator<Item = u8> {
     iter::from_fn(move || {
         loop {
-            machine.execute(state, 0);
-            let (_, TestSerial(byte)) = machine;
-            if let Some(byte) = byte.take() {
+            emulator.execute(mbc, 0);
+            serial.execute(&mut emulator.state);
+            if let Some(byte) = serial.0.take() {
                 return Some(byte);
             }
         }

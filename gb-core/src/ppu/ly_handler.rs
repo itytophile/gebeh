@@ -1,4 +1,4 @@
-use crate::{StateMachine, ic::Ints, ppu::LcdControl, state::LcdStatus};
+use crate::{ic::Ints, ppu::LcdControl, state::LcdStatus};
 
 const LINE_DURATION_M_CYCLE: u8 = 114;
 
@@ -18,8 +18,8 @@ pub struct LyHandler {
 //     }
 // }
 
-impl StateMachine for LyHandler {
-    fn execute(&mut self, state: &mut crate::state::State, _: u64) {
+impl LyHandler {
+    pub fn execute(&mut self, state: &mut crate::state::State, _: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
@@ -60,7 +60,6 @@ impl StateMachine for LyHandler {
 #[cfg(test)]
 mod tests {
     use crate::{
-        StateMachine,
         ppu::{LcdControl, ly_handler::LyHandler},
         state::State,
     };
@@ -68,7 +67,7 @@ mod tests {
     #[test]
     fn ly_incrementer() {
         let mut ly_incrementer = LyHandler::default();
-        let mut state = State::new(&[]);
+        let mut state = State::default();
         state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
         // cycle 0 (line 0)
         ly_incrementer.execute(&mut state, 0);

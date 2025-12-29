@@ -1,6 +1,7 @@
 use crate::common::{TestSerial, machine_to_serial_iter};
 use arrayvec::ArrayVec;
-use gb_core::{Emulator, StateMachine, state::State};
+use gb_core::{Emulator, state::State};
+use testouille_emulator_future::get_mbc;
 
 mod common;
 
@@ -11,10 +12,12 @@ fn cpu_instrs() {
 
     let rom =
         std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/cpu_instrs.gb").unwrap();
-    let mut state = State::new(rom.leak());
-    let mut machine = Emulator::default().compose(TestSerial(None));
+    let rom = rom.as_slice();
+    let mut mbc = get_mbc(rom).unwrap();
+    let mut machine = Emulator::default();
+    let mut serial = TestSerial(None);
 
-    let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, &mut state)
+    let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, &mut serial, mbc.as_mut())
         .take(LEN)
         .collect();
 

@@ -1,13 +1,15 @@
 use std::time::{Duration, Instant};
 
 use gb_core::{
-    Emulator, HEIGHT, StateMachine, WIDTH,
+    Emulator, HEIGHT, WIDTH,
     cartridge::CartridgeType,
     get_factor_8_kib_ram, get_factor_32_kib_rom,
+    mbc::Mbc,
     ppu::{LcdControl, Ppu, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
 };
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
+use testouille_emulator_future::get_mbc;
 use winit::{
     dpi::LogicalSize,
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -79,10 +81,11 @@ fn main() {
     println!("ROM size: {} KiB", get_factor_32_kib_rom(&rom) * 32);
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
-    let mut state = State::new(rom.leak());
+    // don't forget to slice the vec or you will clone it for each save state
+    let mut mbc = get_mbc(rom.as_slice()).unwrap();
     let mut emulator = Emulator::default();
 
-    let mut save_states = vec![(emulator.clone(), state.clone())];
+    let mut save_states = vec![(emulator.clone(), mbc.clone_boxed())];
 
     let event_loop = EventLoop::new().unwrap();
 
@@ -157,10 +160,10 @@ fn main() {
                 if !is_paused {
                     if last_save.elapsed() >= Duration::from_secs(2) {
                         last_save = Instant::now();
-                        save_states.push((emulator.clone(), state.clone()));
+                        save_states.push((emulator.clone(), mbc.clone_boxed()));
                     }
                     draw_emulator(
-                        &mut state,
+                        mbc.as_mut(),
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut cycle_count,
@@ -177,7 +180,10 @@ fn main() {
                 ..
             } if window_id == debug_window.id() => {
                 if !is_paused {
-                    draw_tiles_debug(&state, debug_pixels.frame_mut().as_chunks_mut::<4>().0);
+                    draw_tiles_debug(
+                        &emulator.state,
+                        debug_pixels.frame_mut().as_chunks_mut::<4>().0,
+                    );
                     debug_pixels.render().unwrap();
                 }
 
@@ -190,7 +196,7 @@ fn main() {
             } if window_id == debug_tile_map_window.id() => {
                 if !is_paused {
                     draw_tile_map_debug(
-                        &state,
+                        &emulator.state,
                         debug_tile_map_pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
                     debug_tile_map_pixels.render().unwrap();
@@ -268,7 +274,7 @@ fn main() {
                 ..
             } => {
                 if let Some(old) = save_states.pop() {
-                    (emulator, state) = old
+                    (emulator, mbc) = old
                 }
             }
             Event::WindowEvent {
@@ -293,7 +299,7 @@ fn main() {
 }
 
 fn draw_emulator(
-    state: &mut State,
+    mbc: &mut dyn Mbc,
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
     cycle_count: &mut u64,
@@ -301,7 +307,7 @@ fn draw_emulator(
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
-        emulator.execute(state, *cycle_count);
+        emulator.execute(mbc, *cycle_count);
         *cycle_count += 1;
 
         if *debug_mode == DebugMode::Scanline
@@ -313,9 +319,9 @@ fn draw_emulator(
         {
             log::info!(
                 "LY = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
-                state.ly,
-                state.scx,
-                state.scy,
+                emulator.state.ly,
+                emulator.state.scx,
+                emulator.state.scy,
                 renderer.first_pixels_to_skip
             );
         }
@@ -347,11 +353,11 @@ fn draw_emulator(
             }
         };
 
-        let base = usize::from(state.ly) * usize::from(WIDTH);
+        let base = usize::from(emulator.state.ly) * usize::from(WIDTH);
         for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
             *pixel = (*color).into();
         }
-        if state.ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
+        if emulator.state.ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
             break;
         }
     }

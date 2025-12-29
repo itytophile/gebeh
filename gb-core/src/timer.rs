@@ -1,4 +1,4 @@
-use crate::{StateMachine, ic::Ints, state::State};
+use crate::{ic::Ints, state::State};
 
 // There is a system counter which is 14 bits wide
 // The div register is the height most significant bits of this system counter
@@ -11,8 +11,8 @@ use crate::{StateMachine, ic::Ints, state::State};
 #[derive(Clone)]
 pub struct Timer;
 
-impl StateMachine for Timer {
-    fn execute(&mut self, state: &mut State, _: u64) {
+impl Timer {
+    pub fn execute(&mut self, state: &mut State, _: u64) {
         let increment_frequency: u16 = match state.timer_control & 0b11 {
             0 => 256,
             1 => 4,

@@ -173,14 +173,14 @@ mod tests {
     #[test]
     fn normal_timing() {
         assert_eq!(
-            get_timing(&State::new(&[]), None, Default::default()),
+            get_timing(&State::default(), None, Default::default()),
             MINIMUM_TIME
         );
     }
 
     #[test]
     fn with_window() {
-        let mut state = State::new(&[]);
+        let mut state = State::default();
         state.lcd_control.insert(LcdControl::WINDOW_ENABLE);
 
         // https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn with_objects() {
-        let mut state = State::new(&[]);
+        let mut state = State::default();
         state.lcd_control.insert(LcdControl::OBJ_ENABLE);
         let objects = ArrayVec::from_iter([ObjectAttribute {
             flags: ObjectFlags::empty(),
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn with_scroll_x() {
-        let mut state = State::new(&[]);
+        let mut state = State::default();
 
         for scx in 0..=u8::MAX {
             state.scx = scx;

@@ -1,9 +1,12 @@
 #![no_std]
 
+use core::num::NonZeroU8;
+
 use crate::{
     cpu::Cpu,
     dma::Dma,
-    ppu::{Ppu, PpuBundle, get_ppu_bundle},
+    mbc::Mbc,
+    ppu::{LyHandler, Ppu, Speeder},
     state::State,
     timer::Timer,
 };
@@ -37,34 +40,18 @@ pub fn get_factor_8_kib_ram(rom: &[u8]) -> u8 {
     }
 }
 
-pub trait StateMachine: Clone {
-    /// must take one M-cycle
-    fn execute(&mut self, state: &mut State, cycle_count: u64);
-    fn compose<T: StateMachine>(self, other: T) -> (Self, T)
-    where
-        Self: Sized,
-    {
-        (self, other)
-    }
-}
-
-impl<T: StateMachine, U: StateMachine> StateMachine for (T, U) {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        self.0.execute(state, cycle_count);
-        self.1.execute(state, cycle_count);
-    }
-}
-
 #[derive(Clone)]
 pub struct Emulator {
-    ppu_bundle: PpuBundle,
+    ly_handler: LyHandler,
+    ppu: Speeder,
     dma: Dma,
     cpu: Cpu,
+    pub state: State,
 }
 
 impl Emulator {
     pub fn get_ppu(&self) -> &Ppu {
-        &self.ppu_bundle.1.0
+        &self.ppu.0
     }
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
@@ -74,18 +61,21 @@ impl Emulator {
 impl Default for Emulator {
     fn default() -> Self {
         Self {
-            ppu_bundle: get_ppu_bundle(),
+            ly_handler: LyHandler::default(),
+            ppu: Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
             dma: Default::default(),
             cpu: Default::default(),
+            state: Default::default(),
         }
     }
 }
 
-impl StateMachine for Emulator {
-    fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        self.dma.execute(state, cycle_count);
-        self.ppu_bundle.execute(state, cycle_count);
-        Timer.execute(state, cycle_count);
-        self.cpu.execute(state, cycle_count);
+impl Emulator {
+    pub fn execute(&mut self, mbc: &mut dyn Mbc, cycle_count: u64) {
+        self.dma.execute(&mut self.state, mbc, cycle_count);
+        self.ly_handler.execute(&mut self.state, cycle_count);
+        self.ppu.execute(&mut self.state, cycle_count);
+        Timer.execute(&mut self.state, cycle_count);
+        self.cpu.execute(&mut self.state, mbc, cycle_count);
     }
 }
