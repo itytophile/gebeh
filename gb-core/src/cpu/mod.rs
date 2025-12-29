@@ -14,14 +14,6 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Ime {
-    Off,
-    On,
-    // https://gbdev.io/pandocs/Interrupts.html#ime-interrupt-master-enable-flag-write-only
-    Delay,
-}
-
 #[derive(Clone)]
 pub struct Cpu {
     pub sp: u16,
