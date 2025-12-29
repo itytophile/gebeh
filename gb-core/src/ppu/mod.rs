@@ -369,13 +369,10 @@ impl StateMachine for Ppu {
                 objects,
                 ..
             } => {
-                // interruption is delayed only on line 0
-                if matches!((*dots_count, state.ly), (4, 0) | (0, 1..)) {
-                    request_interrupt(state, LcdStatus::OAM_INT, cycle_count)
-                }
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::OAM_SCAN);
+                    request_interrupt(state, LcdStatus::OAM_INT, cycle_count)
                 }
 
                 if state.lcd_control.contains(LcdControl::OBJ_ENABLE)
@@ -429,8 +426,8 @@ impl StateMachine for Ppu {
             Ppu::HorizontalBlank { dots_count, .. } => {
                 match *dots_count {
                     // we know from mooneye's hblank_ly_scx_timing-GS that if hblank is one dot late, then the interrupt is one
-                    // whole M-cycle late. So I assume that the interrupt is triggered during the fourth dot of hblank
-                    3 => request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count),
+                    // whole M-cycle late. TODO better comment
+                    7 => request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count),
                     4 => state.set_ppu_mode(LcdStatus::HBLANK),
                     _ => {}
                 }

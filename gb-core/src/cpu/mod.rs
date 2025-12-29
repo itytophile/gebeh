@@ -45,7 +45,6 @@ pub struct Cpu {
     pub current_opcode: u8,
     pub is_dispatching_interrupt: bool,
     pub interrupt_enable: Ints,
-    pub interrupt_flag: Ints,
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
     pub boot_rom: &'static [u8; 256],
@@ -76,7 +75,6 @@ impl Default for Cpu {
             current_opcode: 0,
             is_dispatching_interrupt: false,
             interrupt_enable: Ints::empty(),
-            interrupt_flag: Ints::empty(),
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
             boot_rom: &BOOTIX_BOOT_ROM,
@@ -441,7 +439,7 @@ impl Cpu {
                     _ => 0x0000,
                 };
                 if let Some(interrupt) = interrupt {
-                    self.interrupt_flag.remove(interrupt);
+                    state.interrupt_flag.remove(interrupt);
                 }
             }
             NoRead(Res(bit, register)) => {
@@ -859,14 +857,10 @@ impl Cpu {
 
 impl StateMachine for Cpu {
     fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        self.interrupt_flag |= state.prout;
-        state.prout = Ints::empty();
         let interrupts_to_execute =
-            Ints::from_bits_truncate(self.interrupt_enable.bits()) & self.interrupt_flag;
+            Ints::from_bits_truncate(self.interrupt_enable.bits()) & state.interrupt_flag;
         // Peripherals interrupts are not handled the same cycle they are triggered.
         // However, the new value can be read or written over the same cycle.
-        self.interrupt_flag |= state.interrupt_flag;
-        state.interrupt_flag = Ints::empty();
 
         // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
         if self.stop_mode {

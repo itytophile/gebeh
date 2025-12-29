@@ -45,7 +45,7 @@ impl StateMachine for LyHandler {
             && state.lcd_status.contains(LcdStatus::LYC_INT)
             && !self.ly_interrupt_disabled
         {
-            state.prout.insert(Ints::LCD);
+            state.interrupt_flag.insert(Ints::LCD);
             self.ly_interrupt_disabled = true;
         }
 
