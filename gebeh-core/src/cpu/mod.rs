@@ -965,6 +965,7 @@ impl Cpu {
             }
         };
 
+        // to do after read
         state.apply_delayed();
 
         self.execute_instruction(state, inst, interrupts_to_execute, cycle_count, mbc);

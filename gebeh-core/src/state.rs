@@ -138,10 +138,13 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 
 // if read by the cpu the same cycle they are written, then the cpu will read the old value.
 // The delayed value will be read the next cycle.
-// Careful, delayed state can be written over the same cycle by the CPU, so it will never be read.
+// Be careful, delayed state can be written over the same cycle by the CPU thus it will never be read.
 #[derive(Clone, Default)]
 pub struct Delayed {
+    // according to some mooneye tests, interrupts from PPU are delayed by one M-cycle
     pub interrupt_flag: Interruptions,
+    // according to some mooneye tests and a comment in SameBoy PPU implementation, STAT mode is delayed by one M-cycle
+    // https://github.com/LIJI32/SameBoy/blob/858f0034650fc91778f2cf9adaf801ce77d2fe68/Core/display.c#L1530
     pub ppu_mode: LcdStatus,
 }
 
