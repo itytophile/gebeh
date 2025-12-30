@@ -187,15 +187,21 @@ fn rst_timing() {
     test_mooneye("rst_timing.gb");
 }
 
+// instr
+
 #[test]
 fn daa() {
     test_mooneye("instr/daa.gb");
 }
 
+// interrupts
+
 #[test]
 fn ie_push() {
     test_mooneye("interrupts/ie_push.gb");
 }
+
+// oam_dma
 
 #[test]
 fn oam_dma_basic() {
@@ -212,8 +218,8 @@ fn oam_dma_sources_gs() {
     test_mooneye("oam_dma/sources-GS.gb");
 }
 
-// d'après mooneye, quand le cpu lit une donnée, avant de faire la lecture il exécute un cycle sur le périphérique lu.
-// dans le cas du ppu, cela implique que si le ppu modifie ly dans le même cycle de lecture, le cpu lit la nouvelle valeur.
+// ppu
+
 #[test]
 fn hblank_ly_scx_timing_gs() {
     test_mooneye("ppu/hblank_ly_scx_timing-GS.gb");
@@ -249,27 +255,97 @@ fn intr_2_oam_ok_timing() {
     test_mooneye("ppu/intr_2_oam_ok_timing.gb");
 }
 
-// #[test]
-// fn lcdon_timing_gs() {
-//     test_mooneye("ppu/lcdon_timing-GS.gb");
-// }
+#[test]
+#[ignore]
+fn lcdon_timing_gs() {
+    test_mooneye("ppu/lcdon_timing-GS.gb");
+}
 
-// #[test]
-// fn lcdon_write_timing_gs() {
-//     test_mooneye("ppu/lcdon_write_timing-GS.gb");
-// }
+#[test]
+#[ignore]
+fn lcdon_write_timing_gs() {
+    test_mooneye("ppu/lcdon_write_timing-GS.gb");
+}
 
-// #[test]
-// fn stat_irq_blocking() {
-//     test_mooneye("ppu/stat_irq_blocking.gb");
-// }
+#[test]
+fn stat_irq_blocking() {
+    test_mooneye("ppu/stat_irq_blocking.gb");
+}
 
-// #[test]
-// fn stat_lyc_onoff() {
-//     test_mooneye("ppu/stat_lyc_onoff.gb");
-// }
+#[test]
+#[ignore]
+fn stat_lyc_onoff() {
+    test_mooneye("ppu/stat_lyc_onoff.gb");
+}
 
 #[test]
 fn vblank_stat_intr_gs() {
     test_mooneye("ppu/vblank_stat_intr-GS.gb");
+}
+
+// timer
+
+#[test]
+fn div_write() {
+    test_mooneye("timer/div_write.gb");
+}
+
+#[test]
+fn rapid_roggle() {
+    test_mooneye("timer/rapid_toggle.gb");
+}
+
+#[test]
+fn tim00() {
+    test_mooneye("timer/tim00.gb");
+}
+
+#[test]
+fn tim00_div_trigger() {
+    test_mooneye("timer/tim00_div_trigger.gb");
+}
+
+#[test]
+fn tim01() {
+    test_mooneye("timer/tim01.gb");
+}
+
+#[test]
+fn tim01_div_trigger() {
+    test_mooneye("timer/tim01_div_trigger.gb");
+}
+
+#[test]
+fn tim10() {
+    test_mooneye("timer/tim10.gb");
+}
+
+#[test]
+fn tim10_div_trigger() {
+    test_mooneye("timer/tim10_div_trigger.gb");
+}
+
+#[test]
+fn tim11() {
+    test_mooneye("timer/tim11.gb");
+}
+
+#[test]
+fn tim11_div_trigger() {
+    test_mooneye("timer/tim11_div_trigger.gb");
+}
+
+#[test]
+fn tima_reload() {
+    test_mooneye("timer/tima_reload.gb");
+}
+
+#[test]
+fn tima_write_reloading() {
+    test_mooneye("timer/tima_write_reloading.gb");
+}
+
+#[test]
+fn tma_write_reloading() {
+    test_mooneye("timer/tma_write_reloading.gb");
 }
