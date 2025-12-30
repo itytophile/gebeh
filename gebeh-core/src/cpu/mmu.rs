@@ -34,9 +34,9 @@ impl MmuCpuExt for State {
             SC => self.sc.bits() | 0b01111110,
             0xff03 => 0xff,
             DIV => (self.system_counter >> 6 & 0xff).try_into().unwrap(),
-            TIMER_COUNTER => self.timer_counter,
-            TIMER_MODULO => self.timer_modulo,
-            TIMER_CONTROL => self.timer_control | 0b11111000,
+            TIMER_COUNTER => self.tima,
+            TIMER_MODULO => self.tma,
+            TIMER_CONTROL => self.tac | 0b11111000,
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             SWEEP => self.sweep | 0b10000000,
@@ -127,9 +127,9 @@ impl MmuCpuExt for State {
             // Citation:
             // Writing any value to this register resets it to $00
             DIV => self.system_counter = 0,
-            TIMER_COUNTER => self.timer_counter = value,
-            TIMER_MODULO => self.timer_modulo = value,
-            TIMER_CONTROL => self.timer_control = value,
+            TIMER_COUNTER => self.tima = value,
+            TIMER_MODULO => self.tma = value,
+            TIMER_CONTROL => self.tac = value,
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             SWEEP => self.sweep = value,

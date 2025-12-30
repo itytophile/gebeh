@@ -16,7 +16,7 @@ pub struct Timer {
 impl Timer {
     pub fn execute(&mut self, state: &mut State, _: u64) {
         // we only check a single bit to see if it's a multiple of the frequency
-        let frequency_mask = match state.timer_control & 0b11 {
+        let frequency_mask = match state.tac & 0b11 {
             0b00 => 0x80, // multiple of 256
             0b01 => 0x02, // multiple of 4
             0b10 => 0x08, // multiple of 16
@@ -29,7 +29,7 @@ impl Timer {
         // the following checks are broken by design
         // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#relation-between-timer-and-divider-register
 
-        let and = state.timer_control & 0b100 != 0 && state.system_counter & frequency_mask != 0;
+        let and = state.tac & 0b100 != 0 && state.system_counter & frequency_mask != 0;
 
         if and == self.falling_edge_detector {
             return;
@@ -41,11 +41,11 @@ impl Timer {
             return;
         }
 
-        state.timer_counter = if let Some(value) = state.timer_counter.checked_add(1) {
+        state.tima = if let Some(value) = state.tima.checked_add(1) {
             value
         } else {
             state.interrupt_flag.insert(Interruptions::TIMER);
-            state.timer_modulo
+            state.tma
         };
     }
 }
