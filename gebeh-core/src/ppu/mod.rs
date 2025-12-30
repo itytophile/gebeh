@@ -9,9 +9,8 @@ use core::num::NonZeroU8;
 use arrayvec::ArrayVec;
 
 use crate::{
-    ic::Ints,
     ppu::renderer::Renderer,
-    state::{LcdStatus, State},
+    state::{Interruptions, LcdStatus, State},
 };
 
 pub use ly_handler::LyHandler;
@@ -315,7 +314,7 @@ fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, _: u64) {
         LcdStatus::HBLANK_INT | LcdStatus::OAM_INT | LcdStatus::VBLANK_INT
     ));
     if state.lcd_status.contains(mode_interrupt) {
-        state.interrupt_flag.insert(Ints::LCD);
+        state.interrupt_flag.insert(Interruptions::LCD);
     }
 }
 
@@ -440,7 +439,7 @@ impl Ppu {
                     request_interrupt(state, LcdStatus::VBLANK_INT, cycle_count);
                     // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
                     request_interrupt(state, LcdStatus::OAM_INT, cycle_count);
-                    state.interrupt_flag.insert(Ints::VBLANK);
+                    state.interrupt_flag.insert(Interruptions::VBLANK);
                     state.set_ppu_mode(LcdStatus::VBLANK);
                 }
                 *remaining_dots -= 1;

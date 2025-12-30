@@ -3,9 +3,8 @@ mod mmu;
 
 use crate::{
     cpu::mmu::MmuCpuExt,
-    ic::Ints,
     mbc::Mbc,
-    state::{BOOTIX_BOOT_ROM, State},
+    state::{BOOTIX_BOOT_ROM, Interruptions, State},
 };
 use arrayvec::ArrayVec;
 use instructions::{
@@ -36,7 +35,7 @@ pub struct Cpu {
     // test purposes
     pub current_opcode: u8,
     pub is_dispatching_interrupt: bool,
-    pub interrupt_enable: Ints,
+    pub interrupt_enable: Interruptions,
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
     pub boot_rom: &'static [u8; 256],
@@ -66,7 +65,7 @@ impl Default for Cpu {
             stop_mode: Default::default(),
             current_opcode: 0,
             is_dispatching_interrupt: false,
-            interrupt_enable: Ints::empty(),
+            interrupt_enable: Interruptions::empty(),
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
             boot_rom: &BOOTIX_BOOT_ROM,
@@ -192,7 +191,7 @@ impl Cpu {
         &mut self,
         state: &mut State,
         inst: AfterReadInstruction,
-        interrupts_to_execute: Ints,
+        interrupts_to_execute: Interruptions,
         cycle_count: u64,
         mbc: &mut dyn Mbc,
     ) {
@@ -427,11 +426,11 @@ impl Cpu {
                 let interrupt = interrupts_to_execute.iter().next();
                 // we have to check here the interrupts to pass the ie_push test
                 self.pc = match interrupt {
-                    Some(Ints::VBLANK) => 0x0040,
-                    Some(Ints::LCD) => 0x0048,
-                    Some(Ints::TIMER) => 0x0050,
-                    Some(Ints::SERIAL) => 0x0058,
-                    Some(Ints::JOYPAD) => 0x0060,
+                    Some(Interruptions::VBLANK) => 0x0040,
+                    Some(Interruptions::LCD) => 0x0048,
+                    Some(Interruptions::TIMER) => 0x0050,
+                    Some(Interruptions::SERIAL) => 0x0058,
+                    Some(Interruptions::JOYPAD) => 0x0060,
                     _ => 0x0000,
                 };
                 if let Some(interrupt) = interrupt {
@@ -867,7 +866,7 @@ impl Cpu {
 impl Cpu {
     pub fn execute(&mut self, state: &mut State, mbc: &mut dyn Mbc, cycle_count: u64) {
         let interrupts_to_execute =
-            Ints::from_bits_truncate(self.interrupt_enable.bits()) & state.interrupt_flag;
+            Interruptions::from_bits_truncate(self.interrupt_enable.bits()) & state.interrupt_flag;
         // Peripherals interrupts are not handled the same cycle they are triggered.
         // However, the new value can be read or written over the same cycle.
 

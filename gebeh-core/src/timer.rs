@@ -1,4 +1,4 @@
-use crate::{ic::Ints, state::State};
+use crate::state::{Interruptions, State};
 
 // There is a system counter which is 14 bits wide
 // The div register is the height most significant bits of this system counter
@@ -32,7 +32,7 @@ impl Timer {
         state.timer_counter = if let Some(value) = state.timer_counter.checked_add(1) {
             value
         } else {
-            state.interrupt_flag.insert(Ints::TIMER);
+            state.interrupt_flag.insert(Interruptions::TIMER);
             state.timer_modulo
         };
     }

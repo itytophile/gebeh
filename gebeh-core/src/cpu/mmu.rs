@@ -1,4 +1,4 @@
-use crate::{cpu::Cpu, ic::Ints, mbc::Mbc, ppu::LcdControl, state::*};
+use crate::{cpu::Cpu, mbc::Mbc, ppu::LcdControl, state::*};
 
 pub trait MmuCpuExt {
     fn read(&self, index: u16, cycles: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8;
@@ -131,7 +131,7 @@ impl MmuCpuExt for State {
             TIMER_MODULO => self.timer_modulo = value,
             TIMER_CONTROL => self.timer_control = value,
             0xff08..INTERRUPT_FLAG => {}
-            INTERRUPT_FLAG => self.interrupt_flag = Ints::from_bits_truncate(value),
+            INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             SWEEP => self.sweep = value,
             LENGTH_TIMER_AND_DUTY_CYCLE => self.length_timer_and_duty_cycle = value,
             VOLUME_AND_ENVELOPE => self.volume_and_envelope = value,
@@ -190,7 +190,7 @@ impl MmuCpuExt for State {
             BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control = value & 0b1 != 0,
             0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)] = value,
-            INTERRUPT_ENABLE => cpu.interrupt_enable = Ints::from_bits_retain(value),
+            INTERRUPT_ENABLE => cpu.interrupt_enable = Interruptions::from_bits_retain(value),
         }
     }
 }

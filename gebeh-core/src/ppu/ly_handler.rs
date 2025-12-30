@@ -1,4 +1,7 @@
-use crate::{ic::Ints, ppu::LcdControl, state::LcdStatus};
+use crate::{
+    ppu::LcdControl,
+    state::{Interruptions, LcdStatus},
+};
 
 const LINE_DURATION_M_CYCLE: u8 = 114;
 
@@ -45,7 +48,7 @@ impl LyHandler {
             && state.lcd_status.contains(LcdStatus::LYC_INT)
             && !self.ly_interrupt_disabled
         {
-            state.interrupt_flag.insert(Ints::LCD);
+            state.interrupt_flag.insert(Interruptions::LCD);
             self.ly_interrupt_disabled = true;
         }
 
