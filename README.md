@@ -30,7 +30,7 @@ Pronounced gebeh.
 ### Reference emulators
 
 - [Mooneye GB](https://github.com/Gekkio/mooneye-gb) - Used for comparison to know why gebeh was failing some tests.
-- [SameBoy](https://github.com/LIJI32/SameBoy) - Still can't understand the code, but there are interesting comments about STAT.
+- [SameBoy](https://github.com/LIJI32/SameBoy) - Used to see how roms are supposed to run. Still can't understand the code, but there are interesting comments about STAT.
 - [Boytacean](https://github.com/joamag/boytacean) - Can be used in the browser directly. MBC and some instructions implementation stolen from here.
 - [RGY](https://github.com/YushiOMOTE/rgy) no-std emulator - Used its PPU implementation to test the CPU at first.
 
