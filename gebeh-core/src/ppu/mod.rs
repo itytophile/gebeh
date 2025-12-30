@@ -40,6 +40,18 @@ pub enum PpuStep {
     }, // <= 456
 }
 
+impl PpuStep {
+    fn get_ppu_mode(&self) -> LcdStatus {
+        use PpuStep::*;
+        match self {
+            OamScan { .. } => LcdStatus::OAM_SCAN,
+            Drawing { .. } => LcdStatus::DRAWING,
+            HorizontalBlank { .. } => LcdStatus::HBLANK,
+            VerticalBlankScanline { .. } => LcdStatus::VBLANK,
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Ppu {
     pub step: PpuStep,
@@ -348,7 +360,10 @@ impl Ppu {
         };
     }
 
-    pub fn detect_stat_irq(&mut self, state: &mut State) {
+    pub fn fire_interrupts(&mut self, state: &mut State) {
+        if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
+            state.interrupt_flag.insert(Interruptions::VBLANK);
+        }
         let stat_mode_irq = match &self.step {
             PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
             PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
@@ -380,7 +395,8 @@ impl Ppu {
         }
 
         self.switch_from_finished_mode(state);
-        self.detect_stat_irq(state);
+        self.fire_interrupts(state);
+        state.set_ppu_mode(self.step.get_ppu_mode());
 
         match &mut self.step {
             PpuStep::OamScan {
@@ -389,11 +405,6 @@ impl Ppu {
                 objects,
                 ..
             } => {
-                // STAT delayed by one M-cycle
-                if *dots_count == 4 {
-                    state.set_ppu_mode(LcdStatus::OAM_SCAN);
-                }
-
                 if state.lcd_control.contains(LcdControl::OBJ_ENABLE)
                     && *dots_count % 2 == 0
                     && objects.len() < objects.capacity()
@@ -423,9 +434,7 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                // STAT delayed by one M-cycle
                 if *dots_count == 4 {
-                    state.set_ppu_mode(LcdStatus::DRAWING);
                     // hot fix, we sometimes miss the scx value by one M-cycle
                     // so we reset the renderer here
                     *renderer = Renderer::new(core::mem::take(&mut renderer.objects), state.scx);
@@ -442,20 +451,8 @@ impl Ppu {
 
                 *dots_count += 1;
             }
-            PpuStep::HorizontalBlank { dots_count, .. } => {
-                if *dots_count == 4 {
-                    state.set_ppu_mode(LcdStatus::HBLANK)
-                }
-
-                *dots_count += 1
-            }
-            PpuStep::VerticalBlankScanline { dots_count } => {
-                if *dots_count == 4 {
-                    state.interrupt_flag.insert(Interruptions::VBLANK);
-                    state.set_ppu_mode(LcdStatus::VBLANK);
-                }
-                *dots_count += 1;
-            }
+            PpuStep::HorizontalBlank { dots_count, .. } => *dots_count += 1,
+            PpuStep::VerticalBlankScanline { dots_count } => *dots_count += 1,
         };
     }
 }
