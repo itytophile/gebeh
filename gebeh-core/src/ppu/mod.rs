@@ -3,7 +3,6 @@ mod fifos;
 mod ly_handler;
 mod renderer;
 mod sprite_fetcher;
-mod stat_irq_handler;
 
 use core::num::NonZeroU8;
 
@@ -15,10 +14,9 @@ use crate::{
 };
 
 pub use ly_handler::LyHandler;
-pub use stat_irq_handler::StatIrqHandler;
 
 #[derive(Clone)]
-pub enum Ppu {
+pub enum PpuStep {
     OamScan {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
@@ -40,6 +38,12 @@ pub enum Ppu {
         dots_count: u16,
         // no wy_condition because vblank means the frame ends
     }, // <= 456
+}
+
+#[derive(Clone, Default)]
+pub struct Ppu {
+    pub step: PpuStep,
+    stat_irq: bool,
 }
 
 bitflags::bitflags! {
@@ -77,7 +81,7 @@ impl LcdControl {
 const OAM_SCAN_DURATION: u8 = 80;
 const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456 * 10;
 
-impl Default for Ppu {
+impl Default for PpuStep {
     fn default() -> Self {
         Self::OamScan {
             dots_count: 0,
@@ -187,8 +191,8 @@ impl From<[u8; 4]> for ObjectAttribute {
 impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
-        match self {
-            Self::HorizontalBlank {
+        match &self.step {
+            PpuStep::HorizontalBlank {
                 dots_count,
                 remaining_dots,
                 scanline,
@@ -199,8 +203,8 @@ impl Ppu {
     }
 
     fn switch_from_finished_mode(&mut self, state: &State) {
-        match self {
-            Ppu::OamScan {
+        match &mut self.step {
+            PpuStep::OamScan {
                 window_y,
                 dots_count: OAM_SCAN_DURATION,
                 objects,
@@ -227,20 +231,20 @@ impl Ppu {
 
                 // log::warn!("{cycles}: entering drawing with ly = {}", state.ly);
 
-                *self = Ppu::Drawing {
+                self.step = PpuStep::Drawing {
                     dots_count: 0,
                     renderer,
                     window_y: *window_y,
                 }
             }
-            Ppu::Drawing {
+            PpuStep::Drawing {
                 dots_count,
                 renderer: Renderer { scanline, .. },
                 window_y,
                 ..
             } => {
                 if let Ok(scanline) = scanline.as_slice().try_into() {
-                    *self = Ppu::HorizontalBlank {
+                    self.step = PpuStep::HorizontalBlank {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                         window_y: *window_y,
                         dots_count: 0,
@@ -248,27 +252,27 @@ impl Ppu {
                     }
                 }
             }
-            Ppu::HorizontalBlank {
+            PpuStep::HorizontalBlank {
                 remaining_dots,
                 window_y,
                 dots_count,
                 ..
             } if remaining_dots == dots_count => {
-                *self = if state.ly == 144 {
-                    Ppu::VerticalBlankScanline { dots_count: 0 }
+                self.step = if state.ly == 144 {
+                    PpuStep::VerticalBlankScanline { dots_count: 0 }
                 } else {
-                    Ppu::OamScan {
+                    PpuStep::OamScan {
                         window_y: *window_y,
                         dots_count: 0,
                         objects: Default::default(),
                     }
                 };
             }
-            Ppu::VerticalBlankScanline {
+            PpuStep::VerticalBlankScanline {
                 dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
                 ..
             } => {
-                *self = Ppu::OamScan {
+                self.step = PpuStep::OamScan {
                     window_y: Default::default(),
                     dots_count: 0,
                     objects: Default::default(),
@@ -353,8 +357,8 @@ impl Ppu {
 
         self.switch_from_finished_mode(state);
 
-        match self {
-            Ppu::OamScan {
+        match &mut self.step {
+            PpuStep::OamScan {
                 dots_count,
                 window_y,
                 objects,
@@ -388,7 +392,7 @@ impl Ppu {
                 }
                 *dots_count += 1;
             }
-            Ppu::Drawing {
+            PpuStep::Drawing {
                 dots_count,
                 renderer,
                 window_y,
@@ -413,14 +417,14 @@ impl Ppu {
 
                 *dots_count += 1;
             }
-            Ppu::HorizontalBlank { dots_count, .. } => {
+            PpuStep::HorizontalBlank { dots_count, .. } => {
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::HBLANK)
                 }
 
                 *dots_count += 1
             }
-            Ppu::VerticalBlankScanline { dots_count } => {
+            PpuStep::VerticalBlankScanline { dots_count } => {
                 if *dots_count == 4 {
                     state.interrupt_flag.insert(Interruptions::VBLANK);
                     state.set_ppu_mode(LcdStatus::VBLANK);
@@ -428,6 +432,44 @@ impl Ppu {
                 *dots_count += 1;
             }
         };
+
+        let stat_mode_irq = match &self.step {
+            PpuStep::OamScan {
+                dots_count: 5.., ..
+            }
+            | PpuStep::Drawing {
+                dots_count: ..5, ..
+            } => state.lcd_status.contains(LcdStatus::OAM_INT),
+            PpuStep::HorizontalBlank {
+                dots_count: 8.., ..
+            }
+            | PpuStep::VerticalBlankScanline { dots_count: ..5 } => {
+                state.lcd_status.contains(LcdStatus::HBLANK_INT)
+            }
+            PpuStep::VerticalBlankScanline { dots_count: 5.. }
+            | PpuStep::OamScan {
+                dots_count: ..5, ..
+            } => {
+                // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
+                state.lcd_status.contains(LcdStatus::OAM_INT)
+                    | state.lcd_status.contains(LcdStatus::VBLANK_INT)
+            }
+            _ => false,
+        };
+
+        let stat_irq = stat_mode_irq
+            || (state.lcd_status.contains(LcdStatus::LYC_INT) && state.ly == state.lyc);
+
+        if stat_irq == self.stat_irq {
+            return;
+        }
+
+        self.stat_irq = stat_irq;
+
+        // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
+        if stat_irq {
+            state.interrupt_flag.insert(Interruptions::LCD);
+        }
     }
 }
 
@@ -445,7 +487,7 @@ impl Speeder {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ppu::{LcdControl, LyHandler, Ppu, VERTICAL_BLANK_SCANLINE_DURATION},
+        ppu::{LcdControl, LyHandler, Ppu, PpuStep, VERTICAL_BLANK_SCANLINE_DURATION},
         state::State,
     };
 
@@ -460,7 +502,7 @@ mod tests {
         loop {
             ppu.execute(&mut state, 0);
             duration += 1;
-            if let Ppu::OamScan { dots_count: 1, .. } = ppu {
+            if let PpuStep::OamScan { dots_count: 1, .. } = ppu.step {
                 break;
             }
         }
@@ -481,10 +523,10 @@ mod tests {
 
             ppu.execute(&mut state, 0);
             duration += 1;
-            if let Ppu::VerticalBlankScanline {
+            if let PpuStep::VerticalBlankScanline {
                 dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
                 ..
-            } = ppu
+            } = ppu.step
             {
                 break;
             }

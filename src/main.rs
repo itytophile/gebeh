@@ -4,7 +4,7 @@ use gebeh::get_mbc;
 use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
-    ppu::{LcdControl, Ppu, get_bg_win_tile, get_color_from_line, get_line_from_tile},
+    ppu::{LcdControl, PpuStep, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
 };
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
@@ -52,9 +52,9 @@ fn main() {
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
     //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
-    let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
+    // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/gejmboj/gejmboj.gb").unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/oh_2/oh.gb").unwrap();
+    let rom = std::fs::read("/home/ityt/Téléchargements/oh_2/oh.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/20y/20y.gb").unwrap();
     // let rom = std::fs::read(
     //     "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/stat_irq_blocking.gb",
@@ -310,11 +310,11 @@ fn draw_emulator(
         *cycle_count += 1;
 
         if *debug_mode == DebugMode::Scanline
-            && let Ppu::Drawing {
+            && let PpuStep::Drawing {
                 dots_count: 4,
                 renderer,
                 ..
-            } = emulator.get_ppu()
+            } = &emulator.get_ppu().step
         {
             log::info!(
                 "LY = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
@@ -327,7 +327,7 @@ fn draw_emulator(
 
         let scanline = match debug_mode {
             DebugMode::Pixel(previous_len) => {
-                let Ppu::Drawing { renderer, .. } = emulator.get_ppu() else {
+                let PpuStep::Drawing { renderer, .. } = &emulator.get_ppu().step else {
                     continue;
                 };
                 if renderer.scanline.len() == *previous_len {
