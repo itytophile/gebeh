@@ -367,10 +367,13 @@ impl Ppu {
         let stat_mode_irq = match &self.step {
             PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
             PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
-            PpuStep::VerticalBlankScanline { .. } => {
-                // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
+            PpuStep::VerticalBlankScanline { dots_count: 0, .. } if state.ly == 144 => {
+                // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     | state.lcd_status.contains(LcdStatus::VBLANK_INT)
+            }
+            PpuStep::VerticalBlankScanline { .. } => {
+                state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
             _ => false,
         };
