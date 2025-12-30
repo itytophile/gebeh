@@ -23,6 +23,15 @@ pub enum PpuStep {
         window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 80
+    // I have to delay (2 M-cycles) the drawing phase because I miss an edit of the SCX register during the OH demo.
+    // There are maybe two causes:
+    // - the LY=LYC interrupt is not detected by the CPU fast enough
+    // - when SCX is written in the same cycle the drawing phase starts, the drawing must catch that value (not possible with the current implementation)
+    DelayedDrawing {
+        dots_count: u16,
+        window_y: Option<u8>,
+        objects: ArrayVec<ObjectAttribute, 10>,
+    },
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
@@ -45,7 +54,7 @@ impl PpuStep {
         use PpuStep::*;
         match self {
             OamScan { .. } => LcdStatus::OAM_SCAN,
-            Drawing { .. } => LcdStatus::DRAWING,
+            DelayedDrawing { .. } | Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
             VerticalBlankScanline { .. } => LcdStatus::VBLANK,
         }
@@ -287,13 +296,24 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 objects,
             } => {
+                self.step = PpuStep::DelayedDrawing {
+                    dots_count: 0,
+                    window_y: *window_y,
+                    objects: core::mem::take(objects),
+                };
+            }
+            PpuStep::DelayedDrawing {
+                dots_count: dots_count @ 8,
+                window_y,
+                objects,
+            } => {
                 let mut objects_to_sort: ArrayVec<_, 10> =
                     objects.iter().copied().enumerate().collect();
                 // https://gbdev.io/pandocs/OAM.html#drawing-priority
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let renderer = Renderer::new(
+                let mut renderer = Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
@@ -302,15 +322,13 @@ impl Ppu {
                     // https://gbdev.io/pandocs/Scrolling.html#scrolling
                     // Citation: The scroll registers are re-read on each tile fetch, except for
                     // the low 3 bits of SCX, which are only read at the beginning of the scanline
-                    // (I have a visual glitch on the OH demo when I set this at the start of OAM scan so I'll do it here instead)
-                    // EDIT: i'm still one cycle late
                     state.scx,
                 );
-
-                // log::warn!("{cycles}: entering drawing with ly = {}", state.ly);
-
+                for _ in 0..*dots_count + 2 {
+                    renderer.execute(state, *dots_count, window_y);
+                }
                 self.step = PpuStep::Drawing {
-                    dots_count: 0,
+                    dots_count: *dots_count,
                     renderer,
                     window_y: *window_y,
                 }
@@ -442,26 +460,14 @@ impl Ppu {
                 }
                 *dots_count += 1;
             }
+            PpuStep::DelayedDrawing { dots_count, .. } => *dots_count += 1,
             PpuStep::Drawing {
                 dots_count,
                 renderer,
                 window_y,
                 ..
             } => {
-                if *dots_count == 4 {
-                    // hot fix, we sometimes miss the scx value by one M-cycle
-                    // so we reset the renderer here
-                    *renderer = Renderer::new(core::mem::take(&mut renderer.objects), state.scx);
-                    // don't forget that the renderer takes 174 dots to render a screen (minimum) so we must
-                    // run it two times more
-                    for _ in 0..6 {
-                        renderer.execute(state, *dots_count, window_y);
-                    }
-                }
-
-                if *dots_count >= 4 {
-                    renderer.execute(state, *dots_count, window_y);
-                }
+                renderer.execute(state, *dots_count, window_y);
 
                 *dots_count += 1;
             }
