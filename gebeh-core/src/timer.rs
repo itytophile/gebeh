@@ -11,17 +11,10 @@ use crate::state::{Interruptions, State};
 #[derive(Clone, Default)]
 pub struct Timer {
     falling_edge_detector: bool,
-    // to emulate the one M-cycle delay between an overflow and tima register getting the new value
-    // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
-    tima_has_overflowed: Option<u8>,
 }
 
 impl Timer {
-    pub fn execute(&mut self, state: &mut State, _: u64) {
-        if let Some(tma) = self.tima_has_overflowed.take() {
-            state.tima = tma;
-        }
-
+    pub fn execute(&mut self, state: &mut State, cycles: u64) {
         // we only check a single bit to see if it's a multiple of the frequency
         let frequency_mask = match state.tac & 0b11 {
             0b00 => 0x80, // multiple of 256
@@ -48,11 +41,28 @@ impl Timer {
             return;
         }
 
-        state.tima = state.tima.wrapping_add(1);
+        state.tima.0 = state.tima.0.wrapping_add(1);
 
-        if state.tima == 0 {
+        if state.tima.0 == 0 {
+            if cycles <= 1829858 {
+                log::warn!("{cycles}: overflow!");
+            }
+            // indeed, it's not delayed. Remove the delay fixes a mooneye test.
+            // I'll investigate later (or never)
             state.interrupt_flag.insert(Interruptions::TIMER);
-            self.tima_has_overflowed = Some(state.tma);
+            state.tima.1 = Some(state.tma);
         }
     }
+}
+
+// to emulate the one M-cycle delay between an overflow and tima register getting the new value
+// https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
+// And to emulate the cpu write that cancels the overflow on the same cycle.
+pub fn commit_tima_overflow(state: &mut State) {
+    state.has_tima_just_overflowed = false;
+    let Some(new_tima) = state.tima.1.take() else {
+        return;
+    };
+    state.tima.0 = new_tima;
+    state.has_tima_just_overflowed = true;
 }

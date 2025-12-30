@@ -6,7 +6,7 @@ pub trait MmuCpuExt {
 }
 
 impl MmuCpuExt for State {
-    fn read(&self, index: u16, _: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8 {
+    fn read(&self, index: u16, cycles: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
@@ -34,7 +34,10 @@ impl MmuCpuExt for State {
             SC => self.sc.bits() | 0b01111110,
             0xff03 => 0xff,
             DIV => (self.system_counter >> 6 & 0xff).try_into().unwrap(),
-            TIMER_COUNTER => self.tima,
+            TIMER_COUNTER => {
+                log::warn!("{cycles}: reading tima value 0x{:02x}", self.tima.0);
+                self.tima.0
+            }
             TIMER_MODULO => self.tma,
             TIMER_CONTROL => self.tac | 0b11111000,
             0xff08..INTERRUPT_FLAG => 0xff,
@@ -93,7 +96,7 @@ impl MmuCpuExt for State {
         }
     }
 
-    fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu, mbc: &mut dyn Mbc) {
+    fn write(&mut self, index: u16, value: u8, cycles: u64, cpu: &mut Cpu, mbc: &mut dyn Mbc) {
         if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
@@ -126,8 +129,19 @@ impl MmuCpuExt for State {
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00
-            DIV => self.system_counter = 0,
-            TIMER_COUNTER => self.tima = value,
+            DIV => {
+                log::warn!("{cycles}: Writing to div");
+                self.system_counter = 0
+            }
+            TIMER_COUNTER => {
+                if self.has_tima_just_overflowed {
+                    return;
+                }
+                log::warn!("{cycles}: Writing to tima value: 0x{value:02x}");
+                // Cancel tima overflow if it's in the same cycle
+                // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
+                self.tima = (value, None);
+            }
             TIMER_MODULO => self.tma = value,
             TIMER_CONTROL => self.tac = value,
             0xff08..INTERRUPT_FLAG => {}

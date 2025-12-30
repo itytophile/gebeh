@@ -60,5 +60,6 @@ impl Emulator {
         self.ppu.execute(&mut self.state, cycle_count);
         self.timer.execute(&mut self.state, cycle_count);
         self.cpu.execute(&mut self.state, mbc, cycle_count);
+        timer::commit_tima_overflow(&mut self.state);
     }
 }
