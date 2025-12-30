@@ -458,3 +458,54 @@ impl Speeder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        ppu::{LcdControl, LyHandler, Ppu, VERTICAL_BLANK_SCANLINE_DURATION},
+        state::State,
+    };
+
+    #[test]
+    fn first_line_duration() {
+        let mut ppu = Ppu::default();
+        let mut state = State::default();
+        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
+        let mut duration = 0;
+        // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
+        ppu.execute(&mut state, 0);
+        loop {
+            ppu.execute(&mut state, 0);
+            duration += 1;
+            if let Ppu::OamScan { dots_count: 1, .. } = ppu {
+                break;
+            }
+        }
+        assert_eq!(456, duration);
+    }
+
+    #[test]
+    fn frame_duration() {
+        let mut ppu = Ppu::default();
+        let mut ly_handler = LyHandler::default();
+        let mut state = State::default();
+        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
+        let mut duration = 0;
+        loop {
+            if duration % 4 == 0 {
+                ly_handler.execute(&mut state, 0);
+            }
+
+            ppu.execute(&mut state, 0);
+            duration += 1;
+            if let Ppu::VerticalBlankScanline {
+                dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
+                ..
+            } = ppu
+            {
+                break;
+            }
+        }
+        assert_eq!(70224, duration);
+    }
+}
