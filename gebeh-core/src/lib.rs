@@ -6,7 +6,7 @@ use crate::{
     cpu::Cpu,
     dma::Dma,
     mbc::Mbc,
-    ppu::{LyHandler, Ppu, Speeder},
+    ppu::{LyHandler, Ppu, Speeder, StatIrqHandler},
     state::State,
     timer::Timer,
 };
@@ -27,6 +27,7 @@ pub struct Emulator {
     ppu: Speeder,
     dma: Dma,
     cpu: Cpu,
+    stat_irq_handler: StatIrqHandler,
     pub state: State,
 }
 
@@ -47,6 +48,7 @@ impl Default for Emulator {
             dma: Default::default(),
             cpu: Default::default(),
             state: Default::default(),
+            stat_irq_handler: Default::default(),
         }
     }
 }
@@ -56,6 +58,7 @@ impl Emulator {
         self.dma.execute(&mut self.state, mbc, cycle_count);
         self.ly_handler.execute(&mut self.state, cycle_count);
         self.ppu.execute(&mut self.state, cycle_count);
+        self.stat_irq_handler.execute(&self.ppu.0, &mut self.state);
         Timer.execute(&mut self.state, cycle_count);
         self.cpu.execute(&mut self.state, mbc, cycle_count);
     }

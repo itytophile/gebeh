@@ -1,16 +1,11 @@
-use crate::{
-    ppu::LcdControl,
-    state::{Interruptions, LcdStatus},
-};
+use crate::{ppu::LcdControl, state::LcdStatus};
 
 const LINE_DURATION_M_CYCLE: u8 = 114;
 
 #[derive(Clone, Default)]
 pub struct LyHandler {
-    // ly increment logic
     logical_ly: u8,
     clock_count_in_line: u8,
-    ly_interrupt_disabled: bool,
 }
 
 // impl LyHandler {
@@ -33,23 +28,14 @@ impl LyHandler {
                 if self.logical_ly != 153 {
                     // the increment is handled differently on line 153
                     state.ly += 1;
-                    self.ly_interrupt_disabled = false;
                 }
                 self.logical_ly = (self.logical_ly + 1) % 154;
             }
+            // https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
             1 if state.ly == 153 => {
                 state.ly = 0;
-                self.ly_interrupt_disabled = false;
             }
             _ => {}
-        }
-
-        if state.lyc == state.ly
-            && state.lcd_status.contains(LcdStatus::LYC_INT)
-            && !self.ly_interrupt_disabled
-        {
-            state.interrupt_flag.insert(Interruptions::LCD);
-            self.ly_interrupt_disabled = true;
         }
 
         state

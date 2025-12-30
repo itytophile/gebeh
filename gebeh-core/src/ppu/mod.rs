@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub use ly_handler::LyHandler;
+pub use stat_irq_handler::StatIrqHandler;
 
 #[derive(Clone)]
 pub enum Ppu {
@@ -308,16 +309,6 @@ impl From<Color> for [u8; 4] {
     }
 }
 
-fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, _: u64) {
-    assert!(matches!(
-        mode_interrupt,
-        LcdStatus::HBLANK_INT | LcdStatus::OAM_INT | LcdStatus::VBLANK_INT
-    ));
-    if state.lcd_status.contains(mode_interrupt) {
-        state.interrupt_flag.insert(Interruptions::LCD);
-    }
-}
-
 // D'après "The cycle accurate gameboy docs":
 // - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
 // - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
@@ -355,7 +346,7 @@ fn request_interrupt(state: &mut State, mode_interrupt: LcdStatus, _: u64) {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
-    pub fn execute(&mut self, state: &mut State, cycle_count: u64) {
+    pub fn execute(&mut self, state: &mut State, _: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
@@ -372,7 +363,6 @@ impl Ppu {
                 // STAT delayed by one M-cycle
                 if *dots_count == 4 {
                     state.set_ppu_mode(LcdStatus::OAM_SCAN);
-                    request_interrupt(state, LcdStatus::OAM_INT, cycle_count)
                 }
 
                 if state.lcd_control.contains(LcdControl::OBJ_ENABLE)
@@ -424,21 +414,14 @@ impl Ppu {
                 *dots_count += 1;
             }
             Ppu::HorizontalBlank { dots_count, .. } => {
-                match *dots_count {
-                    // we know from mooneye's hblank_ly_scx_timing-GS that if hblank is one dot late, then the interrupt is one
-                    // whole M-cycle late. TODO better comment
-                    7 => request_interrupt(state, LcdStatus::HBLANK_INT, cycle_count),
-                    4 => state.set_ppu_mode(LcdStatus::HBLANK),
-                    _ => {}
+                if *dots_count == 4 {
+                    state.set_ppu_mode(LcdStatus::HBLANK)
                 }
 
                 *dots_count += 1
             }
             Ppu::VerticalBlankScanline { dots_count } => {
                 if *dots_count == 4 {
-                    request_interrupt(state, LcdStatus::VBLANK_INT, cycle_count);
-                    // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
-                    request_interrupt(state, LcdStatus::OAM_INT, cycle_count);
                     state.interrupt_flag.insert(Interruptions::VBLANK);
                     state.set_ppu_mode(LcdStatus::VBLANK);
                 }
