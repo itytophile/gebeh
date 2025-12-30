@@ -11,7 +11,7 @@ use crate::state::{Interruptions, State};
 #[derive(Clone, Default)]
 pub struct Timer {
     falling_edge_detector: bool,
-    // to emulate the one M-cycle delay between an overflow and tima edit
+    // to emulate the one M-cycle delay between an overflow and tima register getting the new value
     // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
     tima_has_overflowed: Option<u8>,
 }
