@@ -192,7 +192,8 @@ pub struct State {
     pub wx: u8,
     pub tma: u8,
     pub tac: u8,
-    pub tima: (u8, Option<u8>), // current value and future value if there is an overflow. Yes this is strange.
+    pub tima: u8,
+    pub tma_to_tima_delay: bool,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
     pub system_counter: u16,
@@ -253,6 +254,7 @@ impl Default for State {
             wx: 0,
             tma: 0,
             tac: 0,
+            tma_to_tima_delay: false,
             tima: Default::default(),
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],

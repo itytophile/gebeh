@@ -35,10 +35,13 @@ impl MmuCpuExt for State {
             0xff03 => 0xff,
             DIV => (self.system_counter >> 6 & 0xff).try_into().unwrap(),
             TIMER_COUNTER => {
-                log::warn!("{cycles}: reading tima value 0x{:02x}", self.tima.0);
-                self.tima.0
+                log::warn!("{cycles}: reading tima value 0x{:02x}", self.tima);
+                self.tima
             }
-            TIMER_MODULO => self.tma,
+            TIMER_MODULO => {
+                log::warn!("{cycles}: reading tma value: 0x{:02x}", self.tma);
+                self.tma
+            }
             TIMER_CONTROL => self.tac | 0b11111000,
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
@@ -140,9 +143,19 @@ impl MmuCpuExt for State {
                 log::warn!("{cycles}: Writing to tima value: 0x{value:02x}");
                 // Cancel tima overflow if it's in the same cycle
                 // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
-                self.tima = (value, None);
+                self.tima = value;
+                self.tma_to_tima_delay = false;
             }
-            TIMER_MODULO => self.tma = value,
+            TIMER_MODULO => {
+                if self.has_tima_just_overflowed {
+                    // should not conflict with a timer increment hopefully
+                    self.tima = value;
+                    log::warn!("{cycles}: Writing to tma (overflowed) value: 0x{value:02x}");
+                } else {
+                    log::warn!("{cycles}: Writing to tma value: 0x{value:02x}");
+                }
+                self.tma = value
+            }
             TIMER_CONTROL => self.tac = value,
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),

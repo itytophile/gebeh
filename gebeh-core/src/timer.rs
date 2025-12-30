@@ -41,16 +41,16 @@ impl Timer {
             return;
         }
 
-        state.tima.0 = state.tima.0.wrapping_add(1);
+        state.tima = state.tima.wrapping_add(1);
 
-        if state.tima.0 == 0 {
+        if state.tima == 0 {
             if cycles <= 1829858 {
                 log::warn!("{cycles}: overflow!");
             }
             // indeed, it's not delayed. Remove the delay fixes a mooneye test.
             // I'll investigate later (or never)
             state.interrupt_flag.insert(Interruptions::TIMER);
-            state.tima.1 = Some(state.tma);
+            state.tma_to_tima_delay = true;
         }
     }
 }
@@ -60,9 +60,10 @@ impl Timer {
 // And to emulate the cpu write that cancels the overflow on the same cycle.
 pub fn commit_tima_overflow(state: &mut State) {
     state.has_tima_just_overflowed = false;
-    let Some(new_tima) = state.tima.1.take() else {
+    if !state.tma_to_tima_delay {
         return;
-    };
-    state.tima.0 = new_tima;
+    }
+    state.tma_to_tima_delay = false;
+    state.tima = state.tma;
     state.has_tima_just_overflowed = true;
 }
