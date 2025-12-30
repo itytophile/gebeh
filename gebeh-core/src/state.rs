@@ -75,7 +75,7 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
-    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
     pub struct LcdStatus: u8 {
         const LYC_INT = 1 << 6;
         const OAM_INT = 1 << 5;
@@ -136,6 +136,15 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
 
+// if read by the cpu the same cycle they are written, then the cpu will read the old value.
+// The delayed value will be read the next cycle.
+// Careful, delayed state can be written over the same cycle by the CPU, so it will never be read.
+#[derive(Clone, Default)]
+pub struct Delayed {
+    pub interrupt_flag: Interruptions,
+    pub ppu_mode: LcdStatus,
+}
+
 #[derive(Clone)]
 pub struct State {
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
@@ -184,6 +193,7 @@ pub struct State {
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
     pub system_counter: u16,
+    pub delayed: Delayed,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -244,6 +254,7 @@ impl Default for State {
             joypad: JoypadFlags::empty(),
             // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
             system_counter: 0,
+            delayed: Default::default(),
         }
     }
 }
@@ -253,12 +264,17 @@ impl State {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
-    pub fn set_ppu_mode(&mut self, mode: LcdStatus) {
+    fn set_ppu_mode(&mut self, mode: LcdStatus) {
         assert!(matches!(
             mode,
             LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
         ));
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
+    }
+    pub fn apply_delayed(&mut self) {
+        self.set_ppu_mode(self.delayed.ppu_mode);
+        self.interrupt_flag |= self.delayed.interrupt_flag;
+        self.delayed.interrupt_flag = Interruptions::empty();
     }
     pub fn get_scrolling(&self) -> Scrolling {
         Scrolling {

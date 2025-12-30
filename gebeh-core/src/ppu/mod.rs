@@ -361,17 +361,28 @@ impl Ppu {
     }
 
     pub fn fire_interrupts(&mut self, state: &mut State) {
+        // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
         if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
-            state.interrupt_flag.insert(Interruptions::VBLANK);
+            // must be synchronized with the STAT vblank so one M-cycle delay too
+            state.delayed.interrupt_flag.insert(Interruptions::VBLANK);
         }
+
         let stat_mode_irq = match &self.step {
+            // one M-cycle delay
+            // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_2_0_timing.s
             PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
-            PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
-            PpuStep::VerticalBlankScanline { dots_count: 0, .. } if state.ly == 144 => {
-                // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+            // one M-cycle delay (to delay a LY read) + must jump M-cycle when drawing has a one dot penalty
+            // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/hblank_ly_scx_timing-GS.s
+            PpuStep::HorizontalBlank {
+                dots_count: 3.., ..
+            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+            PpuStep::VerticalBlankScanline { dots_count: 0 } if state.ly == 144 => {
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     | state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
+            // Must be synchronized with the OAM interrupt so one M-cycle delay too
+            // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_1_2_timing-GS.s
             PpuStep::VerticalBlankScanline { .. } => {
                 state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
@@ -388,7 +399,7 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            state.interrupt_flag.insert(Interruptions::LCD);
+            state.delayed.interrupt_flag.insert(Interruptions::LCD);
         }
     }
 
@@ -399,7 +410,7 @@ impl Ppu {
 
         self.switch_from_finished_mode(state);
         self.fire_interrupts(state);
-        state.set_ppu_mode(self.step.get_ppu_mode());
+        state.delayed.ppu_mode = self.step.get_ppu_mode();
 
         match &mut self.step {
             PpuStep::OamScan {

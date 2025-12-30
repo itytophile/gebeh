@@ -48,16 +48,13 @@ fn main() {
     color_eyre::install().unwrap();
     env_logger::init();
 
-    // let rom =
-    //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/interrupt_time/interrupt_time.gb")
-    //         .unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/gejmboj/gejmboj.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/oh_2/oh.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/20y/20y.gb").unwrap();
     let rom = std::fs::read(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/stat_irq_blocking.gb",
+        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/acceptance/ppu/hblank_ly_scx_timing-GS.gb",
     )
     .unwrap();
     // let rom =

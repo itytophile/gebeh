@@ -882,6 +882,7 @@ impl Cpu {
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
+                state.apply_delayed();
                 return;
             }
             self.is_halted = false;
@@ -963,6 +964,8 @@ impl Cpu {
                 AfterReadInstruction::Read(state.read(register_value, cycle_count, self, mbc), inst)
             }
         };
+
+        state.apply_delayed();
 
         self.execute_instruction(state, inst, interrupts_to_execute, cycle_count, mbc);
     }
