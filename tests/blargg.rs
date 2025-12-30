@@ -1,7 +1,7 @@
 use crate::common::{TestSerial, machine_to_serial_iter};
 use arrayvec::ArrayVec;
-use gb_core::Emulator;
-use testouille_emulator_future::get_mbc;
+use gebeh::get_mbc;
+use gebeh_core::Emulator;
 
 mod common;
 

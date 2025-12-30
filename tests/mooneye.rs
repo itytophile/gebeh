@@ -1,5 +1,5 @@
-use gb_core::Emulator;
-use testouille_emulator_future::get_mbc;
+use gebeh::get_mbc;
+use gebeh_core::Emulator;
 
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(

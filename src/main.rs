@@ -1,13 +1,13 @@
 use std::time::{Duration, Instant};
 
-use gb_core::{
+use gebeh::get_mbc;
+use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::{LcdControl, Ppu, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
 };
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
-use testouille_emulator_future::get_mbc;
 use winit::{
     dpi::LogicalSize,
     event::{ElementState, Event, KeyEvent, WindowEvent},

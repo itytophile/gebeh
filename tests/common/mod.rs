@@ -1,4 +1,4 @@
-use gb_core::{
+use gebeh_core::{
     Emulator,
     mbc::Mbc,
     state::{SerialControl, State},

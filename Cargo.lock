@@ -587,7 +587,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
-name = "gb-core"
+name = "gebeh"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "color-eyre",
+ "env_logger",
+ "gebeh-core",
+ "log",
+ "pixels",
+ "winit",
+]
+
+[[package]]
+name = "gebeh-core"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
@@ -1603,19 +1616,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "testouille-emulator-future"
-version = "0.1.0"
-dependencies = [
- "arrayvec",
- "color-eyre",
- "env_logger",
- "gb-core",
- "log",
- "pixels",
- "winit",
 ]
 
 [[package]]

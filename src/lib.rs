@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use gb_core::mbc::*;
+use gebeh_core::mbc::*;
 
 pub trait CloneMbc<'a>: Mbc {
     fn clone_boxed(&self) -> Box<dyn CloneMbc<'a> + 'a>;

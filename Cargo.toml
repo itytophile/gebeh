@@ -1,14 +1,15 @@
 [workspace]
-members = ["gb-core"]
+members = ["gebeh-core"]
 
 [package]
-name = "testouille-emulator-future"
+name = "gebeh"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 color-eyre = "0.6.5"
-gb-core = { path = "./gb-core" }
+gebeh-core = { path = "./gebeh-core" }
 env_logger = "0.11.8"
 winit = "0.29"
 pixels = "0.15.0"

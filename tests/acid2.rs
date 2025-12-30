@@ -1,5 +1,5 @@
-use gb_core::{Emulator, HEIGHT, ppu::Color};
-use testouille_emulator_future::get_mbc;
+use gebeh::get_mbc;
+use gebeh_core::{Emulator, HEIGHT, ppu::Color};
 
 #[test]
 fn dmg_acid2() {
