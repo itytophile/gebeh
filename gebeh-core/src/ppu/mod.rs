@@ -3,6 +3,7 @@ mod fifos;
 mod ly_handler;
 mod renderer;
 mod sprite_fetcher;
+mod stat_irq_handler;
 
 use core::num::NonZeroU8;
 
@@ -35,7 +36,7 @@ pub enum Ppu {
         scanline: [Color; 160],
     }, // <= 204
     VerticalBlankScanline {
-        remaining_dots: u16,
+        dots_count: u16,
         // no wy_condition because vblank means the frame ends
     }, // <= 456
 }
@@ -253,9 +254,7 @@ impl Ppu {
                 ..
             } if remaining_dots == dots_count => {
                 *self = if state.ly == 144 {
-                    Ppu::VerticalBlankScanline {
-                        remaining_dots: VERTICAL_BLANK_SCANLINE_DURATION,
-                    }
+                    Ppu::VerticalBlankScanline { dots_count: 0 }
                 } else {
                     Ppu::OamScan {
                         window_y: *window_y,
@@ -265,7 +264,8 @@ impl Ppu {
                 };
             }
             Ppu::VerticalBlankScanline {
-                remaining_dots: 0, ..
+                dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
+                ..
             } => {
                 *self = Ppu::OamScan {
                     window_y: Default::default(),
@@ -434,15 +434,15 @@ impl Ppu {
 
                 *dots_count += 1
             }
-            Ppu::VerticalBlankScanline { remaining_dots } => {
-                if *remaining_dots == VERTICAL_BLANK_SCANLINE_DURATION - 4 {
+            Ppu::VerticalBlankScanline { dots_count } => {
+                if *dots_count == 4 {
                     request_interrupt(state, LcdStatus::VBLANK_INT, cycle_count);
                     // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
                     request_interrupt(state, LcdStatus::OAM_INT, cycle_count);
                     state.interrupt_flag.insert(Interruptions::VBLANK);
                     state.set_ppu_mode(LcdStatus::VBLANK);
                 }
-                *remaining_dots -= 1;
+                *dots_count += 1;
             }
         };
     }
