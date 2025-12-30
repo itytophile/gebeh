@@ -188,6 +188,72 @@ impl From<[u8; 4]> for ObjectAttribute {
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum Color {
+    White,
+    LightGray,
+    DarkGray,
+    Black,
+}
+
+impl From<Color> for u32 {
+    fn from(c: Color) -> u32 {
+        match c {
+            Color::White => 0xffffff,
+            Color::LightGray => 0xaaaaaa,
+            Color::DarkGray => 0x555555,
+            Color::Black => 0,
+        }
+    }
+}
+
+impl From<Color> for [u8; 4] {
+    fn from(c: Color) -> Self {
+        match c {
+            Color::White => [0xff; 4],
+            Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
+            Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
+            Color::Black => [0, 0, 0, 0xff],
+        }
+    }
+}
+
+// D'après "The cycle accurate gameboy docs":
+// - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
+// - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
+// - Le OAM scan commence seulement au deuxième M-cycle d'une ligne. En effet, les modes sont décalés par rapport à la ligne, le Hblank déborde
+//  à la fin et est exécuté au premier M-cycle de la ligne prochaine. Cela implique qu'un même Hblank peut connaître deux valeurs de LY différentes.
+
+// ce que veut mooneye: écart entre OAM_INT et STAT MODE HBLANK = 63 M-cycles ou 252 dots (80 + 172)
+// cependant d'après "The cycle accurate gameboy docs", l'interruption de OAM_INT arrive un cycle plus tôt
+
+// D'après un commentaire dans SameBoy: It seems that the STAT register's mode bits are always "late" by 4 T-cycles.
+// Donc les modes ne sont pas décalés en fin de compte ?
+// Supposons que les modes ne soient pas décalés mais que cela soit le STAT qui soit à la bourre.
+// Cela expliquerait pourquoi l'interruption du Mode 2 arrive un cycle avant Stat=2 (sauf ligne 0)
+// Or l'interruption vblank arrive toujours pile poil quand son stat passe à 1.
+// Mooneye veut aussi que l'écart en OAM_INT et HBLANK_INT = 63 M-cycles
+// Donc à partir de ces informations je peux conclure:
+// - le OAM scan (mode 2) commence bien au cycle 0
+// - son interruption est lancée cycle 0 (bien synchronisée) (cycle 1 à la ligne 0)
+// - son STAT est en retard d'un M-cycle
+// - Le Drawing (mode 3) commence bien au cycle 20, juste après OAM scan
+// - son STAT est en retard d'un M-cycle
+// - le Hblank (mode 0) commence après le Drawing de façon normale
+// - son interruption est lancée dès le premier cycle (bien synchronisée)
+// - son STAT n'est pas en retard, il est changé dès le premier cycle (bien synchronisé même cycle que l'interruption)
+// - VBLANK a un retard d'un cycle sur son STAT et sur son interruption (j'en peux plus)
+//
+// Nouvelle info de Mooneye, il veut un écart parfait entre l'interruption de OAM scan et le changement de STAT en mode 3 (drawing)
+// cependant actuellement le STAT du mode 3 est en retard, alors que l'interruption de OAM scan est parfait.
+// Tout ça me donne l'impression que si le PPU actionne une interruption alors le CPU a un délai d'un cycle avant de le traiter.
+// En effet, pour corriger ce timing Interruption Mode 2 => STAT Mode 3 il faudrait corriger le retard de STAT mode 3. Mais cela
+// serait en contradiction avec "The cycle accurate gameboy docs" qui dit bien que le STAT Mode 3 a le retard.
+// Donc on va tenter un délai d'un M-cycle pour le traitement d'une interruption de la part du CPU. Cela implique que le Hblank a
+// aussi son STAT en retard, comme indiqué par le commentaire de SameBoy.
+// De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
+
+// one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
@@ -281,81 +347,40 @@ impl Ppu {
             _ => {}
         };
     }
-}
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum Color {
-    White,
-    LightGray,
-    DarkGray,
-    Black,
-}
+    pub fn detect_stat_irq(&mut self, state: &mut State) {
+        let stat_mode_irq = match &self.step {
+            PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
+            PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            PpuStep::VerticalBlankScanline { .. } => {
+                // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
+                state.lcd_status.contains(LcdStatus::OAM_INT)
+                    | state.lcd_status.contains(LcdStatus::VBLANK_INT)
+            }
+            _ => false,
+        };
+        let stat_irq = stat_mode_irq
+            || (state.lcd_status.contains(LcdStatus::LYC_INT) && state.ly == state.lyc);
 
-impl From<Color> for u32 {
-    fn from(c: Color) -> u32 {
-        match c {
-            Color::White => 0xffffff,
-            Color::LightGray => 0xaaaaaa,
-            Color::DarkGray => 0x555555,
-            Color::Black => 0,
+        if stat_irq == self.stat_irq {
+            return;
+        }
+
+        self.stat_irq = stat_irq;
+
+        // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
+        if stat_irq {
+            state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
-}
 
-impl From<Color> for [u8; 4] {
-    fn from(c: Color) -> Self {
-        match c {
-            Color::White => [0xff; 4],
-            Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
-            Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
-            Color::Black => [0, 0, 0, 0xff],
-        }
-    }
-}
-
-// D'après "The cycle accurate gameboy docs":
-// - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
-// - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
-// - Le OAM scan commence seulement au deuxième M-cycle d'une ligne. En effet, les modes sont décalés par rapport à la ligne, le Hblank déborde
-//  à la fin et est exécuté au premier M-cycle de la ligne prochaine. Cela implique qu'un même Hblank peut connaître deux valeurs de LY différentes.
-
-// ce que veut mooneye: écart entre OAM_INT et STAT MODE HBLANK = 63 M-cycles ou 252 dots (80 + 172)
-// cependant d'après "The cycle accurate gameboy docs", l'interruption de OAM_INT arrive un cycle plus tôt
-
-// D'après un commentaire dans SameBoy: It seems that the STAT register's mode bits are always "late" by 4 T-cycles.
-// Donc les modes ne sont pas décalés en fin de compte ?
-// Supposons que les modes ne soient pas décalés mais que cela soit le STAT qui soit à la bourre.
-// Cela expliquerait pourquoi l'interruption du Mode 2 arrive un cycle avant Stat=2 (sauf ligne 0)
-// Or l'interruption vblank arrive toujours pile poil quand son stat passe à 1.
-// Mooneye veut aussi que l'écart en OAM_INT et HBLANK_INT = 63 M-cycles
-// Donc à partir de ces informations je peux conclure:
-// - le OAM scan (mode 2) commence bien au cycle 0
-// - son interruption est lancée cycle 0 (bien synchronisée) (cycle 1 à la ligne 0)
-// - son STAT est en retard d'un M-cycle
-// - Le Drawing (mode 3) commence bien au cycle 20, juste après OAM scan
-// - son STAT est en retard d'un M-cycle
-// - le Hblank (mode 0) commence après le Drawing de façon normale
-// - son interruption est lancée dès le premier cycle (bien synchronisée)
-// - son STAT n'est pas en retard, il est changé dès le premier cycle (bien synchronisé même cycle que l'interruption)
-// - VBLANK a un retard d'un cycle sur son STAT et sur son interruption (j'en peux plus)
-//
-// Nouvelle info de Mooneye, il veut un écart parfait entre l'interruption de OAM scan et le changement de STAT en mode 3 (drawing)
-// cependant actuellement le STAT du mode 3 est en retard, alors que l'interruption de OAM scan est parfait.
-// Tout ça me donne l'impression que si le PPU actionne une interruption alors le CPU a un délai d'un cycle avant de le traiter.
-// En effet, pour corriger ce timing Interruption Mode 2 => STAT Mode 3 il faudrait corriger le retard de STAT mode 3. Mais cela
-// serait en contradiction avec "The cycle accurate gameboy docs" qui dit bien que le STAT Mode 3 a le retard.
-// Donc on va tenter un délai d'un M-cycle pour le traitement d'une interruption de la part du CPU. Cela implique que le Hblank a
-// aussi son STAT en retard, comme indiqué par le commentaire de SameBoy.
-// De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
-
-// one iteration = one dot = (1/4 M-cyle DMG)
-impl Ppu {
     pub fn execute(&mut self, state: &mut State, _: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
 
         self.switch_from_finished_mode(state);
+        self.detect_stat_irq(state);
 
         match &mut self.step {
             PpuStep::OamScan {
@@ -432,44 +457,6 @@ impl Ppu {
                 *dots_count += 1;
             }
         };
-
-        let stat_mode_irq = match &self.step {
-            PpuStep::OamScan {
-                dots_count: 5.., ..
-            }
-            | PpuStep::Drawing {
-                dots_count: ..5, ..
-            } => state.lcd_status.contains(LcdStatus::OAM_INT),
-            PpuStep::HorizontalBlank {
-                dots_count: 8.., ..
-            }
-            | PpuStep::VerticalBlankScanline { dots_count: ..5 } => {
-                state.lcd_status.contains(LcdStatus::HBLANK_INT)
-            }
-            PpuStep::VerticalBlankScanline { dots_count: 5.. }
-            | PpuStep::OamScan {
-                dots_count: ..5, ..
-            } => {
-                // according to https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/vblank_stat_intr-GS.s
-                state.lcd_status.contains(LcdStatus::OAM_INT)
-                    | state.lcd_status.contains(LcdStatus::VBLANK_INT)
-            }
-            _ => false,
-        };
-
-        let stat_irq = stat_mode_irq
-            || (state.lcd_status.contains(LcdStatus::LYC_INT) && state.ly == state.lyc);
-
-        if stat_irq == self.stat_irq {
-            return;
-        }
-
-        self.stat_irq = stat_irq;
-
-        // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
-        if stat_irq {
-            state.interrupt_flag.insert(Interruptions::LCD);
-        }
     }
 }
 
