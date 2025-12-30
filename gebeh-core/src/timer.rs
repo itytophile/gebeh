@@ -11,10 +11,17 @@ use crate::state::{Interruptions, State};
 #[derive(Clone, Default)]
 pub struct Timer {
     falling_edge_detector: bool,
+    // to emulate the one M-cycle delay between an overflow and tima edit
+    // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
+    tima_has_overflowed: Option<u8>,
 }
 
 impl Timer {
     pub fn execute(&mut self, state: &mut State, _: u64) {
+        if let Some(tma) = self.tima_has_overflowed.take() {
+            state.tima = tma;
+        }
+
         // we only check a single bit to see if it's a multiple of the frequency
         let frequency_mask = match state.tac & 0b11 {
             0b00 => 0x80, // multiple of 256
@@ -41,11 +48,11 @@ impl Timer {
             return;
         }
 
-        state.tima = if let Some(value) = state.tima.checked_add(1) {
-            value
-        } else {
+        state.tima = state.tima.wrapping_add(1);
+
+        if state.tima == 0 {
             state.interrupt_flag.insert(Interruptions::TIMER);
-            state.tma
-        };
+            self.tima_has_overflowed = Some(state.tma);
+        }
     }
 }
