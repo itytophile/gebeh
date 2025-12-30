@@ -6,9 +6,9 @@ Pronounced gebeh.
 
 ### General resources
 
-- https://gbdev.io/pandocs/
-- https://gekkio.fi/files/gb-docs/gbctr.pdf
-- https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7
+- [Pan Docs](https://gbdev.io/pandocs/)
+- [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)
+- [gbz80(7) — Game Boy CPU instruction reference](https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7)
 
 ### CPU important details
 
