@@ -291,7 +291,7 @@ fn div_write() {
 }
 
 #[test]
-fn rapid_roggle() {
+fn rapid_toggle() {
     test_mooneye("timer/rapid_toggle.gb");
 }
 
