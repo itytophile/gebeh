@@ -28,6 +28,7 @@ pub struct Emulator {
     dma: Dma,
     cpu: Cpu,
     pub state: State,
+    timer: Timer,
 }
 
 impl Emulator {
@@ -47,6 +48,7 @@ impl Default for Emulator {
             dma: Default::default(),
             cpu: Default::default(),
             state: Default::default(),
+            timer: Default::default(),
         }
     }
 }
@@ -56,7 +58,7 @@ impl Emulator {
         self.dma.execute(&mut self.state, mbc, cycle_count);
         self.ly_handler.execute(&mut self.state, cycle_count);
         self.ppu.execute(&mut self.state, cycle_count);
-        Timer.execute(&mut self.state, cycle_count);
+        self.timer.execute(&mut self.state, cycle_count);
         self.cpu.execute(&mut self.state, mbc, cycle_count);
     }
 }
