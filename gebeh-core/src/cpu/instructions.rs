@@ -255,20 +255,11 @@ impl Default for Prefetch {
 }
 
 mod opcodes {
-    use crate::instructions::CONSUME_PC;
-    use crate::instructions::Condition;
-    use crate::instructions::NoReadInstruction;
-    use crate::instructions::OpAfterRead;
-    use crate::instructions::POP_SP;
-    use crate::instructions::ReadAddress;
+    use super::*;
 
-    use super::Instruction::*;
-    use super::Instructions;
-    use super::NoReadInstruction::*;
-    use super::ReadInstruction::*;
-    use super::Register8Bit;
-    use super::Register16Bit;
-    use super::vec;
+    use Instruction::*;
+    use NoReadInstruction::*;
+    use ReadInstruction::*;
 
     pub fn ld_r_n(register: Register8Bit) -> Instructions {
         (

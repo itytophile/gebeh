@@ -1,18 +1,18 @@
+pub mod instructions;
 mod mmu;
 
 use crate::{
     cpu::mmu::MmuCpuExt,
     ic::Ints,
-    instructions::{
-        AfterReadInstruction, Condition, Flag, Instruction, InstructionsAndSetPc,
-        NoReadInstruction, OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction,
-        Register8Bit, Register16Bit, SetPc, get_instructions, vec,
-    },
     mbc::Mbc,
     state::{BOOTIX_BOOT_ROM, State},
 };
-
 use arrayvec::ArrayVec;
+use instructions::{
+    AfterReadInstruction, Condition, Flag, Instruction, InstructionsAndSetPc, NoReadInstruction,
+    OpAfterRead, POP_SP, Prefetch, ReadAddress, ReadInstruction, Register8Bit, Register16Bit,
+    SetPc, get_instructions, vec,
+};
 
 #[derive(Clone)]
 pub struct Cpu {
