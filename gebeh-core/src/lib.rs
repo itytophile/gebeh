@@ -29,6 +29,7 @@ pub struct Emulator {
     cpu: Cpu,
     pub state: State,
     timer: Timer,
+    cycles: u64, // debug purposes
 }
 
 impl Emulator {
@@ -49,24 +50,26 @@ impl Default for Emulator {
             cpu: Default::default(),
             state: Default::default(),
             timer: Default::default(),
+            cycles: 0,
         }
     }
 }
 
 impl Emulator {
-    pub fn execute(&mut self, mbc: &mut dyn Mbc, cycle_count: u64) {
-        self.dma.execute(&mut self.state, mbc, cycle_count);
-        self.ly_handler.execute(&mut self.state, cycle_count);
-        self.ppu.execute(&mut self.state, cycle_count);
-        self.timer.execute(&mut self.state, cycle_count);
+    pub fn execute(&mut self, mbc: &mut dyn Mbc) {
+        self.dma.execute(&mut self.state, mbc, self.cycles);
+        self.ly_handler.execute(&mut self.state, self.cycles);
+        self.ppu.execute(&mut self.state, self.cycles);
+        self.timer.execute(&mut self.state, self.cycles);
         self.cpu.execute(
             &mut self.state,
             Peripherals {
                 mbc,
                 timer: &mut self.timer,
             },
-            cycle_count,
+            self.cycles,
         );
         self.timer.commit_tima_overflow();
+        self.cycles = self.cycles.wrapping_add(1);
     }
 }

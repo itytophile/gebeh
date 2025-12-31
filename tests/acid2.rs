@@ -21,7 +21,7 @@ fn dmg_acid2() {
     let mut working_split = split.clone();
     let mut all_good = true;
     loop {
-        emulator.execute(mbc.as_mut(), 0);
+        emulator.execute(mbc.as_mut());
         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready()
             && previous_ly != Some(emulator.state.ly)
         {

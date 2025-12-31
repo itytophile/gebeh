@@ -142,8 +142,6 @@ fn main() {
 
     let mut last_save = Instant::now();
 
-    let mut cycle_count: u64 = 0;
-
     let mut debug_mode = DebugMode::None;
 
     event_loop
@@ -162,7 +160,6 @@ fn main() {
                         mbc.as_mut(),
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
-                        &mut cycle_count,
                         &mut debug_mode,
                     );
                     pixels.render().unwrap();
@@ -298,13 +295,11 @@ fn draw_emulator(
     mbc: &mut dyn Mbc,
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
-    cycle_count: &mut u64,
     debug_mode: &mut DebugMode,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
-        emulator.execute(mbc, *cycle_count);
-        *cycle_count += 1;
+        emulator.execute(mbc);
 
         if *debug_mode == DebugMode::Scanline
             && let PpuStep::Drawing {

@@ -32,7 +32,7 @@ pub fn machine_to_serial_iter(
 ) -> impl Iterator<Item = u8> {
     iter::from_fn(move || {
         loop {
-            emulator.execute(mbc, 0);
+            emulator.execute(mbc);
             serial.execute(&mut emulator.state);
             if let Some(byte) = serial.0.take() {
                 return Some(byte);

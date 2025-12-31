@@ -12,7 +12,7 @@ fn test_mooneye(path: &str) {
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
     while emulator.get_cpu().current_opcode != 0x40 {
-        emulator.execute(mbc.as_mut(), 0);
+        emulator.execute(mbc.as_mut());
     }
 
     let cpu = emulator.get_cpu();
