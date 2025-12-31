@@ -3,7 +3,7 @@
 use core::num::NonZeroU8;
 
 use crate::{
-    cpu::Cpu,
+    cpu::{Cpu, Peripherals},
     dma::Dma,
     mbc::Mbc,
     ppu::{LyHandler, Ppu, Speeder},
@@ -59,7 +59,14 @@ impl Emulator {
         self.ly_handler.execute(&mut self.state, cycle_count);
         self.ppu.execute(&mut self.state, cycle_count);
         self.timer.execute(&mut self.state, cycle_count);
-        self.cpu.execute(&mut self.state, mbc, cycle_count);
-        timer::commit_tima_overflow(&mut self.state);
+        self.cpu.execute(
+            &mut self.state,
+            Peripherals {
+                mbc,
+                timer: &mut self.timer,
+            },
+            cycle_count,
+        );
+        self.timer.commit_tima_overflow();
     }
 }

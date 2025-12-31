@@ -190,16 +190,10 @@ pub struct State {
     pub sc: SerialControl,
     pub wy: u8,
     pub wx: u8,
-    pub tma: u8,
-    pub tac: u8,
-    pub tima: u8,
-    pub tma_to_tima_delay: bool,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
     pub joypad: JoypadFlags,
-    pub system_counter: u16,
     pub delayed: Delayed,
     // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
-    pub has_tima_just_overflowed: bool, // will block write in the cycle after the overflow
 }
 
 #[derive(Clone, Copy, Default)]
@@ -252,17 +246,11 @@ impl Default for State {
             sc: SerialControl::empty(),
             wy: 0,
             wx: 0,
-            tma: 0,
-            tac: 0,
-            tma_to_tima_delay: false,
-            tima: Default::default(),
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
             joypad: JoypadFlags::empty(),
             // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
-            system_counter: 0,
             delayed: Default::default(),
-            has_tima_just_overflowed: false,
         }
     }
 }

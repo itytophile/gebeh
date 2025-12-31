@@ -1,16 +1,42 @@
-use crate::{cpu::Cpu, mbc::Mbc, ppu::LcdControl, state::*};
+use crate::{cpu::Cpu, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer};
+
+pub struct Peripherals<'a> {
+    pub mbc: &'a mut dyn Mbc,
+    pub timer: &'a mut Timer,
+}
+
+impl Peripherals<'_> {
+    pub fn get_ref(&self) -> PeripheralsRef<'_> {
+        PeripheralsRef {
+            mbc: self.mbc,
+            timer: self.timer,
+        }
+    }
+}
+
+pub struct PeripheralsRef<'a> {
+    pub mbc: &'a dyn Mbc,
+    pub timer: &'a Timer,
+}
 
 pub trait MmuCpuExt {
-    fn read(&self, index: u16, cycles: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8;
-    fn write(&mut self, index: u16, value: u8, cycles: u64, cpu: &mut Cpu, mbc: &mut dyn Mbc);
+    fn read(&self, index: u16, cycles: u64, cpu: &Cpu, peripherals: PeripheralsRef) -> u8;
+    fn write(
+        &mut self,
+        index: u16,
+        value: u8,
+        cycles: u64,
+        cpu: &mut Cpu,
+        peripherals: Peripherals,
+    );
 }
 
 impl MmuCpuExt for State {
-    fn read(&self, index: u16, cycles: u64, cpu: &Cpu, mbc: &dyn Mbc) -> u8 {
+    fn read(&self, index: u16, _: u64, cpu: &Cpu, peripherals: PeripheralsRef) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
-            ..OAM => MmuExt::read(self, index, mbc),
+            ..OAM => MmuExt::read(self, index, peripherals.mbc),
             OAM..NOT_USABLE => {
                 let ppu = self.lcd_status & LcdStatus::PPU_MASK;
                 if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.is_dma_active {
@@ -33,16 +59,10 @@ impl MmuCpuExt for State {
             SB => self.sb,
             SC => self.sc.bits() | 0b01111110,
             0xff03 => 0xff,
-            DIV => (self.system_counter >> 6 & 0xff).try_into().unwrap(),
-            TIMER_COUNTER => {
-                log::warn!("{cycles}: reading tima value 0x{:02x}", self.tima);
-                self.tima
-            }
-            TIMER_MODULO => {
-                log::warn!("{cycles}: reading tma value: 0x{:02x}", self.tma);
-                self.tma
-            }
-            TIMER_CONTROL => self.tac | 0b11111000,
+            DIV => peripherals.timer.get_div(),
+            TIMER_COUNTER => peripherals.timer.get_tima(),
+            TIMER_MODULO => peripherals.timer.get_tma(),
+            TIMER_CONTROL => peripherals.timer.get_tac(),
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             SWEEP => self.sweep | 0b10000000,
@@ -99,19 +119,19 @@ impl MmuCpuExt for State {
         }
     }
 
-    fn write(&mut self, index: u16, value: u8, cycles: u64, cpu: &mut Cpu, mbc: &mut dyn Mbc) {
+    fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu, peripherals: Peripherals) {
         if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
 
         match index {
-            0..VIDEO_RAM => mbc.write(index, value),
+            0..VIDEO_RAM => peripherals.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
                 if (self.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
                     self.video_ram[usize::from(index - VIDEO_RAM)] = value
                 }
             }
-            EXTERNAL_RAM..WORK_RAM => mbc.write(index, value),
+            EXTERNAL_RAM..WORK_RAM => peripherals.mbc.write(index, value),
             WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
@@ -132,31 +152,10 @@ impl MmuCpuExt for State {
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00
-            DIV => {
-                log::warn!("{cycles}: Writing to div");
-                self.system_counter = 0
-            }
-            TIMER_COUNTER => {
-                if self.has_tima_just_overflowed {
-                    return;
-                }
-                log::warn!("{cycles}: Writing to tima value: 0x{value:02x}");
-                // Cancel tima overflow if it's in the same cycle
-                // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
-                self.tima = value;
-                self.tma_to_tima_delay = false;
-            }
-            TIMER_MODULO => {
-                if self.has_tima_just_overflowed {
-                    // should not conflict with a timer increment hopefully
-                    self.tima = value;
-                    log::warn!("{cycles}: Writing to tma (overflowed) value: 0x{value:02x}");
-                } else {
-                    log::warn!("{cycles}: Writing to tma value: 0x{value:02x}");
-                }
-                self.tma = value
-            }
-            TIMER_CONTROL => self.tac = value,
+            DIV => peripherals.timer.reset_system_counter(),
+            TIMER_COUNTER => peripherals.timer.set_tima(value),
+            TIMER_MODULO => peripherals.timer.set_tma(value),
+            TIMER_CONTROL => peripherals.timer.set_tac(value),
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             SWEEP => self.sweep = value,
