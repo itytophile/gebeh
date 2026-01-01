@@ -11,7 +11,7 @@ use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
     event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::EventLoop,
+    event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
@@ -257,7 +257,7 @@ fn main() {
                         (emulator, mbc) = old
                     }
                 }
-                KeyCode::Escape => elwt.exit(),
+                KeyCode::Escape => exit(elwt, title, mbc.as_ref()),
                 KeyCode::KeyA => emulator.get_joypad_mut().a = true,
                 KeyCode::KeyB => emulator.get_joypad_mut().b = true,
                 KeyCode::ArrowLeft => emulator.get_joypad_mut().left = true,
@@ -271,12 +271,23 @@ fn main() {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => {
-                elwt.exit();
-            }
+            } => exit(elwt, title, mbc.as_ref()),
             _ => {}
         })
         .unwrap();
+}
+
+fn exit(elwt: &EventLoopWindowTarget<()>, title: &str, mbc: &dyn Mbc) {
+    if let Some(save) = mbc.get_ram_to_save() {
+        std::fs::write(format!("{title}.save"), save).unwrap();
+    }
+    // at the moment there is only mbc3 that is using that
+    let mut buffer = [0u8; 12];
+    let count = mbc.get_additional_data_to_save(&mut buffer);
+    if count > 0 {
+        std::fs::write(format!("{title}.extra.save"), &buffer[..count]).unwrap();
+    }
+    elwt.exit();
 }
 
 fn draw_emulator(
