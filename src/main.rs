@@ -69,6 +69,7 @@ fn main() {
         .unwrap_or(title.len());
     let title = str::from_utf8(&title[..end_zero_pos]).unwrap();
     println!("Title: {title}");
+
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
     let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
     println!("Cartridge type: {cartridge_type:?}");
@@ -79,6 +80,16 @@ fn main() {
     // don't forget to slice the vec or you will clone it for each save state
     let mut mbc = get_mbc(rom.as_slice()).unwrap();
     let mut emulator = Emulator::default();
+
+    if let Ok(file) = std::fs::read(format!("{title}.save")) {
+        log::info!("Saved data found!");
+        mbc.load_saved_ram(&file);
+    }
+
+    if let Ok(file) = std::fs::read(format!("{title}.extra.save")) {
+        log::info!("Extra data found!");
+        mbc.load_additional_data(&file);
+    }
 
     let mut save_states = vec![(emulator.clone(), mbc.clone_boxed())];
 
@@ -277,6 +288,7 @@ fn main() {
         .unwrap();
 }
 
+// TODO save at fixed interval
 fn exit(elwt: &EventLoopWindowTarget<()>, title: &str, mbc: &dyn Mbc) {
     if let Some(save) = mbc.get_ram_to_save() {
         std::fs::write(format!("{title}.save"), save).unwrap();
