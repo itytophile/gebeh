@@ -21,7 +21,9 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a>(
     let mbc: Box<dyn CloneMbc<'a>> =
         match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()? {
             CartridgeType::RomOnly => Box::new(rom),
-            CartridgeType::Mbc1 | CartridgeType::Mbc1Ram => Box::new(Mbc1::new(rom)),
+            CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
+                Box::new(Mbc1::new(rom))
+            }
             CartridgeType::Mbc3RamBattery => Box::new(Mbc3::new(rom, InstantRtc::new())),
             CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
         };

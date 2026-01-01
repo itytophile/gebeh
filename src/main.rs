@@ -53,9 +53,7 @@ fn main() {
     // let rom = std::fs::read("/home/ityt/Téléchargements/gejmboj/gejmboj.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/oh_2/oh.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/20y/20y.gb").unwrap();
-    let rom =
-        std::fs::read("/home/ityt/Téléchargements/mallard/mallard.gb")
-            .unwrap();
+    let rom = std::fs::read("/home/ityt/Téléchargements/mallard/mallard.gb").unwrap();
     // let rom =
     //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/individual/10-bit ops.gb")
     //         .unwrap();

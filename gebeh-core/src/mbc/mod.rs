@@ -45,6 +45,7 @@ pub enum CartridgeType {
     RomOnly,
     Mbc1,
     Mbc1Ram,
+    Mbc1RamBattery,
     Mbc3RamBattery,
     Mbc5RamBattery,
 }
@@ -57,6 +58,7 @@ impl TryFrom<u8> for CartridgeType {
             0 => Ok(Self::RomOnly),
             1 => Ok(Self::Mbc1),
             2 => Ok(Self::Mbc1Ram),
+            3 => Ok(Self::Mbc1RamBattery),
             0x13 => Ok(Self::Mbc3RamBattery),
             0x1b => Ok(Self::Mbc5RamBattery),
             _ => Err(value),
