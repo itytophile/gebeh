@@ -13,8 +13,15 @@ pub use mbc5::*;
 // if the program doesn't need MBCs with big ram.
 // Don't want to do static dispatch to avoid monomorphization
 pub trait Mbc {
+    // maybe too much responsibility?
+    fn load_saved_ram(&mut self, save: &[u8]);
+    // useful for RTC at the moment
+    fn load_additional_data(&mut self, additional_data: &[u8]);
     fn read(&self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
+    fn get_ram_to_save(&self) -> Option<&[u8]>;
+    /// Returns how many bytes were written into the buffer. Panics if the buffer is not big enough.
+    fn get_additional_data_to_save(&self, buffer: &mut [u8]) -> usize;
 }
 
 impl<T: Deref<Target = [u8]>> Mbc for T {
@@ -23,6 +30,14 @@ impl<T: Deref<Target = [u8]>> Mbc for T {
     }
 
     fn write(&mut self, _: u16, _: u8) {}
+    fn get_ram_to_save(&self) -> Option<&[u8]> {
+        None
+    }
+    fn get_additional_data_to_save(&self, _: &mut [u8]) -> usize {
+        0
+    }
+    fn load_saved_ram(&mut self, _: &[u8]) {}
+    fn load_additional_data(&mut self, _: &[u8]) {}
 }
 
 #[derive(Debug, Clone, Copy)]

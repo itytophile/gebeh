@@ -32,6 +32,18 @@ impl RtcRegisters {
         (u16::from(self.upper_1bit_day_counter_carry_halt) << 1) & 0x100
             | u16::from(self.lower_8bits_day_counter)
     }
+    pub fn from_seconds(seconds: u32, carry: bool, halt: bool) -> Self {
+        let new_days = u16::try_from((seconds / (3600 * 24)) % 512).unwrap();
+        RtcRegisters {
+            seconds: u8::try_from(seconds % 60).unwrap(),
+            minutes: u8::try_from((seconds / 60) % 60).unwrap(),
+            hours: u8::try_from((seconds / 3600) % 24).unwrap(),
+            lower_8bits_day_counter: new_days as u8,
+            upper_1bit_day_counter_carry_halt: ((new_days >> 1) as u8) & 0x80
+                | (halt as u8) << 1
+                | carry as u8,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -55,8 +67,10 @@ pub struct Mbc3<T, U> {
 }
 
 pub trait Rtc {
-    fn get_clock_data(&mut self, current: RtcRegisters) -> RtcRegisters;
+    fn get_clock_data(&mut self) -> RtcRegisters;
     fn set_clock_data(&mut self, register: RtcRegisters);
+    fn deserialize(&mut self, save: &[u8]);
+    fn serialize(&self, buffer: &mut [u8]) -> usize;
 }
 
 impl<T: Deref<Target = [u8]>, U> Mbc3<T, U> {
@@ -162,8 +176,26 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                     }
                 }
             }
-            0x6000 => self.rtc_registers = self.rtc.get_clock_data(self.rtc_registers),
+            0x6000 => self.rtc_registers = self.rtc.get_clock_data(),
             _ => panic!("Writing 0x{value:02x} to ${index:04x}"),
         }
+    }
+
+    fn load_saved_ram(&mut self, save: &[u8]) {
+        let min = save.len().min(self.ram.len());
+        self.ram[..min].copy_from_slice(&save[..min]);
+    }
+
+    // u16 -> days, u8 -> hours, u8 -> minutes
+    fn load_additional_data(&mut self, additional_data: &[u8]) {
+        self.rtc.deserialize(additional_data);
+    }
+
+    fn get_ram_to_save(&self) -> Option<&[u8]> {
+        Some(&self.ram)
+    }
+
+    fn get_additional_data_to_save(&self, buffer: &mut [u8]) -> usize {
+        self.rtc.serialize(buffer)
     }
 }

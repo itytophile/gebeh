@@ -77,4 +77,19 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
             _ => panic!(),
         }
     }
+
+    fn load_saved_ram(&mut self, save: &[u8]) {
+        let min = save.len().min(self.ram.len());
+        self.ram[..min].copy_from_slice(&save[..min]);
+    }
+
+    fn load_additional_data(&mut self, _: &[u8]) {}
+
+    fn get_ram_to_save(&self) -> Option<&[u8]> {
+        Some(&self.ram)
+    }
+
+    fn get_additional_data_to_save(&self, _: &mut [u8]) -> usize {
+        0
+    }
 }
