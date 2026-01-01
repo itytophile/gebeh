@@ -17,6 +17,7 @@ pub mod mbc;
 pub mod ppu;
 pub mod state;
 pub mod timer;
+pub mod joypad;
 
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;
