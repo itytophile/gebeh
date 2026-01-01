@@ -1,8 +1,9 @@
-use crate::{cpu::Cpu, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer};
+use crate::{cpu::Cpu, joypad::Joypad, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer};
 
 pub struct Peripherals<'a> {
     pub mbc: &'a mut dyn Mbc,
     pub timer: &'a mut Timer,
+    pub joypad: &'a mut Joypad,
 }
 
 impl Peripherals<'_> {
@@ -10,6 +11,7 @@ impl Peripherals<'_> {
         PeripheralsRef {
             mbc: self.mbc,
             timer: self.timer,
+            joypad: self.joypad,
         }
     }
 }
@@ -17,6 +19,7 @@ impl Peripherals<'_> {
 pub struct PeripheralsRef<'a> {
     pub mbc: &'a dyn Mbc,
     pub timer: &'a Timer,
+    pub joypad: &'a Joypad,
 }
 
 pub trait MmuCpuExt {
@@ -45,17 +48,7 @@ impl MmuCpuExt for State {
                     self.oam[usize::from(index - OAM)]
                 }
             }
-            JOYPAD => {
-                (if self
-                    .joypad
-                    .contains(JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD)
-                {
-                    // https://gbdev.io/pandocs/Joypad_Input.html#ff00--p1joyp-joypad
-                    self.joypad.bits() | 0xf
-                } else {
-                    self.joypad.bits()
-                }) | 0b11000000 // unused bits return 1
-            }
+            JOYPAD => peripherals.joypad.get_register(),
             SB => self.sb,
             SC => self.sc.bits() | 0b01111110,
             0xff03 => 0xff,
@@ -141,12 +134,7 @@ impl MmuCpuExt for State {
                 }
             }
             NOT_USABLE..JOYPAD => {}
-            JOYPAD => {
-                self.joypad
-                    .remove(JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD);
-                self.joypad |= JoypadFlags::from_bits_retain(value)
-                    & (JoypadFlags::NOT_BUTTONS | JoypadFlags::NOT_DPAD)
-            }
+            JOYPAD => peripherals.joypad.set_register(value),
             SB => self.sb = value,
             SC => self.sc = SerialControl::from_bits_truncate(value),
             0xff03 => {}

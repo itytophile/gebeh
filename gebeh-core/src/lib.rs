@@ -5,6 +5,7 @@ use core::num::NonZeroU8;
 use crate::{
     cpu::{Cpu, Peripherals},
     dma::Dma,
+    joypad::Joypad,
     mbc::Mbc,
     ppu::{LyHandler, Ppu, Speeder},
     state::State,
@@ -13,11 +14,11 @@ use crate::{
 
 pub mod cpu;
 pub mod dma;
+pub mod joypad;
 pub mod mbc;
 pub mod ppu;
 pub mod state;
 pub mod timer;
-pub mod joypad;
 
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;
@@ -30,6 +31,7 @@ pub struct Emulator {
     cpu: Cpu,
     pub state: State,
     timer: Timer,
+    joypad: Joypad,
     cycles: u64, // debug purposes
 }
 
@@ -39,6 +41,9 @@ impl Emulator {
     }
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
+    }
+    pub fn get_joypad_mut(&mut self) -> &mut Joypad {
+        &mut self.joypad
     }
 }
 
@@ -51,6 +56,7 @@ impl Default for Emulator {
             cpu: Default::default(),
             state: Default::default(),
             timer: Default::default(),
+            joypad: Default::default(),
             cycles: 0,
         }
     }
@@ -67,6 +73,7 @@ impl Emulator {
             Peripherals {
                 mbc,
                 timer: &mut self.timer,
+                joypad: &mut self.joypad,
             },
             self.cycles,
         );

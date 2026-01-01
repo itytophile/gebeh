@@ -1,5 +1,16 @@
-use crate::state::JoypadFlags;
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    struct JoypadFlags: u8 {
+        const NOT_BUTTONS = 1 << 5;
+        const NOT_DPAD = 1 << 4;
+        const NOT_START_DOWN = 1 << 3;
+        const NOT_SELECT_UP = 1 << 2;
+        const NOT_B_LEFT = 1 << 1;
+        const NOT_A_RIGHT = 1;
+    }
+}
 
+#[derive(Clone, Default)]
 pub struct JoypadInput {
     pub a: bool,
     pub b: bool,
@@ -11,6 +22,7 @@ pub struct JoypadInput {
     pub down: bool,
 }
 
+#[derive(Clone, Default)]
 pub struct Joypad {
     input: JoypadInput,
     is_dpad_selected: bool,
@@ -62,6 +74,6 @@ impl Joypad {
         }
         value.set(JoypadFlags::NOT_DPAD, !self.is_dpad_selected);
         value.set(JoypadFlags::NOT_BUTTONS, !self.is_buttons_selected);
-        value.bits()
+        value.bits() | 0b11000000 // unused bits return 1
     }
 }

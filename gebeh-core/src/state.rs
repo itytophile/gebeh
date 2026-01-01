@@ -63,18 +63,6 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
-    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
-    pub struct JoypadFlags: u8 {
-        const NOT_BUTTONS = 1 << 5;
-        const NOT_DPAD = 1 << 4;
-        const NOT_START_DOWN = 1 << 3;
-        const NOT_SELECT_UP = 1 << 2;
-        const NOT_B_LEFT = 1 << 1;
-        const NOT_A_RIGHT = 1;
-    }
-}
-
-bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
     pub struct LcdStatus: u8 {
         const LYC_INT = 1 << 6;
@@ -191,7 +179,6 @@ pub struct State {
     pub wy: u8,
     pub wx: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
-    pub joypad: JoypadFlags,
     pub delayed: Delayed,
     // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
 }
@@ -248,7 +235,6 @@ impl Default for State {
             wx: 0,
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
-            joypad: JoypadFlags::empty(),
             // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
             delayed: Default::default(),
         }
