@@ -5,7 +5,7 @@ use core::num::NonZeroU8;
 use crate::{
     cpu::{Cpu, Peripherals},
     dma::Dma,
-    joypad::Joypad,
+    joypad::{Joypad, JoypadInput},
     mbc::Mbc,
     ppu::{LyHandler, Ppu, Speeder},
     state::State,
@@ -42,8 +42,8 @@ impl Emulator {
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
     }
-    pub fn get_joypad_mut(&mut self) -> &mut Joypad {
-        &mut self.joypad
+    pub fn get_joypad_mut(&mut self) -> &mut JoypadInput {
+        &mut self.joypad.input
     }
 }
 

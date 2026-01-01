@@ -209,79 +209,68 @@ fn main() {
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::Space),
+                                state: ElementState::Released,
+                                physical_key: PhysicalKey::Code(keycode),
                                 ..
                             },
                         ..
                     },
                 ..
-            } => is_paused = !is_paused,
+            } => match keycode {
+                KeyCode::KeyA => emulator.get_joypad_mut().a = false,
+                KeyCode::KeyB => emulator.get_joypad_mut().b = false,
+                KeyCode::ArrowLeft => emulator.get_joypad_mut().left = false,
+                KeyCode::ArrowRight => emulator.get_joypad_mut().right = false,
+                KeyCode::ArrowUp => emulator.get_joypad_mut().up = false,
+                KeyCode::ArrowDown => emulator.get_joypad_mut().down = false,
+                KeyCode::Enter => emulator.get_joypad_mut().start = false,
+                KeyCode::Tab => emulator.get_joypad_mut().select = false,
+                _ => {}
+            },
             Event::WindowEvent {
                 event:
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
                                 state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::KeyS),
+                                physical_key: PhysicalKey::Code(keycode),
                                 ..
                             },
                         ..
                     },
                 ..
-            } => {
-                debug_mode = match debug_mode {
-                    DebugMode::Scanline => DebugMode::None,
-                    _ => DebugMode::Scanline,
+            } => match keycode {
+                KeyCode::Space => is_paused = !is_paused,
+                KeyCode::KeyS => {
+                    debug_mode = match debug_mode {
+                        DebugMode::Scanline => DebugMode::None,
+                        _ => DebugMode::Scanline,
+                    }
                 }
-            }
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::KeyP),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                debug_mode = match debug_mode {
-                    DebugMode::Pixel(_) => DebugMode::None,
-                    _ => DebugMode::Pixel(0),
+                KeyCode::KeyP => {
+                    debug_mode = match debug_mode {
+                        DebugMode::Pixel(_) => DebugMode::None,
+                        _ => DebugMode::Pixel(0),
+                    }
                 }
-            }
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::ArrowLeft),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                if let Some(old) = save_states.pop() {
-                    (emulator, mbc) = old
+                KeyCode::Backspace => {
+                    if let Some(old) = save_states.pop() {
+                        (emulator, mbc) = old
+                    }
                 }
-            }
+                KeyCode::Escape => elwt.exit(),
+                KeyCode::KeyA => emulator.get_joypad_mut().a = true,
+                KeyCode::KeyB => emulator.get_joypad_mut().b = true,
+                KeyCode::ArrowLeft => emulator.get_joypad_mut().left = true,
+                KeyCode::ArrowRight => emulator.get_joypad_mut().right = true,
+                KeyCode::ArrowUp => emulator.get_joypad_mut().up = true,
+                KeyCode::ArrowDown => emulator.get_joypad_mut().down = true,
+                KeyCode::Enter => emulator.get_joypad_mut().start = true,
+                KeyCode::Tab => emulator.get_joypad_mut().select = true,
+                _ => {}
+            },
             Event::WindowEvent {
-                event:
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    },
+                event: WindowEvent::CloseRequested,
                 ..
             } => {
                 elwt.exit();

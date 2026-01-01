@@ -24,15 +24,12 @@ pub struct JoypadInput {
 
 #[derive(Clone, Default)]
 pub struct Joypad {
-    input: JoypadInput,
+    pub input: JoypadInput,
     is_dpad_selected: bool,
     is_buttons_selected: bool,
 }
 
 impl Joypad {
-    pub fn set_input(&mut self, input: JoypadInput) {
-        self.input = input;
-    }
     pub fn set_register(&mut self, value: u8) {
         let value = JoypadFlags::from_bits_retain(value);
         self.is_dpad_selected = !value.contains(JoypadFlags::NOT_DPAD);
