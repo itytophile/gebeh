@@ -1,7 +1,92 @@
 #[derive(Clone, Default)]
+struct Sweep {}
+
+impl Sweep {
+    fn trigger(&mut self) {
+        todo!()
+    }
+    fn has_overflowed(&self) -> bool {
+        todo!()
+    }
+}
+
+#[derive(Clone, Default)]
+struct PulseChannel {
+    length_timer_and_duty_cycle: u8,
+    volume_and_envelope: u8,
+    period_low: u8,
+    period_high_and_control: u8,
+    is_enabled: bool,
+    sweep: Option<Sweep>,
+}
+
+impl PulseChannel {
+    fn set_period_high_and_control(&mut self, value: u8) {
+        let is_triggered = value & 0x80 != 0;
+        self.period_high_and_control = value;
+        if is_triggered {
+            self.trigger();
+        }
+    }
+
+    fn trigger(&mut self) {
+        if self.is_length_timer_expired() {
+            self.reset_length_timer();
+        }
+        self.reload_period_divider();
+        self.reset_envelope_timer();
+        self.reload_volume();
+        if let Some(sweep) = &mut self.sweep {
+            sweep.trigger();
+        }
+    }
+
+    fn is_on(&self) -> bool {
+        self.is_dac_on()
+            && !(self.is_length_timer_enabled() && self.is_length_timer_expired())
+            && !self
+                .sweep
+                .as_ref()
+                .map(Sweep::has_overflowed)
+                .unwrap_or(false)
+    }
+
+    fn is_length_timer_expired(&self) -> bool {
+        todo!()
+    }
+
+    fn is_length_timer_enabled(&self) -> bool {
+        todo!()
+    }
+
+    fn is_dac_on(&self) -> bool {
+        // https://gbdev.io/pandocs/Audio_details.html#dacs
+        self.volume_and_envelope & 0xf8 != 0
+    }
+
+    fn reset_length_timer(&self) {
+        todo!()
+    }
+
+    fn reload_period_divider(&self) {
+        todo!()
+    }
+
+    fn reset_envelope_timer(&self) {
+        todo!()
+    }
+
+    fn reload_volume(&self) {
+        todo!()
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct Apu {
     is_on: bool,
-    sound_panning: Nr51,
+    nr51: Nr51,
+    nr50: Nr50,
+    nr10: u8,
 }
 
 bitflags::bitflags! {
@@ -15,6 +100,7 @@ bitflags::bitflags! {
     }
 }
 
+// Sound panning
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
     pub struct Nr51: u8 {
@@ -29,6 +115,17 @@ bitflags::bitflags! {
     }
 }
 
+// Master volume & VIN panning
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
+    pub struct Nr50: u8 {
+        const VIN_LEFT = 1 << 7;
+        const LEFT_VOLUME_MASK = 0b01110000;
+        const VIN_RIGHT = 1 << 3;
+        const RIGHT_VOLUME_MASK = 0b00000111;
+    }
+}
+
 impl Apu {
     pub fn get_nr52(&self) -> u8 {
         let mut flags = Nr52::empty();
@@ -40,20 +137,20 @@ impl Apu {
         flags.bits() | 0b01110000
     }
     pub fn write_nr52(&mut self, value: u8) {
-        self.is_on = Nr52::from_bits_retain(value).contains(Nr52::AUDIO_ON_OFF);
+        let is_on = Nr52::from_bits_retain(value).contains(Nr52::AUDIO_ON_OFF);
+        if self.is_on == is_on {
+            return;
+        }
+        self.is_on = is_on;
         if !self.is_on {
-            self.clear_all_registers();
+            *self = Default::default();
         }
     }
     pub fn get_nr51(&self) -> u8 {
-        self.sound_panning.bits()
+        self.nr51.bits()
     }
     pub fn write_nr51(&mut self, value: u8) {
-        self.sound_panning = Nr51::from_bits_retain(value);
-    }
-    fn clear_all_registers(&mut self) {
-        self.sound_panning = Nr51::empty();
-        todo!()
+        self.nr51 = Nr51::from_bits_retain(value);
     }
 
     fn is_ch1_on(&self) -> bool {
