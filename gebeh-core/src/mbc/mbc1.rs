@@ -98,9 +98,7 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
     }
     fn write(&mut self, index: u16, value: u8) {
         match index {
-            0x0000..0x2000 => {
-                self.ram_enabled = (value & 0x0f) == 0x0a;
-            }
+            0x0000..0x2000 => self.ram_enabled = (value & 0x0f) == 0x0a,
             0x2000..0x4000 => self.rom_bank = value & 0x1f,
             0x4000..0x6000 => self.advanced_bank = value & 0x03,
             0x6000..0x8000 => {
