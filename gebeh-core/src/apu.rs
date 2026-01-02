@@ -34,7 +34,7 @@ struct LengthTimer {
 
 impl LengthTimer {
     fn tick(&mut self, div: u8) -> bool {
-        let has_ticked = div & 0x10 != 0;
+        let has_ticked = div & (1 << 5) != 0;
 
         if self.falling_edge == has_ticked {
             return true;
@@ -61,6 +61,48 @@ impl LengthTimer {
 }
 
 #[derive(Clone, Default)]
+struct EnvelopeTimer {
+    falling_edge: bool,
+    value: u8, // 4 bits
+    is_increasing: bool,
+    sweep_pace: u8, // 3 bits
+    pace_count: u8,
+}
+
+impl EnvelopeTimer {
+    fn tick(&mut self, div: u8) {
+        if self.sweep_pace == 0 {
+            return;
+        }
+
+        let has_ticked = div & (1 << 7) != 0;
+        if self.falling_edge == has_ticked {
+            return;
+        }
+
+        self.falling_edge = has_ticked;
+
+        if self.falling_edge {
+            return;
+        }
+
+        self.pace_count += 1;
+
+        if self.pace_count != self.sweep_pace {
+            return;
+        }
+
+        self.pace_count = 0;
+
+        match (self.is_increasing, self.value) {
+            (true, 0x0f) | (false, 0) => {}
+            (true, _) => self.value += 1,
+            (false, _) => self.value -= 1,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
 struct PulseChannel<S: Sweep> {
     length_timer_and_duty_cycle: u8,
     volume_and_envelope: u8,
@@ -69,6 +111,8 @@ struct PulseChannel<S: Sweep> {
     is_enabled: bool,
     sweep: S,
     length_timer: LengthTimer,
+    period_divider_counter: u16,
+    envelopeTimer: EnvelopeTimer,
 }
 
 impl<S: Sweep> PulseChannel<S> {
@@ -83,11 +127,11 @@ impl<S: Sweep> PulseChannel<S> {
     fn trigger(&mut self) {
         self.is_enabled = true;
         if self.length_timer.is_expired() {
-            self.length_timer.reload(self.length_timer_and_duty_cycle & 0x3f);
+            self.length_timer
+                .reload(self.length_timer_and_duty_cycle & 0x3f);
         }
-        self.reload_period_divider();
-        self.reset_envelope_timer();
-        self.reload_volume();
+        self.period_divider_counter = self.get_period();
+        self.reload_envelope_timer();
         self.sweep.trigger();
     }
 
@@ -100,18 +144,13 @@ impl<S: Sweep> PulseChannel<S> {
         self.volume_and_envelope & 0xf8 != 0
     }
 
-    fn reload_period_divider(&self) {
-        todo!()
+    fn reload_envelope_timer(&mut self) {
+        self.envelopeTimer.is_increasing = self.volume_and_envelope & 0x08 != 0;
+        self.envelopeTimer.value = (self.volume_and_envelope >> 4) & 0x0f;
+        self.envelopeTimer.sweep_pace = self.volume_and_envelope & 0x07;
     }
 
-    fn reset_envelope_timer(&self) {
-        todo!()
-    }
-
-    fn reload_volume(&self) {
-        todo!()
-    }
-
+    // must be called at 1048576 Hz (once per four dots)
     fn tick(&mut self, div: u8) {
         if !self.is_on() {
             return;
@@ -119,6 +158,16 @@ impl<S: Sweep> PulseChannel<S> {
         // don't use && directly because it is lazy
         // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
         self.is_enabled = self.sweep.tick(div) & self.length_timer.tick(div);
+        self.period_divider_counter = if self.period_divider_counter == 0x7ff {
+            self.get_period()
+        } else {
+            self.period_divider_counter + 1
+        };
+    }
+
+    // 11 bits
+    fn get_period(&self) -> u16 {
+        u16::from_be_bytes([self.period_high_and_control & 0x07, self.period_low])
     }
 }
 
