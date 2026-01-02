@@ -38,6 +38,14 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
         u8::try_from(get_factor_32_kib_rom(self.rom.deref())).unwrap() << 1
     }
 
+    fn get_rom_bank_upper_bits(&self) -> u8 {
+        match self.get_rom_bank_count() {
+            128 => self.advanced_bank,
+            64 => self.advanced_bank & 1,
+            _ => 0,
+        }
+    }
+
     fn get_switchable_rom_offset(&self) -> usize {
         // https://gbdev.io/pandocs/MBC1.html#20003fff--rom-bank-number-write-only
         // Citation: If this register is set to $00, it behaves as if it is set to $01
@@ -45,13 +53,8 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
         // the bank number is masked to the required number of bits.
         // [...] As a result if the ROM is 256 KiB or smaller, it is possible to map bank 0
         // to the 4000–7FFF region — by setting the 5th bit to 1 it will prevent the 00→01 translation
-        let upper_bits = match self.get_rom_bank_count() {
-            128 => self.advanced_bank,
-            64 => self.advanced_bank & 1,
-            _ => 0,
-        };
-        let rom_bank_number =
-            (upper_bits << 5) | (self.rom_bank.max(1) & (self.get_rom_bank_count() - 1));
+        let rom_bank_number = (self.get_rom_bank_upper_bits() << 5)
+            | (self.rom_bank.max(1) & (self.get_rom_bank_count() - 1));
         usize::from(rom_bank_number) * usize::from(ROM_BANK_SIZE)
     }
 
@@ -67,12 +70,7 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
     fn get_rom_offset(&self) -> usize {
         match self.banking_mode {
             BankingMode::Advanced => {
-                let upper_bits = match self.get_rom_bank_count() {
-                    128 => self.advanced_bank,
-                    64 => self.advanced_bank & 1,
-                    _ => 0,
-                };
-                (usize::from(upper_bits) << 5) * usize::from(ROM_BANK_SIZE)
+                (usize::from(self.get_rom_bank_upper_bits()) << 5) * usize::from(ROM_BANK_SIZE)
             }
             BankingMode::Simple => 0,
         }
