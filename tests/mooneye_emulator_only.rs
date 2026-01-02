@@ -31,3 +31,63 @@ fn test_mooneye(path: &str) {
 fn mbc1_bits_bank1() {
     test_mooneye("mbc1/bits_bank1.gb");
 }
+
+#[test]
+fn mbc1_bits_bank2() {
+    test_mooneye("mbc1/bits_bank2.gb");
+}
+
+#[test]
+fn mbc1_bits_mode() {
+    test_mooneye("mbc1/bits_mode.gb");
+}
+
+#[test]
+fn mbc1_bits_ramg() {
+    test_mooneye("mbc1/bits_ramg.gb");
+}
+
+#[test]
+fn mbc1_multicart_rom_8mb() {
+    test_mooneye("mbc1/multicart_rom_8Mb.gb");
+}
+
+#[test]
+fn mbc1_ram_256kb() {
+    test_mooneye("mbc1/ram_256kb.gb");
+}
+
+#[test]
+fn mbc1_ram_64kb() {
+    test_mooneye("mbc1/ram_64kb.gb");
+}
+
+#[test]
+fn mbc1_rom_16mb() {
+    test_mooneye("mbc1/rom_16Mb.gb");
+}
+
+#[test]
+fn mbc1_rom_1mb() {
+    test_mooneye("mbc1/rom_1Mb.gb");
+}
+
+#[test]
+fn mbc1_rom_2mb() {
+    test_mooneye("mbc1/rom_2Mb.gb");
+}
+
+#[test]
+fn mbc1_rom_4mb() {
+    test_mooneye("mbc1/rom_4Mb.gb");
+}
+
+#[test]
+fn mbc1_rom_512kb() {
+    test_mooneye("mbc1/rom_512kb.gb");
+}
+
+#[test]
+fn mbc1_rom_8mb() {
+    test_mooneye("mbc1/rom_8Mb.gb");
+}
