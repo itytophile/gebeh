@@ -5,7 +5,7 @@ struct Ch1Sweep {
 
 trait Sweep {
     fn trigger(&mut self);
-    fn tick(&mut self) -> bool;
+    fn tick(&mut self, div: u8) -> bool;
 }
 
 impl Sweep for Ch1Sweep {
@@ -13,7 +13,7 @@ impl Sweep for Ch1Sweep {
         todo!()
     }
     // Returns channel on/off
-    fn tick(&mut self) -> bool {
+    fn tick(&mut self, div: u8) -> bool {
         todo!()
     }
 }
@@ -21,8 +21,42 @@ impl Sweep for Ch1Sweep {
 impl Sweep for () {
     fn trigger(&mut self) {}
 
-    fn tick(&mut self) -> bool {
+    fn tick(&mut self, _: u8) -> bool {
         true
+    }
+}
+
+#[derive(Clone, Default)]
+struct LengthTimer {
+    falling_edge: bool,
+    value: u8,
+}
+
+impl LengthTimer {
+    fn tick(&mut self, div: u8) -> bool {
+        let has_ticked = div & 0x10 != 0;
+
+        if self.falling_edge == has_ticked {
+            return true;
+        }
+
+        self.falling_edge = has_ticked;
+
+        if !self.falling_edge {
+            assert!(self.value < 64);
+            self.value += 1;
+            return self.value != 64;
+        }
+
+        true
+    }
+
+    fn is_expired(&self) -> bool {
+        self.value == 64
+    }
+
+    fn reload(&mut self, value: u8) {
+        self.value = value;
     }
 }
 
@@ -34,6 +68,7 @@ struct PulseChannel<S: Sweep> {
     period_high_and_control: u8,
     is_enabled: bool,
     sweep: S,
+    length_timer: LengthTimer,
 }
 
 impl<S: Sweep> PulseChannel<S> {
@@ -47,8 +82,8 @@ impl<S: Sweep> PulseChannel<S> {
 
     fn trigger(&mut self) {
         self.is_enabled = true;
-        if self.is_length_timer_expired() {
-            self.reset_length_timer();
+        if self.length_timer.is_expired() {
+            self.length_timer.reload(self.length_timer_and_duty_cycle & 0x3f);
         }
         self.reload_period_divider();
         self.reset_envelope_timer();
@@ -60,21 +95,9 @@ impl<S: Sweep> PulseChannel<S> {
         self.is_dac_on() && self.is_enabled
     }
 
-    fn is_length_timer_expired(&self) -> bool {
-        todo!()
-    }
-
-    fn is_length_timer_enabled(&self) -> bool {
-        todo!()
-    }
-
     fn is_dac_on(&self) -> bool {
         // https://gbdev.io/pandocs/Audio_details.html#dacs
         self.volume_and_envelope & 0xf8 != 0
-    }
-
-    fn reset_length_timer(&self) {
-        todo!()
     }
 
     fn reload_period_divider(&self) {
@@ -89,11 +112,13 @@ impl<S: Sweep> PulseChannel<S> {
         todo!()
     }
 
-    fn tick(&mut self) {
+    fn tick(&mut self, div: u8) {
         if !self.is_on() {
             return;
         }
-        self.is_enabled = self.sweep.tick();
+        // don't use && directly because it is lazy
+        // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
+        self.is_enabled = self.sweep.tick(div) & self.length_timer.tick(div);
     }
 }
 
