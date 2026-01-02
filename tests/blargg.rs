@@ -1,3 +1,5 @@
+use std::ffi::CStr;
+
 use crate::common::{TestSerial, machine_to_serial_iter};
 use arrayvec::ArrayVec;
 use gebeh::get_mbc;
@@ -22,4 +24,69 @@ fn cpu_instrs() {
         .collect();
 
     assert_eq!(EXPECTED, str::from_utf8(&buffer).unwrap());
+}
+
+#[test]
+fn instr_timing() {
+    const EXPECTED: &str = "instr_timing\n\n\nPassed";
+    const LEN: usize = EXPECTED.len();
+
+    let rom = std::fs::read("/home/ityt/Documents/git/gb-test-roms/instr_timing/instr_timing.gb")
+        .unwrap();
+    let rom = rom.as_slice();
+    let mut mbc = get_mbc(rom).unwrap();
+    let mut machine = Emulator::default();
+    let mut serial = TestSerial(None);
+
+    let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, &mut serial, mbc.as_mut())
+        .take(LEN)
+        .collect();
+
+    assert_eq!(EXPECTED, str::from_utf8(&buffer).unwrap());
+}
+
+#[test]
+fn mem_timing() {
+    const EXPECTED: &str = "mem_timing\n\n01:ok  02:ok  03:ok  \n\nPassed";
+    const LEN: usize = EXPECTED.len();
+
+    let rom =
+        std::fs::read("/home/ityt/Documents/git/gb-test-roms/mem_timing/mem_timing.gb").unwrap();
+    let rom = rom.as_slice();
+    let mut mbc = get_mbc(rom).unwrap();
+    let mut machine = Emulator::default();
+    let mut serial = TestSerial(None);
+
+    let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, &mut serial, mbc.as_mut())
+        .take(LEN)
+        .collect();
+
+    assert_eq!(EXPECTED, str::from_utf8(&buffer).unwrap());
+}
+
+#[test]
+fn mem_timing_2() {
+    const EXPECTED: &str = "mem_timing\n\n01:ok  02:ok  03:ok  \n\nPassed\n";
+    let rom =
+        std::fs::read("/home/ityt/Documents/git/gb-test-roms/mem_timing-2/mem_timing.gb").unwrap();
+    let rom = rom.as_slice();
+    let mut mbc = get_mbc(rom).unwrap();
+    let mut machine = Emulator::default();
+
+    let output = loop {
+        machine.execute(mbc.as_mut());
+        let ram = mbc.get_ram_to_save().unwrap();
+        if ram[1..4] != [0xDE, 0xB0, 0x61] || ram[0] == 0x80 {
+            continue;
+        }
+        let output = CStr::from_bytes_until_nul(&ram[4..])
+            .unwrap()
+            .to_str()
+            .unwrap();
+        if output.len() == EXPECTED.len() {
+            break output;
+        }
+    };
+
+    assert_eq!(EXPECTED, output)
 }

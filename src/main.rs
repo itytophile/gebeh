@@ -54,11 +54,6 @@ fn main() {
     // let rom = std::fs::read("/home/ityt/Téléchargements/oh_2/oh.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/20y/20y.gb").unwrap();
     let rom = std::fs::read("/home/ityt/Téléchargements/mallard/mallard.gb").unwrap();
-    // let rom =
-    //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/individual/10-bit ops.gb")
-    //         .unwrap();
-    // let rom =
-    //     std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/cpu_instrs.gb").unwrap();
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
     let title = &rom[0x134..0x143];
     let end_zero_pos = title
