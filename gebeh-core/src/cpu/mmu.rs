@@ -90,7 +90,7 @@ impl MmuCpuExt for State {
             CHANNEL_4_FREQUENCY_AND_RANDOMNESS => self.channel_4_frequency_and_randomness,
             CHANNEL_4_CONTROL => self.channel_4_control | 0b10111111,
             MASTER_VOLUME_AND_VIN_PANNING => self.master_volume_and_vin_panning,
-            SOUND_PANNING => self.sound_panning,
+            SOUND_PANNING => peripherals.apu.get_nr51(),
             AUDIO_MASTER_CONTROL => peripherals.apu.get_nr52(),
             0xff27..WAVE => 0xff,
             LCD_CONTROL => self.lcd_control.bits(),
@@ -174,7 +174,7 @@ impl MmuCpuExt for State {
             CHANNEL_4_FREQUENCY_AND_RANDOMNESS => self.channel_4_frequency_and_randomness = value,
             CHANNEL_4_CONTROL => self.channel_4_control = value,
             MASTER_VOLUME_AND_VIN_PANNING => self.master_volume_and_vin_panning = value,
-            SOUND_PANNING => self.sound_panning = value,
+            SOUND_PANNING => peripherals.apu.write_nr51(value),
             AUDIO_MASTER_CONTROL => peripherals.apu.write_nr52(value),
             0xff27..WAVE => {}
             WAVE..LCD_CONTROL => {

@@ -1,6 +1,7 @@
 #[derive(Clone, Default)]
 pub struct Apu {
     is_on: bool,
+    sound_panning: Nr51,
 }
 
 bitflags::bitflags! {
@@ -11,6 +12,20 @@ bitflags::bitflags! {
         const CH3_ON = 1 << 2;
         const CH2_ON = 1 << 1;
         const CH1_ON = 1;
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
+    pub struct Nr51: u8 {
+        const CH4_LEFT = 1 << 7;
+        const CH3_LEFT = 1 << 6;
+        const CH2_LEFT = 1 << 5;
+        const CH1_LEFT = 1 << 4;
+        const CH4_RIGHT = 1 << 3;
+        const CH3_RIGHT = 1 << 2;
+        const CH2_RIGHT = 1 << 1;
+        const CH1_RIGHT = 1;
     }
 }
 
@@ -30,7 +45,14 @@ impl Apu {
             self.clear_all_registers();
         }
     }
+    pub fn get_nr51(&self) -> u8 {
+        self.sound_panning.bits()
+    }
+    pub fn write_nr51(&mut self, value: u8) {
+        self.sound_panning = Nr51::from_bits_retain(value);
+    }
     fn clear_all_registers(&mut self) {
+        self.sound_panning = Nr51::empty();
         todo!()
     }
 
