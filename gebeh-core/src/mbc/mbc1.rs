@@ -87,6 +87,9 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
                     - usize::from(SWITCHABLE_ROM_BANK)]
             }
             EXTERNAL_RAM..WORK_RAM => {
+                if !self.ram_enabled {
+                    return 0xff;
+                }
                 self.ram[self.get_ram_offset() + usize::from(index) - usize::from(EXTERNAL_RAM)]
             }
             _ => panic!(),
