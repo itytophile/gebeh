@@ -66,7 +66,9 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
 
     fn get_rom_offset(&self) -> usize {
         match self.banking_mode {
-            BankingMode::Advanced if self.get_rom_bank_count() > LIMIT_ROM_BANK_COUNT_BEFORE_ADVANCED => {
+            BankingMode::Advanced
+                if self.get_rom_bank_count() > LIMIT_ROM_BANK_COUNT_BEFORE_ADVANCED =>
+            {
                 (usize::from(self.advanced_bank) << 5) * usize::from(RAM_BANK_SIZE)
             }
             _ => 0,
