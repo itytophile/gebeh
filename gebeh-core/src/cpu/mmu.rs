@@ -1,9 +1,12 @@
-use crate::{cpu::Cpu, joypad::Joypad, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer};
+use crate::{
+    apu::Apu, cpu::Cpu, joypad::Joypad, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer,
+};
 
 pub struct Peripherals<'a> {
     pub mbc: &'a mut dyn Mbc,
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
+    pub apu: &'a mut Apu,
 }
 
 impl Peripherals<'_> {
@@ -12,6 +15,7 @@ impl Peripherals<'_> {
             mbc: self.mbc,
             timer: self.timer,
             joypad: self.joypad,
+            apu: self.apu,
         }
     }
 }
@@ -20,6 +24,7 @@ pub struct PeripheralsRef<'a> {
     pub mbc: &'a dyn Mbc,
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
+    pub apu: &'a Apu,
 }
 
 pub trait MmuCpuExt {
@@ -86,7 +91,7 @@ impl MmuCpuExt for State {
             CHANNEL_4_CONTROL => self.channel_4_control | 0b10111111,
             MASTER_VOLUME_AND_VIN_PANNING => self.master_volume_and_vin_panning,
             SOUND_PANNING => self.sound_panning,
-            AUDIO_MASTER_CONTROL => self.audio_master_control | 0b01110000,
+            AUDIO_MASTER_CONTROL => peripherals.apu.get_nr52(),
             0xff27..WAVE => 0xff,
             LCD_CONTROL => self.lcd_control.bits(),
             LCD_STATUS => self.lcd_status.bits() | 0b10000000,
@@ -170,7 +175,7 @@ impl MmuCpuExt for State {
             CHANNEL_4_CONTROL => self.channel_4_control = value,
             MASTER_VOLUME_AND_VIN_PANNING => self.master_volume_and_vin_panning = value,
             SOUND_PANNING => self.sound_panning = value,
-            AUDIO_MASTER_CONTROL => self.audio_master_control = value,
+            AUDIO_MASTER_CONTROL => peripherals.apu.write_nr52(value),
             0xff27..WAVE => {}
             WAVE..LCD_CONTROL => {
                 // TODO wave ram

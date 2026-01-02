@@ -3,6 +3,7 @@
 use core::num::NonZeroU8;
 
 use crate::{
+    apu::Apu,
     cpu::{Cpu, Peripherals},
     dma::Dma,
     joypad::{Joypad, JoypadInput},
@@ -12,6 +13,7 @@ use crate::{
     timer::Timer,
 };
 
+pub mod apu;
 pub mod cpu;
 pub mod dma;
 pub mod joypad;
@@ -32,6 +34,7 @@ pub struct Emulator {
     pub state: State,
     timer: Timer,
     joypad: Joypad,
+    apu: Apu,
     cycles: u64, // debug purposes
 }
 
@@ -57,6 +60,7 @@ impl Default for Emulator {
             state: Default::default(),
             timer: Default::default(),
             joypad: Default::default(),
+            apu: Default::default(),
             cycles: 0,
         }
     }
@@ -74,6 +78,7 @@ impl Emulator {
                 mbc,
                 timer: &mut self.timer,
                 joypad: &mut self.joypad,
+                apu: &mut self.apu,
             },
             self.cycles,
         );
