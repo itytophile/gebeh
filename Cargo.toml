@@ -15,6 +15,7 @@ winit = "0.29"
 pixels = "0.15.0"
 log = "0.4.29"
 cpal = "0.17.0"
+timerfd = "1.6.0"
 
 [dev-dependencies]
 arrayvec = "0.7.6"

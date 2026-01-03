@@ -10,7 +10,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Copy)]
 pub struct JoypadInput {
     pub a: bool,
     pub b: bool,

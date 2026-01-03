@@ -17,10 +17,9 @@ use cpal::{
     FromSample, I24, SizedSample,
     traits::{DeviceTrait, StreamTrait},
 };
-use gebeh_core::{Emulator, apu::Apu};
+use gebeh_core::apu::Apu;
 
 pub struct Audio {
-    falling_edge: bool,
     // we must avoid updating it every cycle...
     apu: Arc<RwLock<Apu>>,
     _stream: cpal::Stream,
@@ -52,7 +51,6 @@ impl Audio {
 
         Self {
             apu: apu_to_keep,
-            falling_edge: false,
             _stream: stream,
         }
     }
@@ -90,20 +88,7 @@ impl Audio {
             .unwrap()
     }
 
-    pub fn update_sound(&mut self, emulator: &Emulator) {
-        // 256Hz
-        let has_ticked = emulator.get_timer().get_div() & (1 << 5) != 0;
-
-        if self.falling_edge == has_ticked {
-            return;
-        }
-
-        self.falling_edge = has_ticked;
-
-        if self.falling_edge {
-            return;
-        }
-
-        *self.apu.write().unwrap() = emulator.get_apu().clone();
+    pub fn update_sound(&mut self, apu: Apu) {
+        *self.apu.write().unwrap() = apu;
     }
 }
