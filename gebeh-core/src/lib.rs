@@ -31,7 +31,7 @@ pub struct Emulator {
     ppu: Speeder,
     dma: Dma,
     cpu: Cpu,
-    pub state: State,
+    state: State,
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
@@ -47,6 +47,15 @@ impl Emulator {
     }
     pub fn get_joypad_mut(&mut self) -> &mut JoypadInput {
         &mut self.joypad.input
+    }
+    pub fn get_apu(&self) -> &Apu {
+        &self.apu
+    }
+    pub fn get_timer(&self) -> &Timer {
+        &self.timer
+    }
+    pub fn get_state(&self) -> &State {
+        &self.state
     }
 }
 

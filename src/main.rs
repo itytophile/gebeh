@@ -1,10 +1,16 @@
 mod audio;
 
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex, RwLock},
+    time::{Duration, Instant},
+};
 
+use color_eyre::owo_colors::OwoColorize;
+use cpal::traits::HostTrait;
 use gebeh::get_mbc;
 use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
+    apu::Apu,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::{LcdControl, PpuStep, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
@@ -17,6 +23,8 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
+
+use crate::audio::Audio;
 
 const DEBUG_TILE_COL_COUNT: u8 = 16;
 // must be divisible by three because there are three blocks of tiles
@@ -50,7 +58,13 @@ fn main() {
     color_eyre::install().unwrap();
     env_logger::init();
 
-    audio::prout();
+    let host = cpal::default_host();
+
+    let device = host
+        .default_output_device()
+        .expect("failed to find output device");
+    
+    let mut audio = Audio::new(&device);
 
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
@@ -163,11 +177,12 @@ fn main() {
                         last_save = Instant::now();
                         save_states.push((emulator.clone(), mbc.clone_boxed()));
                     }
-                    draw_emulator(
+                    drive_emulator(
                         mbc.as_mut(),
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut debug_mode,
+                        &mut audio
                     );
                     pixels.render().unwrap();
                 }
@@ -181,7 +196,7 @@ fn main() {
             } if window_id == debug_window.id() => {
                 if !is_paused {
                     draw_tiles_debug(
-                        &emulator.state,
+                        emulator.get_state(),
                         debug_pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
                     debug_pixels.render().unwrap();
@@ -196,7 +211,7 @@ fn main() {
             } if window_id == debug_tile_map_window.id() => {
                 if !is_paused {
                     draw_tile_map_debug(
-                        &emulator.state,
+                        emulator.get_state(),
                         debug_tile_map_pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
                     debug_tile_map_pixels.render().unwrap();
@@ -299,15 +314,17 @@ fn exit(elwt: &EventLoopWindowTarget<()>, title: &str, mbc: &dyn Mbc) {
     elwt.exit();
 }
 
-fn draw_emulator(
+fn drive_emulator(
     mbc: &mut dyn Mbc,
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
     debug_mode: &mut DebugMode,
+    audio: &mut Audio
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
         emulator.execute(mbc);
+        audio.update_sound(emulator);
 
         if *debug_mode == DebugMode::Scanline
             && let PpuStep::Drawing {
@@ -318,9 +335,9 @@ fn draw_emulator(
         {
             log::info!(
                 "LY = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
-                emulator.state.ly,
-                emulator.state.scx,
-                emulator.state.scy,
+                emulator.get_state().ly,
+                emulator.get_state().scx,
+                emulator.get_state().scy,
                 renderer.first_pixels_to_skip
             );
         }
@@ -352,11 +369,11 @@ fn draw_emulator(
             }
         };
 
-        let base = usize::from(emulator.state.ly) * usize::from(WIDTH);
+        let base = usize::from(emulator.get_state().ly) * usize::from(WIDTH);
         for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
             *pixel = (*color).into();
         }
-        if emulator.state.ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
+        if emulator.get_state().ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
             break;
         }
     }
@@ -457,3 +474,5 @@ fn draw_viewport(x: u8, y: u8, tile_map_area: bool, pixels: &mut [[u8; 4]], colo
             + usize::from(x.wrapping_add(WIDTH))] = color;
     }
 }
+
+

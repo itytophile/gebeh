@@ -397,35 +397,28 @@ impl Apu {
         self.ch1.tick(div);
         self.ch2.tick(div);
     }
-    pub fn sample_left(&self, sample_rate: u32, sample_start: u32) -> impl Iterator<Item = f32> {
-        let volume_left = self.get_volume_left();
-
-        (sample_start..sample_rate).map(move |index| {
-            ((if self.nr51.contains(Nr51::CH1_LEFT) {
-                self.ch1.sample(index, sample_rate)
-            } else {
-                0.0
-            }) + if self.nr51.contains(Nr51::CH2_LEFT) {
-                self.ch2.sample(index, sample_rate)
-            } else {
-                0.
-            }) * volume_left
-        })
+    pub fn sample_left(&self, sample_rate: u32, index: u32) -> f32 {
+        ((if self.nr51.contains(Nr51::CH1_LEFT) {
+            self.ch1.sample(index, sample_rate)
+        } else {
+            0.0
+        }) + if self.nr51.contains(Nr51::CH2_LEFT) {
+            self.ch2.sample(index, sample_rate)
+        } else {
+            0.
+        }) * self.get_volume_left()
     }
 
-    pub fn sample_right(&self, sample_rate: u32, sample_start: u32) -> impl Iterator<Item = f32> {
-        let volume_right = self.get_volume_right();
-        (sample_start..sample_rate).map(move |index| {
-            ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-                self.ch1.sample(index, sample_rate)
-            } else {
-                0.0
-            }) + if self.nr51.contains(Nr51::CH2_RIGHT) {
-                self.ch2.sample(index, sample_rate)
-            } else {
-                0.
-            }) * volume_right
-        })
+    pub fn sample_right(&self, sample_rate: u32, index: u32) -> f32 {
+        ((if self.nr51.contains(Nr51::CH1_RIGHT) {
+            self.ch1.sample(index, sample_rate)
+        } else {
+            0.0
+        }) + if self.nr51.contains(Nr51::CH2_RIGHT) {
+            self.ch2.sample(index, sample_rate)
+        } else {
+            0.
+        }) * self.get_volume_right()
     }
 
     fn get_volume_left(&self) -> f32 {
