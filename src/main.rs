@@ -1,16 +1,11 @@
 mod audio;
 
-use std::{
-    sync::{Arc, Mutex, RwLock},
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
-use color_eyre::owo_colors::OwoColorize;
 use cpal::traits::HostTrait;
 use gebeh::get_mbc;
 use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
-    apu::Apu,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::{LcdControl, PpuStep, get_bg_win_tile, get_color_from_line, get_line_from_tile},
     state::State,
@@ -63,7 +58,7 @@ fn main() {
     let device = host
         .default_output_device()
         .expect("failed to find output device");
-    
+
     let mut audio = Audio::new(&device);
 
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
@@ -182,7 +177,7 @@ fn main() {
                         &mut emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                         &mut debug_mode,
-                        &mut audio
+                        &mut audio,
                     );
                     pixels.render().unwrap();
                 }
@@ -319,7 +314,7 @@ fn drive_emulator(
     emulator: &mut Emulator,
     pixels: &mut [[u8; 4]],
     debug_mode: &mut DebugMode,
-    audio: &mut Audio
+    audio: &mut Audio,
 ) {
     let start = Instant::now();
     while start.elapsed() <= Duration::from_millis(33) {
@@ -474,5 +469,3 @@ fn draw_viewport(x: u8, y: u8, tile_map_area: bool, pixels: &mut [[u8; 4]], colo
             + usize::from(x.wrapping_add(WIDTH))] = color;
     }
 }
-
-

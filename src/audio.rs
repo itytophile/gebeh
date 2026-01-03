@@ -23,7 +23,7 @@ pub struct Audio {
     falling_edge: bool,
     // we must avoid updating it every cycle...
     apu: Arc<RwLock<Apu>>,
-    stream: cpal::Stream,
+    _stream: cpal::Stream,
 }
 
 impl Audio {
@@ -53,7 +53,7 @@ impl Audio {
         Self {
             apu: apu_to_keep,
             falling_edge: false,
-            stream,
+            _stream: stream,
         }
     }
 
