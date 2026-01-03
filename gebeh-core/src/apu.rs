@@ -1,28 +1,78 @@
 #[derive(Clone, Default)]
 struct Ch1Sweep {
     nr10: u8,
+    pace_count: u8,
+    falling_edge: bool,
+    period: u16,
+}
+
+impl Ch1Sweep {
+    fn is_decreasing(&self) -> bool {
+        self.nr10 & 0x08 != 0
+    }
+    // 3 bits
+    fn individual_step(&self) -> u8 {
+        self.nr10 & 0x07
+    }
+    // 3 bits
+    fn pace(&self) -> u8 {
+        (self.nr10 >> 4) & 0x07
+    }
 }
 
 trait Sweep {
     fn trigger(&mut self);
-    fn tick(&mut self, div: u8) -> bool;
+    // is channel still enable, new period value
+    fn tick(&mut self, period: u16, div: u8) -> (bool, Option<u16>);
 }
 
 impl Sweep for Ch1Sweep {
     fn trigger(&mut self) {
-        todo!()
+        // TODO shadow register https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
+        self.pace_count = 0;
+        // TODO If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
     }
     // Returns channel on/off
-    fn tick(&mut self, div: u8) -> bool {
-        todo!()
+    fn tick(&mut self, period: u16, div: u8) -> (bool, Option<u16>) {
+        if self.pace() == 0 {
+            return (true, None);
+        }
+        // 128 Hz
+        let has_ticked = div & (1 << 4) != 0;
+
+        if self.falling_edge == has_ticked {
+            return (true, None);
+        }
+
+        self.falling_edge = has_ticked;
+
+        self.pace_count += 1;
+
+        if self.pace_count != self.pace() {
+            return (true, None);
+        }
+
+        self.pace_count = 0;
+
+        if self.is_decreasing() {
+            return (true, Some(period - period / (1 << self.individual_step())));
+        }
+
+        let new_period = period + period / (1 << self.individual_step());
+
+        if new_period > 0x7ff {
+            return (false, None);
+        }
+
+        (true, Some(new_period))
     }
 }
 
 impl Sweep for () {
     fn trigger(&mut self) {}
 
-    fn tick(&mut self, _: u8) -> bool {
-        true
+    fn tick(&mut self, _: u16, _: u8) -> (bool, Option<u16>) {
+        (true, None)
     }
 }
 
@@ -34,6 +84,7 @@ struct LengthTimer {
 
 impl LengthTimer {
     fn tick(&mut self, div: u8) -> bool {
+        // 256 Hz
         let has_ticked = div & (1 << 5) != 0;
 
         if self.falling_edge == has_ticked {
@@ -75,6 +126,7 @@ impl EnvelopeTimer {
             return;
         }
 
+        // 64 Hz
         let has_ticked = div & (1 << 7) != 0;
         if self.falling_edge == has_ticked {
             return;
@@ -117,9 +169,8 @@ struct PulseChannel<S: Sweep> {
 
 impl<S: Sweep> PulseChannel<S> {
     fn set_period_high_and_control(&mut self, value: u8) {
-        let is_triggered = value & 0x80 != 0;
         self.period_high_and_control = value;
-        if is_triggered {
+        if value & 0x80 != 0 {
             self.trigger();
         }
     }
@@ -150,6 +201,10 @@ impl<S: Sweep> PulseChannel<S> {
         self.envelopeTimer.sweep_pace = self.volume_and_envelope & 0x07;
     }
 
+    fn is_length_enable(&self) -> bool {
+        self.period_high_and_control & 0x64 != 0
+    }
+
     // must be called at 1048576 Hz (once per four dots)
     fn tick(&mut self, div: u8) {
         if !self.is_on() {
@@ -157,7 +212,12 @@ impl<S: Sweep> PulseChannel<S> {
         }
         // don't use && directly because it is lazy
         // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
-        self.is_enabled = self.sweep.tick(div) & self.length_timer.tick(div);
+        let (is_enabled_from_sweep, new_period) = self.sweep.tick(self.get_period(), div);
+        if let Some(period) = new_period {
+            self.set_period(period);
+        }
+        self.is_enabled =
+            is_enabled_from_sweep & (!self.is_length_enable() || self.length_timer.tick(div));
         self.period_divider_counter = if self.period_divider_counter == 0x7ff {
             self.get_period()
         } else {
@@ -168,6 +228,12 @@ impl<S: Sweep> PulseChannel<S> {
     // 11 bits
     fn get_period(&self) -> u16 {
         u16::from_be_bytes([self.period_high_and_control & 0x07, self.period_low])
+    }
+
+    fn set_period(&mut self, value: u16) {
+        self.period_low = value as u8;
+        self.period_high_and_control =
+            self.period_high_and_control & 0b11000000 | ((value >> 4) as u8) & 0x07;
     }
 }
 
@@ -245,15 +311,15 @@ impl Apu {
     }
 
     fn is_ch1_on(&self) -> bool {
-        todo!()
+        self.ch1.is_on()
     }
     fn is_ch2_on(&self) -> bool {
-        todo!()
+        self.ch2.is_on()
     }
     fn is_ch3_on(&self) -> bool {
-        todo!()
+        false
     }
     fn is_ch4_on(&self) -> bool {
-        todo!()
+        false
     }
 }
