@@ -209,9 +209,9 @@ impl<S: Sweep> PulseChannel<S> {
             self.length_timer
                 .reload(self.length_timer_and_duty_cycle & 0x3f);
         }
-        self.period_divider_counter = self.get_period();
+        self.period_divider_counter = self.get_period_value();
         self.reload_envelope_timer();
-        self.sweep.trigger(self.get_period());
+        self.sweep.trigger(self.get_period_value());
     }
 
     fn is_on(&self) -> bool {
@@ -242,12 +242,12 @@ impl<S: Sweep> PulseChannel<S> {
         // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
         let (is_enabled_from_sweep, new_period) = self.sweep.tick(div);
         if let Some(period) = new_period {
-            self.set_period(period);
+            self.set_period_value(period);
         }
         self.is_enabled =
             is_enabled_from_sweep & (!self.is_length_enable() || self.length_timer.tick(div));
         self.period_divider_counter = if self.period_divider_counter == 0x7ff {
-            self.get_period()
+            self.get_period_value()
         } else {
             self.period_divider_counter + 1
         };
@@ -255,14 +255,41 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     // 11 bits
-    fn get_period(&self) -> u16 {
+    fn get_period_value(&self) -> u16 {
         u16::from_be_bytes([self.period_high_and_control & 0x07, self.period_low])
     }
 
-    fn set_period(&mut self, value: u16) {
+    fn set_period_value(&mut self, value: u16) {
         self.period_low = value as u8;
         self.period_high_and_control =
             self.period_high_and_control & 0b11000000 | ((value >> 4) as u8) & 0x07;
+    }
+
+    fn sample(&self, index: u32, sample_rate: u32) -> f32 {
+        let space_size = sample_rate as f32 / self.get_tone_frequency();
+        let index_in_freq_space = index as f32 % space_size;
+        let normalized_index = index_in_freq_space / space_size;
+        let duty_cycle = match self.get_duty_cycle() {
+            0b00 => 0.125,
+            0b01 => 0.25,
+            0b10 => 0.5,
+            0b11 => 0.75,
+            _ => unreachable!(),
+        };
+        (if normalized_index > duty_cycle {
+            1.
+        } else {
+            -1.
+        }) * (self.envelope_timer.value as f32 / 15.)
+    }
+
+    fn get_duty_cycle(&self) -> u8 {
+        (self.length_timer_and_duty_cycle >> 5) & 0x3
+    }
+
+    // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
+    fn get_tone_frequency(&self) -> f32 {
+        131072.0 / (2048.0 - self.get_period_value() as f32)
     }
 }
 
@@ -369,5 +396,43 @@ impl Apu {
     pub fn execute(&mut self, div: u8) {
         self.ch1.tick(div);
         self.ch2.tick(div);
+    }
+    pub fn sample_left(&self, sample_rate: u32, sample_start: u32) -> impl Iterator<Item = f32> {
+        let volume_left = self.get_volume_left();
+
+        (sample_start..sample_rate).map(move |index| {
+            ((if self.nr51.contains(Nr51::CH1_LEFT) {
+                self.ch1.sample(index, sample_rate)
+            } else {
+                0.0
+            }) + if self.nr51.contains(Nr51::CH2_LEFT) {
+                self.ch2.sample(index, sample_rate)
+            } else {
+                0.
+            }) * volume_left
+        })
+    }
+
+    pub fn sample_right(&self, sample_rate: u32, sample_start: u32) -> impl Iterator<Item = f32> {
+        let volume_right = self.get_volume_right();
+        (sample_start..sample_rate).map(move |index| {
+            ((if self.nr51.contains(Nr51::CH1_RIGHT) {
+                self.ch1.sample(index, sample_rate)
+            } else {
+                0.0
+            }) + if self.nr51.contains(Nr51::CH2_RIGHT) {
+                self.ch2.sample(index, sample_rate)
+            } else {
+                0.
+            }) * volume_right
+        })
+    }
+
+    fn get_volume_left(&self) -> f32 {
+        (((self.nr50.bits() >> 4) & 0x7) + 1) as f32 / 8.
+    }
+
+    fn get_volume_right(&self) -> f32 {
+        ((self.nr50.bits() & 0x7) + 1) as f32 / 8.
     }
 }

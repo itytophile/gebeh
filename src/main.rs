@@ -1,3 +1,5 @@
+mod audio;
+
 use std::time::{Duration, Instant};
 
 use gebeh::get_mbc;
@@ -47,6 +49,8 @@ enum DebugMode {
 fn main() {
     color_eyre::install().unwrap();
     env_logger::init();
+
+    audio::prout();
 
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
