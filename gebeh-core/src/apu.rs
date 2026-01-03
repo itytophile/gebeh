@@ -3,7 +3,7 @@ pub struct Ch1Sweep {
     nr10: u8,
     pace_count: u8,
     falling_edge: bool,
-    period: u16,
+    period_value: u16,
 }
 
 impl Ch1Sweep {
@@ -24,11 +24,12 @@ pub trait Sweep {
     fn trigger(&mut self, period: u16);
     // is channel still enable, new period value
     fn tick(&mut self, div: u8) -> (bool, Option<u16>);
+    fn get_period_value(&self) -> Option<u16>;
 }
 
 impl Sweep for Ch1Sweep {
     fn trigger(&mut self, period: u16) {
-        self.period = period;
+        self.period_value = period;
         self.pace_count = 0;
         // TODO If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
     }
@@ -55,19 +56,24 @@ impl Sweep for Ch1Sweep {
         self.pace_count = 0;
 
         if self.is_decreasing() {
-            return (
-                true,
-                Some(self.period - self.period / (1 << self.individual_step())),
-            );
+            let new_period = self.period_value - self.period_value / (1 << self.individual_step());
+            self.period_value = new_period;
+            return (true, Some(new_period));
         }
 
-        let new_period = self.period + self.period / (1 << self.individual_step());
+        let new_period = self.period_value + self.period_value / (1 << self.individual_step());
 
         if new_period > 0x7ff {
             return (false, None);
         }
 
+        self.period_value = new_period;
+
         (true, Some(new_period))
+    }
+
+    fn get_period_value(&self) -> Option<u16> {
+        Some(self.period_value)
     }
 }
 
@@ -76,6 +82,10 @@ impl Sweep for () {
 
     fn tick(&mut self, _: u8) -> (bool, Option<u16>) {
         (true, None)
+    }
+
+    fn get_period_value(&self) -> Option<u16> {
+        None
     }
 }
 
@@ -166,7 +176,6 @@ pub struct PulseChannel<S: Sweep> {
     is_enabled: bool,
     sweep: S,
     length_timer: LengthTimer,
-    period_divider_counter: u16,
     envelope_timer: EnvelopeTimer,
 }
 
@@ -209,7 +218,6 @@ impl<S: Sweep> PulseChannel<S> {
             self.length_timer
                 .reload(self.length_timer_and_duty_cycle & 0x3f);
         }
-        self.period_divider_counter = self.get_period_value();
         self.reload_envelope_timer();
         self.sweep.trigger(self.get_period_value());
     }
@@ -246,11 +254,6 @@ impl<S: Sweep> PulseChannel<S> {
         }
         self.is_enabled =
             is_enabled_from_sweep & (!self.is_length_enable() || self.length_timer.tick(div));
-        self.period_divider_counter = if self.period_divider_counter == 0x7ff {
-            self.get_period_value()
-        } else {
-            self.period_divider_counter + 1
-        };
         self.envelope_timer.tick(div);
     }
 
@@ -289,7 +292,12 @@ impl<S: Sweep> PulseChannel<S> {
 
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {
-        131072.0 / (2048.0 - self.get_period_value() as f32)
+        131072.0
+            / (2048.0
+                - self
+                    .sweep
+                    .get_period_value()
+                    .unwrap_or(self.get_period_value()) as f32)
     }
 }
 

@@ -46,8 +46,9 @@ fn main() {
 
     let shared_frame = frame.clone();
     let shared_joypad = joypad.clone();
+
     std::thread::spawn(move || emulator_loop::run(&shared_frame, &shared_joypad));
-    println!("coucou");
+
     event_loop
         .run(|event, elwt| match event {
             Event::WindowEvent {

@@ -77,8 +77,6 @@ pub fn run(shared_frame: &RwLock<[[Color; 160]; 144]>, shared_joypad: &RwLock<Jo
 
     let mut i = 0u8;
 
-    println!("before loop");
-
     loop {
         tfd.read();
         for _ in 0..ITERATION_COUNT {
