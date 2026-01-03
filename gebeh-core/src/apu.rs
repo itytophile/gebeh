@@ -113,7 +113,11 @@ impl Sweep for Ch1Sweep {
     }
 
     fn get_period_value(&self) -> Option<u16> {
-        Some(self.period_value)
+        if self.pace == 0 && self.individual_step() == 0 {
+            None
+        } else {
+            Some(self.period_value)
+        }
     }
 }
 
@@ -197,6 +201,8 @@ impl EnvelopeTimer {
             return;
         }
 
+        log::warn!("tick!");
+
         self.falling_edge = has_ticked;
 
         if self.falling_edge {
@@ -216,10 +222,12 @@ impl EnvelopeTimer {
             (true, _) => self.value += 1,
             (false, _) => self.value -= 1,
         }
+
+        log::warn!("Damn bro! {}", self.value);
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct PulseChannel<S: Sweep> {
     length_timer_and_duty_cycle: u8,
     volume_and_envelope: u8,
@@ -229,6 +237,21 @@ pub struct PulseChannel<S: Sweep> {
     sweep: S,
     length_timer: LengthTimer,
     envelope_timer: EnvelopeTimer,
+}
+
+impl<S: Default + Sweep> Default for PulseChannel<S> {
+    fn default() -> Self {
+        Self {
+            length_timer_and_duty_cycle: Default::default(),
+            volume_and_envelope: Default::default(),
+            period_low: Default::default(),
+            period_high_and_control: Default::default(),
+            is_enabled: true,
+            sweep: Default::default(),
+            length_timer: Default::default(),
+            envelope_timer: Default::default(),
+        }
+    }
 }
 
 impl<S: Sweep> PulseChannel<S> {
@@ -286,14 +309,19 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn reload_envelope_timer(&mut self) {
+        log::warn!(
+            "Reloading with value: 0x{:02x}",
+            (self.volume_and_envelope >> 4) & 0x0f
+        );
         self.envelope_timer.is_increasing = self.volume_and_envelope & 0x08 != 0;
         self.envelope_timer.value = (self.volume_and_envelope >> 4) & 0x0f;
         self.envelope_timer.sweep_pace =
             NonZero::new(self.volume_and_envelope & 0x07).unwrap_or(DEFAULT_PACE);
+        self.envelope_timer.pace_count = 0;
     }
 
     fn is_length_enable(&self) -> bool {
-        self.period_high_and_control & 0x64 != 0
+        self.period_high_and_control & 0x40 != 0
     }
 
     // must be called at 1048576 Hz (once per four dots)
