@@ -3,6 +3,7 @@ pub struct Ch1Sweep {
     nr10: u8,
     pace_count: u8,
     falling_edge: bool,
+    period: u16,
 }
 
 impl Ch1Sweep {
@@ -20,19 +21,19 @@ impl Ch1Sweep {
 }
 
 pub trait Sweep {
-    fn trigger(&mut self);
+    fn trigger(&mut self, period: u16);
     // is channel still enable, new period value
-    fn tick(&mut self, period: u16, div: u8) -> (bool, Option<u16>);
+    fn tick(&mut self, div: u8) -> (bool, Option<u16>);
 }
 
 impl Sweep for Ch1Sweep {
-    fn trigger(&mut self) {
-        // TODO shadow register https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
+    fn trigger(&mut self, period: u16) {
+        self.period = period;
         self.pace_count = 0;
         // TODO If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
     }
     // Returns channel on/off
-    fn tick(&mut self, period: u16, div: u8) -> (bool, Option<u16>) {
+    fn tick(&mut self, div: u8) -> (bool, Option<u16>) {
         if self.pace() == 0 {
             return (true, None);
         }
@@ -54,10 +55,13 @@ impl Sweep for Ch1Sweep {
         self.pace_count = 0;
 
         if self.is_decreasing() {
-            return (true, Some(period - period / (1 << self.individual_step())));
+            return (
+                true,
+                Some(self.period - self.period / (1 << self.individual_step())),
+            );
         }
 
-        let new_period = period + period / (1 << self.individual_step());
+        let new_period = self.period + self.period / (1 << self.individual_step());
 
         if new_period > 0x7ff {
             return (false, None);
@@ -68,9 +72,9 @@ impl Sweep for Ch1Sweep {
 }
 
 impl Sweep for () {
-    fn trigger(&mut self) {}
+    fn trigger(&mut self, _: u16) {}
 
-    fn tick(&mut self, _: u16, _: u8) -> (bool, Option<u16>) {
+    fn tick(&mut self, _: u8) -> (bool, Option<u16>) {
         (true, None)
     }
 }
@@ -209,7 +213,7 @@ impl<S: Sweep> PulseChannel<S> {
         }
         self.period_divider_counter = self.get_period();
         self.reload_envelope_timer();
-        self.sweep.trigger();
+        self.sweep.trigger(self.get_period());
     }
 
     fn is_on(&self) -> bool {
@@ -238,7 +242,7 @@ impl<S: Sweep> PulseChannel<S> {
         }
         // don't use && directly because it is lazy
         // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
-        let (is_enabled_from_sweep, new_period) = self.sweep.tick(self.get_period(), div);
+        let (is_enabled_from_sweep, new_period) = self.sweep.tick(div);
         if let Some(period) = new_period {
             self.set_period(period);
         }
