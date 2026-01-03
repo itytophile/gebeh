@@ -1,9 +1,8 @@
 #[derive(Clone, Default)]
-struct Ch1Sweep {
+pub struct Ch1Sweep {
     nr10: u8,
     pace_count: u8,
     falling_edge: bool,
-    period: u16,
 }
 
 impl Ch1Sweep {
@@ -20,7 +19,7 @@ impl Ch1Sweep {
     }
 }
 
-trait Sweep {
+pub trait Sweep {
     fn trigger(&mut self);
     // is channel still enable, new period value
     fn tick(&mut self, period: u16, div: u8) -> (bool, Option<u16>);
@@ -155,7 +154,7 @@ impl EnvelopeTimer {
 }
 
 #[derive(Clone, Default)]
-struct PulseChannel<S: Sweep> {
+pub struct PulseChannel<S: Sweep> {
     length_timer_and_duty_cycle: u8,
     volume_and_envelope: u8,
     period_low: u8,
@@ -164,7 +163,34 @@ struct PulseChannel<S: Sweep> {
     sweep: S,
     length_timer: LengthTimer,
     period_divider_counter: u16,
-    envelopeTimer: EnvelopeTimer,
+    envelope_timer: EnvelopeTimer,
+}
+
+impl<S: Sweep> PulseChannel<S> {
+    pub fn get_nrx1(&self) -> u8 {
+        self.length_timer_and_duty_cycle | 0b00111111
+    }
+    pub fn write_nrx1(&mut self, value: u8) {
+        self.length_timer_and_duty_cycle = value;
+    }
+    pub fn get_nrx2(&self) -> u8 {
+        self.volume_and_envelope
+    }
+    pub fn write_nrx2(&mut self, value: u8) {
+        self.volume_and_envelope = value;
+    }
+    pub fn get_nrx3(&self) -> u8 {
+        0xff
+    }
+    pub fn write_nrx3(&mut self, value: u8) {
+        self.period_low = value;
+    }
+    pub fn get_nrx4(&self) -> u8 {
+        self.period_high_and_control | 0b10111111
+    }
+    pub fn write_nrx4(&mut self, value: u8) {
+        self.set_period_high_and_control(value);
+    }
 }
 
 impl<S: Sweep> PulseChannel<S> {
@@ -196,9 +222,9 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn reload_envelope_timer(&mut self) {
-        self.envelopeTimer.is_increasing = self.volume_and_envelope & 0x08 != 0;
-        self.envelopeTimer.value = (self.volume_and_envelope >> 4) & 0x0f;
-        self.envelopeTimer.sweep_pace = self.volume_and_envelope & 0x07;
+        self.envelope_timer.is_increasing = self.volume_and_envelope & 0x08 != 0;
+        self.envelope_timer.value = (self.volume_and_envelope >> 4) & 0x0f;
+        self.envelope_timer.sweep_pace = self.volume_and_envelope & 0x07;
     }
 
     fn is_length_enable(&self) -> bool {
@@ -223,6 +249,7 @@ impl<S: Sweep> PulseChannel<S> {
         } else {
             self.period_divider_counter + 1
         };
+        self.envelope_timer.tick(div);
     }
 
     // 11 bits
@@ -237,13 +264,22 @@ impl<S: Sweep> PulseChannel<S> {
     }
 }
 
+impl PulseChannel<Ch1Sweep> {
+    pub fn get_nr10(&self) -> u8 {
+        self.sweep.nr10 | 0x80
+    }
+    pub fn write_nr10(&mut self, value: u8) {
+        self.sweep.nr10 = value;
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Apu {
     is_on: bool,
     nr51: Nr51,
     nr50: Nr50,
-    ch1: PulseChannel<Ch1Sweep>,
-    ch2: PulseChannel<()>,
+    pub ch1: PulseChannel<Ch1Sweep>,
+    pub ch2: PulseChannel<()>,
 }
 
 bitflags::bitflags! {
@@ -309,6 +345,12 @@ impl Apu {
     pub fn write_nr51(&mut self, value: u8) {
         self.nr51 = Nr51::from_bits_retain(value);
     }
+    pub fn get_nr50(&self) -> u8 {
+        self.nr50.bits()
+    }
+    pub fn write_nr50(&mut self, value: u8) {
+        self.nr50 = Nr50::from_bits_retain(value);
+    }
 
     fn is_ch1_on(&self) -> bool {
         self.ch1.is_on()
@@ -321,5 +363,9 @@ impl Apu {
     }
     fn is_ch4_on(&self) -> bool {
         false
+    }
+    pub fn execute(&mut self, div: u8) {
+        self.ch1.tick(div);
+        self.ch2.tick(div);
     }
 }

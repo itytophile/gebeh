@@ -16,24 +16,24 @@ pub const TIMER_COUNTER: u16 = 0xff05; // TIMA
 pub const TIMER_MODULO: u16 = 0xff06; // TMA
 pub const TIMER_CONTROL: u16 = 0xff07; // TAC
 pub const INTERRUPT_FLAG: u16 = 0xff0f;
-pub const SWEEP: u16 = 0xff10;
-pub const LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff11;
-pub const VOLUME_AND_ENVELOPE: u16 = 0xff12;
-pub const CHANNEL_1_PERIOD_LOW: u16 = 0xff13;
-pub const CHANNEL_1_PERIOD_HIGH_AND_CONTROL: u16 = 0xff14;
-pub const CHANNEL_2_LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff16;
-pub const CHANNEL_2_VOLUME_AND_ENVELOPE: u16 = 0xff17;
-pub const CHANNEL_2_PERIOD_LOW: u16 = 0xff18;
-pub const CHANNEL_2_PERIOD_HIGH_AND_CONTROL: u16 = 0xff19;
-pub const CHANNEL_3_DAC_ENABLE: u16 = 0xff1a;
-pub const CHANNEL_3_LENGTH_TIMER: u16 = 0xff1b;
-pub const CHANNEL_3_OUTPUT_LEVEL: u16 = 0xff1c;
-pub const CHANNEL_3_PERIOD_HIGH_AND_CONTROL: u16 = 0xff1e;
-pub const CHANNEL_3_PERIOD_LOW: u16 = 0xff1d;
-pub const CHANNEL_4_LENGTH_TIMER: u16 = 0xff20;
-pub const CHANNEL_4_VOLUME_AND_ENVELOPE: u16 = 0xff21;
-pub const CHANNEL_4_FREQUENCY_AND_RANDOMNESS: u16 = 0xff22;
-pub const CHANNEL_4_CONTROL: u16 = 0xff23;
+pub const CH1_SWEEP: u16 = 0xff10;
+pub const CH1_LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff11;
+pub const CH1_VOLUME_AND_ENVELOPE: u16 = 0xff12;
+pub const CH1_PERIOD_LOW: u16 = 0xff13;
+pub const CH1_PERIOD_HIGH_AND_CONTROL: u16 = 0xff14;
+pub const CH2_LENGTH_TIMER_AND_DUTY_CYCLE: u16 = 0xff16;
+pub const CH2_VOLUME_AND_ENVELOPE: u16 = 0xff17;
+pub const CH2_PERIOD_LOW: u16 = 0xff18;
+pub const CH2_PERIOD_HIGH_AND_CONTROL: u16 = 0xff19;
+pub const CH3_DAC_ENABLE: u16 = 0xff1a;
+pub const CH3_LENGTH_TIMER: u16 = 0xff1b;
+pub const CH3_OUTPUT_LEVEL: u16 = 0xff1c;
+pub const CH3_PERIOD_HIGH_AND_CONTROL: u16 = 0xff1e;
+pub const CH3_PERIOD_LOW: u16 = 0xff1d;
+pub const CH4_LENGTH_TIMER: u16 = 0xff20;
+pub const CH4_VOLUME_AND_ENVELOPE: u16 = 0xff21;
+pub const CH4_FREQUENCY_AND_RANDOMNESS: u16 = 0xff22;
+pub const CH4_CONTROL: u16 = 0xff23;
 pub const MASTER_VOLUME_AND_VIN_PANNING: u16 = 0xff24;
 pub const SOUND_PANNING: u16 = 0xff25;
 pub const AUDIO_MASTER_CONTROL: u16 = 0xff26;
@@ -147,24 +147,15 @@ pub struct State {
     pub obp0: u8,
     pub obp1: u8,
     pub interrupt_flag: Interruptions,
-    pub sweep: u8,
-    pub length_timer_and_duty_cycle: u8,
-    pub volume_and_envelope: u8,
-    pub channel_1_period_low: u8,
-    pub channel_1_period_high_and_control: u8,
-    pub channel_2_length_timer_and_duty_cycle: u8,
-    pub channel_2_volume_and_envelope: u8,
-    pub channel_2_period_low: u8,
-    pub channel_2_period_high_and_control: u8,
-    pub channel_3_dac_enable: u8,
-    pub channel_3_length_timer: u8,
-    pub channel_3_output_level: u8,
-    pub channel_3_period_high_and_control: u8,
-    pub channel_3_period_low: u8,
-    pub channel_4_length_timer: u8,
-    pub channel_4_volume_and_envelope: u8,
-    pub channel_4_frequency_and_randomness: u8,
-    pub channel_4_control: u8,
+    pub ch3_dac_enable: u8,
+    pub ch3_length_timer: u8,
+    pub ch3_output_level: u8,
+    pub ch3_period_high_and_control: u8,
+    pub ch3_period_low: u8,
+    pub ch4_length_timer: u8,
+    pub ch4_volume_and_envelope: u8,
+    pub ch4_frequency_and_randomness: u8,
+    pub ch4_control: u8,
     pub master_volume_and_vin_panning: u8,
     pub sound_panning: u8,
     pub audio_master_control: u8,
@@ -203,24 +194,15 @@ impl Default for State {
             obp0: 0,
             obp1: 0,
             interrupt_flag: Interruptions::empty(),
-            sweep: 0,
-            length_timer_and_duty_cycle: 0,
-            volume_and_envelope: 0,
-            channel_1_period_low: 0,
-            channel_1_period_high_and_control: 0,
-            channel_2_length_timer_and_duty_cycle: 0,
-            channel_2_volume_and_envelope: 0,
-            channel_2_period_low: 0,
-            channel_2_period_high_and_control: 0,
-            channel_3_dac_enable: 0,
-            channel_3_length_timer: 0,
-            channel_3_output_level: 0,
-            channel_3_period_high_and_control: 0,
-            channel_3_period_low: 0,
-            channel_4_length_timer: 0,
-            channel_4_volume_and_envelope: 0,
-            channel_4_frequency_and_randomness: 0,
-            channel_4_control: 0,
+            ch3_dac_enable: 0,
+            ch3_length_timer: 0,
+            ch3_output_level: 0,
+            ch3_period_high_and_control: 0,
+            ch3_period_low: 0,
+            ch4_length_timer: 0,
+            ch4_volume_and_envelope: 0,
+            ch4_frequency_and_randomness: 0,
+            ch4_control: 0,
             master_volume_and_vin_panning: 0,
             sound_panning: 0,
             audio_master_control: 0,
