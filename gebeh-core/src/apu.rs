@@ -195,9 +195,7 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn write_nrx4(&mut self, value: u8) {
         self.set_period_high_and_control(value);
     }
-}
 
-impl<S: Sweep> PulseChannel<S> {
     fn set_period_high_and_control(&mut self, value: u8) {
         self.period_high_and_control = value;
         if value & 0x80 != 0 {
