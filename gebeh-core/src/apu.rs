@@ -269,6 +269,10 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn sample(&self, index: u32, sample_rate: u32) -> f32 {
+        if !self.is_on() {
+            return 0.;
+        }
+
         let space_size = sample_rate as f32 / self.get_tone_frequency();
         let index_in_freq_space = index as f32 % space_size;
         let normalized_index = index_in_freq_space / space_size;
