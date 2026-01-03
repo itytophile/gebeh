@@ -31,7 +31,7 @@ pub struct Emulator {
     ppu: Speeder,
     dma: Dma,
     cpu: Cpu,
-    state: State,
+    pub state: State,
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
@@ -53,9 +53,6 @@ impl Emulator {
     }
     pub fn get_timer(&self) -> &Timer {
         &self.timer
-    }
-    pub fn get_state(&self) -> &State {
-        &self.state
     }
 }
 

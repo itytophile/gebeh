@@ -191,7 +191,7 @@ fn main() {
             } if window_id == debug_window.id() => {
                 if !is_paused {
                     draw_tiles_debug(
-                        emulator.get_state(),
+                        &emulator.state,
                         debug_pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
                     debug_pixels.render().unwrap();
@@ -206,7 +206,7 @@ fn main() {
             } if window_id == debug_tile_map_window.id() => {
                 if !is_paused {
                     draw_tile_map_debug(
-                        emulator.get_state(),
+                        &emulator.state,
                         debug_tile_map_pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
                     debug_tile_map_pixels.render().unwrap();
@@ -330,9 +330,9 @@ fn drive_emulator(
         {
             log::info!(
                 "LY = {:03}, SCX = {:03}, SCY = {:03}, first pixels to skip = {}",
-                emulator.get_state().ly,
-                emulator.get_state().scx,
-                emulator.get_state().scy,
+                emulator.state.ly,
+                emulator.state.scx,
+                emulator.state.scy,
                 renderer.first_pixels_to_skip
             );
         }
@@ -364,11 +364,11 @@ fn drive_emulator(
             }
         };
 
-        let base = usize::from(emulator.get_state().ly) * usize::from(WIDTH);
+        let base = usize::from(emulator.state.ly) * usize::from(WIDTH);
         for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
             *pixel = (*color).into();
         }
-        if emulator.get_state().ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
+        if emulator.state.ly == HEIGHT - 1 || *debug_mode != DebugMode::None {
             break;
         }
     }
