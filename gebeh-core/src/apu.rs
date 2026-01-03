@@ -1,3 +1,5 @@
+use core::num::{NonZero, NonZeroU8};
+
 #[derive(Clone, Default)]
 pub struct Ch1Sweep {
     nr10: u8,
@@ -18,23 +20,60 @@ impl Ch1Sweep {
     fn pace(&self) -> u8 {
         (self.nr10 >> 4) & 0x07
     }
+
+    // None -> overflow
+    fn compute_next_value_and_check_overflow(&self) -> Option<u16> {
+        if self.is_decreasing() {
+            return Some(self.period_value - self.period_value / (1 << self.individual_step()));
+        }
+
+        let new_period = self.period_value + self.period_value / (1 << self.individual_step());
+
+        if new_period > 0x7ff {
+            return None;
+        }
+
+        Some(new_period)
+    }
 }
 
 pub trait Sweep {
-    fn trigger(&mut self, period: u16);
+    // returns new period value
+    #[must_use]
+    fn trigger(&mut self, period: u16) -> Option<u16>;
     // is channel still enable, new period value
+    #[must_use]
     fn tick(&mut self, div: u8) -> (bool, Option<u16>);
+    #[must_use]
     fn get_period_value(&self) -> Option<u16>;
 }
 
 impl Sweep for Ch1Sweep {
-    fn trigger(&mut self, period: u16) {
+    fn trigger(&mut self, period: u16) -> Option<u16> {
         self.period_value = period;
         self.pace_count = 0;
-        // TODO If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
+        // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
+        // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
+        if self.individual_step() != 0
+            && let Some(new_period) = self.compute_next_value_and_check_overflow()
+        {
+            self.period_value = new_period;
+            return Some(new_period);
+        }
+
+        None
     }
+
     // Returns channel on/off
     fn tick(&mut self, div: u8) -> (bool, Option<u16>) {
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
+        // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
+        // strictly more than $7FF), the channel is turned off instead. This occurs even
+        // if sweep iterations are disabled by the pace being 0.
+        let Some(new_period_value) = self.compute_next_value_and_check_overflow() else {
+            return (false, None);
+        };
+
         if self.pace() == 0 {
             return (true, None);
         }
@@ -54,22 +93,17 @@ impl Sweep for Ch1Sweep {
         }
 
         self.pace_count = 0;
+        self.period_value = new_period_value;
 
-        if self.is_decreasing() {
-            let new_period = self.period_value - self.period_value / (1 << self.individual_step());
-            self.period_value = new_period;
-            return (true, Some(new_period));
+        // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
+        // Citation: then frequency calculation and overflow check are run again immediately
+        // using this new value, but this second new frequency is not written back
+        if let Some(again) = self.compute_next_value_and_check_overflow() {
+            self.period_value = again;
+            return (true, Some(new_period_value));
         }
 
-        let new_period = self.period_value + self.period_value / (1 << self.individual_step());
-
-        if new_period > 0x7ff {
-            return (false, None);
-        }
-
-        self.period_value = new_period;
-
-        (true, Some(new_period))
+        (false, Some(new_period_value))
     }
 
     fn get_period_value(&self) -> Option<u16> {
@@ -78,7 +112,9 @@ impl Sweep for Ch1Sweep {
 }
 
 impl Sweep for () {
-    fn trigger(&mut self, _: u16) {}
+    fn trigger(&mut self, _: u16) -> Option<u16> {
+        None
+    }
 
     fn tick(&mut self, _: u8) -> (bool, Option<u16>) {
         (true, None)
@@ -124,21 +160,31 @@ impl LengthTimer {
     }
 }
 
-#[derive(Clone, Default)]
+const DEFAULT_PACE: NonZeroU8 = NonZeroU8::new(8).unwrap();
+
+#[derive(Clone)]
 struct EnvelopeTimer {
     falling_edge: bool,
     value: u8, // 4 bits
     is_increasing: bool,
-    sweep_pace: u8, // 3 bits
+    sweep_pace: NonZeroU8, // 3 bits
     pace_count: u8,
+}
+
+impl Default for EnvelopeTimer {
+    fn default() -> Self {
+        Self {
+            falling_edge: Default::default(),
+            value: Default::default(),
+            is_increasing: Default::default(),
+            sweep_pace: DEFAULT_PACE,
+            pace_count: Default::default(),
+        }
+    }
 }
 
 impl EnvelopeTimer {
     fn tick(&mut self, div: u8) {
-        if self.sweep_pace == 0 {
-            return;
-        }
-
         // 64 Hz
         let has_ticked = div & (1 << 7) != 0;
         if self.falling_edge == has_ticked {
@@ -153,7 +199,7 @@ impl EnvelopeTimer {
 
         self.pace_count += 1;
 
-        if self.pace_count != self.sweep_pace {
+        if self.pace_count != self.sweep_pace.get() {
             return;
         }
 
@@ -219,7 +265,9 @@ impl<S: Sweep> PulseChannel<S> {
                 .reload(self.length_timer_and_duty_cycle & 0x3f);
         }
         self.reload_envelope_timer();
-        self.sweep.trigger(self.get_period_value());
+        if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
+            self.set_period_value(new_period);
+        }
     }
 
     fn is_on(&self) -> bool {
@@ -234,7 +282,8 @@ impl<S: Sweep> PulseChannel<S> {
     fn reload_envelope_timer(&mut self) {
         self.envelope_timer.is_increasing = self.volume_and_envelope & 0x08 != 0;
         self.envelope_timer.value = (self.volume_and_envelope >> 4) & 0x0f;
-        self.envelope_timer.sweep_pace = self.volume_and_envelope & 0x07;
+        self.envelope_timer.sweep_pace =
+            NonZero::new(self.volume_and_envelope & 0x07).unwrap_or(DEFAULT_PACE);
     }
 
     fn is_length_enable(&self) -> bool {
