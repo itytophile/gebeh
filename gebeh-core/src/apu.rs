@@ -219,8 +219,6 @@ impl EnvelopeTimer {
             (true, _) => self.value += 1,
             (false, _) => self.value -= 1,
         }
-
-        log::warn!("Damn bro! {}", self.value);
     }
 }
 
@@ -351,18 +349,37 @@ impl<S: Sweep> PulseChannel<S> {
         let space_size = sample_rate as f32 / self.get_tone_frequency();
         let index_in_freq_space = index as f32 % space_size;
         let normalized_index = index_in_freq_space / space_size;
-        let duty_cycle = match self.get_duty_cycle() {
-            0b00 => 0.125,
-            0b01 => 0.25,
-            0b10 => 0.5,
-            0b11 => 0.75,
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
+        let value = match self.get_duty_cycle() {
+            0b00 => {
+                if normalized_index < 0.875 {
+                    1.
+                } else {
+                    -1.
+                }
+            }
+            0b01 => {
+                if (normalized_index - 0.125) % 1.0 < 0.75 {
+                    1.
+                } else {
+                    -1.
+                }
+            },
+            0b10 => {
+                if (normalized_index - 0.125) % 1.0 < 0.5 {
+                    1.
+                } else {
+                    -1.
+                }
+            },
+            0b11 => if (normalized_index + 0.125) % 1.0 < 0.25 {
+                1.
+            } else {
+                -1.
+            },
             _ => unreachable!(),
         };
-        (if normalized_index > duty_cycle {
-            1.
-        } else {
-            -1.
-        }) * (self.envelope_timer.value as f32 / 15.)
+        value * (self.envelope_timer.value as f32 / 15.)
     }
 
     fn get_duty_cycle(&self) -> u8 {
