@@ -538,3 +538,39 @@ impl Apu {
         ((self.nr50.bits() & 0x7) + 1) as f32 / 8.
     }
 }
+
+struct NoiseChannel {
+    nr41: u8,
+    length_timer: LengthTimer,
+    nr42: u8,
+    envelope_timer: EnvelopeTimer,
+    nr43: u8,
+    nr44: u8,
+}
+
+impl NoiseChannel {
+    fn write_nr41(&mut self, value: u8) {
+        self.nr41 = value;
+    }
+    fn read_nr41(&self) -> u8 {
+        0xff
+    }
+    fn write_nr42(&mut self, value: u8) {
+        self.nr42 = value;
+    }
+    fn read_nr42(&self) -> u8 {
+        self.nr42
+    }
+    fn write_nr43(&mut self, value: u8) {
+        self.nr43 = value;
+    }
+    fn read_nr43(&self) -> u8 {
+        self.nr43
+    }
+    fn write_nr44(&mut self, value: u8) {
+        self.nr44 = value;
+    }
+    fn read_nr44(&self) -> u8 {
+        self.nr44 | 0b10111111
+    }
+}
