@@ -10,6 +10,9 @@ pub struct Ch1Sweep {
     // Citation: Note that the value written to this field is not re-read by the hardware
     // until a sweep iteration completes, or the channel is (re)triggered.
     pace: u8,
+    // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
+    // The “enabled flag” is set if either the sweep pace or individual step are non-zero, cleared otherwise.
+    is_enabled: bool,
 }
 
 impl Ch1Sweep {
@@ -53,6 +56,7 @@ impl Sweep for Ch1Sweep {
         self.period_value = period;
         self.pace_count = 0;
         self.pace = (self.nr10 >> 4) & 0x07;
+        self.is_enabled = self.pace != 0 || self.individual_step() != 0;
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
         if self.individual_step() != 0
@@ -67,6 +71,9 @@ impl Sweep for Ch1Sweep {
 
     // Returns channel on/off
     fn tick(&mut self, div: u8) -> (bool, Option<u16>) {
+        if !self.is_enabled {
+            return (true, None);
+        }
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
         // strictly more than $7FF), the channel is turned off instead. This occurs even
@@ -150,6 +157,8 @@ impl LengthTimer {
             return true;
         }
 
+        log::warn!("tick length!");
+
         self.falling_edge = has_ticked;
 
         if !self.falling_edge {
@@ -201,7 +210,7 @@ impl EnvelopeTimer {
             return;
         }
 
-        log::warn!("tick!");
+        log::warn!("tick envelope!");
 
         self.falling_edge = has_ticked;
 
@@ -246,7 +255,7 @@ impl<S: Default + Sweep> Default for PulseChannel<S> {
             volume_and_envelope: Default::default(),
             period_low: Default::default(),
             period_high_and_control: Default::default(),
-            is_enabled: true,
+            is_enabled: false,
             sweep: Default::default(),
             length_timer: Default::default(),
             envelope_timer: Default::default(),
@@ -502,6 +511,9 @@ impl Apu {
         false
     }
     pub fn execute(&mut self, div: u8) {
+        if !self.is_on {
+            return;
+        }
         self.ch1.tick(div);
         self.ch2.tick(div);
     }
