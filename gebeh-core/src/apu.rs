@@ -354,6 +354,11 @@ impl<S: Sweep> PulseChannel<S> {
         if !self.is_on() {
             return 0.;
         }
+        // let space_size = sample_rate as f32 / self.get_tone_frequency();
+        // let index_in_freq_space = index as f32 % space_size;
+        // let normalized_index = index_in_freq_space / space_size;
+        // Better function thanks to
+        // (a % b) / b = (a / b) % 1.0
         let index = (index as f32 * self.get_tone_frequency() / sample_rate as f32) % 1.;
         let index = (index * 8.) as usize;
         let wave = match self.get_duty_cycle() {
