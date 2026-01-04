@@ -292,6 +292,7 @@ impl<S: Sweep> PulseChannel<S> {
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
             self.set_period_value(new_period);
         }
+        log::warn!("new tone frequency: {} Hz", self.get_tone_frequency());
     }
 
     fn is_on(&self) -> bool {
@@ -345,7 +346,6 @@ impl<S: Sweep> PulseChannel<S> {
         if !self.is_on() {
             return 0.;
         }
-
         let space_size = sample_rate as f32 / self.get_tone_frequency();
         let index_in_freq_space = index as f32 % space_size;
         let normalized_index = index_in_freq_space / space_size;
@@ -364,26 +364,28 @@ impl<S: Sweep> PulseChannel<S> {
                 } else {
                     -1.
                 }
-            },
+            }
             0b10 => {
                 if (normalized_index - 0.125) % 1.0 < 0.5 {
                     1.
                 } else {
                     -1.
                 }
-            },
-            0b11 => if (normalized_index + 0.125) % 1.0 < 0.25 {
-                1.
-            } else {
-                -1.
-            },
+            }
+            0b11 => {
+                if (normalized_index + 0.125) % 1.0 < 0.25 {
+                    1.
+                } else {
+                    -1.
+                }
+            }
             _ => unreachable!(),
         };
         value * (self.envelope_timer.value as f32 / 15.)
     }
 
     fn get_duty_cycle(&self) -> u8 {
-        (self.length_timer_and_duty_cycle >> 5) & 0x3
+        (self.length_timer_and_duty_cycle >> 6) & 0x3
     }
 
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
