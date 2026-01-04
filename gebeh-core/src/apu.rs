@@ -1,5 +1,3 @@
-use core::num::{NonZero, NonZeroU8};
-
 #[derive(Clone, Default)]
 pub struct Ch1Sweep {
     nr10: u8,
@@ -179,38 +177,28 @@ impl LengthTimer {
     }
 }
 
-const DEFAULT_PACE: NonZeroU8 = NonZeroU8::new(8).unwrap();
-
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct EnvelopeTimer {
     falling_edge: bool,
     value: u8, // 4 bits
     is_increasing: bool,
-    sweep_pace: NonZeroU8, // 3 bits
+    sweep_pace: u8, // 3 bits
     pace_count: u8,
-}
-
-impl Default for EnvelopeTimer {
-    fn default() -> Self {
-        Self {
-            falling_edge: Default::default(),
-            value: Default::default(),
-            is_increasing: Default::default(),
-            sweep_pace: DEFAULT_PACE,
-            pace_count: Default::default(),
-        }
-    }
 }
 
 impl EnvelopeTimer {
     fn tick(&mut self, div: u8) {
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff12--nr12-channel-1-volume--envelope
+        // A setting of 0 disables the envelope.
+        if self.sweep_pace == 0 {
+            return;
+        }
+
         // 64 Hz
         let has_ticked = div & (1 << 7) != 0;
         if self.falling_edge == has_ticked {
             return;
         }
-
-        log::warn!("tick envelope!");
 
         self.falling_edge = has_ticked;
 
@@ -220,7 +208,7 @@ impl EnvelopeTimer {
 
         self.pace_count += 1;
 
-        if self.pace_count != self.sweep_pace.get() {
+        if self.pace_count != self.sweep_pace {
             return;
         }
 
@@ -318,14 +306,9 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn reload_envelope_timer(&mut self) {
-        log::warn!(
-            "Reloading with value: 0x{:02x}",
-            (self.volume_and_envelope >> 4) & 0x0f
-        );
         self.envelope_timer.is_increasing = self.volume_and_envelope & 0x08 != 0;
         self.envelope_timer.value = (self.volume_and_envelope >> 4) & 0x0f;
-        self.envelope_timer.sweep_pace =
-            NonZero::new(self.volume_and_envelope & 0x07).unwrap_or(DEFAULT_PACE);
+        self.envelope_timer.sweep_pace = self.volume_and_envelope & 0x07;
         self.envelope_timer.pace_count = 0;
     }
 
