@@ -1,3 +1,11 @@
+type Wave = [f32; 8];
+
+// https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
+const WAVE_00: Wave = [1., 1., 1., 1., 1., 1., 1., -1.];
+const WAVE_01: Wave = [-1., 1., 1., 1., 1., 1., 1., -1.];
+const WAVE_10: Wave = [-1., 1., 1., 1., 1., -1., -1., -1.];
+const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
+
 #[derive(Clone, Default)]
 pub struct Ch1Sweep {
     nr10: u8,
@@ -346,42 +354,16 @@ impl<S: Sweep> PulseChannel<S> {
         if !self.is_on() {
             return 0.;
         }
-        let space_size = sample_rate as f32 / self.get_tone_frequency();
-        let index_in_freq_space = index as f32 % space_size;
-        let normalized_index = index_in_freq_space / space_size;
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
-        let value = match self.get_duty_cycle() {
-            0b00 => {
-                if normalized_index < 0.875 {
-                    1.
-                } else {
-                    -1.
-                }
-            }
-            0b01 => {
-                if (normalized_index - 0.125) % 1.0 < 0.75 {
-                    1.
-                } else {
-                    -1.
-                }
-            }
-            0b10 => {
-                if (normalized_index - 0.125) % 1.0 < 0.5 {
-                    1.
-                } else {
-                    -1.
-                }
-            }
-            0b11 => {
-                if (normalized_index + 0.125) % 1.0 < 0.25 {
-                    1.
-                } else {
-                    -1.
-                }
-            }
+        let index = (index as f32 * self.get_tone_frequency() / sample_rate as f32) % 1.;
+        let index = (index * 8.) as usize;
+        let wave = match self.get_duty_cycle() {
+            0b00 => WAVE_00,
+            0b01 => WAVE_01,
+            0b10 => WAVE_10,
+            0b11 => WAVE_11,
             _ => unreachable!(),
         };
-        value * (self.envelope_timer.value as f32 / 15.)
+        wave[index] * (self.envelope_timer.value as f32 / 15.)
     }
 
     fn get_duty_cycle(&self) -> u8 {
