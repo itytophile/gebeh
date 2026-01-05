@@ -241,13 +241,12 @@ impl EnvelopeTimer {
 #[derive(Clone)]
 pub struct PulseChannel<S: Sweep> {
     length_timer_and_duty_cycle: u8,
-    volume_and_envelope: u8,
+    volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,
     period_high_and_control: u8,
     is_enabled: bool,
     sweep: S,
     length_timer: LengthTimer,
-    envelope_timer: EnvelopeTimer,
 }
 
 impl<S: Default + Sweep> Default for PulseChannel<S> {
@@ -260,7 +259,6 @@ impl<S: Default + Sweep> Default for PulseChannel<S> {
             is_enabled: false,
             sweep: Default::default(),
             length_timer: Default::default(),
-            envelope_timer: Default::default(),
         }
     }
 }
@@ -273,10 +271,10 @@ impl<S: Sweep> PulseChannel<S> {
         self.length_timer_and_duty_cycle = value;
     }
     pub fn get_nrx2(&self) -> u8 {
-        self.volume_and_envelope
+        self.volume_and_envelope.get_register()
     }
     pub fn write_nrx2(&mut self, value: u8) {
-        self.volume_and_envelope = value;
+        self.volume_and_envelope.write_register(value);
     }
     pub fn get_nrx3(&self) -> u8 {
         0xff
@@ -302,7 +300,7 @@ impl<S: Sweep> PulseChannel<S> {
         self.is_enabled = true;
         self.length_timer
             .trigger(self.length_timer_and_duty_cycle & 0x3f);
-        self.envelope_timer.trigger(self.volume_and_envelope);
+        self.volume_and_envelope.trigger();
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
             self.set_period_value(new_period);
         }
@@ -310,12 +308,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn is_on(&self) -> bool {
-        self.is_dac_on() && self.is_enabled
-    }
-
-    fn is_dac_on(&self) -> bool {
-        // https://gbdev.io/pandocs/Audio_details.html#dacs
-        self.volume_and_envelope & 0xf8 != 0
+        self.volume_and_envelope.is_dac_on() && self.is_enabled
     }
 
     fn is_length_enable(&self) -> bool {
@@ -335,7 +328,7 @@ impl<S: Sweep> PulseChannel<S> {
         }
         self.is_enabled =
             is_enabled_from_sweep & (!self.is_length_enable() || self.length_timer.tick(div));
-        self.envelope_timer.tick(div);
+        self.volume_and_envelope.tick(div);
     }
 
     // 11 bits
@@ -367,7 +360,7 @@ impl<S: Sweep> PulseChannel<S> {
             0b11 => WAVE_11,
             _ => unreachable!(),
         };
-        wave[index] * (self.envelope_timer.value as f32 / 15.)
+        wave[index] * self.volume_and_envelope.get_volume()
     }
 
     fn get_duty_cycle(&self) -> u8 {
@@ -640,5 +633,38 @@ impl LinearFeedbackShiftRegister {
 
     fn trigger(&mut self) {
         self.0 = 0;
+    }
+}
+
+#[derive(Clone, Default)]
+struct VolumeAndEnvelope {
+    timer: EnvelopeTimer,
+    register: u8,
+}
+
+impl VolumeAndEnvelope {
+    fn is_dac_on(&self) -> bool {
+        // https://gbdev.io/pandocs/Audio_details.html#dacs
+        self.register & 0xf8 != 0
+    }
+
+    fn get_volume(&self) -> f32 {
+        self.timer.value as f32 / 15.
+    }
+
+    fn get_register(&self) -> u8 {
+        self.register
+    }
+
+    fn write_register(&mut self, value: u8) {
+        self.register = value;
+    }
+
+    fn trigger(&mut self) {
+        self.timer.trigger(self.register);
+    }
+
+    fn tick(&mut self, div: u8) {
+        self.timer.tick(div);
     }
 }
