@@ -11,13 +11,48 @@
 //! With JACK (Linux): `cargo run --example beep --features jack -- --jack`
 //! With specific device: `cargo run --example beep -- --device "wasapi:device_id"`
 
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock},
+};
 
 use cpal::{
     FromSample, I24, SizedSample,
     traits::{DeviceTrait, StreamTrait},
 };
 use gebeh_core::apu::Apu;
+
+// for sampling reasons we have to generate the noise values at program start
+#[derive(Default)]
+struct LinearFeedbackShiftRegister(u16);
+
+impl LinearFeedbackShiftRegister {
+    fn tick(&mut self, short_mode: bool) -> u8 {
+        // https://gbdev.io/pandocs/Audio_details.html#noise-channel-ch4
+        let new_value = (self.0 & 1 != 0) == (self.0 & 0b10 != 0);
+        self.0 = self.0 & 0x7fff | ((new_value as u16) << 15);
+        if short_mode {
+            self.0 = self.0 & 0xff7f | ((new_value as u16) << 7)
+        }
+        let shifted_out = self.0 & 1;
+        self.0 >>= 1;
+        shifted_out as u8
+    }
+
+    fn trigger(&mut self) {
+        self.0 = 0;
+    }
+}
+
+fn get_noise(is_short: bool) -> Vec<u8> {
+    let mut lfsr = LinearFeedbackShiftRegister::default();
+    let mut already_seen = HashSet::new();
+    let mut noise = Vec::new();
+    while already_seen.insert(lfsr.0) {
+        noise.push(lfsr.tick(is_short));
+    }
+    noise
+}
 
 pub struct Audio {
     // we must avoid updating it every cycle...

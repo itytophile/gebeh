@@ -295,6 +295,7 @@ pub struct Apu {
     nr50: Nr50,
     pub ch1: PulseChannel<Ch1Sweep>,
     pub ch2: PulseChannel<()>,
+    pub ch4: NoiseChannel,
 }
 
 bitflags::bitflags! {
@@ -422,41 +423,40 @@ impl Apu {
     }
 }
 
-struct NoiseChannel {
+#[derive(Default, Clone)]
+pub struct NoiseChannel {
     length: Length<64>,
     volume_and_envelope: VolumeAndEnvelope,
     nr43: u8,
     is_enabled: bool,
-    inner_clock: u32,
-    lfsr: LinearFeedbackShiftRegister,
 }
 
 impl NoiseChannel {
-    fn write_nr41(&mut self, value: u8) {
+    pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
     }
-    fn read_nr41(&self) -> u8 {
+    pub fn read_nr41(&self) -> u8 {
         0xff
     }
-    fn write_nr42(&mut self, value: u8) {
+    pub fn write_nr42(&mut self, value: u8) {
         self.volume_and_envelope.write_register(value);
     }
-    fn read_nr42(&self) -> u8 {
+    pub fn read_nr42(&self) -> u8 {
         self.volume_and_envelope.get_register()
     }
-    fn write_nr43(&mut self, value: u8) {
+    pub fn write_nr43(&mut self, value: u8) {
         self.nr43 = value;
     }
-    fn read_nr43(&self) -> u8 {
+    pub fn read_nr43(&self) -> u8 {
         self.nr43
     }
-    fn write_nr44(&mut self, value: u8) {
+    pub fn write_nr44(&mut self, value: u8) {
         self.length.is_enable = value & 0x40 != 0;
         if value & 0x80 != 0 {
             self.trigger();
         }
     }
-    fn read_nr44(&self) -> u8 {
+    pub fn read_nr44(&self) -> u8 {
         ((self.length.is_enable as u8) << 6) | 0b10111111
     }
 
@@ -464,7 +464,6 @@ impl NoiseChannel {
         self.is_enabled = true;
         self.length.trigger();
         self.volume_and_envelope.trigger();
-        self.lfsr.trigger();
     }
 
     fn is_on(&self) -> bool {
@@ -472,8 +471,6 @@ impl NoiseChannel {
     }
 
     fn tick(&mut self, div: u8) {
-        self.inner_clock = self.inner_clock.wrapping_add(1);
-        self.lfsr.tick(self.is_short_mode());
         self.length.tick(div);
     }
     fn get_divider(&self) -> u8 {
@@ -491,25 +488,5 @@ impl NoiseChannel {
     }
     fn is_short_mode(&self) -> bool {
         self.nr43 & 0x8 != 0
-    }
-}
-
-struct LinearFeedbackShiftRegister(u16);
-
-impl LinearFeedbackShiftRegister {
-    fn tick(&mut self, short_mode: bool) -> u8 {
-        // https://gbdev.io/pandocs/Audio_details.html#noise-channel-ch4
-        let new_value = (self.0 & 1 != 0) == (self.0 & 0b10 != 0);
-        self.0 = self.0 & 0x7fff | ((new_value as u16) << 15);
-        if short_mode {
-            self.0 = self.0 & 0xff7f | ((new_value as u16) << 7)
-        }
-        let shifted_out = self.0 & 1;
-        self.0 >>= 1;
-        shifted_out as u8
-    }
-
-    fn trigger(&mut self) {
-        self.0 = 0;
     }
 }
