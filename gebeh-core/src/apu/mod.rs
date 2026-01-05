@@ -1,7 +1,7 @@
 use crate::apu::{envelope::VolumeAndEnvelope, length::Length};
 
-mod length;
 mod envelope;
+mod length;
 
 type Wave = [f32; 8];
 
@@ -152,47 +152,6 @@ impl Sweep for () {
         None
     }
 }
-
-#[derive(Clone, Default)]
-struct LengthTimer {
-    falling_edge: bool,
-    value: u8,
-}
-
-impl LengthTimer {
-    fn tick(&mut self, div: u8) -> bool {
-        // 256 Hz
-        let has_ticked = div & (1 << 5) != 0;
-
-        if self.falling_edge == has_ticked {
-            return true;
-        }
-
-        log::warn!("tick length!");
-
-        self.falling_edge = has_ticked;
-
-        if !self.falling_edge {
-            assert!(self.value < 64);
-            self.value += 1;
-            return self.value != 64;
-        }
-
-        true
-    }
-
-    fn is_expired(&self) -> bool {
-        self.value == 64
-    }
-
-    fn trigger(&mut self, value: u8) {
-        if self.is_expired() {
-            self.value = value;
-        }
-    }
-}
-
-
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
@@ -464,11 +423,9 @@ impl Apu {
 }
 
 struct NoiseChannel {
-    nr41: u8,
-    length_timer: LengthTimer,
+    length: Length<64>,
     volume_and_envelope: VolumeAndEnvelope,
     nr43: u8,
-    nr44: u8,
     is_enabled: bool,
     inner_clock: u32,
     lfsr: LinearFeedbackShiftRegister,
@@ -476,7 +433,7 @@ struct NoiseChannel {
 
 impl NoiseChannel {
     fn write_nr41(&mut self, value: u8) {
-        self.nr41 = value;
+        self.length.set_initial_timer_length(value);
     }
     fn read_nr41(&self) -> u8 {
         0xff
@@ -494,30 +451,30 @@ impl NoiseChannel {
         self.nr43
     }
     fn write_nr44(&mut self, value: u8) {
-        self.nr44 = value;
+        self.length.is_enable = value & 0x40 != 0;
         if value & 0x80 != 0 {
             self.trigger();
         }
     }
     fn read_nr44(&self) -> u8 {
-        self.nr44 | 0b10111111
+        ((self.length.is_enable as u8) << 6) | 0b10111111
     }
 
     fn trigger(&mut self) {
         self.is_enabled = true;
-        self.length_timer.trigger(self.nr41 & 0x3f);
+        self.length.trigger();
         self.volume_and_envelope.trigger();
         self.lfsr.trigger();
     }
 
     fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled
+        self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
-    
+
     fn tick(&mut self, div: u8) {
         self.inner_clock = self.inner_clock.wrapping_add(1);
         self.lfsr.tick(self.is_short_mode());
-        self.is_enabled = !self.is_length_enable() || self.length_timer.tick(div);
+        self.length.tick(div);
     }
     fn get_divider(&self) -> u8 {
         self.nr43 & 0x7
@@ -534,9 +491,6 @@ impl NoiseChannel {
     }
     fn is_short_mode(&self) -> bool {
         self.nr43 & 0x8 != 0
-    }
-    fn is_length_enable(&self) -> bool {
-        self.nr44 & 0x40 != 0
     }
 }
 

@@ -49,7 +49,6 @@ impl EnvelopeTimer {
     }
 }
 
-
 #[derive(Clone, Default)]
 pub struct VolumeAndEnvelope {
     timer: EnvelopeTimer,
