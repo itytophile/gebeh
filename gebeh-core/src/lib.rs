@@ -73,7 +73,7 @@ impl Default for Emulator {
 }
 
 impl Emulator {
-    pub fn execute(&mut self, mbc: &mut dyn Mbc) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
         self.dma.execute(&mut self.state, mbc, self.cycles);
         self.ly_handler.execute(&mut self.state, self.cycles);
         self.ppu.execute(&mut self.state, self.cycles);

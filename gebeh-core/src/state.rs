@@ -249,11 +249,11 @@ impl State {
 }
 
 pub trait MmuExt {
-    fn read(&self, index: u16, mbc: &dyn Mbc) -> u8;
+    fn read<M: Mbc + ?Sized>(&self, index: u16, mbc: &M) -> u8;
 }
 
 impl MmuExt for State {
-    fn read(&self, index: u16, mbc: &dyn Mbc) -> u8 {
+    fn read<M: Mbc + ?Sized>(&self, index: u16, mbc: &M) -> u8 {
         match index {
             0..VIDEO_RAM => mbc.read(index),
             VIDEO_RAM..EXTERNAL_RAM => {

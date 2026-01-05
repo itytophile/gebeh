@@ -4,6 +4,7 @@ pub use mmu::Peripherals;
 
 use crate::{
     cpu::mmu::MmuCpuExt,
+    mbc::Mbc,
     state::{BOOTIX_BOOT_ROM, Interruptions, State},
 };
 use arrayvec::ArrayVec;
@@ -187,13 +188,13 @@ impl Cpu {
         self.ime = true;
     }
 
-    fn execute_instruction(
+    fn execute_instruction<M: Mbc + ?Sized>(
         &mut self,
         state: &mut State,
         inst: AfterReadInstruction,
         interrupts_to_execute: Interruptions,
         cycle_count: u64,
-        peripherals: Peripherals,
+        peripherals: Peripherals<M>,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
@@ -882,7 +883,12 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn execute(&mut self, state: &mut State, peripherals: Peripherals, cycle_count: u64) {
+    pub fn execute<M: Mbc + ?Sized>(
+        &mut self,
+        state: &mut State,
+        peripherals: Peripherals<M>,
+        cycle_count: u64,
+    ) {
         let interrupts_to_execute =
             Interruptions::from_bits_truncate(self.interrupt_enable.bits()) & state.interrupt_flag;
         // Peripherals interrupts are not handled the same cycle they are triggered.

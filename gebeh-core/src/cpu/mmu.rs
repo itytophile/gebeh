@@ -2,15 +2,15 @@ use crate::{
     apu::Apu, cpu::Cpu, joypad::Joypad, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer,
 };
 
-pub struct Peripherals<'a> {
-    pub mbc: &'a mut dyn Mbc,
+pub struct Peripherals<'a, M: Mbc + ?Sized> {
+    pub mbc: &'a mut M,
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
 }
 
-impl Peripherals<'_> {
-    pub fn get_ref(&self) -> PeripheralsRef<'_> {
+impl<M: Mbc + ?Sized> Peripherals<'_, M> {
+    pub fn get_ref(&self) -> PeripheralsRef<'_, M> {
         PeripheralsRef {
             mbc: self.mbc,
             timer: self.timer,
@@ -20,27 +20,39 @@ impl Peripherals<'_> {
     }
 }
 
-pub struct PeripheralsRef<'a> {
-    pub mbc: &'a dyn Mbc,
+pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
+    pub mbc: &'a M,
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
 }
 
 pub trait MmuCpuExt {
-    fn read(&self, index: u16, cycles: u64, cpu: &Cpu, peripherals: PeripheralsRef) -> u8;
-    fn write(
+    fn read<M: Mbc + ?Sized>(
+        &self,
+        index: u16,
+        cycles: u64,
+        cpu: &Cpu,
+        peripherals: PeripheralsRef<M>,
+    ) -> u8;
+    fn write<M: Mbc + ?Sized>(
         &mut self,
         index: u16,
         value: u8,
         cycles: u64,
         cpu: &mut Cpu,
-        peripherals: Peripherals,
+        peripherals: Peripherals<M>,
     );
 }
 
 impl MmuCpuExt for State {
-    fn read(&self, index: u16, _: u64, cpu: &Cpu, peripherals: PeripheralsRef) -> u8 {
+    fn read<M: Mbc + ?Sized>(
+        &self,
+        index: u16,
+        _: u64,
+        cpu: &Cpu,
+        peripherals: PeripheralsRef<M>,
+    ) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
@@ -129,7 +141,14 @@ impl MmuCpuExt for State {
         }
     }
 
-    fn write(&mut self, index: u16, value: u8, _: u64, cpu: &mut Cpu, peripherals: Peripherals) {
+    fn write<M: Mbc + ?Sized>(
+        &mut self,
+        index: u16,
+        value: u8,
+        _: u64,
+        cpu: &mut Cpu,
+        peripherals: Peripherals<M>,
+    ) {
         if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;
         }

@@ -18,7 +18,7 @@ impl Default for Dma {
 }
 
 impl Dma {
-    pub fn execute(&mut self, state: &mut State, mbc: &dyn Mbc, _: u64) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, state: &mut State, mbc: &M, _: u64) {
         if let Some(address) = self.0.next() {
             state.is_dma_active = true;
             state.oam[usize::from(address as u8)] = state.read(address, mbc);
