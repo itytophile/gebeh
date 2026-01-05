@@ -349,7 +349,7 @@ impl<S: Sweep> PulseChannel<S> {
             self.period_high_and_control & 0b11000000 | ((value >> 4) as u8) & 0x07;
     }
 
-    fn sample(&self, index: u32, sample_rate: u32) -> f32 {
+    fn sample(&self, sample: f32) -> f32 {
         if !self.is_on() {
             return 0.;
         }
@@ -358,7 +358,7 @@ impl<S: Sweep> PulseChannel<S> {
         // let normalized_index = index_in_freq_space / space_size;
         // Better function thanks to
         // (a % b) / b = (a / b) % 1.0
-        let index = (index as f32 * self.get_tone_frequency() / sample_rate as f32) % 1.;
+        let index = (sample * self.get_tone_frequency()) % 1.;
         let index = (index * 8.) as usize;
         let wave = match self.get_duty_cycle() {
             0b00 => WAVE_00,
@@ -505,25 +505,28 @@ impl Apu {
         self.ch1.tick(div);
         self.ch2.tick(div);
     }
-    pub fn sample_left(&self, sample_rate: u32, index: u32) -> f32 {
+
+    /// sample in [0;1[
+    pub fn sample_left(&self, sample: f32) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(index, sample_rate)
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(index, sample_rate)
+            self.ch2.sample(sample)
         } else {
             0.
         }) * self.get_volume_left()
     }
 
-    pub fn sample_right(&self, sample_rate: u32, index: u32) -> f32 {
+    /// sample in [0;1[
+    pub fn sample_right(&self, sample: f32) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(index, sample_rate)
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(index, sample_rate)
+            self.ch2.sample(sample)
         } else {
             0.
         }) * self.get_volume_right()

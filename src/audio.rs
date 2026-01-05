@@ -73,8 +73,9 @@ impl Audio {
                 move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                     let apu = apu.read().unwrap();
                     for frame in data.chunks_mut(channels) {
-                        let left = T::from_sample(apu.sample_left(sample_rate, sample_index));
-                        let right = T::from_sample(apu.sample_right(sample_rate, sample_index));
+                        let sample = sample_index as f32 / sample_rate as f32;
+                        let left = T::from_sample(apu.sample_left(sample));
+                        let right = T::from_sample(apu.sample_right(sample));
                         sample_index = (sample_index + 1) % sample_rate;
                         for (index, sample) in frame.iter_mut().enumerate() {
                             // even is left, odd is right
