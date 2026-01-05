@@ -1,3 +1,7 @@
+use crate::apu::length::Length;
+
+mod length;
+
 type Wave = [f32; 8];
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
@@ -240,20 +244,22 @@ impl EnvelopeTimer {
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
-    length: Length,
+    length: Length<64>,
+    duty_cycle: u8,
     volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,
-    period_high_and_control: u8,
+    period_high: u8,
     is_enabled: bool,
     sweep: S,
 }
 
 impl<S: Sweep> PulseChannel<S> {
     pub fn get_nrx1(&self) -> u8 {
-        self.length.get_register() | 0b00111111
+        (self.duty_cycle << 6) | 0b00111111
     }
     pub fn write_nrx1(&mut self, value: u8) {
-        self.length.write_register(value);
+        self.duty_cycle = value >> 6;
+        self.length.set_initial_timer_length(value);
     }
     pub fn get_nrx2(&self) -> u8 {
         self.volume_and_envelope.get_register()
@@ -268,14 +274,11 @@ impl<S: Sweep> PulseChannel<S> {
         self.period_low = value;
     }
     pub fn get_nrx4(&self) -> u8 {
-        self.period_high_and_control | 0b10111111
+        ((self.length.is_enable as u8) << 6) | 0b10111111
     }
     pub fn write_nrx4(&mut self, value: u8) {
-        self.set_period_high_and_control(value);
-    }
-
-    fn set_period_high_and_control(&mut self, value: u8) {
-        self.period_high_and_control = value;
+        self.length.is_enable = value & 0x40 != 0;
+        self.period_high = value & 0x07;
         if value & 0x80 != 0 {
             self.trigger();
         }
@@ -292,11 +295,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled
-    }
-
-    fn is_length_enable(&self) -> bool {
-        self.period_high_and_control & 0x40 != 0
+        self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
     // must be called at 1048576 Hz (once per four dots)
@@ -310,20 +309,19 @@ impl<S: Sweep> PulseChannel<S> {
         if let Some(period) = new_period {
             self.set_period_value(period);
         }
-        self.is_enabled =
-            is_enabled_from_sweep & (!self.is_length_enable() || self.length.tick(div));
+        self.is_enabled = is_enabled_from_sweep;
+        self.length.tick(div);
         self.volume_and_envelope.tick(div);
     }
 
     // 11 bits
     fn get_period_value(&self) -> u16 {
-        u16::from_be_bytes([self.period_high_and_control & 0x07, self.period_low])
+        u16::from_be_bytes([self.period_high & 0x07, self.period_low])
     }
 
     fn set_period_value(&mut self, value: u16) {
         self.period_low = value as u8;
-        self.period_high_and_control =
-            self.period_high_and_control & 0b11000000 | ((value >> 4) as u8) & 0x07;
+        self.period_high = self.period_high & 0b11000000 | ((value >> 4) as u8) & 0x07;
     }
 
     fn sample(&self, sample: f32) -> f32 {
@@ -337,7 +335,7 @@ impl<S: Sweep> PulseChannel<S> {
         // (a % b) / b = (a / b) % 1.0
         let index = (sample * self.get_tone_frequency()) % 1.;
         let index = (index * 8.) as usize;
-        let wave = match self.get_duty_cycle() {
+        let wave = match self.duty_cycle {
             0b00 => WAVE_00,
             0b01 => WAVE_01,
             0b10 => WAVE_10,
@@ -346,11 +344,6 @@ impl<S: Sweep> PulseChannel<S> {
         };
         wave[index] * self.volume_and_envelope.get_volume()
     }
-
-    fn get_duty_cycle(&self) -> u8 {
-        (self.length.get_register() >> 6) & 0x3
-    }
-
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {
         131072.0
@@ -650,30 +643,5 @@ impl VolumeAndEnvelope {
 
     fn tick(&mut self, div: u8) {
         self.timer.tick(div);
-    }
-}
-
-#[derive(Clone, Default)]
-struct Length {
-    timer: LengthTimer,
-    // can contain duty cycle
-    register: u8,
-}
-
-impl Length {
-    fn get_register(&self) -> u8 {
-        self.register
-    }
-
-    fn write_register(&mut self, value: u8) {
-        self.register = value;
-    }
-
-    fn trigger(&mut self) {
-        self.timer.trigger(self.register & 0x3f);
-    }
-
-    fn tick(&mut self, div: u8) -> bool {
-        self.timer.tick(div)
     }
 }
