@@ -180,8 +180,10 @@ impl LengthTimer {
         self.value == 64
     }
 
-    fn reload(&mut self, value: u8) {
-        self.value = value;
+    fn trigger(&mut self, value: u8) {
+        if self.is_expired() {
+            self.value = value;
+        }
     }
 }
 
@@ -195,6 +197,12 @@ struct EnvelopeTimer {
 }
 
 impl EnvelopeTimer {
+    fn trigger(&mut self, volume_and_envelope: u8) {
+        self.is_increasing = volume_and_envelope & 0x08 != 0;
+        self.value = (volume_and_envelope >> 4) & 0x0f;
+        self.sweep_pace = volume_and_envelope & 0x07;
+        self.pace_count = 0;
+    }
     fn tick(&mut self, div: u8) {
         // https://gbdev.io/pandocs/Audio_Registers.html#ff12--nr12-channel-1-volume--envelope
         // A setting of 0 disables the envelope.
@@ -292,11 +300,9 @@ impl<S: Sweep> PulseChannel<S> {
 
     fn trigger(&mut self) {
         self.is_enabled = true;
-        if self.length_timer.is_expired() {
-            self.length_timer
-                .reload(self.length_timer_and_duty_cycle & 0x3f);
-        }
-        self.reload_envelope_timer();
+        self.length_timer
+            .trigger(self.length_timer_and_duty_cycle & 0x3f);
+        self.envelope_timer.trigger(self.volume_and_envelope);
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
             self.set_period_value(new_period);
         }
@@ -310,13 +316,6 @@ impl<S: Sweep> PulseChannel<S> {
     fn is_dac_on(&self) -> bool {
         // https://gbdev.io/pandocs/Audio_details.html#dacs
         self.volume_and_envelope & 0xf8 != 0
-    }
-
-    fn reload_envelope_timer(&mut self) {
-        self.envelope_timer.is_increasing = self.volume_and_envelope & 0x08 != 0;
-        self.envelope_timer.value = (self.volume_and_envelope >> 4) & 0x0f;
-        self.envelope_timer.sweep_pace = self.volume_and_envelope & 0x07;
-        self.envelope_timer.pace_count = 0;
     }
 
     fn is_length_enable(&self) -> bool {
@@ -546,6 +545,7 @@ struct NoiseChannel {
     envelope_timer: EnvelopeTimer,
     nr43: u8,
     nr44: u8,
+    is_enabled: bool,
 }
 
 impl NoiseChannel {
@@ -569,8 +569,26 @@ impl NoiseChannel {
     }
     fn write_nr44(&mut self, value: u8) {
         self.nr44 = value;
+        if value & 0x80 != 0 {
+            self.trigger();
+        }
     }
     fn read_nr44(&self) -> u8 {
         self.nr44 | 0b10111111
+    }
+
+    fn trigger(&mut self) {
+        self.is_enabled = true;
+        self.length_timer.trigger(self.nr41 & 0x3f);
+        self.envelope_timer.trigger(self.nr42);
+    }
+
+    fn is_on(&self) -> bool {
+        self.is_dac_on() && self.is_enabled
+    }
+
+    fn is_dac_on(&self) -> bool {
+        // https://gbdev.io/pandocs/Audio_details.html#dacs
+        self.nr42 & 0xf8 != 0
     }
 }
