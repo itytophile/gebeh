@@ -238,37 +238,22 @@ impl EnvelopeTimer {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
-    length_timer_and_duty_cycle: u8,
+    length: Length,
     volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,
     period_high_and_control: u8,
     is_enabled: bool,
     sweep: S,
-    length_timer: LengthTimer,
-}
-
-impl<S: Default + Sweep> Default for PulseChannel<S> {
-    fn default() -> Self {
-        Self {
-            length_timer_and_duty_cycle: Default::default(),
-            volume_and_envelope: Default::default(),
-            period_low: Default::default(),
-            period_high_and_control: Default::default(),
-            is_enabled: false,
-            sweep: Default::default(),
-            length_timer: Default::default(),
-        }
-    }
 }
 
 impl<S: Sweep> PulseChannel<S> {
     pub fn get_nrx1(&self) -> u8 {
-        self.length_timer_and_duty_cycle | 0b00111111
+        self.length.get_register() | 0b00111111
     }
     pub fn write_nrx1(&mut self, value: u8) {
-        self.length_timer_and_duty_cycle = value;
+        self.length.write_register(value);
     }
     pub fn get_nrx2(&self) -> u8 {
         self.volume_and_envelope.get_register()
@@ -298,8 +283,7 @@ impl<S: Sweep> PulseChannel<S> {
 
     fn trigger(&mut self) {
         self.is_enabled = true;
-        self.length_timer
-            .trigger(self.length_timer_and_duty_cycle & 0x3f);
+        self.length.trigger();
         self.volume_and_envelope.trigger();
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
             self.set_period_value(new_period);
@@ -327,7 +311,7 @@ impl<S: Sweep> PulseChannel<S> {
             self.set_period_value(period);
         }
         self.is_enabled =
-            is_enabled_from_sweep & (!self.is_length_enable() || self.length_timer.tick(div));
+            is_enabled_from_sweep & (!self.is_length_enable() || self.length.tick(div));
         self.volume_and_envelope.tick(div);
     }
 
@@ -364,7 +348,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     fn get_duty_cycle(&self) -> u8 {
-        (self.length_timer_and_duty_cycle >> 6) & 0x3
+        (self.length.get_register() >> 6) & 0x3
     }
 
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
@@ -666,5 +650,30 @@ impl VolumeAndEnvelope {
 
     fn tick(&mut self, div: u8) {
         self.timer.tick(div);
+    }
+}
+
+#[derive(Clone, Default)]
+struct Length {
+    timer: LengthTimer,
+    // can contain duty cycle
+    register: u8,
+}
+
+impl Length {
+    fn get_register(&self) -> u8 {
+        self.register
+    }
+
+    fn write_register(&mut self, value: u8) {
+        self.register = value;
+    }
+
+    fn trigger(&mut self) {
+        self.timer.trigger(self.register & 0x3f);
+    }
+
+    fn tick(&mut self, div: u8) -> bool {
+        self.timer.tick(div)
     }
 }
