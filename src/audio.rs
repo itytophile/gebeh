@@ -38,10 +38,6 @@ impl LinearFeedbackShiftRegister {
         self.0 >>= 1;
         shifted_out as u8
     }
-
-    fn trigger(&mut self) {
-        self.0 = 0;
-    }
 }
 
 fn get_noise(is_short: bool) -> Vec<u8> {
@@ -102,6 +98,9 @@ impl Audio {
         let channels = config.channels as usize;
         let mut sample_index = 0u32;
 
+        let noise = get_noise(false);
+        let short_noise = get_noise(true);
+
         device
             .build_output_stream(
                 config,
@@ -109,8 +108,8 @@ impl Audio {
                     let apu = apu.read().unwrap();
                     for frame in data.chunks_mut(channels) {
                         let sample = sample_index as f32 / sample_rate as f32;
-                        let left = T::from_sample(apu.sample_left(sample));
-                        let right = T::from_sample(apu.sample_right(sample));
+                        let left = T::from_sample(apu.sample_left(sample, &noise, &short_noise));
+                        let right = T::from_sample(apu.sample_right(sample, &noise, &short_noise));
                         sample_index = (sample_index + 1) % sample_rate;
                         for (index, sample) in frame.iter_mut().enumerate() {
                             // even is left, odd is right

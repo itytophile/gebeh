@@ -386,32 +386,41 @@ impl Apu {
         }
         self.ch1.tick(div);
         self.ch2.tick(div);
+        self.ch4.tick(div);
     }
 
     /// sample in [0;1[
-    pub fn sample_left(&self, sample: f32) -> f32 {
+    pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
             self.ch1.sample(sample)
         } else {
             0.0
-        }) + if self.nr51.contains(Nr51::CH2_LEFT) {
+        }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
             self.ch2.sample(sample)
         } else {
             0.
-        }) * self.get_volume_left()
+        }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
+            self.ch4.sample(sample, noise, short_noise)
+        } else {
+            0.
+        })) * self.get_volume_left()
     }
 
     /// sample in [0;1[
-    pub fn sample_right(&self, sample: f32) -> f32 {
+    pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
             self.ch1.sample(sample)
         } else {
             0.0
-        }) + if self.nr51.contains(Nr51::CH2_RIGHT) {
+        }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
             self.ch2.sample(sample)
         } else {
             0.
-        }) * self.get_volume_right()
+        }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
+            self.ch4.sample(sample, noise, short_noise)
+        } else {
+            0.
+        })) * self.get_volume_right()
     }
 
     fn get_volume_left(&self) -> f32 {
@@ -471,7 +480,11 @@ impl NoiseChannel {
     }
 
     fn tick(&mut self, div: u8) {
+        if !self.is_on() {
+            return;
+        }
         self.length.tick(div);
+        self.volume_and_envelope.tick(div);
     }
     fn get_divider(&self) -> u8 {
         self.nr43 & 0x7
@@ -488,5 +501,24 @@ impl NoiseChannel {
     }
     fn is_short_mode(&self) -> bool {
         self.nr43 & 0x8 != 0
+    }
+
+    fn sample(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
+        if !self.is_on() {
+            return 0.;
+        }
+
+        let freq = self.get_tick_frequency();
+        // if freq is equal to A Hz then it means the lfsr has emitted A different values in 1 second.
+        // So we must index the noise values in the interval [0; A[
+        // The noise is cyclic so we can use modulo if the index is greater than the provided noise values.
+        // (Remainder: freq is in [0;1[)
+        let index = (sample * freq) as usize;
+
+        (if self.is_short_mode() {
+            short_noise[index % short_noise.len()] as f32
+        } else {
+            noise[index % noise.len()] as f32
+        }) * self.volume_and_envelope.get_volume()
     }
 }
