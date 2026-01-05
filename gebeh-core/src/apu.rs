@@ -549,6 +549,8 @@ struct NoiseChannel {
     nr43: u8,
     nr44: u8,
     is_enabled: bool,
+    inner_clock: u32,
+    lfsr: LinearFeedbackShiftRegister,
 }
 
 impl NoiseChannel {
@@ -584,6 +586,7 @@ impl NoiseChannel {
         self.is_enabled = true;
         self.length_timer.trigger(self.nr41 & 0x3f);
         self.envelope_timer.trigger(self.nr42);
+        self.lfsr.trigger();
     }
 
     fn is_on(&self) -> bool {
@@ -593,5 +596,49 @@ impl NoiseChannel {
     fn is_dac_on(&self) -> bool {
         // https://gbdev.io/pandocs/Audio_details.html#dacs
         self.nr42 & 0xf8 != 0
+    }
+    fn tick(&mut self, div: u8) {
+        self.inner_clock = self.inner_clock.wrapping_add(1);
+        self.lfsr.tick(self.is_short_mode());
+        self.is_enabled = !self.is_length_enable() || self.length_timer.tick(div);
+    }
+    fn get_divider(&self) -> u8 {
+        self.nr43 & 0x7
+    }
+    fn get_shift(&self) -> u8 {
+        (self.nr43 >> 4) & 0xf
+    }
+    fn get_tick_frequency(&self) -> f32 {
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff22--nr43-channel-4-frequency--randomness
+        // Citation: Note that divider = 0 is treated as divider = 0.5 instead.
+        let divider = self.get_divider();
+        let divider: f32 = if divider == 0 { 0.5 } else { divider as f32 };
+        262144.0 / (divider * 2.0f32.powi(self.get_shift().into()))
+    }
+    fn is_short_mode(&self) -> bool {
+        self.nr43 & 0x8 != 0
+    }
+    fn is_length_enable(&self) -> bool {
+        self.nr44 & 0x40 != 0
+    }
+}
+
+struct LinearFeedbackShiftRegister(u16);
+
+impl LinearFeedbackShiftRegister {
+    fn tick(&mut self, short_mode: bool) -> u8 {
+        // https://gbdev.io/pandocs/Audio_details.html#noise-channel-ch4
+        let new_value = (self.0 & 1 != 0) == (self.0 & 0b10 != 0);
+        self.0 = self.0 & 0x7fff | ((new_value as u16) << 15);
+        if short_mode {
+            self.0 = self.0 & 0xff7f | ((new_value as u16) << 7)
+        }
+        let shifted_out = self.0 & 1;
+        self.0 >>= 1;
+        shifted_out as u8
+    }
+
+    fn trigger(&mut self) {
+        self.0 = 0;
     }
 }
