@@ -1,4 +1,7 @@
-use crate::apu::{noise_channel::NoiseChannel, pulse_channel::PulseChannel, sweep::Ch1Sweep};
+use crate::apu::{
+    noise_channel::NoiseChannel, pulse_channel::PulseChannel, sweep::Ch1Sweep,
+    wave_channel::WaveChannel,
+};
 
 mod envelope;
 mod length;
@@ -14,6 +17,7 @@ pub struct Apu {
     nr50: Nr50,
     pub ch1: PulseChannel<Ch1Sweep>,
     pub ch2: PulseChannel<()>,
+    pub ch3: WaveChannel,
     pub ch4: NoiseChannel,
 }
 
@@ -58,10 +62,10 @@ impl Apu {
     pub fn get_nr52(&self) -> u8 {
         let mut flags = Nr52::empty();
         flags.set(Nr52::AUDIO_ON_OFF, self.is_on);
-        flags.set(Nr52::CH4_ON, self.is_ch4_on());
-        flags.set(Nr52::CH3_ON, self.is_ch3_on());
-        flags.set(Nr52::CH2_ON, self.is_ch2_on());
-        flags.set(Nr52::CH1_ON, self.is_ch1_on());
+        flags.set(Nr52::CH4_ON, self.ch4.is_on());
+        flags.set(Nr52::CH3_ON, self.ch3.is_on());
+        flags.set(Nr52::CH2_ON, self.ch2.is_on());
+        flags.set(Nr52::CH1_ON, self.ch1.is_on());
         flags.bits() | 0b01110000
     }
     pub fn write_nr52(&mut self, value: u8) {
@@ -87,24 +91,13 @@ impl Apu {
         self.nr50 = Nr50::from_bits_retain(value);
     }
 
-    fn is_ch1_on(&self) -> bool {
-        self.ch1.is_on()
-    }
-    fn is_ch2_on(&self) -> bool {
-        self.ch2.is_on()
-    }
-    fn is_ch3_on(&self) -> bool {
-        false
-    }
-    fn is_ch4_on(&self) -> bool {
-        false
-    }
     pub fn execute(&mut self, div: u8) {
         if !self.is_on {
             return;
         }
         self.ch1.tick(div);
         self.ch2.tick(div);
+        self.ch3.tick(div);
         self.ch4.tick(div);
     }
 
@@ -115,6 +108,10 @@ impl Apu {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
             self.ch2.sample(sample)
+        } else {
+            0.
+        }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
@@ -131,6 +128,10 @@ impl Apu {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
             self.ch2.sample(sample)
+        } else {
+            0.
+        }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {

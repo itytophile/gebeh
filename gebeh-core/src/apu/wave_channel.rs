@@ -1,7 +1,7 @@
 use crate::apu::length::Length;
 
 #[derive(Default, Clone)]
-struct WaveChannel {
+pub struct WaveChannel {
     is_enabled: bool,
     is_dac_on: bool,
     length: Length<256>,
@@ -51,7 +51,7 @@ impl WaveChannel {
         self.length.trigger();
         self.effective_output_level = self.output_level;
     }
-    fn is_on(&self) -> bool {
+    pub fn is_on(&self) -> bool {
         self.is_enabled && self.is_dac_on && !self.length.is_expired()
     }
     // let's ignore specific behaviors
@@ -92,5 +92,12 @@ impl WaveChannel {
     // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {
         65536. / (2048. - self.period as f32)
+    }
+
+    pub fn tick(&mut self, div: u8) {
+        if !self.is_on() {
+            return;
+        }
+        self.length.tick(div);
     }
 }

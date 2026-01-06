@@ -43,7 +43,7 @@ impl NoiseChannel {
         self.volume_and_envelope.trigger();
     }
 
-    fn is_on(&self) -> bool {
+    pub fn is_on(&self) -> bool {
         self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
