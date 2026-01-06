@@ -7,10 +7,10 @@ use crate::apu::{
 type Wave = [f32; 8];
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
-const WAVE_00: Wave = [1., 1., 1., 1., 1., 1., 1., -1.];
-const WAVE_01: Wave = [-1., 1., 1., 1., 1., 1., 1., -1.];
-const WAVE_10: Wave = [-1., 1., 1., 1., 1., -1., -1., -1.];
-const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
+const WAVE_00: Wave = [1., 1., 1., 1., 1., 1., 1., 0.];
+const WAVE_01: Wave = [0., 1., 1., 1., 1., 1., 1., 0.];
+const WAVE_10: Wave = [0., 1., 1., 1., 1., 0., 0., 0.];
+const WAVE_11: Wave = [1., 0., 0., 0., 0., 0., 0., 1.];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
