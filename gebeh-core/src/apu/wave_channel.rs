@@ -9,6 +9,7 @@ struct WaveChannel {
     effective_output_level: u8,
     period: u16, // 11 bits
     effective_period: u16,
+    ram: [u8; 16],
 }
 
 impl WaveChannel {
@@ -54,5 +55,19 @@ impl WaveChannel {
     }
     fn is_on(&self) -> bool {
         self.is_enabled && self.is_dac_on && !self.length.is_expired()
+    }
+    // let's ignore specific behaviors
+    // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
+    fn write_ram(&mut self, index: u8, value: u8) {
+        if self.is_on() {
+            return;
+        }
+        self.ram[usize::from(index)] = value;
+    }
+    fn read_ram(&self, index: u8) -> u8 {
+        if self.is_on() {
+            return 0xff;
+        }
+        self.ram[usize::from(index)]
     }
 }
