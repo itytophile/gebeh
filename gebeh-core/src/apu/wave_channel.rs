@@ -1,6 +1,6 @@
 use crate::apu::length::Length;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct WaveChannel {
     is_enabled: bool,
     is_dac_on: bool,
@@ -8,7 +8,6 @@ struct WaveChannel {
     output_level: u8, // 2 bits
     effective_output_level: u8,
     period: u16, // 11 bits
-    effective_period: u16,
     ram: [u8; 16],
 }
 
@@ -51,23 +50,47 @@ impl WaveChannel {
         self.is_enabled = true;
         self.length.trigger();
         self.effective_output_level = self.output_level;
-        self.effective_period = self.period;
     }
     fn is_on(&self) -> bool {
         self.is_enabled && self.is_dac_on && !self.length.is_expired()
     }
     // let's ignore specific behaviors
     // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
-    fn write_ram(&mut self, index: u8, value: u8) {
+    pub fn write_ram(&mut self, index: u8, value: u8) {
         if self.is_on() {
             return;
         }
         self.ram[usize::from(index)] = value;
     }
-    fn read_ram(&self, index: u8) -> u8 {
+    pub fn read_ram(&self, index: u8) -> u8 {
         if self.is_on() {
             return 0xff;
         }
         self.ram[usize::from(index)]
+    }
+    pub fn sample(&self, sample: f32) -> f32 {
+        // About output level https://gbdev.io/pandocs/Audio_Registers.html#ff1c--nr32-channel-3-output-level
+        if !self.is_on() || self.effective_output_level == 0 {
+            return 0.;
+        }
+
+        let index = (sample * self.get_tone_frequency()) % 1.;
+        let index = (index * 32.) as usize;
+        let two_samples = self.ram[index / 2];
+
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
+        // Citation: As CH3 plays, it reads wave RAM left to right, upper nibble first
+        let value = (if index.is_multiple_of(2) {
+            two_samples >> 4
+        } else {
+            two_samples & 0x0f
+        }) >> (self.effective_output_level - 1);
+
+        value as f32 / 0x0f as f32
+    }
+
+    // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
+    fn get_tone_frequency(&self) -> f32 {
+        65536. / (2048. - self.period as f32)
     }
 }
