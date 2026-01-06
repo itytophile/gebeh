@@ -76,38 +76,20 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             CH1_SWEEP => peripherals.apu.ch1.get_nr10(),
-            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => {
-                log::warn!(
-                    "Reading ch1 length timer: {}",
-                    peripherals.apu.ch1.get_nrx1()
-                );
-                peripherals.apu.ch1.get_nrx1()
-            }
-            CH1_VOLUME_AND_ENVELOPE => {
-                log::warn!(
-                    "Reading ch1 volume and envelope: {}",
-                    peripherals.apu.ch1.get_nrx2()
-                );
-                peripherals.apu.ch1.get_nrx2()
-            }
-            CH1_PERIOD_LOW => {
-                log::warn!("Reading ch1 period low: {}", peripherals.apu.ch1.get_nrx3());
-                peripherals.apu.ch1.get_nrx3()
-            }
-            CH1_PERIOD_HIGH_AND_CONTROL => {
-                log::warn!("Reading ch1 control: {}", peripherals.apu.ch1.get_nrx4());
-                peripherals.apu.ch1.get_nrx4()
-            }
+            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => peripherals.apu.ch1.get_nrx1(),
+            CH1_VOLUME_AND_ENVELOPE => peripherals.apu.ch1.get_nrx2(),
+            CH1_PERIOD_LOW => peripherals.apu.ch1.get_nrx3(),
+            CH1_PERIOD_HIGH_AND_CONTROL => peripherals.apu.ch1.get_nrx4(),
             0xff15 => 0xff,
             CH2_LENGTH_TIMER_AND_DUTY_CYCLE => peripherals.apu.ch2.get_nrx1(),
             CH2_VOLUME_AND_ENVELOPE => peripherals.apu.ch2.get_nrx2(),
             CH2_PERIOD_LOW => peripherals.apu.ch2.get_nrx3(),
             CH2_PERIOD_HIGH_AND_CONTROL => peripherals.apu.ch2.get_nrx4(),
-            CH3_DAC_ENABLE => self.ch3_dac_enable | 0b01111111,
-            CH3_LENGTH_TIMER => 0xff,
-            CH3_OUTPUT_LEVEL => self.ch3_output_level | 0b10011111,
-            CH3_PERIOD_HIGH_AND_CONTROL => self.ch3_period_high_and_control | 0b10111111,
-            CH3_PERIOD_LOW => 0xff,
+            CH3_DAC_ENABLE => peripherals.apu.ch3.get_nr30(),
+            CH3_LENGTH_TIMER => peripherals.apu.ch3.get_nr31(),
+            CH3_OUTPUT_LEVEL => peripherals.apu.ch3.get_nr32(),
+            CH3_PERIOD_LOW => peripherals.apu.ch3.get_nr33(),
+            CH3_PERIOD_HIGH_AND_CONTROL => peripherals.apu.ch3.get_nr34(),
             0xff1f => 0xff,
             CH4_LENGTH_TIMER => peripherals.apu.ch4.read_nr41(),
             CH4_VOLUME_AND_ENVELOPE => peripherals.apu.ch4.read_nr42(),
@@ -117,6 +99,10 @@ impl MmuCpuExt for State {
             SOUND_PANNING => peripherals.apu.get_nr51(),
             AUDIO_MASTER_CONTROL => peripherals.apu.get_nr52(),
             0xff27..WAVE => 0xff,
+            WAVE..LCD_CONTROL => peripherals
+                .apu
+                .ch3
+                .read_ram(u8::try_from(index - WAVE).unwrap()),
             LCD_CONTROL => self.lcd_control.bits(),
             LCD_STATUS => self.lcd_status.bits() | 0b10000000,
             SCY => self.scy,
@@ -182,36 +168,21 @@ impl MmuCpuExt for State {
             TIMER_CONTROL => peripherals.timer.set_tac(value),
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
-            CH1_SWEEP => {
-                log::warn!("Setting ch1 weep with: 0b{value:08b}");
-                peripherals.apu.ch1.write_nr10(value)
-            }
-            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => {
-                log::warn!("Setting ch1 length timer with: 0b{value:08b}");
-                peripherals.apu.ch1.write_nrx1(value)
-            }
-            CH1_VOLUME_AND_ENVELOPE => {
-                log::warn!("Setting ch1 volume and envelope with: 0b{value:08b}");
-                peripherals.apu.ch1.write_nrx2(value)
-            }
-            CH1_PERIOD_LOW => {
-                log::warn!("Setting ch1 period low with: 0b{value:08b}");
-                peripherals.apu.ch1.write_nrx3(value)
-            }
-            CH1_PERIOD_HIGH_AND_CONTROL => {
-                log::warn!("Setting ch1 control with: 0b{value:08b}");
-                peripherals.apu.ch1.write_nrx4(value)
-            }
+            CH1_SWEEP => peripherals.apu.ch1.write_nr10(value),
+            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => peripherals.apu.ch1.write_nrx1(value),
+            CH1_VOLUME_AND_ENVELOPE => peripherals.apu.ch1.write_nrx2(value),
+            CH1_PERIOD_LOW => peripherals.apu.ch1.write_nrx3(value),
+            CH1_PERIOD_HIGH_AND_CONTROL => peripherals.apu.ch1.write_nrx4(value),
             0xff15 => {}
             CH2_LENGTH_TIMER_AND_DUTY_CYCLE => peripherals.apu.ch2.write_nrx1(value),
             CH2_VOLUME_AND_ENVELOPE => peripherals.apu.ch2.write_nrx2(value),
             CH2_PERIOD_LOW => peripherals.apu.ch2.write_nrx3(value),
             CH2_PERIOD_HIGH_AND_CONTROL => peripherals.apu.ch2.write_nrx4(value),
-            CH3_DAC_ENABLE => self.ch3_dac_enable = value,
-            CH3_LENGTH_TIMER => self.ch3_length_timer = value,
-            CH3_OUTPUT_LEVEL => self.ch3_output_level = value,
-            CH3_PERIOD_HIGH_AND_CONTROL => self.ch3_period_high_and_control = value,
-            CH3_PERIOD_LOW => self.ch3_period_low = value,
+            CH3_DAC_ENABLE => peripherals.apu.ch3.write_nr30(value),
+            CH3_LENGTH_TIMER => peripherals.apu.ch3.write_nr31(value),
+            CH3_OUTPUT_LEVEL => peripherals.apu.ch3.write_nr32(value),
+            CH3_PERIOD_LOW => peripherals.apu.ch3.write_nr33(value),
+            CH3_PERIOD_HIGH_AND_CONTROL => peripherals.apu.ch3.write_nr34(value),
             0xff1f => {}
             CH4_LENGTH_TIMER => peripherals.apu.ch4.write_nr41(value),
             CH4_VOLUME_AND_ENVELOPE => peripherals.apu.ch4.write_nr42(value),
@@ -219,25 +190,19 @@ impl MmuCpuExt for State {
             CH4_CONTROL => peripherals.apu.ch4.write_nr44(value),
             MASTER_VOLUME_AND_VIN_PANNING => self.master_volume_and_vin_panning = value,
             SOUND_PANNING => peripherals.apu.write_nr51(value),
-            AUDIO_MASTER_CONTROL => {
-                log::warn!("Writing master control with 0bx{value:08b}");
-                peripherals.apu.write_nr52(value)
-            }
+            AUDIO_MASTER_CONTROL => peripherals.apu.write_nr52(value),
             0xff27..WAVE => {}
             WAVE..LCD_CONTROL => {
-                // TODO wave ram
+                peripherals
+                    .apu
+                    .ch3
+                    .write_ram(u8::try_from(index - WAVE).unwrap(), value);
             }
             LCD_CONTROL => self.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
-            SCY => {
-                // log::warn!("{cycles}: setting scy with {value}");
-                self.scy = value
-            }
-            SCX => {
-                // log::warn!("{cycles}: setting scx with {value}");
-                self.scx = value
-            }
+            SCY => self.scy = value,
+            SCX => self.scx = value,
             LY => {} // read only
             LYC => self.lyc = value,
             DMA => {

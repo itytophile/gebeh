@@ -54,7 +54,7 @@ impl Timer {
         self.tima = value;
         self.tma_to_tima_delay = false;
     }
-    pub fn execute(&mut self, state: &mut State, cycles: u64) {
+    pub fn execute(&mut self, state: &mut State, _: u64) {
         // we only check a single bit to see if it's a multiple of the frequency
         let frequency_mask = match self.tac & 0b11 {
             0b00 => 0x80, // multiple of 256
@@ -84,9 +84,6 @@ impl Timer {
         self.tima = self.tima.wrapping_add(1);
 
         if self.tima == 0 {
-            if cycles <= 1829858 {
-                log::warn!("{cycles}: overflow!");
-            }
             // indeed, it's not delayed. Remove the delay fixes a mooneye test.
             // I'll investigate later (or never)
             state.interrupt_flag.insert(Interruptions::TIMER);
