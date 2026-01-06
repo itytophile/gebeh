@@ -25,7 +25,7 @@ impl WaveChannel {
         self.length.set_initial_timer_length(value);
     }
     pub fn get_nr32(&self) -> u8 {
-        self.output_level << 5
+        (self.output_level << 5) | 0b10011111
     }
     pub fn write_nr32(&mut self, value: u8) {
         self.output_level = (value >> 5) & 0b11;
