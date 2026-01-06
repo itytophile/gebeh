@@ -5,6 +5,7 @@ mod length;
 mod noise_channel;
 mod pulse_channel;
 mod sweep;
+mod wave_channel;
 
 #[derive(Clone, Default)]
 pub struct Apu {
