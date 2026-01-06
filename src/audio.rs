@@ -1,16 +1,3 @@
-//! Plays a simple 440 Hz sine wave (beep) tone.
-//!
-//! This example demonstrates:
-//! - Selecting audio hosts (with optional JACK support on Linux)
-//! - Selecting devices by ID or using the default output device
-//! - Querying the default output configuration
-//! - Building and running an output stream with typed samples
-//! - Generating audio data in the stream callback
-//!
-//! Run with: `cargo run --example beep`
-//! With JACK (Linux): `cargo run --example beep --features jack -- --jack`
-//! With specific device: `cargo run --example beep -- --device "wasapi:device_id"`
-
 use std::{
     collections::HashSet,
     sync::{Arc, RwLock},
@@ -110,7 +97,10 @@ impl Audio {
                         let sample = sample_index as f32 / sample_rate as f32;
                         let left = T::from_sample(apu.sample_left(sample, &noise, &short_noise));
                         let right = T::from_sample(apu.sample_right(sample, &noise, &short_noise));
-                        sample_index = (sample_index + 1) % sample_rate;
+                        // yes it's not moduloed by sample_rate. When we modulo the sample_index by the sample_rate, it will
+                        // "reset" the played wave every second (squared wave, noise...) and it can create audible artifacts.
+                        // I don't know if the sample_index being huge can create precision issues.
+                        sample_index = sample_index.wrapping_add(1);
                         for (index, sample) in frame.iter_mut().enumerate() {
                             // even is left, odd is right
                             *sample = if index % 2 == 0 { left } else { right }

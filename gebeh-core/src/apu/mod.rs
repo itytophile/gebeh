@@ -389,7 +389,6 @@ impl Apu {
         self.ch4.tick(div);
     }
 
-    /// sample in [0;1[
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
             self.ch1.sample(sample)
@@ -406,7 +405,6 @@ impl Apu {
         })) * self.get_volume_left()
     }
 
-    /// sample in [0;1[
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
             self.ch1.sample(sample)
@@ -510,9 +508,7 @@ impl NoiseChannel {
 
         let freq = self.get_tick_frequency();
         // if freq is equal to A Hz then it means the lfsr has emitted A different values in 1 second.
-        // So we must index the noise values in the interval [0; A[
         // The noise is cyclic so we can use modulo if the index is greater than the provided noise values.
-        // (Remainder: freq is in [0;1[)
         let index = (sample * freq) as usize;
 
         (if self.is_short_mode() {
