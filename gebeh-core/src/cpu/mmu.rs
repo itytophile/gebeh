@@ -99,6 +99,10 @@ impl MmuCpuExt for State {
             SOUND_PANNING => peripherals.apu.get_nr51(),
             AUDIO_MASTER_CONTROL => peripherals.apu.get_nr52(),
             0xff27..WAVE => 0xff,
+            WAVE..LCD_CONTROL => peripherals
+                .apu
+                .ch3
+                .read_ram(u8::try_from(index - WAVE).unwrap()),
             LCD_CONTROL => self.lcd_control.bits(),
             LCD_STATUS => self.lcd_status.bits() | 0b10000000,
             SCY => self.scy,
@@ -189,7 +193,10 @@ impl MmuCpuExt for State {
             AUDIO_MASTER_CONTROL => peripherals.apu.write_nr52(value),
             0xff27..WAVE => {}
             WAVE..LCD_CONTROL => {
-                // TODO wave ram
+                peripherals
+                    .apu
+                    .ch3
+                    .write_ram(u8::try_from(index - WAVE).unwrap(), value);
             }
             LCD_CONTROL => self.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
