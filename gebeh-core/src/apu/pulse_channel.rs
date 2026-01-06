@@ -61,7 +61,6 @@ impl<S: Sweep> PulseChannel<S> {
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
             self.set_period_value(new_period);
         }
-        log::warn!("new tone frequency: {} Hz", self.get_tone_frequency());
     }
 
     pub fn is_on(&self) -> bool {
