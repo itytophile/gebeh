@@ -1,5 +1,5 @@
 [workspace]
-members = ["gebeh-core"]
+members = ["gebeh-core", "gebeh-web"]
 
 [package]
 name = "gebeh"

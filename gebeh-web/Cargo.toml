@@ -1,0 +1,17 @@
+[package]
+name = "gebeh-web"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pixels = "0.15.0"
+winit = "0.29"
+console_error_panic_hook = "0.1"
+console_log = "1"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["GpuTextureFormat", "Window", "Document", "HtmlElement", "Event"] }
+error-iter = "0.4"
+log = "0.4"
+winit_input_helper = "0.15"
+fern = "0.7.1"
