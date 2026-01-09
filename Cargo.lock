@@ -745,6 +745,7 @@ dependencies = [
  "console_log",
  "error-iter",
  "fern",
+ "gebeh-core",
  "log",
  "pixels",
  "wasm-bindgen",

@@ -2,9 +2,11 @@
 #![forbid(unsafe_code)]
 
 use error_iter::ErrorIter as _;
+use gebeh_core::{HEIGHT, WIDTH};
 use log::error;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use std::rc::Rc;
+use wasm_bindgen::prelude::*;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -12,8 +14,6 @@ use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-const WIDTH: u32 = 320;
-const HEIGHT: u32 = 240;
 const BOX_SIZE: i16 = 64;
 
 /// Representation of the application state. In this example, a box will bounce around the screen.
@@ -73,14 +73,16 @@ async fn run() {
 
         // Listen for resize event on browser client. Adjust winit window dimensions
         // on event trigger
+        let js_window = web_sys::window().unwrap();
         let closure = wasm_bindgen::closure::Closure::wrap(Box::new({
             let window = Rc::clone(&window);
             move |_e: web_sys::Event| {
-                let _ = window.request_inner_size(get_window_size());
+                let size = get_window_size();
+                log::info!("{size:?}");
+                let _ = window.request_inner_size(size);
             }
         }) as Box<dyn FnMut(_)>);
-        web_sys::window()
-            .unwrap()
+        js_window
             .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
             .unwrap();
         closure.forget();
@@ -95,7 +97,7 @@ async fn run() {
 
         let surface_texture =
             SurfaceTexture::new(window_size.width, window_size.height, window.as_ref());
-        let builder = PixelsBuilder::new(WIDTH, HEIGHT, surface_texture);
+        let builder = PixelsBuilder::new(WIDTH.into(), HEIGHT.into(), surface_texture);
 
         let builder = {
             // Web targets do not support the default texture format
@@ -204,4 +206,9 @@ impl World {
             pixel.copy_from_slice(&rgba);
         }
     }
+}
+
+#[wasm_bindgen]
+pub fn mdr() -> String {
+    "From Rust".to_string()
 }
