@@ -11,21 +11,19 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
-[profile.release]
-# This makes the compiled code faster and smaller, but it makes compiling slower,
-# so it's only enabled in release mode.
-lto = true
-opt-level = "z"
-
 [dependencies]
-# The `wasm-bindgen` crate provides the bare minimum functionality needed
-# to interact with JavaScript.
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+error-iter = "0.4.1"
+log = "0.4.29"
+pixels = "0.15.0"
 wasm-bindgen = "0.2.45"
+wasm-bindgen-futures = "0.4"
+winit = "0.29"
+winit_input_helper = "0.15"
 
-# The `web-sys` crate allows you to interact with the various browser APIs,
-# like the DOM.
 [dependencies.web-sys]
-version = "0.3.22"
+version = "0.3"
 features = ["console"]
 
 # These crates are used for running unit tests.
