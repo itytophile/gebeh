@@ -1,29 +1,23 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+mod mbc;
+
 use error_iter::ErrorIter;
+use gebeh_core::mbc::Mbc;
+use gebeh_core::Emulator;
 use log::error;
 use pixels::{PixelsBuilder, SurfaceTexture};
 use std::rc::Rc;
+use wasm_bindgen::prelude::*;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{EventLoop, EventLoopBuilder, EventLoopProxy};
 use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-use wasm_bindgen::prelude::*;
 
-const WIDTH: u32 = 320;
-const HEIGHT: u32 = 240;
-const BOX_SIZE: i16 = 64;
-
-/// Representation of the application state. In this example, a box will bounce around the screen.
-struct World {
-    box_x: i16,
-    box_y: i16,
-    velocity_x: i16,
-    velocity_y: i16,
-}
+use crate::mbc::{get_mbc, CloneMbc};
 
 #[wasm_bindgen(start)]
 fn main() {
@@ -31,7 +25,8 @@ fn main() {
     fern::Dispatch::new()
         .level(log::LevelFilter::Info)
         .chain(fern::Output::call(console_log::log))
-        .apply().unwrap();
+        .apply()
+        .unwrap();
 }
 
 /// Retrieve current width and height dimensions of browser client window
@@ -55,17 +50,19 @@ impl Proxy {
 
 #[wasm_bindgen]
 pub fn init_window() -> Proxy {
-    let event_loop = EventLoopBuilder::<Vec<u8>>::with_user_event().build().unwrap();
+    let event_loop = EventLoopBuilder::<Vec<u8>>::with_user_event()
+        .build()
+        .unwrap();
     let proxy = Proxy(event_loop.create_proxy());
-    
+
     wasm_bindgen_futures::spawn_local(run(event_loop));
-    
+
     proxy
 }
 
 async fn run(event_loop: EventLoop<Vec<u8>>) {
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(gebeh_core::WIDTH as f64, gebeh_core::HEIGHT as f64);
         WindowBuilder::new()
             .with_title("Hello Pixels + Web")
             .with_inner_size(size)
@@ -112,9 +109,12 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
 
         let surface_texture =
             SurfaceTexture::new(window_size.width, window_size.height, window.as_ref());
-        let builder = PixelsBuilder::new(WIDTH, HEIGHT, surface_texture);
+        let builder = PixelsBuilder::new(
+            gebeh_core::WIDTH.into(),
+            gebeh_core::HEIGHT.into(),
+            surface_texture,
+        );
 
-        #[cfg(target_arch = "wasm32")]
         let builder = {
             // Web targets do not support the default texture format
             let texture_format = pixels::wgpu::TextureFormat::Rgba8Unorm;
@@ -125,24 +125,34 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
 
         builder.build_async().await.expect("Pixels error")
     };
-    let mut world = World::new();
+
+    let mut mbc_and_emulator: Option<(Box<dyn CloneMbc>, Emulator)> = None;
 
     let res = event_loop.run(|event, elwt| {
+        // Handle input events
+        if input.update(&event) && (input.key_pressed(KeyCode::Escape) || input.close_requested()) {
+            elwt.exit();
+        }
+
         match event {
             Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,
                 ..
             } => {
-                // Draw the current frame
-                world.draw(pixels.frame_mut());
-                if let Err(err) = pixels.render() {
-                    log_error("pixels.render", err);
-                    elwt.exit();
-                    return;
-                }
+                if let Some((mbc, emulator)) = &mut mbc_and_emulator {
+                    draw_emulator(
+                        mbc.as_mut(),
+                        emulator,
+                        pixels.frame_mut().as_chunks_mut::<4>().0,
+                    );
 
-                // Update internal state and request a redraw
-                world.update();
+                    if let Err(err) = pixels.render() {
+                        log_error("pixels.render", err);
+                        elwt.exit();
+                        return;
+                    }
+                };
+
                 window.request_redraw();
             }
 
@@ -154,19 +164,14 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
                 if let Err(err) = pixels.resize_surface(size.width, size.height) {
                     log_error("pixels.resize_surface", err);
                     elwt.exit();
-                    return;
                 }
             }
-            Event::UserEvent(ref file) => {
+            Event::UserEvent(file) => {
                 log::info!("New file ! size = {}", file.len());
+                mbc_and_emulator = Some((get_mbc(file).unwrap(), Emulator::default()));
             }
 
             _ => (),
-        }
-
-        // Handle input events
-        if input.update(&event) && (input.key_pressed(KeyCode::Escape) || input.close_requested()) {
-            elwt.exit();
         }
     });
     res.unwrap();
@@ -179,50 +184,21 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     }
 }
 
-impl World {
-    /// Create a new `World` instance that can draw a moving box.
-    fn new() -> Self {
-        Self {
-            box_x: 24,
-            box_y: 16,
-            velocity_x: 1,
-            velocity_y: 1,
+fn draw_emulator(mbc: &mut dyn Mbc, emulator: &mut Emulator, pixels: &mut [[u8; 4]]) {
+    let start = web_time::Instant::now();
+    while start.elapsed() <= web_time::Duration::from_millis(33) {
+        emulator.execute(mbc);
+
+        let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
+            continue;
+        };
+
+        let base = usize::from(emulator.state.ly) * usize::from(gebeh_core::WIDTH);
+        for (pixel, color) in pixels[base..].iter_mut().zip(scanline) {
+            *pixel = (*color).into();
         }
-    }
-
-    /// Update the `World` internal state; bounce the box around the screen.
-    fn update(&mut self) {
-        if self.box_x <= 0 || self.box_x + BOX_SIZE > WIDTH as i16 {
-            self.velocity_x *= -1;
-        }
-        if self.box_y <= 0 || self.box_y + BOX_SIZE > HEIGHT as i16 {
-            self.velocity_y *= -1;
-        }
-
-        self.box_x += self.velocity_x;
-        self.box_y += self.velocity_y;
-    }
-
-    /// Draw the `World` state to the frame buffer.
-    ///
-    /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
-    fn draw(&self, frame: &mut [u8]) {
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let x = (i % WIDTH as usize) as i16;
-            let y = (i / WIDTH as usize) as i16;
-
-            let inside_the_box = x >= self.box_x
-                && x < self.box_x + BOX_SIZE
-                && y >= self.box_y
-                && y < self.box_y + BOX_SIZE;
-
-            let rgba = if inside_the_box {
-                [0x5e, 0x48, 0xe8, 0xff]
-            } else {
-                [0x48, 0xb2, 0xe8, 0xff]
-            };
-
-            pixel.copy_from_slice(&rgba);
+        if emulator.state.ly == gebeh_core::HEIGHT - 1 {
+            break;
         }
     }
 }

@@ -21,7 +21,6 @@ timerfd = "1.6.0"
 arrayvec = "0.7.6"
 
 [profile.release]
-lto = true
 opt-level = "z"
 overflow-checks = true
 
