@@ -1,5 +1,5 @@
 [workspace]
-members = ["gebeh-core"]
+members = ["gebeh-core", "gebeh-web"]
 
 [package]
 name = "gebeh"
@@ -21,8 +21,8 @@ timerfd = "1.6.0"
 arrayvec = "0.7.6"
 
 [profile.release]
+opt-level = "z"
 overflow-checks = true
-debug = true
 
 [profile.test]
 opt-level = 3
