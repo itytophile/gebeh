@@ -7,7 +7,7 @@ use pixels::{PixelsBuilder, SurfaceTexture};
 use std::rc::Rc;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoop;
+use winit::event_loop::{EventLoop, EventLoopBuilder, EventLoopProxy};
 use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
@@ -28,9 +28,10 @@ struct World {
 #[wasm_bindgen(start)]
 fn main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    console_log::init_with_level(log::Level::Trace).expect("error initializing logger");
-
-    wasm_bindgen_futures::spawn_local(run());
+    fern::Dispatch::new()
+        .level(log::LevelFilter::Info)
+        .chain(fern::Output::call(console_log::log))
+        .apply().unwrap();
 }
 
 /// Retrieve current width and height dimensions of browser client window
@@ -42,8 +43,27 @@ fn get_window_size() -> LogicalSize<f64> {
     )
 }
 
-async fn run() {
-    let event_loop = EventLoop::new().unwrap();
+#[wasm_bindgen]
+pub struct Proxy(EventLoopProxy<Vec<u8>>);
+
+#[wasm_bindgen]
+impl Proxy {
+    pub fn send_file(&self, file: Vec<u8>) {
+        self.0.send_event(file).unwrap()
+    }
+}
+
+#[wasm_bindgen]
+pub fn init_window() -> Proxy {
+    let event_loop = EventLoopBuilder::<Vec<u8>>::with_user_event().build().unwrap();
+    let proxy = Proxy(event_loop.create_proxy());
+    
+    wasm_bindgen_futures::spawn_local(run(event_loop));
+    
+    proxy
+}
+
+async fn run(event_loop: EventLoop<Vec<u8>>) {
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
@@ -136,6 +156,9 @@ async fn run() {
                     elwt.exit();
                     return;
                 }
+            }
+            Event::UserEvent(ref file) => {
+                log::info!("New file ! size = {}", file.len());
             }
 
             _ => (),
