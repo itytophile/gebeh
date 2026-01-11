@@ -1,6 +1,6 @@
 # You must change these to your own details.
 [package]
-name = "rust-webpack-template"
+name = "gebeh-web"
 description = "My super awesome Rust, WebAssembly, and Webpack project!"
 version = "0.1.0"
 authors = ["You <you@example.com>"]

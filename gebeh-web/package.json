@@ -1,10 +1,10 @@
 {
   "author": "You <you@example.com>",
-  "name": "rust-webpack-template",
+  "name": "gebeh-web",
   "version": "0.1.0",
   "scripts": {
-    "build": "rimraf dist pkg && webpack --disable-interpret",
-    "start": "rimraf dist pkg && webpack-dev-server --disable-interpret --open -d eval-source-map",
+    "build": "rimraf dist pkg && wasm-pack build --target web && tsc",
+    "start": "npm run build && serve",
     "test": "cargo test && wasm-pack test --headless"
   },
   "devDependencies": {
@@ -13,6 +13,7 @@
     "copy-webpack-plugin": "^13",
     "eslint": "^9.39.2",
     "rimraf": "^6",
+    "serve": "^14.2.5",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.52.0",

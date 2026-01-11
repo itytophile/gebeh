@@ -844,6 +844,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "gebeh-web"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "error-iter",
+ "fern",
+ "futures",
+ "gebeh-core",
+ "js-sys",
+ "log",
+ "pixels",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "web-time 1.1.0",
+ "winit",
+ "winit_input_helper",
+]
+
+[[package]]
 name = "gethostname"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1799,28 +1821,6 @@ name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
-
-[[package]]
-name = "rust-webpack-template"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "error-iter",
- "fern",
- "futures",
- "gebeh-core",
- "js-sys",
- "log",
- "pixels",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "web-time 1.1.0",
- "winit",
- "winit_input_helper",
-]
 
 [[package]]
 name = "rustc-demangle"

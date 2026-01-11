@@ -14,5 +14,5 @@
     "esModuleInterop" : true,
     "outDir": "./dist",
   },
-  "include": ["eslint.config.mjs", "ts", "webpack.config.ts"],
+  "include": ["ts"],
 }
