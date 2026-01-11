@@ -1,12 +1,16 @@
-import { AUDIO_PROCESSOR_NAME, FromMainMsg, FromNodeMsg } from "./common.js";
+import {
+  AUDIO_PROCESSOR_NAME,
+  FromMainMessage,
+  FromNodeMessage,
+} from "./common.js";
 
-const romInput = document.getElementById("rom-input");
+const romInput = document.querySelector("#rom-input");
 
 if (!(romInput instanceof HTMLInputElement)) {
-  throw new Error("rom-input is not an input");
+  throw new TypeError("rom-input is not an input");
 }
 
-romInput.onchange = async () => {
+romInput.addEventListener("change", async () => {
   const file = romInput.files?.item(0);
 
   if (!file) {
@@ -21,11 +25,11 @@ romInput.onchange = async () => {
     node.port.postMessage({
       type: "rom",
       bytes,
-    } satisfies FromMainMsg);
+    } satisfies FromMainMessage);
   } else {
     notReadyRom = bytes;
   }
-};
+});
 
 let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
@@ -42,35 +46,65 @@ async function getAudioWorkletNode(): Promise<AudioWorkletNode> {
   });
   const { port } = node;
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-  port.onmessage = ({ data }: MessageEvent<FromNodeMsg>) => {
-    switch (data.type) {
-      case "ready": {
-        // ready
-        isNodeReady = true;
-        if (notReadyRom) {
-          console.log("sending");
-          port.postMessage(
-            { type: "rom", bytes: notReadyRom } satisfies FromMainMsg,
-            [notReadyRom],
-          );
-          console.log("sent");
+  port.addEventListener(
+    "message",
+    ({ data }: MessageEvent<FromNodeMessage>) => {
+      switch (data.type) {
+        case "ready": {
+          // ready
+          isNodeReady = true;
+          if (notReadyRom) {
+            console.log("sending");
+            port.postMessage(
+              { type: "rom", bytes: notReadyRom } satisfies FromMainMessage,
+              [notReadyRom],
+            );
+            console.log("sent");
+          }
+          break;
         }
-        break;
+        case "wasm": {
+          // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
+          void fetch("pkg/gebeh_web_bg.wasm")
+            .then((response) => response.arrayBuffer())
+            .then((bytes) => {
+              port.postMessage(
+                { type: "wasm", bytes } satisfies FromMainMessage,
+                [bytes],
+              );
+            });
+        }
       }
-      case "wasm": {
-        // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-        void fetch("pkg/gebeh_web_bg.wasm")
-          .then((response) => response.arrayBuffer())
-          .then((bytes) => {
-            port.postMessage({ type: "wasm", bytes } satisfies FromMainMsg, [
-              bytes,
-            ]);
-          });
-      }
-    }
-  };
+    },
+  );
   console.log("allo les boys");
   node.connect(audioContext.destination);
   console.log("je sais pas trop");
   return node;
 }
+
+const canvas = document.querySelector("#canvas");
+
+if (!(canvas instanceof HTMLCanvasElement)) {
+  throw new TypeError("Not Canvas");
+}
+
+const context = canvas.getContext("2d");
+
+if (!context) {
+  throw new Error("Canvas context is null");
+}
+
+const imageData = context.createImageData(100, 100);
+
+// Iterate through every pixel
+for (let index = 0; index < imageData.data.length; index += 4) {
+  // Modify pixel data
+  imageData.data[index + 0] = 190; // R value
+  imageData.data[index + 1] = 0; // G value
+  imageData.data[index + 2] = 210; // B value
+  imageData.data[index + 3] = 255; // A value
+}
+
+// Draw image data to the canvas
+context.putImageData(imageData, 20, 20);

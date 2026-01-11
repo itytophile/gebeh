@@ -1,6 +1,10 @@
 import "../polyfill/TextEncoder.js";
 import { initSync, WebEmulator } from "../pkg/gebeh_web.js";
-import { AUDIO_PROCESSOR_NAME, FromMainMsg, FromNodeMsg } from "./common.js";
+import {
+  AUDIO_PROCESSOR_NAME,
+  FromMainMessage,
+  FromNodeMessage,
+} from "./common.js";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
 // I copied the declarations because doing something clean with multiple tsconfig files or whatever is too difficult
@@ -40,21 +44,24 @@ class WasmProcessor
   constructor() {
     super();
     new ArrayBuffer();
-    this.port.onmessage = ({ data }: MessageEvent<FromMainMsg>) => {
-      switch (data.type) {
-        case "rom": {
-          this.emulator?.load_rom(new Uint8Array(data.bytes));
-          break;
+    this.port.addEventListener(
+      "message",
+      ({ data }: MessageEvent<FromMainMessage>) => {
+        switch (data.type) {
+          case "rom": {
+            this.emulator?.load_rom(new Uint8Array(data.bytes));
+            break;
+          }
+          case "wasm": {
+            initSync({ module: data.bytes });
+            this.emulator = new WebEmulator();
+            this.port.postMessage({ type: "ready" } satisfies FromNodeMessage);
+            console.log("ready!");
+          }
         }
-        case "wasm": {
-          initSync({ module: data.bytes });
-          this.emulator = new WebEmulator();
-          this.port.postMessage({ type: "ready" } satisfies FromNodeMsg);
-          console.log("ready!");
-        }
-      }
-    };
-    this.port.postMessage({ type: "wasm" } satisfies FromNodeMsg);
+      },
+    );
+    this.port.postMessage({ type: "wasm" } satisfies FromNodeMessage);
   }
 
   process(
