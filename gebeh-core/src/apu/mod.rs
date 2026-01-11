@@ -124,6 +124,7 @@ pub struct Sampler {
 }
 
 impl Sampler {
+    #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
             self.ch1.sample(sample)
@@ -144,6 +145,7 @@ impl Sampler {
         })) * self.get_volume_left()
     }
 
+    #[must_use]
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
             self.ch1.sample(sample)

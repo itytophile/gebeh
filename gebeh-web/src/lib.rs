@@ -1,7 +1,6 @@
 #![deny(clippy::all)]
 
 mod mbc;
-mod oscillator;
 mod wasm_audio;
 
 use error_iter::ErrorIter;
@@ -23,7 +22,6 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 use crate::mbc::{get_mbc, CloneMbc};
-use crate::oscillator::{Oscillator, Params};
 
 // with rust flags specified in .cargo/config.toml, the app is slow with the default allocator.
 #[global_allocator]
@@ -110,11 +108,18 @@ pub async fn init_audio() {
     }
     log::info!("Audio init!");
     IS_AUDIO_INITIALIZED.set(false);
-    let params: &'static Params = Box::leak(Box::default());
-    let mut osc = Oscillator::new(params);
-
-    if let Err(err) = wasm_audio::wasm_audio(Box::new(move |left| {
-        osc.process(left)
+    let noise = get_noise(false);
+    let short_noise = get_noise(true);
+    let mut sample_index = 0u32;
+    if let Err(err) = wasm_audio::wasm_audio(Box::new(move |left, right, sample_rate| {
+        let sampler = SAMPLER.read().unwrap().clone();
+        for (left, right) in left.iter_mut().zip(right.iter_mut()) {
+            let sample = sample_index as f32 / sample_rate;
+            *left = sampler.sample_left(sample, &noise, &short_noise);
+            *right = sampler.sample_right(sample, &noise, &short_noise);
+            sample_index = sample_index.wrapping_add(1);
+        }
+        true
     }))
     .await
     {
@@ -124,8 +129,6 @@ pub async fn init_audio() {
 }
 
 async fn run(event_loop: EventLoop<Vec<u8>>) {
-    let noise = get_noise(false).leak();
-    let short_noise = get_noise(true).leak();
     let window = {
         let size = LogicalSize::new(gebeh_core::WIDTH as f64, gebeh_core::HEIGHT as f64);
         WindowBuilder::new()
@@ -210,6 +213,8 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
                         emulator,
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
+
+                    *SAMPLER.write().unwrap() = emulator.get_apu().get_sampler();
 
                     if let Err(err) = pixels.render() {
                         log_error("pixels.render", err);

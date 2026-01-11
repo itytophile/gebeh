@@ -8,14 +8,15 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys;
 use web_sys::{AudioContext, AudioWorkletNode, AudioWorkletNodeOptions};
 
+type ProcessFunction = Box<dyn FnMut(&mut [f32], &mut [f32], f32) -> bool>;
+
 #[wasm_bindgen]
-#[allow(clippy::type_complexity)]
-pub struct WasmAudioProcessor(Box<dyn FnMut(&mut [f32]) -> bool>);
+pub struct WasmAudioProcessor(ProcessFunction);
 
 #[wasm_bindgen]
 impl WasmAudioProcessor {
-    pub fn process(&mut self, left: &mut [f32]) -> bool {
-        self.0(left)
+    pub fn process(&mut self, left: &mut [f32], right: &mut [f32], sample_rate: f32) -> bool {
+        self.0(left, right, sample_rate)
     }
     pub fn pack(self) -> usize {
         Box::into_raw(Box::new(self)) as usize
@@ -32,7 +33,7 @@ impl WasmAudioProcessor {
 #[allow(clippy::type_complexity)]
 #[must_use]
 pub fn wasm_audio(
-    process: Box<dyn FnMut(&mut [f32]) -> bool>,
+    process: ProcessFunction,
 ) -> AssertUnwindSafe<Pin<Box<dyn std::future::Future<Output = Result<AudioContext, JsValue>>>>> {
     let process = AssertUnwindSafe(process);
     AssertUnwindSafe(Box::pin(async {
@@ -47,10 +48,9 @@ pub fn wasm_audio(
 // wasm_audio_node creates an AudioWorkletNode running a Wasm audio processor.
 // Remember to call prepare_wasm_audio once on your context before calling
 // this function.
-#[allow(clippy::type_complexity)]
 pub fn wasm_audio_node(
     ctx: &AudioContext,
-    process: Box<dyn FnMut(&mut [f32]) -> bool>,
+    process: ProcessFunction,
 ) -> Result<AudioWorkletNode, JsValue> {
     let options = AudioWorkletNodeOptions::new();
     options.set_processor_options(Some(&js_sys::Array::of3(

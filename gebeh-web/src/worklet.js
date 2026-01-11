@@ -10,8 +10,8 @@ registerProcessor(
       this.processor = WasmAudioProcessor.unpack(handle);
     }
     process(inputs, outputs) {
-      console.log(outputs);
-      return this.processor.process(outputs[0][0]);
+      const [left, right] = outputs[0];
+      return this.processor.process(left, right, sampleRate);
     }
   },
 );
