@@ -13,6 +13,7 @@
     "copy-webpack-plugin": "^13",
     "eslint": "^9.39.2",
     "eslint-plugin-unicorn": "^62.0.0",
+    "prettier": "^3.7.4",
     "rimraf": "^6",
     "serve": "^14.2.5",
     "ts-loader": "^9.5.4",

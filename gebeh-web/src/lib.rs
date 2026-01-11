@@ -83,7 +83,7 @@ impl WebEmulator {
     }
 
     pub fn load_rom(&mut self, rom: Vec<u8>) {
-        console::log_1(&JsValue::from_str("Loading rom..."));
+        console::log_1(&JsValue::from_str("Loading rom"));
         let Some(mbc) = get_mbc(rom) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return;

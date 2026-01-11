@@ -12,8 +12,8 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop" : true,
-    "outDir": "./dist",
+    "esModuleInterop": true,
+    "outDir": "./dist"
   },
   "include": ["ts"],
   "exclude": ["polyfill"]

@@ -17,8 +17,6 @@ romInput.addEventListener("change", async () => {
     return;
   }
 
-  console.log("issou");
-
   const bytes = await file.arrayBuffer();
   const node = await getAudioWorkletNode();
   if (isNodeReady) {
@@ -54,16 +52,15 @@ async function getAudioWorkletNode(): Promise<AudioWorkletNode> {
           // ready
           isNodeReady = true;
           if (notReadyRom) {
-            console.log("sending");
             port.postMessage(
               { type: "rom", bytes: notReadyRom } satisfies FromMainMessage,
               [notReadyRom],
             );
-            console.log("sent");
           }
           break;
         }
         case "wasm": {
+          console.log("Sending wasm");
           // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
           void fetch("pkg/gebeh_web_bg.wasm")
             .then((response) => response.arrayBuffer())
@@ -77,9 +74,8 @@ async function getAudioWorkletNode(): Promise<AudioWorkletNode> {
       }
     },
   );
-  console.log("allo les boys");
+  port.start();
   node.connect(audioContext.destination);
-  console.log("je sais pas trop");
   return node;
 }
 

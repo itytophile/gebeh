@@ -98,5 +98,5 @@
         ? this
         : self
       : global
-    : globalThis
+    : globalThis,
 );

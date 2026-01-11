@@ -43,7 +43,6 @@ class WasmProcessor
 
   constructor() {
     super();
-    new ArrayBuffer();
     this.port.addEventListener(
       "message",
       ({ data }: MessageEvent<FromMainMessage>) => {
@@ -53,14 +52,17 @@ class WasmProcessor
             break;
           }
           case "wasm": {
+            console.log("Initializing wasm");
             initSync({ module: data.bytes });
             this.emulator = new WebEmulator();
             this.port.postMessage({ type: "ready" } satisfies FromNodeMessage);
-            console.log("ready!");
+            console.log("Ready!");
           }
         }
       },
     );
+    this.port.start();
+    console.log("Requesting wasm");
     this.port.postMessage({ type: "wasm" } satisfies FromNodeMessage);
   }
 
