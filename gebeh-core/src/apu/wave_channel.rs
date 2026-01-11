@@ -113,7 +113,7 @@ impl WaveSampler {
             two_samples & 0x0f
         }) >> (self.effective_output_level - 1);
 
-        value as f32 / 0x0f as f32
+        value as f32 / 0x0f as f32 * 2. - 1.
     }
     // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {
