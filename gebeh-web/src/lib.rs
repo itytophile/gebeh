@@ -118,6 +118,7 @@ pub async fn init_audio() {
     }))
     .await
     {
+        log::error!("Can't init audio");
         web_sys::console::error_1(&err);
     }
 }

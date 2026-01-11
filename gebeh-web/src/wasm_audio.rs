@@ -58,6 +58,8 @@ pub fn wasm_audio_node(
         &wasm_bindgen::memory(),
         &WasmAudioProcessor(process).pack().into(),
     )));
+    // stereo
+    options.set_output_channel_count(&JsValue::from(js_sys::Array::of1(&JsValue::from_f64(2.))));
     AudioWorkletNode::new_with_options(ctx, "WasmProcessor", &options)
 }
 
