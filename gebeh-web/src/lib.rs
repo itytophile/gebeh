@@ -99,7 +99,8 @@ thread_local! {
     static IS_AUDIO_INITIALIZED: Cell<bool> = const { Cell::new(false) };
 }
 
-static SAMPLER: LazyLock<RwLock<Sampler>> = LazyLock::new(Default::default);
+static SAMPLER: LazyLock<RwLock<(Sampler, bool)>> =
+    LazyLock::new(|| RwLock::new((Default::default(), true)));
 
 #[wasm_bindgen]
 pub async fn init_audio() {
@@ -112,13 +113,19 @@ pub async fn init_audio() {
     let short_noise = get_noise(true);
     let mut sample_index = 0u32;
     if let Err(err) = wasm_audio::wasm_audio(Box::new(move |left, right, sample_rate| {
-        let sampler = SAMPLER.read().unwrap().clone();
+        let (sampler, is_on) = SAMPLER.read().unwrap().clone();
+
+        if !is_on {
+            return true;
+        }
+
         for (left, right) in left.iter_mut().zip(right.iter_mut()) {
             let sample = sample_index as f32 / sample_rate;
             *left = sampler.sample_left(sample, &noise, &short_noise);
             *right = sampler.sample_right(sample, &noise, &short_noise);
             sample_index = sample_index.wrapping_add(1);
         }
+
         true
     }))
     .await
@@ -199,6 +206,7 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
     let res = event_loop.run(|event, elwt| {
         // Handle input events
         if input.update(&event) && (input.key_pressed(KeyCode::Escape) || input.close_requested()) {
+            SAMPLER.write().unwrap().1 = false;
             elwt.exit();
         }
 
@@ -214,7 +222,7 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
                         pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
 
-                    *SAMPLER.write().unwrap() = emulator.get_apu().get_sampler();
+                    SAMPLER.write().unwrap().0 = emulator.get_apu().get_sampler();
 
                     if let Err(err) = pixels.render() {
                         log_error("pixels.render", err);
@@ -225,6 +233,10 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
 
                 window.request_redraw();
             }
+            Event::WindowEvent {
+                event: WindowEvent::Occluded(is_occluded),
+                ..
+            } => SAMPLER.write().unwrap().1 = !is_occluded,
 
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -240,7 +252,6 @@ async fn run(event_loop: EventLoop<Vec<u8>>) {
                 log::info!("New file ! size = {}", file.len());
                 mbc_and_emulator = Some((get_mbc(file).unwrap(), Emulator::default()));
             }
-
             _ => (),
         }
     });
