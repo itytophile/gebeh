@@ -11,6 +11,7 @@ const dist = resolve(__dirname, "dist");
 
 export default {
   experiments: { asyncWebAssembly: true },
+  devtool: "inline-source-map",
   mode: "production",
   entry: {
     index: "./ts/index.ts",
@@ -21,6 +22,23 @@ export default {
   },
   devServer: {
     static: dist,
+  },
+  // https://github.com/TypeStrong/ts-loader/blob/f7d022f79d1dae3c0c07ee63ec63c697eb99b32a/examples/vanilla/webpack.config.js
+  module: {
+    rules: [
+      {
+        test: /\.([cm]?ts|tsx)$/,
+        loader: "ts-loader",
+      },
+    ],
+  },
+  resolve: {
+    extensions: [".ts", ".tsx", ".js"],
+    extensionAlias: {
+      ".ts": [".js", ".ts"],
+      ".cts": [".cjs", ".cts"],
+      ".mts": [".mjs", ".mts"],
+    },
   },
   plugins: [
     new CopyPlugin({ patterns: [resolve(__dirname, "static")] }),

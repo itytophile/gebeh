@@ -68,9 +68,36 @@ impl WaveChannel {
         }
         self.ram[usize::from(index)]
     }
+
+    pub fn get_sampler(&self) -> WaveSampler {
+        WaveSampler {
+            is_on: self.is_on(),
+            effective_output_level: self.effective_output_level,
+            ram: self.ram,
+            period: self.period,
+        }
+    }
+
+    pub fn tick(&mut self, div: u8) {
+        if !self.is_on() {
+            return;
+        }
+        self.length.tick(div);
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct WaveSampler {
+    is_on: bool,
+    effective_output_level: u8,
+    ram: [u8; 16],
+    period: u16,
+}
+
+impl WaveSampler {
     pub fn sample(&self, sample: f32) -> f32 {
         // About output level https://gbdev.io/pandocs/Audio_Registers.html#ff1c--nr32-channel-3-output-level
-        if !self.is_on() || self.effective_output_level == 0 {
+        if !self.is_on || self.effective_output_level == 0 {
             return 0.;
         }
 
@@ -88,16 +115,8 @@ impl WaveChannel {
 
         value as f32 / 0x0f as f32
     }
-
     // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {
         65536. / (2048. - self.period as f32)
-    }
-
-    pub fn tick(&mut self, div: u8) {
-        if !self.is_on() {
-            return;
-        }
-        self.length.tick(div);
     }
 }

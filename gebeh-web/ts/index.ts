@@ -1,6 +1,13 @@
-import * as wasm from "../pkg/index";
+import { init_window, Sampler } from "../pkg/index";
 
-const proxy = wasm.init_window();
+let gebehNode: AudioWorkletNode | undefined;
+
+const proxy = init_window((sampler: unknown) => {
+  if (!(sampler instanceof Sampler)) {
+    throw new Error("Not Sampler");
+  }
+  gebehNode?.port.postMessage(false);
+});
 
 const romInput = document.getElementById("rom-input");
 
@@ -14,4 +21,8 @@ romInput.onchange = async () => {
     return;
   }
   proxy.send_file(await file.bytes());
+  // const audioContext = new AudioContext();
+  // await audioContext.audioWorklet.addModule("./gebeh-audio-processor.js");
+  // gebehNode = new AudioWorkletNode(audioContext, "gebeh-processor");
+  // gebehNode.connect(audioContext.destination);
 };

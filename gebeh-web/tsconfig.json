@@ -2,6 +2,7 @@
   "compilerOptions": {
     "noImplicitAny": true,
     "allowJs": true,
+    "sourceMap": true,
     "module": "esnext",
     "target": "esnext",
     "jsx": "react",
@@ -10,7 +11,8 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "allowSyntheticDefaultImports": true,
-    "noEmit": true,
+    "esModuleInterop" : true,
+    "outDir": "./dist",
   },
   "include": ["eslint.config.mjs", "ts", "webpack.config.ts"],
 }

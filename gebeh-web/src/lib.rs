@@ -1,14 +1,19 @@
 #![deny(clippy::all)]
-#![forbid(unsafe_code)]
 
 mod mbc;
+mod oscillator;
+mod wasm_audio;
 
 use error_iter::ErrorIter;
+use gebeh_core::apu::Sampler;
 use gebeh_core::mbc::Mbc;
 use gebeh_core::Emulator;
 use log::error;
 use pixels::{PixelsBuilder, SurfaceTexture};
+use std::cell::Cell;
+use std::collections::HashSet;
 use std::rc::Rc;
+use std::sync::{LazyLock, RwLock};
 use wasm_bindgen::prelude::*;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
@@ -18,6 +23,7 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 use crate::mbc::{get_mbc, CloneMbc};
+use crate::oscillator::{Oscillator, Params};
 
 #[wasm_bindgen(start)]
 fn main() {
@@ -36,6 +42,33 @@ fn get_window_size() -> LogicalSize<f64> {
         client_window.inner_width().unwrap().as_f64().unwrap(),
         client_window.inner_height().unwrap().as_f64().unwrap(),
     )
+}
+
+#[derive(Default)]
+struct LinearFeedbackShiftRegister(u16);
+
+impl LinearFeedbackShiftRegister {
+    fn tick(&mut self, short_mode: bool) -> u8 {
+        // https://gbdev.io/pandocs/Audio_details.html#noise-channel-ch4
+        let new_value = (self.0 & 1 != 0) == (self.0 & 0b10 != 0);
+        self.0 = self.0 & 0x7fff | ((new_value as u16) << 15);
+        if short_mode {
+            self.0 = self.0 & 0xff7f | ((new_value as u16) << 7)
+        }
+        let shifted_out = self.0 & 1;
+        self.0 >>= 1;
+        shifted_out as u8
+    }
+}
+
+fn get_noise(is_short: bool) -> Vec<u8> {
+    let mut lfsr = LinearFeedbackShiftRegister::default();
+    let mut already_seen = HashSet::new();
+    let mut noise = Vec::new();
+    while already_seen.insert(lfsr.0) {
+        noise.push(lfsr.tick(is_short));
+    }
+    noise
 }
 
 #[wasm_bindgen]
@@ -60,7 +93,27 @@ pub fn init_window() -> Proxy {
     proxy
 }
 
+thread_local! {
+    static IS_AUDIO_INITIALIZED: Cell<bool> = const { Cell::new(false) };
+}
+
+static SAMPLER: LazyLock<RwLock<Sampler>> = LazyLock::new(Default::default);
+
+#[wasm_bindgen]
+pub fn init_audio() {
+    if IS_AUDIO_INITIALIZED.get() {
+        return;
+    }
+    IS_AUDIO_INITIALIZED.set(false);
+    let params: &'static Params = Box::leak(Box::default());
+    let mut osc = Oscillator::new(params);
+
+    wasm_audio::wasm_audio(Box::new(move |buf| osc.process(buf)));
+}
+
 async fn run(event_loop: EventLoop<Vec<u8>>) {
+    let noise = get_noise(false).leak();
+    let short_noise = get_noise(true).leak();
     let window = {
         let size = LogicalSize::new(gebeh_core::WIDTH as f64, gebeh_core::HEIGHT as f64);
         WindowBuilder::new()
