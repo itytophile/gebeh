@@ -1,7 +1,6 @@
 import init, { init_audio, init_window } from "../pkg/gebeh_web.js";
 
 await init();
-
 const proxy = init_window();
 
 const romInput = document.getElementById("rom-input");
@@ -15,6 +14,6 @@ romInput.onchange = async () => {
   if (!file) {
     return;
   }
-  proxy.send_file(await file.bytes());
   init_audio();
+  proxy.send_file(await file.bytes());
 };

@@ -25,6 +25,10 @@ use winit_input_helper::WinitInputHelper;
 use crate::mbc::{get_mbc, CloneMbc};
 use crate::oscillator::{Oscillator, Params};
 
+// with rust flags specified in .cargo/config.toml, the app is slow with the default allocator.
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 #[wasm_bindgen(start)]
 fn main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -100,15 +104,22 @@ thread_local! {
 static SAMPLER: LazyLock<RwLock<Sampler>> = LazyLock::new(Default::default);
 
 #[wasm_bindgen]
-pub fn init_audio() {
+pub async fn init_audio() {
     if IS_AUDIO_INITIALIZED.get() {
         return;
     }
+    log::info!("Audio init!");
     IS_AUDIO_INITIALIZED.set(false);
     let params: &'static Params = Box::leak(Box::default());
     let mut osc = Oscillator::new(params);
 
-    wasm_audio::wasm_audio(Box::new(move |buf| osc.process(buf)));
+    if let Err(err) = wasm_audio::wasm_audio(Box::new(move |left| {
+        osc.process(left)
+    }))
+    .await
+    {
+        web_sys::console::error_1(&err);
+    }
 }
 
 async fn run(event_loop: EventLoop<Vec<u8>>) {

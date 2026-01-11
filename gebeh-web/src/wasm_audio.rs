@@ -14,8 +14,8 @@ pub struct WasmAudioProcessor(Box<dyn FnMut(&mut [f32]) -> bool>);
 
 #[wasm_bindgen]
 impl WasmAudioProcessor {
-    pub fn process(&mut self, buf: &mut [f32]) -> bool {
-        self.0(buf)
+    pub fn process(&mut self, left: &mut [f32]) -> bool {
+        self.0(left)
     }
     pub fn pack(self) -> usize {
         Box::into_raw(Box::new(self)) as usize
@@ -30,6 +30,7 @@ impl WasmAudioProcessor {
 // user interaction. Otherwise, resume the context on user interaction, so
 // playback starts reliably on all browsers.
 #[allow(clippy::type_complexity)]
+#[must_use]
 pub fn wasm_audio(
     process: Box<dyn FnMut(&mut [f32]) -> bool>,
 ) -> AssertUnwindSafe<Pin<Box<dyn std::future::Future<Output = Result<AudioContext, JsValue>>>>> {

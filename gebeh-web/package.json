@@ -3,7 +3,7 @@
   "name": "gebeh-web",
   "version": "0.1.0",
   "scripts": {
-    "build": "rimraf dist pkg && wasm-pack build --target web && tsc",
+    "build": "rimraf dist pkg && wasm-pack build . --target web -- -Z build-std=panic_abort,std && tsc",
     "start": "npm run build && serve",
     "test": "cargo test && wasm-pack test --headless"
   },

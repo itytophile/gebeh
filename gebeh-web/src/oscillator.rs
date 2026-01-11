@@ -45,7 +45,7 @@ pub struct Params {
 
 impl Default for Params {
     fn default() -> Self {
-        Self { frequency: Default::default(), volume: 20.into() }
+        Self { frequency: 60.into(), volume: 100.into() }
     }
 }
 

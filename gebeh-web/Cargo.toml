@@ -24,6 +24,7 @@ winit = "0.29"
 winit_input_helper = "0.15"
 gebeh-core = { path = "../gebeh-core" }
 web-time = "1.1.0"
+wee_alloc = "0.4.5"
 
 [dependencies.web-sys]
 version = "0.3"

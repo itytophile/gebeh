@@ -1,11 +1,13 @@
+import { initSync, WasmAudioProcessor } from "http://localhost:3000/pkg/gebeh_web.js"
+
 registerProcessor(
   "WasmProcessor",
   class WasmProcessor extends AudioWorkletProcessor {
     constructor(options) {
       super();
       let [module, memory, handle] = options.processorOptions;
-      bindgen.initSync({ module, memory });
-      this.processor = bindgen.WasmAudioProcessor.unpack(handle);
+      initSync({ module, memory });
+      this.processor = WasmAudioProcessor.unpack(handle);
     }
     process(inputs, outputs) {
       return this.processor.process(outputs[0][0]);
