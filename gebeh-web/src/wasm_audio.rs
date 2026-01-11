@@ -64,7 +64,6 @@ pub fn wasm_audio_node(
 }
 
 pub async fn prepare_wasm_audio(ctx: &AudioContext) -> Result<(), JsValue> {
-    let mod_url = wasm_bindgen::link_to!(module = "/src/worklet.js");
-    JsFuture::from(ctx.audio_worklet()?.add_module(&mod_url)?).await?;
+    JsFuture::from(ctx.audio_worklet()?.add_module("dist/worklet.js")?).await?;
     Ok(())
 }
