@@ -9,7 +9,7 @@ export default defineConfig(
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
   {
-    ignores: ["./pkg/*", "./static/*", "./src/*", "./dist/*", "./eslint.config.mjs"],
+    ignores: ["./pkg/*", "./static/*", "./src/*", "./dist/*", "./eslint.config.mjs", "./polyfill/*"],
     languageOptions: {
       parserOptions: {
         projectService: true,

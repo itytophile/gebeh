@@ -2,6 +2,7 @@
   "compilerOptions": {
     "noImplicitAny": true,
     "allowJs": true,
+    "checkJs": false,
     "sourceMap": true,
     "module": "esnext",
     "target": "esnext",
@@ -15,4 +16,5 @@
     "outDir": "./dist",
   },
   "include": ["ts"],
+  "exclude": ["polyfill"]
 }

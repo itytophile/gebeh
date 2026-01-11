@@ -28,7 +28,7 @@ wee_alloc = "0.4.5"
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["AudioContext", "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions", "AudioDestinationNode"]
+features = ["AudioContext", "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions", "AudioDestinationNode", "console"]
 
 # These crates are used for running unit tests.
 [dev-dependencies]

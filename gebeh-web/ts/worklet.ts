@@ -1,8 +1,6 @@
-import {
-  initSync,
-  SyncInitInput,
-  WasmAudioProcessor,
-} from "../pkg/gebeh_web.js";
+import "../polyfill/TextEncoder.js";
+import { initSync, WebEmulator } from "../pkg/gebeh_web.js";
+import { AUDIO_PROCESSOR_NAME, FromMainMsg, FromNodeMsg } from "./common.js";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
 // I copied the declarations because doing something clean with multiple tsconfig files or whatever is too difficult
@@ -33,34 +31,48 @@ declare global {
   ): void;
 }
 
-registerProcessor(
-  "WasmProcessor",
-  class WasmProcessor
-    extends AudioWorkletProcessor
-    implements AudioWorkletProcessorImpl
-  {
-    processor: WasmAudioProcessor;
-    constructor(options: {
-      processorOptions: [SyncInitInput, WebAssembly.Memory, number];
-    }) {
-      super();
-      const [module, memory, handle] = options.processorOptions;
-      initSync({ module, memory });
-      this.processor = WasmAudioProcessor.unpack(handle);
-    }
-    process(
-      _inputs: Float32Array[][],
-      outputs: Float32Array[][],
-      _parameters: Record<string, Float32Array>,
-    ) {
-      const left = outputs[0]?.[0];
-      const right = outputs[0]?.[1];
+class WasmProcessor
+  extends AudioWorkletProcessor
+  implements AudioWorkletProcessorImpl
+{
+  emulator?: WebEmulator;
 
-      if (!left || !right) {
-        throw new Error("No stereo");
+  constructor() {
+    super();
+    new ArrayBuffer();
+    this.port.onmessage = ({ data }: MessageEvent<FromMainMsg>) => {
+      switch (data.type) {
+        case "rom": {
+          this.emulator?.load_rom(new Uint8Array(data.bytes));
+          break;
+        }
+        case "wasm": {
+          initSync({ module: data.bytes });
+          this.emulator = new WebEmulator();
+          this.port.postMessage({ type: "ready" } satisfies FromNodeMsg);
+          console.log("ready!");
+        }
       }
+    };
+    this.port.postMessage({ type: "wasm" } satisfies FromNodeMsg);
+  }
 
-      return this.processor.process(left, right, sampleRate);
+  process(
+    _inputs: Float32Array[][],
+    outputs: Float32Array[][],
+    _parameters: Record<string, Float32Array>,
+  ) {
+    const left = outputs[0]?.[0];
+    const right = outputs[0]?.[1];
+
+    if (!left || !right) {
+      throw new Error("No stereo");
     }
-  },
-);
+
+    this.emulator?.drive_and_sample(left, right, sampleRate);
+
+    return true;
+  }
+}
+
+registerProcessor(AUDIO_PROCESSOR_NAME, WasmProcessor);
