@@ -1,6 +1,8 @@
 use crate::apu::{
-    noise_channel::NoiseChannel, pulse_channel::PulseChannel, sweep::Ch1Sweep,
-    wave_channel::WaveChannel,
+    noise_channel::{NoiseChannel, NoiseSampler},
+    pulse_channel::{PulseChannel, PulseSampler},
+    sweep::Ch1Sweep,
+    wave_channel::{WaveChannel, WaveSampler},
 };
 
 mod envelope;
@@ -101,6 +103,30 @@ impl Apu {
         self.ch4.tick(div);
     }
 
+    pub fn get_sampler(&self) -> Sampler {
+        Sampler {
+            ch1: self.ch1.get_sampler(),
+            ch2: self.ch2.get_sampler(),
+            ch3: self.ch3.get_sampler(),
+            ch4: self.ch4.get_sampler(),
+            nr50: self.nr50,
+            nr51: self.nr51,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct Sampler {
+    ch1: PulseSampler,
+    ch2: PulseSampler,
+    ch3: WaveSampler,
+    ch4: NoiseSampler,
+    nr51: Nr51,
+    nr50: Nr50,
+}
+
+impl Sampler {
+    #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
             self.ch1.sample(sample)
@@ -121,6 +147,7 @@ impl Apu {
         })) * self.get_volume_left()
     }
 
+    #[must_use]
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
             self.ch1.sample(sample)

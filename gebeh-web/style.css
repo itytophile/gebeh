@@ -1,0 +1,9 @@
+body {
+  margin: 0;
+}
+
+canvas {
+  width: 640px;
+  height: 576px;
+  image-rendering: pixelated;
+}

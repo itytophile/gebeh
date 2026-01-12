@@ -60,19 +60,33 @@ impl NoiseChannel {
     fn get_shift(&self) -> u8 {
         (self.nr43 >> 4) & 0xf
     }
-    fn get_tick_frequency(&self) -> f32 {
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff22--nr43-channel-4-frequency--randomness
-        // Citation: Note that divider = 0 is treated as divider = 0.5 instead.
-        let divider = self.get_divider();
-        let divider: f32 = if divider == 0 { 0.5 } else { divider as f32 };
-        262144.0 / (divider * 2.0f32.powi(self.get_shift().into()))
-    }
     fn is_short_mode(&self) -> bool {
         self.nr43 & 0x8 != 0
     }
 
+    pub fn get_sampler(&self) -> NoiseSampler {
+        NoiseSampler {
+            is_on: self.is_on(),
+            divider: self.get_divider(),
+            shift: self.get_shift(),
+            is_short_mode: self.is_short_mode(),
+            volume: self.volume_and_envelope.get_volume(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct NoiseSampler {
+    is_on: bool,
+    divider: u8,
+    shift: u8,
+    is_short_mode: bool,
+    volume: u8,
+}
+
+impl NoiseSampler {
     pub fn sample(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
-        if !self.is_on() {
+        if !self.is_on {
             return 0.;
         }
 
@@ -81,10 +95,23 @@ impl NoiseChannel {
         // The noise is cyclic so we can use modulo if the index is greater than the provided noise values.
         let index = (sample * freq) as usize;
 
-        (if self.is_short_mode() {
+        // in [0;1]
+        let raw_sample = if self.is_short_mode {
             short_noise[index % short_noise.len()] as f32
         } else {
             noise[index % noise.len()] as f32
-        }) * self.volume_and_envelope.get_volume()
+        };
+
+        (raw_sample * 2. - 1.) * self.volume as f32 / 15.
+    }
+    fn get_tick_frequency(&self) -> f32 {
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff22--nr43-channel-4-frequency--randomness
+        // Citation: Note that divider = 0 is treated as divider = 0.5 instead.
+        let divider: f32 = if self.divider == 0 {
+            0.5
+        } else {
+            self.divider as f32
+        };
+        262144.0 / (divider * 2.0f32.powi(self.shift.into()))
     }
 }

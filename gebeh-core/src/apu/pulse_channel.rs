@@ -7,10 +7,10 @@ use crate::apu::{
 type Wave = [f32; 8];
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
-const WAVE_00: Wave = [1., 1., 1., 1., 1., 1., 1., 0.];
-const WAVE_01: Wave = [0., 1., 1., 1., 1., 1., 1., 0.];
-const WAVE_10: Wave = [0., 1., 1., 1., 1., 0., 0., 0.];
-const WAVE_11: Wave = [1., 0., 0., 0., 0., 0., 0., 1.];
+const WAVE_00: Wave = [1., 1., 1., 1., 1., 1., 1., -1.];
+const WAVE_01: Wave = [-1., 1., 1., 1., 1., 1., 1., -1.];
+const WAVE_10: Wave = [-1., 1., 1., 1., 1., -1., -1., -1.];
+const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
@@ -93,34 +93,16 @@ impl<S: Sweep> PulseChannel<S> {
         self.period_high = self.period_high & 0b11000000 | ((value >> 4) as u8) & 0x07;
     }
 
-    pub fn sample(&self, sample: f32) -> f32 {
-        if !self.is_on() {
-            return 0.;
+    pub fn get_sampler(&self) -> PulseSampler {
+        PulseSampler {
+            is_on: self.is_on(),
+            duty_cycle: self.duty_cycle,
+            period: self
+                .sweep
+                .get_period_value()
+                .unwrap_or(self.get_period_value()),
+            volume: self.volume_and_envelope.get_volume(),
         }
-        // let space_size = sample_rate as f32 / self.get_tone_frequency();
-        // let index_in_freq_space = index as f32 % space_size;
-        // let normalized_index = index_in_freq_space / space_size;
-        // Better function thanks to
-        // (a % b) / b = (a / b) % 1.0
-        let index = (sample * self.get_tone_frequency()) % 1.;
-        let index = (index * 8.) as usize;
-        let wave = match self.duty_cycle {
-            0b00 => WAVE_00,
-            0b01 => WAVE_01,
-            0b10 => WAVE_10,
-            0b11 => WAVE_11,
-            _ => unreachable!(),
-        };
-        wave[index] * self.volume_and_envelope.get_volume()
-    }
-    // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
-    fn get_tone_frequency(&self) -> f32 {
-        131072.0
-            / (2048.0
-                - self
-                    .sweep
-                    .get_period_value()
-                    .unwrap_or(self.get_period_value()) as f32)
     }
 }
 
@@ -143,5 +125,40 @@ impl PulseChannel<Ch1Sweep> {
         }
 
         self.sweep.nr10 = value;
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct PulseSampler {
+    is_on: bool,
+    duty_cycle: u8,
+    period: u16,
+    volume: u8,
+}
+
+impl PulseSampler {
+    pub fn sample(&self, sample: f32) -> f32 {
+        if !self.is_on {
+            return 0.;
+        }
+        // let space_size = sample_rate as f32 / self.get_tone_frequency();
+        // let index_in_freq_space = index as f32 % space_size;
+        // let normalized_index = index_in_freq_space / space_size;
+        // Better function thanks to
+        // (a % b) / b = (a / b) % 1.0
+        let index = (sample * self.get_tone_frequency()) % 1.;
+        let index = (index * 8.) as usize;
+        let wave = match self.duty_cycle {
+            0b00 => WAVE_00,
+            0b01 => WAVE_01,
+            0b10 => WAVE_10,
+            0b11 => WAVE_11,
+            _ => unreachable!(),
+        };
+        wave[index] * self.volume as f32 / 15.
+    }
+    // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
+    fn get_tone_frequency(&self) -> f32 {
+        131072.0 / (2048.0 - self.period as f32)
     }
 }

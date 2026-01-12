@@ -1,6 +1,6 @@
 # You must change these to your own details.
 [package]
-name = "rust-webpack-template"
+name = "gebeh-web"
 description = "My super awesome Rust, WebAssembly, and Webpack project!"
 version = "0.1.0"
 authors = ["You <you@example.com>"]
@@ -12,27 +12,11 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-console_error_panic_hook = "0.1.7"
-console_log = "1.0.0"
-error-iter = "0.4.1"
-fern = "0.7.1"
-log = "0.4.29"
-pixels = "0.15.0"
-tsify = "0.5.6"
 wasm-bindgen = "0.2.45"
-wasm-bindgen-futures = "0.4"
-winit = "0.29"
-winit_input_helper = "0.15"
 gebeh-core = { path = "../gebeh-core" }
 web-time = "1.1.0"
+wee_alloc = "0.4.5"
 
 [dependencies.web-sys]
 version = "0.3"
-features = []
-
-# These crates are used for running unit tests.
-[dev-dependencies]
-wasm-bindgen-test = "0.3"
-futures = "0.3"
-js-sys = "0.3.22"
-wasm-bindgen-futures = "0.4"
+features = ["console"]

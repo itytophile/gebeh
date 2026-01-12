@@ -61,8 +61,8 @@ impl VolumeAndEnvelope {
         self.register & 0xf8 != 0
     }
 
-    pub fn get_volume(&self) -> f32 {
-        self.timer.value as f32 / 15.
+    pub fn get_volume(&self) -> u8 {
+        self.timer.value
     }
 
     pub fn get_register(&self) -> u8 {
