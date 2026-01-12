@@ -45,22 +45,9 @@ if (!context) {
   throw new Error("Canvas context is null");
 }
 
-context.imageSmoothingEnabled = false;
 const GB_WIDTH = 160;
 const GB_HEIGHT = 144;
 const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
-
-// Iterate through every pixel
-for (let index = 0; index < imageData.data.length; index += 4) {
-  // Modify pixel data
-  imageData.data[index + 0] = 190; // R value
-  imageData.data[index + 1] = 0; // G value
-  imageData.data[index + 2] = 210; // B value
-  imageData.data[index + 3] = 255; // A value
-}
-
-// Draw image data to the canvas
-context.putImageData(imageData, 0, 0);
 
 const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   if (node) {
