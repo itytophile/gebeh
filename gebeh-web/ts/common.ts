@@ -3,7 +3,8 @@ export type FromNodeMessage =
   | {
       type: "ready";
     }
-  | { type: "wasm" };
+  | { type: "wasm" }
+  | { type: "frame"; bytes: Uint8Array };
 export type FromMainMessage =
   | {
       type: "rom";

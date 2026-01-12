@@ -45,6 +45,8 @@ export default defineConfig(
           checksVoidReturn: false,
         },
       ],
+      "unicorn/number-literal-case": "off",
+      "unicorn/no-nested-ternary": "off",
     },
   },
 );

@@ -33,7 +33,36 @@ let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
 let notReadyRom: ArrayBuffer | undefined;
 
-async function getAudioWorkletNode(): Promise<AudioWorkletNode> {
+const canvas = document.querySelector("#canvas");
+
+if (!(canvas instanceof HTMLCanvasElement)) {
+  throw new TypeError("Not Canvas");
+}
+
+const context = canvas.getContext("2d");
+
+if (!context) {
+  throw new Error("Canvas context is null");
+}
+
+context.imageSmoothingEnabled = false;
+const GB_WIDTH = 160;
+const GB_HEIGHT = 144;
+const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
+
+// Iterate through every pixel
+for (let index = 0; index < imageData.data.length; index += 4) {
+  // Modify pixel data
+  imageData.data[index + 0] = 190; // R value
+  imageData.data[index + 1] = 0; // G value
+  imageData.data[index + 2] = 210; // B value
+  imageData.data[index + 3] = 255; // A value
+}
+
+// Draw image data to the canvas
+context.putImageData(imageData, 0, 0);
+
+const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   if (node) {
     return node;
   }
@@ -70,6 +99,19 @@ async function getAudioWorkletNode(): Promise<AudioWorkletNode> {
                 [bytes],
               );
             });
+          break;
+        }
+        case "frame": {
+          for (const [index, value] of data.bytes.entries()) {
+            const offset = index * 4;
+            const color =
+              value === 0 ? 0xff : value === 1 ? 0xaa : value === 2 ? 0x55 : 0;
+            imageData.data[offset] = color; // R value
+            imageData.data[offset + 1] = color; // G value
+            imageData.data[offset + 2] = color; // B value
+            imageData.data[offset + 3] = 255; // A value
+          }
+          context.putImageData(imageData, 0, 0);
         }
       }
     },
@@ -77,30 +119,4 @@ async function getAudioWorkletNode(): Promise<AudioWorkletNode> {
   port.start();
   node.connect(audioContext.destination);
   return node;
-}
-
-const canvas = document.querySelector("#canvas");
-
-if (!(canvas instanceof HTMLCanvasElement)) {
-  throw new TypeError("Not Canvas");
-}
-
-const context = canvas.getContext("2d");
-
-if (!context) {
-  throw new Error("Canvas context is null");
-}
-
-const imageData = context.createImageData(100, 100);
-
-// Iterate through every pixel
-for (let index = 0; index < imageData.data.length; index += 4) {
-  // Modify pixel data
-  imageData.data[index + 0] = 190; // R value
-  imageData.data[index + 1] = 0; // G value
-  imageData.data[index + 2] = 210; // B value
-  imageData.data[index + 3] = 255; // A value
-}
-
-// Draw image data to the canvas
-context.putImageData(imageData, 20, 20);
+};

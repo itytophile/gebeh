@@ -2,9 +2,12 @@
 
 use std::collections::HashSet;
 
-use gebeh_core::Emulator;
+use gebeh_core::{Emulator, HEIGHT, WIDTH};
 use wasm_bindgen::prelude::*;
-use web_sys::console;
+use web_sys::{
+    console,
+    js_sys::{self, Uint8Array},
+};
 
 use crate::mbc::{get_mbc, CloneMbc};
 
@@ -49,6 +52,7 @@ struct WebEmulator {
     short_noise: Vec<u8>,
     sample_index: u32,
     mbc: Option<Box<dyn CloneMbc<'static>>>,
+    current_frame: [u8; WIDTH as usize * HEIGHT as usize],
 }
 
 #[wasm_bindgen]
@@ -61,17 +65,41 @@ impl WebEmulator {
             short_noise: get_noise(true),
             sample_index: 0,
             mbc: None,
+            current_frame: [0; WIDTH as usize * HEIGHT as usize],
         }
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
-    pub fn drive_and_sample(&mut self, left: &mut [f32], right: &mut [f32], sample_rate: u32) {
+    pub fn drive_and_sample(
+        &mut self,
+        left: &mut [f32],
+        right: &mut [f32],
+        sample_rate: u32,
+        on_new_frame: &js_sys::Function,
+    ) {
         let Some(mbc) = &mut self.mbc else {
             return;
         };
         // not perfect but whatever
         for _ in 0..(SYSTEM_CLOCK_FREQUENCY * RENDER_QUANTUM_SIZE / sample_rate) {
             self.emulator.execute(mbc.as_mut());
+            if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
+                for (src, dst) in scanline.iter().zip(
+                    self.current_frame[usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
+                        .iter_mut(),
+                ) {
+                    *dst = *src as u8;
+                }
+                if self.emulator.state.ly == HEIGHT - 1 {
+                    let this = JsValue::null();
+                    if let Err(err) = on_new_frame.call1(
+                        &this,
+                        &JsValue::from(Uint8Array::new_from_slice(&self.current_frame)),
+                    ) {
+                        console::error_1(&err);
+                    }
+                }
+            }
         }
         let sampler = self.emulator.get_apu().get_sampler();
         for (left, right) in left.iter_mut().zip(right.iter_mut()) {

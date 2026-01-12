@@ -5,7 +5,8 @@
   "scripts": {
     "build": "rimraf dist pkg && wasm-pack build . --target web && tsc",
     "start": "npm run build && serve",
-    "test": "cargo test && wasm-pack test --headless"
+    "test": "cargo test && wasm-pack test --headless",
+    "routine": "tsc --noEmit && prettier . --write && eslint ."
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

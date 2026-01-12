@@ -78,7 +78,17 @@ class WasmProcessor
       throw new Error("No stereo");
     }
 
-    this.emulator?.drive_and_sample(left, right, sampleRate);
+    this.emulator?.drive_and_sample(
+      left,
+      right,
+      sampleRate,
+      (frame: Uint8Array) => {
+        this.port.postMessage({
+          type: "frame",
+          bytes: frame,
+        } satisfies FromNodeMessage);
+      },
+    );
 
     return true;
   }
