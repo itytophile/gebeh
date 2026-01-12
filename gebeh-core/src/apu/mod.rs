@@ -1,5 +1,7 @@
 use crate::apu::{
-    noise_channel::{NoiseChannel, NoiseSampler}, pulse_channel::{PulseChannel, PulseSampler}, sweep::Ch1Sweep,
+    noise_channel::{NoiseChannel, NoiseSampler},
+    pulse_channel::{PulseChannel, PulseSampler},
+    sweep::Ch1Sweep,
     wave_channel::{WaveChannel, WaveSampler},
 };
 
@@ -108,7 +110,7 @@ impl Apu {
             ch3: self.ch3.get_sampler(),
             ch4: self.ch4.get_sampler(),
             nr50: self.nr50,
-            nr51: self.nr51
+            nr51: self.nr51,
         }
     }
 }

@@ -60,7 +60,7 @@ impl VolumeAndEnvelope {
         // https://gbdev.io/pandocs/Audio_details.html#dacs
         self.register & 0xf8 != 0
     }
-    
+
     pub fn get_volume(&self) -> u8 {
         self.timer.value
     }

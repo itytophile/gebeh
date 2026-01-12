@@ -92,12 +92,17 @@ impl<S: Sweep> PulseChannel<S> {
         self.period_low = value as u8;
         self.period_high = self.period_high & 0b11000000 | ((value >> 4) as u8) & 0x07;
     }
-    
+
     pub fn get_sampler(&self) -> PulseSampler {
-        PulseSampler { is_on: self.is_on(), duty_cycle: self.duty_cycle, period: self
-            .sweep
-            .get_period_value()
-            .unwrap_or(self.get_period_value()), volume: self.volume_and_envelope.get_volume() }
+        PulseSampler {
+            is_on: self.is_on(),
+            duty_cycle: self.duty_cycle,
+            period: self
+                .sweep
+                .get_period_value()
+                .unwrap_or(self.get_period_value()),
+            volume: self.volume_and_envelope.get_volume(),
+        }
     }
 }
 
@@ -128,7 +133,7 @@ pub struct PulseSampler {
     is_on: bool,
     duty_cycle: u8,
     period: u16,
-    volume: u8
+    volume: u8,
 }
 
 impl PulseSampler {
