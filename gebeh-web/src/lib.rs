@@ -42,8 +42,6 @@ fn get_noise(is_short: bool) -> Vec<u8> {
 
 // https://gbdev.io/pandocs/Specifications.html
 const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
-// https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletGlobalScope/currentFrame
-const RENDER_QUANTUM_SIZE: u32 = 128;
 
 #[wasm_bindgen]
 struct WebEmulator {
@@ -53,6 +51,8 @@ struct WebEmulator {
     sample_index: u32,
     mbc: Option<Box<dyn CloneMbc<'static>>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
+    // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
+    error: u32,
 }
 
 #[wasm_bindgen]
@@ -66,6 +66,7 @@ impl WebEmulator {
             sample_index: 0,
             mbc: None,
             current_frame: [0; WIDTH as usize * HEIGHT as usize],
+            error: 0,
         }
     }
 
@@ -80,33 +81,46 @@ impl WebEmulator {
         let Some(mbc) = &mut self.mbc else {
             return;
         };
-        // not perfect but whatever
-        for _ in 0..(SYSTEM_CLOCK_FREQUENCY * RENDER_QUANTUM_SIZE / sample_rate) {
-            self.emulator.execute(mbc.as_mut());
-            if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
-                for (src, dst) in scanline.iter().zip(
-                    self.current_frame[usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
-                        .iter_mut(),
-                ) {
-                    *dst = *src as u8;
-                }
-                if self.emulator.state.ly == HEIGHT - 1 {
-                    let this = JsValue::null();
-                    if let Err(err) = on_new_frame.call1(
-                        &this,
-                        &JsValue::from(Uint8Array::new_from_slice(&self.current_frame)),
+
+        let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
+        let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
+
+        for (left, right) in left.iter_mut().zip(right.iter_mut()) {
+            let mut cycles = base;
+            self.error += remainder;
+
+            if let Some(error) = self.error.checked_sub(sample_rate) {
+                self.error = error;
+                cycles += 1;
+            }
+
+            for _ in 0..cycles {
+                self.emulator.execute(mbc.as_mut());
+                if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
+                    for (src, dst) in scanline.iter().zip(
+                        self.current_frame
+                            [usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
+                            .iter_mut(),
                     ) {
-                        console::error_1(&err);
+                        *dst = *src as u8;
+                    }
+                    if self.emulator.state.ly == HEIGHT - 1 {
+                        let this = JsValue::null();
+                        if let Err(err) = on_new_frame.call1(
+                            &this,
+                            &JsValue::from(Uint8Array::new_from_slice(&self.current_frame)),
+                        ) {
+                            console::error_1(&err);
+                        }
                     }
                 }
             }
-        }
-        let sampler = self.emulator.get_apu().get_sampler();
-        for (left, right) in left.iter_mut().zip(right.iter_mut()) {
+            let sampler = self.emulator.get_apu().get_sampler();
             let sample = self.sample_index as f32 / sample_rate as f32;
             *left = sampler.sample_left(sample, &self.noise, &self.short_noise);
             *right = sampler.sample_right(sample, &self.noise, &self.short_noise);
-            self.sample_index = self.sample_index.wrapping_add(1);
+            // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
+            self.sample_index = self.sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
         }
     }
 
