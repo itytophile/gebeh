@@ -1,8 +1,11 @@
+// try to not import wasm functions here (let's have some fun)
+
 import {
   AUDIO_PROCESSOR_NAME,
   FromMainMessage,
   FromNodeMessage,
 } from "./common.js";
+import { add_inputs } from "./inputs.js";
 
 const romInput = document.querySelector("#rom-input");
 
@@ -59,6 +62,7 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
     outputChannelCount: [2],
   });
   const { port } = node;
+  add_inputs(canvas, port);
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
   port.addEventListener(
     "message",
