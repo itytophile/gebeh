@@ -57,6 +57,45 @@ class WasmProcessor
             this.emulator = new WebEmulator();
             this.port.postMessage({ type: "ready" } satisfies FromNodeMessage);
             console.log("Ready!");
+            break;
+          }
+          case "input": {
+            // inputs are inverted, so if up then we set to true to disable
+            const is_up = data.event === "up";
+            switch (data.button) {
+              case "a": {
+                this.emulator?.set_a(is_up);
+                break;
+              }
+              case "b": {
+                this.emulator?.set_b(is_up);
+                break;
+              }
+              case "start": {
+                this.emulator?.set_start(is_up);
+                break;
+              }
+              case "select": {
+                this.emulator?.set_select(is_up);
+                break;
+              }
+              case "left": {
+                this.emulator?.set_left(is_up);
+                break;
+              }
+              case "right": {
+                this.emulator?.set_right(is_up);
+                break;
+              }
+              case "up": {
+                this.emulator?.set_up(is_up);
+                break;
+              }
+              case "down": {
+                this.emulator?.set_down(is_up);
+                break;
+              }
+            }
           }
         }
       },
