@@ -134,3 +134,39 @@ impl WebEmulator {
         self.mbc = Some(mbc);
     }
 }
+
+#[wasm_bindgen]
+struct JoypadInput(gebeh_core::joypad::JoypadInput);
+
+#[wasm_bindgen]
+impl JoypadInput {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
+
+    pub fn set_a(&mut self, value: bool) {
+        self.0.a = value;
+    }
+    pub fn set_b(&mut self, value: bool) {
+        self.0.b = value;
+    }
+    pub fn set_start(&mut self, value: bool) {
+        self.0.start = value;
+    }
+    pub fn set_select(&mut self, value: bool) {
+        self.0.select = value;
+    }
+    pub fn set_left(&mut self, value: bool) {
+        self.0.left = value;
+    }
+    pub fn set_right(&mut self, value: bool) {
+        self.0.right = value;
+    }
+    pub fn set_down(&mut self, value: bool) {
+        self.0.down = value;
+    }
+    pub fn set_up(&mut self, value: bool) {
+        self.0.up = value;
+    }
+}
