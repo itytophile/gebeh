@@ -133,40 +133,29 @@ impl WebEmulator {
         console::log_1(&JsValue::from_str("Rom loaded!"));
         self.mbc = Some(mbc);
     }
-}
-
-#[wasm_bindgen]
-struct JoypadInput(gebeh_core::joypad::JoypadInput);
-
-#[wasm_bindgen]
-impl JoypadInput {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self(Default::default())
-    }
 
     pub fn set_a(&mut self, value: bool) {
-        self.0.a = value;
+        self.emulator.get_joypad_mut().a = value;
     }
     pub fn set_b(&mut self, value: bool) {
-        self.0.b = value;
+        self.emulator.get_joypad_mut().b = value;
     }
     pub fn set_start(&mut self, value: bool) {
-        self.0.start = value;
+        self.emulator.get_joypad_mut().start = value;
     }
     pub fn set_select(&mut self, value: bool) {
-        self.0.select = value;
+        self.emulator.get_joypad_mut().select = value;
     }
     pub fn set_left(&mut self, value: bool) {
-        self.0.left = value;
+        self.emulator.get_joypad_mut().left = value;
     }
     pub fn set_right(&mut self, value: bool) {
-        self.0.right = value;
+        self.emulator.get_joypad_mut().right = value;
     }
     pub fn set_down(&mut self, value: bool) {
-        self.0.down = value;
+        self.emulator.get_joypad_mut().down = value;
     }
     pub fn set_up(&mut self, value: bool) {
-        self.0.up = value;
+        self.emulator.get_joypad_mut().up = value;
     }
 }
