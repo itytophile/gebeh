@@ -92,7 +92,7 @@ impl Audio {
             .build_output_stream(
                 config,
                 move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                    let apu = apu.read().unwrap();
+                    let apu = apu.read().unwrap().get_sampler();
                     for frame in data.chunks_mut(channels) {
                         let sample = sample_index as f32 / sample_rate as f32;
                         let left = T::from_sample(apu.sample_left(sample, &noise, &short_noise));
