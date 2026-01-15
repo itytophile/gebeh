@@ -2,6 +2,11 @@ body {
   margin: 0;
 }
 
+.screen {
+    display: flex;
+    flex-direction: column;
+}
+
 canvas {
   image-rendering: pixelated;
 }
