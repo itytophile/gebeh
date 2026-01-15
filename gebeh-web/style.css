@@ -44,3 +44,8 @@ canvas {
 .start-select {
   width: 11em;
 }
+
+.interactive {
+  touch-action: none;
+  user-select: none;
+}

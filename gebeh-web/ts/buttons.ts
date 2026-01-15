@@ -1,5 +1,11 @@
 import { FromMainMessage } from "./common";
 
+for (const element of document.querySelectorAll(".interactive")) {
+  element.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+  });
+}
+
 function getButton(id: string) {
   const button = document.getElementById(id);
   if (!button) {
