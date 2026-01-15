@@ -9,12 +9,15 @@ canvas {
 .content {
   display: flex;
   flex-direction: column;
+  gap: 2em;
 }
 
 .buttons-dpads-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-left: 2em;
+  padding-right: 2em;
 }
 
 .buttons {
@@ -23,6 +26,6 @@ canvas {
 }
 
 .button {
-  height: 12em;
-  width: 12em;
+  height: 11em;
+  width: 11em;
 }
