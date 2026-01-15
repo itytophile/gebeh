@@ -1,13 +1,14 @@
 // try to not import wasm functions here (let's have some fun)
 
+import { addButtons } from "./buttons.js";
 import {
   AUDIO_PROCESSOR_NAME,
   FromMainMessage,
   FromNodeMessage,
 } from "./common.js";
-import { add_inputs } from "./inputs.js";
+import { addInputs } from "./keyboard.js";
 
-const romInput = document.querySelector("#rom-input");
+const romInput = document.getElementById("rom-input");
 
 if (!(romInput instanceof HTMLInputElement)) {
   throw new TypeError("rom-input is not an input");
@@ -36,7 +37,7 @@ let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
 let notReadyRom: ArrayBuffer | undefined;
 
-const canvas = document.querySelector("#canvas");
+const canvas = document.getElementById("canvas");
 
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new TypeError("Not Canvas");
@@ -64,7 +65,8 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
     outputChannelCount: [2],
   });
   const { port } = node;
-  add_inputs(canvas, port);
+  addInputs(canvas, port);
+  addButtons(port);
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
   port.addEventListener(
     "message",

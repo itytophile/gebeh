@@ -1,6 +1,6 @@
 import { FromMainMessage, GebehButton } from "./common";
 
-export function add_inputs(canvas: HTMLCanvasElement, port: MessagePort) {
+export function addInputs(canvas: HTMLCanvasElement, port: MessagePort) {
   canvas.addEventListener("keydown", (event) => {
     if (event.repeat) {
       return;

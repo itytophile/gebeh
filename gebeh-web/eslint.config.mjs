@@ -47,6 +47,7 @@ export default defineConfig(
       ],
       "unicorn/number-literal-case": "off",
       "unicorn/no-nested-ternary": "off",
+      "unicorn/prefer-query-selector": "off",
     },
   },
 );
