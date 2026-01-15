@@ -3,7 +3,10 @@ body {
 }
 
 canvas {
-  width: 640px;
-  height: 576px;
   image-rendering: pixelated;
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
 }

@@ -51,6 +51,8 @@ if (!context) {
 const GB_WIDTH = 160;
 const GB_HEIGHT = 144;
 const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
+imageData.data.fill(0xaa);
+context.putImageData(imageData, 0, 0);
 
 const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   if (node) {
