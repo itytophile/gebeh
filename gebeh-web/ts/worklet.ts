@@ -57,6 +57,44 @@ class WasmProcessor
             this.emulator = new WebEmulator();
             this.port.postMessage({ type: "ready" } satisfies FromNodeMessage);
             console.log("Ready!");
+            break;
+          }
+          case "input": {
+            const is_down = data.event === "down";
+            switch (data.button) {
+              case "a": {
+                this.emulator?.set_a(is_down);
+                break;
+              }
+              case "b": {
+                this.emulator?.set_b(is_down);
+                break;
+              }
+              case "start": {
+                this.emulator?.set_start(is_down);
+                break;
+              }
+              case "select": {
+                this.emulator?.set_select(is_down);
+                break;
+              }
+              case "left": {
+                this.emulator?.set_left(is_down);
+                break;
+              }
+              case "right": {
+                this.emulator?.set_right(is_down);
+                break;
+              }
+              case "up": {
+                this.emulator?.set_up(is_down);
+                break;
+              }
+              case "down": {
+                this.emulator?.set_down(is_down);
+                break;
+              }
+            }
           }
         }
       },
