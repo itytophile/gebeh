@@ -7,6 +7,22 @@ canvas {
 }
 
 .content {
-    display: flex;
-    flex-direction: column;
+  display: flex;
+  flex-direction: column;
+}
+
+.buttons-dpads-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.buttons {
+  display: flex;
+  gap: 2em;
+}
+
+.button {
+  height: 12em;
+  width: 12em;
 }
