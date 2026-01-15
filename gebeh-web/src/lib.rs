@@ -1,5 +1,3 @@
-#![deny(clippy::all)]
-
 use std::collections::HashSet;
 
 use gebeh_core::{Emulator, HEIGHT, WIDTH};
@@ -44,7 +42,7 @@ fn get_noise(is_short: bool) -> Vec<u8> {
 const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
 #[wasm_bindgen]
-struct WebEmulator {
+pub struct WebEmulator {
     emulator: Emulator,
     noise: Vec<u8>,
     short_noise: Vec<u8>,
@@ -57,6 +55,7 @@ struct WebEmulator {
 
 #[wasm_bindgen]
 impl WebEmulator {
+    #[allow(clippy::new_without_default)]
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
