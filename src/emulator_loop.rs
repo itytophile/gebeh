@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, RwLock, mpsc::SyncSender},
-};
+use std::sync::{Arc, RwLock, mpsc::SyncSender};
 
 use cpal::{
     BufferSize, FromSample, I24, SizedSample, StreamConfig,
@@ -14,7 +11,7 @@ use gebeh_core::{
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Color,
 };
-use gebeh_front_helper::get_mbc;
+use gebeh_front_helper::{get_mbc, get_noise};
 
 pub fn spawn_emulator(
     device: &cpal::Device,
@@ -167,32 +164,4 @@ where
             None,
         )
         .unwrap()
-}
-
-// for sampling reasons we have to generate the noise values at program start
-#[derive(Default)]
-struct LinearFeedbackShiftRegister(u16);
-
-impl LinearFeedbackShiftRegister {
-    fn tick(&mut self, short_mode: bool) -> u8 {
-        // https://gbdev.io/pandocs/Audio_details.html#noise-channel-ch4
-        let new_value = (self.0 & 1 != 0) == (self.0 & 0b10 != 0);
-        self.0 = self.0 & 0x7fff | ((new_value as u16) << 15);
-        if short_mode {
-            self.0 = self.0 & 0xff7f | ((new_value as u16) << 7)
-        }
-        let shifted_out = self.0 & 1;
-        self.0 >>= 1;
-        shifted_out as u8
-    }
-}
-
-fn get_noise(is_short: bool) -> Vec<u8> {
-    let mut lfsr = LinearFeedbackShiftRegister::default();
-    let mut already_seen = HashSet::new();
-    let mut noise = Vec::new();
-    while already_seen.insert(lfsr.0) {
-        noise.push(lfsr.tick(is_short));
-    }
-    noise
 }
