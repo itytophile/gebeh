@@ -1,5 +1,5 @@
 use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH};
-use gebeh_front_helper::{get_mbc, get_noise, CloneMbc};
+use gebeh_front_helper::{CloneMbc, get_mbc, get_noise};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
 

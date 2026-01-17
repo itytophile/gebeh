@@ -4,7 +4,7 @@ use gebeh_front_helper::get_mbc;
 
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(
-        "/home/ityt/Téléchargements/mts-20240926-1737-443f6e1/emulator-only/{path}"
+        "./downloads/mts-20240926-1737-443f6e1/emulator-only/{path}"
     ))
     .unwrap();
     let rom = rom.as_slice();

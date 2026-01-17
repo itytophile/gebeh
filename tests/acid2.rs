@@ -4,7 +4,7 @@ use gebeh_front_helper::get_mbc;
 
 #[test]
 fn dmg_acid2() {
-    let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
+    let rom = std::fs::read("./downloads/dmg-acid2.gb").unwrap();
     let rom = rom.as_slice();
     let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut emulator = Emulator::default();
