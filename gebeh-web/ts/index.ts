@@ -13,7 +13,9 @@ import { addInputs } from "./keyboard.js";
 const status = document.getElementById("status");
 
 if (status) {
-  status.textContent = crossOriginIsolated ? "Cross origin isolated (good)" : "Not cross origin isolated (bad)";
+  status.textContent = crossOriginIsolated
+    ? "Cross origin isolated (good)"
+    : "Not cross origin isolated (bad)";
 }
 
 const romInput = document.getElementById("rom-input");
