@@ -121,10 +121,13 @@ class WasmProcessor
       right,
       sampleRate,
       (frame: Uint8Array) => {
-        this.port.postMessage({
-          type: "frame",
-          bytes: frame,
-        } satisfies FromNodeMessage);
+        this.port.postMessage(
+          {
+            type: "frame",
+            bytes: frame,
+          } satisfies FromNodeMessage,
+          [frame.buffer],
+        );
       },
     );
 
