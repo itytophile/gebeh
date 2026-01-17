@@ -4,7 +4,7 @@ export type FromNodeMessage =
       type: "ready";
     }
   | { type: "wasm" }
-  | { type: "frame"; bytes: Uint8Array };
+  | { type: "frame"; buffer: SharedArrayBuffer };
 export type GebehButton =
   | "a"
   | "b"
@@ -25,3 +25,5 @@ export type FromMainMessage =
       event: "up" | "down";
       button: GebehButton;
     };
+export const GB_WIDTH = 160;
+export const GB_HEIGHT = 144;
