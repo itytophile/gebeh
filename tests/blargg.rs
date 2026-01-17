@@ -2,8 +2,9 @@ use std::ffi::CStr;
 
 use crate::common::{TestSerial, machine_to_serial_iter};
 use arrayvec::ArrayVec;
-use gebeh::get_mbc;
+use gebeh::InstantRtc;
 use gebeh_core::Emulator;
+use gebeh_front_helper::get_mbc;
 
 mod common;
 
@@ -15,7 +16,7 @@ fn cpu_instrs() {
     let rom =
         std::fs::read("/home/ityt/Documents/git/gb-test-roms/cpu_instrs/cpu_instrs.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc(rom).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
     let mut serial = TestSerial(None);
 
@@ -34,7 +35,7 @@ fn instr_timing() {
     let rom = std::fs::read("/home/ityt/Documents/git/gb-test-roms/instr_timing/instr_timing.gb")
         .unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc(rom).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
     let mut serial = TestSerial(None);
 
@@ -53,7 +54,7 @@ fn mem_timing() {
     let rom =
         std::fs::read("/home/ityt/Documents/git/gb-test-roms/mem_timing/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc(rom).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
     let mut serial = TestSerial(None);
 
@@ -70,7 +71,7 @@ fn mem_timing_2() {
     let rom =
         std::fs::read("/home/ityt/Documents/git/gb-test-roms/mem_timing-2/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc(rom).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
 
     let output = loop {

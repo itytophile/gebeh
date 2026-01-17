@@ -44,17 +44,19 @@ fn main() {
     let mut pixels = get_pixels_from_window(&window, WIDTH.into(), HEIGHT.into());
 
     let joypad: Arc<RwLock<JoypadInput>> = Default::default();
-    let frame = Arc::new(RwLock::new([Color::Black; WIDTH as usize * HEIGHT as usize]));
+    let frame = Arc::new(RwLock::new(
+        [Color::Black; WIDTH as usize * HEIGHT as usize],
+    ));
 
     let shared_frame = frame.clone();
     let shared_joypad = joypad.clone();
-    
+
     let host = cpal::default_host();
 
     let device = host
         .default_output_device()
         .expect("failed to find output device");
-    
+
     let _handle = spawn_emulator(&device, shared_frame, shared_joypad);
 
     event_loop

@@ -692,6 +692,7 @@ dependencies = [
  "cpal",
  "env_logger",
  "gebeh-core",
+ "gebeh-front-helper",
  "log",
  "pixels",
  "winit",
@@ -708,10 +709,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gebeh-front-helper"
+version = "0.1.0"
+dependencies = [
+ "gebeh-core",
+]
+
+[[package]]
 name = "gebeh-web"
 version = "0.1.0"
 dependencies = [
  "gebeh-core",
+ "gebeh-front-helper",
  "wasm-bindgen",
  "web-sys",
  "web-time 1.1.0",

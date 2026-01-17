@@ -7,12 +7,14 @@ use cpal::{
     FromSample, I24, SizedSample,
     traits::{DeviceTrait, StreamTrait},
 };
-use gebeh::get_mbc;
+use gebeh::InstantRtc;
 use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
     joypad::JoypadInput,
-    mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom}, ppu::Color,
+    mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
+    ppu::Color,
 };
+use gebeh_front_helper::get_mbc;
 
 pub fn spawn_emulator(
     device: &cpal::Device,
@@ -104,7 +106,7 @@ where
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     // don't forget to use arc or you will clone the rom for each save state
-    let mut mbc = get_mbc(Arc::from(rom.into_boxed_slice())).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
     let mut emulator = Emulator::default();
 
     // https://gbdev.io/pandocs/Specifications.html

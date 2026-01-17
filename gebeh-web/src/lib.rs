@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
 use gebeh_core::{Emulator, HEIGHT, WIDTH};
+use gebeh_front_helper::{get_mbc, CloneMbc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
 
-use crate::mbc::{get_mbc, CloneMbc};
+use crate::rtc::InstantRtc;
 
-mod mbc;
+mod rtc;
 
 #[derive(Default)]
 struct LinearFeedbackShiftRegister(u16);
@@ -117,7 +118,7 @@ impl WebEmulator {
 
     pub fn load_rom(&mut self, rom: Vec<u8>) {
         console::log_1(&JsValue::from_str("Loading rom"));
-        let Some(mbc) = get_mbc(rom) else {
+        let Some(mbc) = get_mbc::<_, InstantRtc>(rom) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return;
         };
