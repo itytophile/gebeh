@@ -1,9 +1,62 @@
 body {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
 }
 
 canvas {
-  width: 640px;
-  height: 576px;
   image-rendering: pixelated;
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  max-width: 60dvh;
+  width: 100%;
+}
+
+.buttons-dpads-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12%;
+  margin-bottom: 12%;
+  padding-left: 5%;
+  padding-right: 5%;
+  & > * {
+    width: 33%;
+  }
+}
+
+.buttons {
+  display: flex;
+  justify-content: space-around;
+  & > * {
+    width: 50%;
+  }
+}
+
+.start-select-buttons {
+  display: flex;
+  justify-content: space-around;
+  width: 50%;
+  & > * {
+    width: 47%;
+  }
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.interactive {
+  touch-action: none;
+  user-select: none;
 }

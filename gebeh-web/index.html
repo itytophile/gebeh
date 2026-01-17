@@ -6,8 +6,38 @@
     <link href="./style.css" rel="stylesheet" />
   </head>
   <body>
-    <input type="file" id="rom-input" />
-    <canvas id="canvas" tabindex="1" width="160" height="144"></canvas>
+    <div class="content">
+      <div class="screen">
+        <input type="file" id="rom-input" />
+        <canvas id="canvas" tabindex="1" width="160" height="144"></canvas>
+      </div>
+      <div class="buttons-dpads-row">
+        <img class="interactive" src="assets/dpad.svg" id="dpad" />
+        <div class="buttons">
+          <img
+            class="interactive"
+            style="margin-top: 50%"
+            src="assets/buttonB.svg"
+            id="buttonB"
+          />
+          <img class="interactive" src="assets/buttonA.svg" id="buttonA" />
+        </div>
+      </div>
+      <div class="center">
+        <div class="start-select-buttons">
+          <img
+            class="interactive"
+            src="assets/startSelect.svg"
+            id="buttonSelect"
+          />
+          <img
+            class="interactive"
+            src="assets/startSelect.svg"
+            id="buttonStart"
+          />
+        </div>
+      </div>
+    </div>
     <script type="module" src="dist/index.js"></script>
   </body>
 </html>
