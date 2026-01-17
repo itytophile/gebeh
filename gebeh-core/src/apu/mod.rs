@@ -125,23 +125,27 @@ pub struct Sampler {
     nr50: Nr50,
 }
 
+// we have to keep the sound wave between -1 and 1
+const GAIN_NOISE: f32 = 0.15;
+const GAIN_CHANNEL: f32 = (1. - GAIN_NOISE) / 3.;
+
 impl Sampler {
     #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample)
+            self.ch1.sample(sample) * GAIN_CHANNEL
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(sample)
+            self.ch2.sample(sample) * GAIN_CHANNEL
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
-            self.ch3.sample(sample)
+            self.ch3.sample(sample) * GAIN_CHANNEL
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
-            self.ch4.sample(sample, noise, short_noise)
+            self.ch4.sample(sample, noise, short_noise) * GAIN_NOISE
         } else {
             0.
         })) * self.get_volume_left()
@@ -150,19 +154,19 @@ impl Sampler {
     #[must_use]
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(sample)
+            self.ch1.sample(sample) * GAIN_CHANNEL
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(sample)
+            self.ch2.sample(sample) * GAIN_CHANNEL
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
-            self.ch3.sample(sample)
+            self.ch3.sample(sample) * GAIN_CHANNEL
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
-            self.ch4.sample(sample, noise, short_noise)
+            self.ch4.sample(sample, noise, short_noise) * GAIN_NOISE
         } else {
             0.
         })) * self.get_volume_right()
