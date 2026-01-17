@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use gebeh_core::{Emulator, HEIGHT, WIDTH};
+use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH};
 use gebeh_front_helper::{get_mbc, CloneMbc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
@@ -35,9 +35,6 @@ fn get_noise(is_short: bool) -> Vec<u8> {
     }
     noise
 }
-
-// https://gbdev.io/pandocs/Specifications.html
-const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
 #[wasm_bindgen]
 pub struct WebEmulator {

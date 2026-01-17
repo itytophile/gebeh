@@ -9,7 +9,7 @@ use cpal::{
 };
 use gebeh::InstantRtc;
 use gebeh_core::{
-    Emulator, HEIGHT, WIDTH,
+    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     joypad::JoypadInput,
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Color,
@@ -109,8 +109,6 @@ where
     let mut mbc = get_mbc::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
     let mut emulator = Emulator::default();
 
-    // https://gbdev.io/pandocs/Specifications.html
-    const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
     let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
     let mut error = 0;

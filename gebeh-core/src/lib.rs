@@ -25,6 +25,8 @@ pub mod timer;
 
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;
+// https://gbdev.io/pandocs/Specifications.html
+pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
 #[derive(Clone)]
 pub struct Emulator {
