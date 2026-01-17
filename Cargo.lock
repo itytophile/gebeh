@@ -692,9 +692,9 @@ dependencies = [
  "cpal",
  "env_logger",
  "gebeh-core",
+ "gebeh-front-helper",
  "log",
  "pixels",
- "timerfd",
  "winit",
 ]
 
@@ -709,10 +709,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gebeh-front-helper"
+version = "0.1.0"
+dependencies = [
+ "gebeh-core",
+]
+
+[[package]]
 name = "gebeh-web"
 version = "0.1.0"
 dependencies = [
  "gebeh-core",
+ "gebeh-front-helper",
  "wasm-bindgen",
  "web-sys",
  "web-time 1.1.0",
@@ -1903,15 +1911,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
 dependencies = [
  "cfg-if 1.0.4",
-]
-
-[[package]]
-name = "timerfd"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e482e368cf7efa2c8b570f476e5b9fd9fd5e9b9219fc567832b05f13511091"
-dependencies = [
- "rustix 0.38.44",
 ]
 
 [[package]]

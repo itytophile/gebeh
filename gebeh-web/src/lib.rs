@@ -1,42 +1,11 @@
-use std::collections::HashSet;
-
-use gebeh_core::{Emulator, HEIGHT, WIDTH};
+use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH};
+use gebeh_front_helper::{get_mbc, get_noise, CloneMbc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
 
-use crate::mbc::{get_mbc, CloneMbc};
+use crate::rtc::InstantRtc;
 
-mod mbc;
-
-#[derive(Default)]
-struct LinearFeedbackShiftRegister(u16);
-
-impl LinearFeedbackShiftRegister {
-    fn tick(&mut self, short_mode: bool) -> u8 {
-        // https://gbdev.io/pandocs/Audio_details.html#noise-channel-ch4
-        let new_value = (self.0 & 1 != 0) == (self.0 & 0b10 != 0);
-        self.0 = self.0 & 0x7fff | ((new_value as u16) << 15);
-        if short_mode {
-            self.0 = self.0 & 0xff7f | ((new_value as u16) << 7)
-        }
-        let shifted_out = self.0 & 1;
-        self.0 >>= 1;
-        shifted_out as u8
-    }
-}
-
-fn get_noise(is_short: bool) -> Vec<u8> {
-    let mut lfsr = LinearFeedbackShiftRegister::default();
-    let mut already_seen = HashSet::new();
-    let mut noise = Vec::new();
-    while already_seen.insert(lfsr.0) {
-        noise.push(lfsr.tick(is_short));
-    }
-    noise
-}
-
-// https://gbdev.io/pandocs/Specifications.html
-const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
+mod rtc;
 
 #[wasm_bindgen]
 pub struct WebEmulator {
@@ -117,7 +86,7 @@ impl WebEmulator {
 
     pub fn load_rom(&mut self, rom: Vec<u8>) {
         console::log_1(&JsValue::from_str("Loading rom"));
-        let Some(mbc) = get_mbc(rom) else {
+        let Some(mbc) = get_mbc::<_, InstantRtc>(rom) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return;
         };

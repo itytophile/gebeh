@@ -7,6 +7,7 @@ authors = ["You <you@example.com>"]
 categories = ["wasm"]
 readme = "README.md"
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
@@ -14,6 +15,7 @@ crate-type = ["cdylib"]
 [dependencies]
 wasm-bindgen = "0.2.45"
 gebeh-core = { path = "../gebeh-core" }
+gebeh-front-helper = { path = "../gebeh-front-helper" }
 web-time = "1.1.0"
 wee_alloc = "0.4.5"
 

@@ -1,9 +1,9 @@
-mod audio;
 mod emulator_loop;
 
 use std::sync::{Arc, RwLock};
 
-use gebeh_core::{HEIGHT, WIDTH, joypad::JoypadInput, ppu::Color};
+use cpal::traits::HostTrait;
+use gebeh_core::{HEIGHT, WIDTH, joypad::JoypadInput};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
@@ -12,6 +12,8 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
+
+use crate::emulator_loop::spawn_emulator;
 
 fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_> {
     let window_size = window.inner_size();
@@ -42,12 +44,17 @@ fn main() {
     let mut pixels = get_pixels_from_window(&window, WIDTH.into(), HEIGHT.into());
 
     let joypad: Arc<RwLock<JoypadInput>> = Default::default();
-    let frame = Arc::new(RwLock::new([[Color::Black; 160]; 144]));
+    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel(2);
 
-    let shared_frame = frame.clone();
     let shared_joypad = joypad.clone();
 
-    std::thread::spawn(move || emulator_loop::run(&shared_frame, &shared_joypad));
+    let host = cpal::default_host();
+
+    let device = host
+        .default_output_device()
+        .expect("failed to find output device");
+
+    let _handle = spawn_emulator(&device, tx_frame, shared_joypad);
 
     event_loop
         .run(|event, elwt| match event {
@@ -61,7 +68,7 @@ fn main() {
                     .as_chunks_mut::<4>()
                     .0
                     .iter_mut()
-                    .zip(frame.read().unwrap().iter().flatten())
+                    .zip(rx_frame.recv().unwrap().iter())
                 {
                     *pixel = (*color).into();
                 }

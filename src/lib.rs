@@ -1,44 +1,16 @@
-use std::{
-    ops::Deref,
-    time::{Instant, UNIX_EPOCH},
-};
+use std::time::{Instant, UNIX_EPOCH};
 
-use gebeh_core::mbc::*;
-
-pub trait CloneMbc<'a>: Mbc {
-    fn clone_boxed(&self) -> Box<dyn CloneMbc<'a> + 'a>;
-}
-
-impl<'a, T: Mbc + Clone + 'a> CloneMbc<'a> for T {
-    fn clone_boxed(&self) -> Box<dyn CloneMbc<'a> + 'a> {
-        Box::new(self.clone())
-    }
-}
-
-pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a>(
-    rom: T,
-) -> Option<Box<dyn CloneMbc<'a> + 'a>> {
-    let mbc: Box<dyn CloneMbc<'a>> =
-        match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()? {
-            CartridgeType::RomOnly => Box::new(rom),
-            CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-                Box::new(Mbc1::new(rom))
-            }
-            CartridgeType::Mbc3RamBattery => Box::new(Mbc3::new(rom, InstantRtc::new())),
-            CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
-        };
-    Some(mbc)
-}
+use gebeh_core::{HEIGHT, WIDTH, mbc::*, ppu::Color};
 
 #[derive(Clone)]
-struct InstantRtc {
+pub struct InstantRtc {
     last_seen: Instant,
     last_halt: Option<Instant>,
     registers: RtcRegisters,
 }
 
-impl InstantRtc {
-    fn new() -> Self {
+impl Default for InstantRtc {
+    fn default() -> Self {
         Self {
             last_seen: Instant::now(),
             last_halt: None,
@@ -90,3 +62,5 @@ impl Rtc for InstantRtc {
         12
     }
 }
+
+pub type Frame = [Color; WIDTH as usize * HEIGHT as usize];

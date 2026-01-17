@@ -1,11 +1,12 @@
-use gebeh::get_mbc;
+use gebeh::InstantRtc;
 use gebeh_core::{Emulator, HEIGHT, ppu::Color};
+use gebeh_front_helper::get_mbc;
 
 #[test]
 fn dmg_acid2() {
     let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc(rom).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let expected = include_bytes!("acid2_expected.txt");

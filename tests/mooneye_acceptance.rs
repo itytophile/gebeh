@@ -1,5 +1,6 @@
-use gebeh::get_mbc;
+use gebeh::InstantRtc;
 use gebeh_core::Emulator;
+use gebeh_front_helper::get_mbc;
 
 fn test_mooneye(path: &str) {
     let rom = std::fs::read(format!(
@@ -8,7 +9,7 @@ fn test_mooneye(path: &str) {
     .unwrap();
     let rom = rom.as_slice();
     let mut emulator = Emulator::default();
-    let mut mbc = get_mbc(rom).unwrap();
+    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting
     while emulator.get_cpu().current_opcode != 0x40 {

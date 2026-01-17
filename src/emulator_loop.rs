@@ -1,23 +1,77 @@
-use std::{sync::RwLock, time::Duration};
+use std::sync::{Arc, RwLock, mpsc::SyncSender};
 
-use cpal::traits::HostTrait;
-use gebeh::get_mbc;
+use cpal::{
+    BufferSize, FromSample, I24, SizedSample, StreamConfig,
+    traits::{DeviceTrait, StreamTrait},
+};
+use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
-    Emulator, HEIGHT,
+    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     joypad::JoypadInput,
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Color,
 };
-use timerfd::{SetTimeFlags, TimerFd, TimerState};
+use gebeh_front_helper::{get_mbc, get_noise};
 
-use crate::audio::Audio;
+pub fn spawn_emulator(
+    device: &cpal::Device,
+    shared_frame: SyncSender<Frame>,
+    shared_joypad: Arc<RwLock<JoypadInput>>,
+) -> cpal::Stream {
+    let config = device.default_output_config().unwrap();
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::I8 => {
+            create_stream::<i8>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::I16 => {
+            create_stream::<i16>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::I24 => {
+            create_stream::<I24>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::I32 => {
+            create_stream::<i32>(device, config.into(), shared_frame, shared_joypad)
+        }
+        // cpal::SampleFormat::I48 => run::<I48>(&device, &config.into(),shared_frame),
+        cpal::SampleFormat::I64 => {
+            create_stream::<i64>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::U8 => {
+            create_stream::<u8>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::U16 => {
+            create_stream::<u16>(device, config.into(), shared_frame, shared_joypad)
+        }
+        // cpal::SampleFormat::U24 => run::<U24>(&device, &config.into(),shared_frame),
+        cpal::SampleFormat::U32 => {
+            create_stream::<u32>(device, config.into(), shared_frame, shared_joypad)
+        }
+        // cpal::SampleFormat::U48 => run::<U48>(&device, &config.into(),shared_frame),
+        cpal::SampleFormat::U64 => {
+            create_stream::<u64>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::F32 => {
+            create_stream::<f32>(device, config.into(), shared_frame, shared_joypad)
+        }
+        cpal::SampleFormat::F64 => {
+            create_stream::<f64>(device, config.into(), shared_frame, shared_joypad)
+        }
+        sample_format => panic!("Unsupported sample format '{sample_format}'"),
+    };
+    stream.play().unwrap();
 
-const ITERATION_COUNT: usize = 4194304 / 4 / 256;
+    stream
+}
 
-// will poll the emulator every 1/256 seconds (because the most frequent sound event is at 256 Hz)
-// https://gbdev.io/pandocs/Audio_details.html#div-apu
-// Yes the program can reset the div register but I don't think it will be a problem
-pub fn run(shared_frame: &RwLock<[[Color; 160]; 144]>, shared_joypad: &RwLock<JoypadInput>) {
+fn create_stream<T>(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    shared_frame: SyncSender<Frame>,
+    shared_joypad: Arc<RwLock<JoypadInput>>,
+) -> cpal::Stream
+where
+    T: SizedSample + FromSample<f32>,
+{
     // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
     // let rom = std::fs::read("/home/ityt/Téléchargements/gejmboj/gejmboj.gb").unwrap();
@@ -40,62 +94,74 @@ pub fn run(shared_frame: &RwLock<[[Color; 160]; 144]>, shared_joypad: &RwLock<Jo
     println!("ROM size: {} KiB", get_factor_32_kib_rom(&rom) * 32);
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
-    // don't forget to slice the vec or you will clone it for each save state
-    let mut mbc = get_mbc(rom.as_slice()).unwrap();
+    // don't forget to use arc or you will clone the rom for each save state
+    let mut mbc = get_mbc::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
     let mut emulator = Emulator::default();
 
-    if let Ok(file) = std::fs::read(format!("{title}.save")) {
-        log::info!("Saved data found!");
-        mbc.load_saved_ram(&file);
-    }
+    let config = StreamConfig {
+        channels: 2,
+        // same as web
+        buffer_size: BufferSize::Fixed(128),
+        ..config
+    };
 
-    if let Ok(file) = std::fs::read(format!("{title}.extra.save")) {
-        log::info!("Extra data found!");
-        mbc.load_additional_data(&file);
-    }
+    let sample_rate = config.sample_rate;
+    let mut sample_index = 0u32;
 
-    let host = cpal::default_host();
+    let noise = get_noise(false);
+    let short_noise = get_noise(true);
 
-    let device = host
-        .default_output_device()
-        .expect("failed to find output device");
+    let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
+    let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
+    let mut error = 0;
+    let mut current_frame = [Color::Black; WIDTH as usize * HEIGHT as usize];
 
-    let mut audio = Audio::new(&device);
+    device
+        .build_output_stream(
+            &config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                if let Ok(input) = shared_joypad.try_read() {
+                    *emulator.get_joypad_mut() = *input;
+                }
+                for frame in data.as_chunks_mut::<2>().0 {
+                    let mut cycles = base;
+                    error += remainder;
 
-    let mut tfd = TimerFd::new().unwrap();
+                    if let Some(new_error) = error.checked_sub(sample_rate) {
+                        error = new_error;
+                        cycles += 1;
+                    }
 
-    tfd.set_state(
-        TimerState::Periodic {
-            // doesn't work with Duration::ZERO for whatever reason
-            current: Duration::from_micros(1),
-            interval: Duration::from_micros(1_000_000 / 256),
-        },
-        SetTimeFlags::Default,
-    );
+                    for _ in 0..cycles {
+                        emulator.execute(mbc.as_mut());
+                        if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() {
+                            for (src, dst) in scanline.iter().zip(
+                                current_frame
+                                    [usize::from(emulator.state.ly) * usize::from(WIDTH)..]
+                                    .iter_mut(),
+                            ) {
+                                *dst = *src;
+                            }
+                            if emulator.state.ly == HEIGHT - 1
+                                && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
+                                    shared_frame.try_send(current_frame)
+                            {
+                                panic!()
+                            }
+                        }
+                    }
 
-    let mut frame = [[Color::Black; 160]; 144];
+                    let sampler = emulator.get_apu().get_sampler();
 
-    let mut i = 0u8;
-
-    loop {
-        tfd.read();
-        for _ in 0..ITERATION_COUNT {
-            emulator.execute(mbc.as_mut());
-            let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() else {
-                continue;
-            };
-            frame[usize::from(emulator.state.ly)] = *scanline;
-            if emulator.state.ly == HEIGHT - 1 {
-                *shared_frame.write().unwrap() = frame;
-            }
-        }
-        audio.update_sound(emulator.get_apu().clone());
-
-        if i.is_multiple_of(4) {
-            // read inputs at 64Hz
-            *emulator.get_joypad_mut() = *shared_joypad.read().unwrap();
-        }
-
-        i = i.wrapping_add(1);
-    }
+                    let sample = sample_index as f32 / sample_rate as f32;
+                    frame[0] = T::from_sample(sampler.sample_left(sample, &noise, &short_noise));
+                    frame[1] = T::from_sample(sampler.sample_right(sample, &noise, &short_noise));
+                    // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
+                    sample_index = sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
+                }
+            },
+            |err| eprintln!("an error occurred on stream: {err}"),
+            None,
+        )
+        .unwrap()
 }

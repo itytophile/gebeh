@@ -1,5 +1,5 @@
 [workspace]
-members = ["gebeh-core", "gebeh-web"]
+members = ["gebeh-core", "gebeh-front-helper", "gebeh-web"]
 
 [package]
 name = "gebeh"
@@ -10,12 +10,12 @@ publish = false
 [dependencies]
 color-eyre = "0.6.5"
 gebeh-core = { path = "./gebeh-core" }
+gebeh-front-helper = { path = "./gebeh-front-helper" }
 env_logger = "0.11.8"
 winit = "0.29"
 pixels = "0.15.0"
 log = "0.4.29"
 cpal = "0.17.0"
-timerfd = "1.6.0"
 
 [dev-dependencies]
 arrayvec = "0.7.6"
