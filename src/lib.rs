@@ -15,10 +15,10 @@ impl<'a, T: Mbc + Clone + 'a> CloneMbc<'a> for T {
     }
 }
 
-pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a>(
+pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a + Send>(
     rom: T,
-) -> Option<Box<dyn CloneMbc<'a> + 'a>> {
-    let mbc: Box<dyn CloneMbc<'a>> =
+) -> Option<Box<dyn CloneMbc<'a> + 'a + Send>> {
+    let mbc: Box<dyn CloneMbc<'a> + Send> =
         match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()? {
             CartridgeType::RomOnly => Box::new(rom),
             CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
