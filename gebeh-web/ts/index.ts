@@ -5,8 +5,16 @@ import {
   AUDIO_PROCESSOR_NAME,
   FromMainMessage,
   FromNodeMessage,
+  GB_HEIGHT,
+  GB_WIDTH,
 } from "./common.js";
 import { addInputs } from "./keyboard.js";
+
+const status = document.getElementById("status");
+
+if (status) {
+  status.textContent = crossOriginIsolated ? "Cross origin isolated (good)" : "Not cross origin isolated (bad)";
+}
 
 const romInput = document.getElementById("rom-input");
 
@@ -49,8 +57,6 @@ if (!context) {
   throw new Error("Canvas context is null");
 }
 
-const GB_WIDTH = 160;
-const GB_HEIGHT = 144;
 const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
 imageData.data.fill(0xaa);
 context.putImageData(imageData, 0, 0);
@@ -97,7 +103,7 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
           break;
         }
         case "frame": {
-          for (const [index, value] of data.bytes.entries()) {
+          for (const [index, value] of new Uint8Array(data.buffer).entries()) {
             const offset = index * 4;
             const color =
               value === 0 ? 0xff : value === 1 ? 0xaa : value === 2 ? 0x55 : 0;

@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use gebeh_core::{Emulator, HEIGHT, WIDTH};
 use wasm_bindgen::prelude::*;
-use web_sys::{
-    console,
-    js_sys::{self, Uint8Array},
-};
+use web_sys::{console, js_sys};
 
 use crate::mbc::{get_mbc, CloneMbc};
 
@@ -48,7 +45,6 @@ pub struct WebEmulator {
     short_noise: Vec<u8>,
     sample_index: u32,
     mbc: Option<Box<dyn CloneMbc<'static>>>,
-    current_frame: [u8; WIDTH as usize * HEIGHT as usize],
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
 }
@@ -64,7 +60,6 @@ impl WebEmulator {
             short_noise: get_noise(true),
             sample_index: 0,
             mbc: None,
-            current_frame: [0; WIDTH as usize * HEIGHT as usize],
             error: 0,
         }
     }
@@ -76,6 +71,7 @@ impl WebEmulator {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
+        current_frame: &mut [u8],
     ) {
         let Some(mbc) = &mut self.mbc else {
             return;
@@ -97,18 +93,14 @@ impl WebEmulator {
                 self.emulator.execute(mbc.as_mut());
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     for (src, dst) in scanline.iter().zip(
-                        self.current_frame
-                            [usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
+                        current_frame[usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
                             .iter_mut(),
                     ) {
                         *dst = *src as u8;
                     }
                     if self.emulator.state.ly == HEIGHT - 1 {
                         let this = JsValue::null();
-                        if let Err(err) = on_new_frame.call1(
-                            &this,
-                            &JsValue::from(Uint8Array::new_from_slice(&self.current_frame)),
-                        ) {
+                        if let Err(err) = on_new_frame.call0(&this) {
                             console::error_1(&err);
                         }
                     }

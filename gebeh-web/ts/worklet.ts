@@ -4,6 +4,8 @@ import {
   AUDIO_PROCESSOR_NAME,
   FromMainMessage,
   FromNodeMessage,
+  GB_HEIGHT,
+  GB_WIDTH,
 } from "./common.js";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
@@ -40,6 +42,7 @@ class WasmProcessor
   implements AudioWorkletProcessorImpl
 {
   emulator?: WebEmulator;
+  currentFrame = new Uint8Array(new SharedArrayBuffer(GB_WIDTH * GB_HEIGHT));
 
   constructor() {
     super();
@@ -120,15 +123,13 @@ class WasmProcessor
       left,
       right,
       sampleRate,
-      (frame: Uint8Array) => {
-        this.port.postMessage(
-          {
-            type: "frame",
-            bytes: frame,
-          } satisfies FromNodeMessage,
-          [frame.buffer],
-        );
+      () => {
+        this.port.postMessage({
+          type: "frame",
+          buffer: this.currentFrame.buffer,
+        } satisfies FromNodeMessage);
       },
+      this.currentFrame,
     );
 
     return true;
