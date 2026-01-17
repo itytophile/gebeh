@@ -1,13 +1,13 @@
 use std::{
     collections::HashSet,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, mpsc::SyncSender},
 };
 
 use cpal::{
     BufferSize, FromSample, I24, SizedSample, StreamConfig,
     traits::{DeviceTrait, StreamTrait},
 };
-use gebeh::InstantRtc;
+use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     joypad::JoypadInput,
@@ -18,7 +18,7 @@ use gebeh_front_helper::get_mbc;
 
 pub fn spawn_emulator(
     device: &cpal::Device,
-    shared_frame: Arc<RwLock<[Color; WIDTH as usize * HEIGHT as usize]>>,
+    shared_frame: SyncSender<Frame>,
     shared_joypad: Arc<RwLock<JoypadInput>>,
 ) -> cpal::Stream {
     let config = device.default_output_config().unwrap();
@@ -69,7 +69,7 @@ pub fn spawn_emulator(
 fn create_stream<T>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
-    shared_frame: Arc<RwLock<[Color; WIDTH as usize * HEIGHT as usize]>>,
+    shared_frame: SyncSender<Frame>,
     shared_joypad: Arc<RwLock<JoypadInput>>,
 ) -> cpal::Stream
 where
@@ -145,8 +145,11 @@ where
                             ) {
                                 *dst = *src;
                             }
-                            if emulator.state.ly == HEIGHT - 1 {
-                                *shared_frame.write().unwrap() = current_frame;
+                            if emulator.state.ly == HEIGHT - 1
+                                && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
+                                    shared_frame.try_send(current_frame)
+                            {
+                                panic!()
                             }
                         }
                     }
