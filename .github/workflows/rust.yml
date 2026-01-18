@@ -10,13 +10,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  clippy:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
       - name: Install ALSA development packages
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
       - name: Restore cached downloads
         id: cache
         uses: actions/cache@v4
@@ -28,8 +35,6 @@ jobs:
       - name: Download test roms
         if: steps.cache.outputs.cache-hit != 'true'
         run: bash download-test-roms.sh
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets
       - uses: taiki-e/install-action@nextest
       - name: Run tests
-        run: cargo nextest r --workspace --no-fail-fast
+        run: cargo nextest r -p gebeh-core -p gebeh --no-fail-fast

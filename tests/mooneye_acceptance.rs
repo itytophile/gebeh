@@ -58,8 +58,6 @@ fn call_cc_timing2() {
 
 #[test]
 fn call_timing() {
-    color_eyre::install().unwrap();
-    env_logger::init();
     test_mooneye("call_timing.gb");
 }
 
