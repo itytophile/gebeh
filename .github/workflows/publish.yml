@@ -25,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install wasm-pack
-        run: curl https://drager.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: curl https://drager.github.io/wasm-pack/installer/init.sh -sSf | bash
       - name: Install dependencies
         run: npm ci
       - name: Build
