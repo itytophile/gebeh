@@ -688,14 +688,8 @@ name = "gebeh"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
- "color-eyre",
- "cpal",
- "env_logger",
  "gebeh-core",
  "gebeh-front-helper",
- "log",
- "pixels",
- "winit",
 ]
 
 [[package]]
@@ -713,6 +707,21 @@ name = "gebeh-front-helper"
 version = "0.1.0"
 dependencies = [
  "gebeh-core",
+]
+
+[[package]]
+name = "gebeh-native"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "cpal",
+ "env_logger",
+ "gebeh",
+ "gebeh-core",
+ "gebeh-front-helper",
+ "log",
+ "pixels",
+ "winit",
 ]
 
 [[package]]
