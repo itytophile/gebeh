@@ -42,7 +42,7 @@ class WasmProcessor
   implements AudioWorkletProcessorImpl
 {
   emulator?: WebEmulator;
-  currentFrame = new Uint8Array(new SharedArrayBuffer(GB_WIDTH * GB_HEIGHT));
+  currentFrame = new Uint8Array(new ArrayBuffer(GB_WIDTH * GB_HEIGHT));
 
   constructor() {
     super();

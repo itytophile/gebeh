@@ -4,7 +4,7 @@ export type FromNodeMessage =
       type: "ready";
     }
   | { type: "wasm" }
-  | { type: "frame"; buffer: SharedArrayBuffer };
+  | { type: "frame"; buffer: ArrayBuffer };
 export type GebehButton =
   | "a"
   | "b"
