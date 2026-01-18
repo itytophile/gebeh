@@ -1,6 +1,25 @@
 use gebeh_core::mbc::*;
 
+#[derive(Default, Clone)]
+pub struct NullRtc;
+
+impl Rtc for NullRtc {
+    fn get_clock_data(&mut self) -> RtcRegisters {
+        Default::default()
+    }
+
+    fn set_clock_data(&mut self, _: RtcRegisters) {}
+
+    fn deserialize(&mut self, _: &[u8]) {}
+
+    fn serialize(&self, _: &mut [u8]) -> usize {
+        0
+    }
+}
+
+// web-time doesn't work in AudioWorklet according to https://github.com/daxpedda/web-time/issues/45
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct InstantRtc {
     last_seen: web_time::Instant,
     last_halt: Option<web_time::Instant>,
