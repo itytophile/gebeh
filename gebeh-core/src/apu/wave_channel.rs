@@ -78,11 +78,11 @@ impl WaveChannel {
         }
     }
 
-    pub fn tick(&mut self, div: u8) {
+    pub fn tick(&mut self, div_apu: u8) {
         if !self.is_on() {
             return;
         }
-        self.length.tick(div);
+        self.length.tick(div_apu);
     }
 }
 

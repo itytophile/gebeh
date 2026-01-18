@@ -68,17 +68,17 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     // must be called at 1048576 Hz (once per four dots)
-    pub fn tick(&mut self, div: u8) {
+    pub fn tick(&mut self, div_apu: u8) {
         if !self.is_on() {
             return;
         }
-        let (is_enabled_from_sweep, new_period) = self.sweep.tick(div);
+        let (is_enabled_from_sweep, new_period) = self.sweep.tick(div_apu);
         if let Some(period) = new_period {
             self.set_period_value(period);
         }
         self.is_enabled = is_enabled_from_sweep;
-        self.length.tick(div);
-        self.volume_and_envelope.tick(div);
+        self.length.tick(div_apu);
+        self.volume_and_envelope.tick(div_apu);
     }
 
     // 11 bits

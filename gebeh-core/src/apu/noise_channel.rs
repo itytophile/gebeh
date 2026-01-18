@@ -47,12 +47,12 @@ impl NoiseChannel {
         self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
-    pub fn tick(&mut self, div: u8) {
+    pub fn tick(&mut self, div_apu: u8) {
         if !self.is_on() {
             return;
         }
-        self.length.tick(div);
-        self.volume_and_envelope.tick(div);
+        self.length.tick(div_apu);
+        self.volume_and_envelope.tick(div_apu);
     }
     fn get_divider(&self) -> u8 {
         self.nr43 & 0x7

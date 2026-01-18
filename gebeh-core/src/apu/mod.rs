@@ -12,6 +12,17 @@ mod pulse_channel;
 mod sweep;
 mod wave_channel;
 
+#[derive(Default, Clone)]
+pub struct FallingEdge(bool);
+
+impl FallingEdge {
+    pub fn update(&mut self, value: bool) -> bool {
+        let previous = self.0;
+        self.0 = value;
+        previous && !value
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Apu {
     is_on: bool,
@@ -21,6 +32,9 @@ pub struct Apu {
     pub ch2: PulseChannel<()>,
     pub ch3: WaveChannel,
     pub ch4: NoiseChannel,
+    // https://gbdev.io/pandocs/Audio_details.html#div-apu
+    div_apu: u8,
+    falling_edge: FallingEdge,
 }
 
 bitflags::bitflags! {
@@ -97,10 +111,16 @@ impl Apu {
         if !self.is_on {
             return;
         }
-        self.ch1.tick(div);
-        self.ch2.tick(div);
-        self.ch3.tick(div);
-        self.ch4.tick(div);
+
+        // 512 Hz
+        if self.falling_edge.update(div & (1 << 4) != 0) {
+            self.div_apu = self.div_apu.wrapping_add(1);
+        }
+
+        self.ch1.tick(self.div_apu);
+        self.ch2.tick(self.div_apu);
+        self.ch3.tick(self.div_apu);
+        self.ch4.tick(self.div_apu);
     }
 
     pub fn get_sampler(&self) -> Sampler {
