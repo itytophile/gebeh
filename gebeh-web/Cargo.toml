@@ -1,9 +1,9 @@
 # You must change these to your own details.
 [package]
 name = "gebeh-web"
-description = "My super awesome Rust, WebAssembly, and Webpack project!"
+description = "Web front of the gebeh emulator"
 version = "0.1.0"
-authors = ["You <you@example.com>"]
+authors = ["Imran Tierce <imran.tierce@protonmail.com>"]
 categories = ["wasm"]
 readme = "README.md"
 edition = "2024"
