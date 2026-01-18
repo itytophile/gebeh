@@ -93,3 +93,45 @@ fn mbc1_rom_512kb() {
 fn mbc1_rom_8mb() {
     test_mooneye("mbc1/rom_8Mb.gb");
 }
+
+// mbc5
+
+#[test]
+fn mbc5_rom_16mb() {
+    test_mooneye("mbc5/rom_16Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_1mb() {
+    test_mooneye("mbc5/rom_1Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_2mb() {
+    test_mooneye("mbc5/rom_2Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_32mb() {
+    test_mooneye("mbc5/rom_32Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_4mb() {
+    test_mooneye("mbc5/rom_4Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_64mb() {
+    test_mooneye("mbc5/rom_64Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_8mb() {
+    test_mooneye("mbc5/rom_8Mb.gb");
+}
+
+#[test]
+fn mbc5_rom_512kb() {
+    test_mooneye("mbc5/rom_512kb.gb");
+}

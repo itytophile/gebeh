@@ -26,7 +26,7 @@ pub fn get_mbc<
                 Box::new(Mbc1::new(rom))
             }
             CartridgeType::Mbc3RamBattery => Box::new(Mbc3::new(rom, U::default())),
-            CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
+            CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
         };
     Some(mbc)
 }
