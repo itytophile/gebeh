@@ -2,8 +2,8 @@ use crate::apu::{envelope::VolumeAndEnvelope, length::Length};
 
 #[derive(Default, Clone)]
 pub struct NoiseChannel {
-    length: Length<64>,
-    volume_and_envelope: VolumeAndEnvelope,
+    pub length: Length<64>,
+    pub volume_and_envelope: VolumeAndEnvelope,
     nr43: u8,
     is_enabled: bool,
 }
@@ -47,13 +47,6 @@ impl NoiseChannel {
         self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
-    pub fn tick(&mut self, div_apu: u8) {
-        if !self.is_on() {
-            return;
-        }
-        self.length.tick(div_apu);
-        self.volume_and_envelope.tick(div_apu);
-    }
     fn get_divider(&self) -> u8 {
         self.nr43 & 0x7
     }

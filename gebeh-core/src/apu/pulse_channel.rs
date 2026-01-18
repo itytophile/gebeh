@@ -14,9 +14,9 @@ const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
-    length: Length<64>,
+    pub length: Length<64>,
     duty_cycle: u8,
-    volume_and_envelope: VolumeAndEnvelope,
+    pub volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,
     period_high: u8,
     is_enabled: bool,
@@ -67,18 +67,15 @@ impl<S: Sweep> PulseChannel<S> {
         self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
-    // must be called at 1048576 Hz (once per four dots)
-    pub fn tick(&mut self, div_apu: u8) {
+    pub fn tick_sweep(&mut self) {
         if !self.is_on() {
-            return;
+            return
         }
-        let (is_enabled_from_sweep, new_period) = self.sweep.tick(div_apu);
+        let (is_enabled_from_sweep, new_period) = self.sweep.tick();
         if let Some(period) = new_period {
             self.set_period_value(period);
         }
         self.is_enabled = is_enabled_from_sweep;
-        self.length.tick(div_apu);
-        self.volume_and_envelope.tick(div_apu);
     }
 
     // 11 bits

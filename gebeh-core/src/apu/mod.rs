@@ -115,12 +115,21 @@ impl Apu {
         // 512 Hz
         if self.falling_edge.update(div & (1 << 4) != 0) {
             self.div_apu = self.div_apu.wrapping_add(1);
+            if self.div_apu.is_multiple_of(2) {
+                self.ch1.length.tick();
+                self.ch2.length.tick();
+                self.ch3.length.tick();
+                self.ch4.length.tick();
+            }
+            if self.div_apu.is_multiple_of(4) {
+                self.ch1.tick_sweep();
+            }
+            if self.div_apu.is_multiple_of(8) {
+                self.ch1.volume_and_envelope.tick();
+                self.ch2.volume_and_envelope.tick();
+                self.ch4.volume_and_envelope.tick();
+            }
         }
-
-        self.ch1.tick(self.div_apu);
-        self.ch2.tick(self.div_apu);
-        self.ch3.tick(self.div_apu);
-        self.ch4.tick(self.div_apu);
     }
 
     pub fn get_sampler(&self) -> Sampler {

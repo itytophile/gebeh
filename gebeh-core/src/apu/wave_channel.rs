@@ -4,7 +4,7 @@ use crate::apu::length::Length;
 pub struct WaveChannel {
     is_enabled: bool,
     is_dac_on: bool,
-    length: Length<256>,
+    pub length: Length<256>,
     output_level: u8, // 2 bits
     effective_output_level: u8,
     period: u16, // 11 bits
@@ -76,13 +76,6 @@ impl WaveChannel {
             ram: self.ram,
             period: self.period,
         }
-    }
-
-    pub fn tick(&mut self, div_apu: u8) {
-        if !self.is_on() {
-            return;
-        }
-        self.length.tick(div_apu);
     }
 }
 

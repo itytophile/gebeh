@@ -1,11 +1,8 @@
-use crate::apu::FallingEdge;
-
 #[derive(Clone, Default)]
 pub struct Length<const L: u16> {
     pub is_enable: bool,
     initial_timer_length: u8,
     current_timer_value: u16,
-    falling_edge: FallingEdge,
 }
 
 impl Length<64> {
@@ -31,12 +28,9 @@ impl<const L: u16> Length<L> {
         }
     }
 
-    pub fn tick(&mut self, div_apu: u8) {
+    pub fn tick(&mut self) {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
-        if !self.is_expired()
-            && self.is_enable
-            && self.falling_edge.update(!div_apu.is_multiple_of(2))
-        {
+        if !self.is_expired() && self.is_enable {
             self.current_timer_value += 1;
         }
     }

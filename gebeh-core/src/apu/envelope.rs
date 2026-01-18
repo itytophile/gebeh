@@ -1,12 +1,9 @@
-use crate::apu::FallingEdge;
-
 #[derive(Clone, Default)]
 struct EnvelopeTimer {
     value: u8, // 4 bits
     is_increasing: bool,
     sweep_pace: u8, // 3 bits
     pace_count: u8,
-    falling_edge: FallingEdge,
 }
 
 impl EnvelopeTimer {
@@ -16,11 +13,11 @@ impl EnvelopeTimer {
         self.sweep_pace = volume_and_envelope & 0x07;
         self.pace_count = 0;
     }
-    fn tick(&mut self, div_apu: u8) {
+    fn tick(&mut self) {
         // https://gbdev.io/pandocs/Audio_Registers.html#ff12--nr12-channel-1-volume--envelope
         // A setting of 0 disables the envelope.
         // about multiple of 8 https://gbdev.io/pandocs/Audio_details.html#div-apu
-        if self.sweep_pace == 0 || !self.falling_edge.update(!div_apu.is_multiple_of(8)) {
+        if self.sweep_pace == 0 {
             return;
         }
 
@@ -68,7 +65,7 @@ impl VolumeAndEnvelope {
         self.timer.trigger(self.register);
     }
 
-    pub fn tick(&mut self, div: u8) {
-        self.timer.tick(div);
+    pub fn tick(&mut self) {
+        self.timer.tick();
     }
 }
