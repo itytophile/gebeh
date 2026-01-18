@@ -2,7 +2,6 @@
 pub struct Ch1Sweep {
     pub nr10: u8,
     pace_count: u8,
-    falling_edge: bool,
     period_value: u16,
     // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
     // Citation: Note that the value written to this field is not re-read by the hardware
@@ -44,7 +43,7 @@ pub trait Sweep {
     fn trigger(&mut self, period: u16) -> Option<u16>;
     // is channel still enable, new period value
     #[must_use]
-    fn tick(&mut self, div: u8) -> (bool, Option<u16>);
+    fn tick(&mut self) -> (bool, Option<u16>);
     #[must_use]
     fn get_period_value(&self) -> Option<u16>;
 }
@@ -68,7 +67,7 @@ impl Sweep for Ch1Sweep {
     }
 
     // Returns channel on/off
-    fn tick(&mut self, div: u8) -> (bool, Option<u16>) {
+    fn tick(&mut self) -> (bool, Option<u16>) {
         if !self.is_enabled {
             return (true, None);
         }
@@ -83,14 +82,6 @@ impl Sweep for Ch1Sweep {
         if self.pace == 0 {
             return (true, None);
         }
-        // 128 Hz
-        let has_ticked = div & (1 << 4) != 0;
-
-        if self.falling_edge == has_ticked {
-            return (true, None);
-        }
-
-        self.falling_edge = has_ticked;
 
         self.pace_count += 1;
 
@@ -110,11 +101,10 @@ impl Sweep for Ch1Sweep {
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: then frequency calculation and overflow check are run again immediately
         // using this new value, but this second new frequency is not written back
-        if self.compute_next_value_and_check_overflow().is_none() {
-            return (false, Some(new_period_value));
-        }
-
-        (true, Some(new_period_value))
+        (
+            self.compute_next_value_and_check_overflow().is_some(),
+            Some(new_period_value),
+        )
     }
 
     fn get_period_value(&self) -> Option<u16> {
@@ -131,7 +121,7 @@ impl Sweep for () {
         None
     }
 
-    fn tick(&mut self, _: u8) -> (bool, Option<u16>) {
+    fn tick(&mut self) -> (bool, Option<u16>) {
         (true, None)
     }
 

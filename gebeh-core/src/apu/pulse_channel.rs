@@ -24,6 +24,16 @@ pub struct PulseChannel<S: Sweep> {
 }
 
 impl<S: Sweep> PulseChannel<S> {
+    pub fn tick_envelope(&mut self) {
+        if self.is_on() {
+            self.volume_and_envelope.tick();
+        }
+    }
+    pub fn tick_length(&mut self) {
+        if self.is_on() {
+            self.length.tick();
+        }
+    }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
     }
@@ -67,20 +77,15 @@ impl<S: Sweep> PulseChannel<S> {
         self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
-    // must be called at 1048576 Hz (once per four dots)
-    pub fn tick(&mut self, div: u8) {
+    pub fn tick_sweep(&mut self) {
         if !self.is_on() {
             return;
         }
-        // don't use && directly because it is lazy
-        // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
-        let (is_enabled_from_sweep, new_period) = self.sweep.tick(div);
+        let (is_enabled_from_sweep, new_period) = self.sweep.tick();
         if let Some(period) = new_period {
             self.set_period_value(period);
         }
         self.is_enabled = is_enabled_from_sweep;
-        self.length.tick(div);
-        self.volume_and_envelope.tick(div);
     }
 
     // 11 bits
@@ -90,7 +95,7 @@ impl<S: Sweep> PulseChannel<S> {
 
     fn set_period_value(&mut self, value: u16) {
         self.period_low = value as u8;
-        self.period_high = self.period_high & 0b11000000 | ((value >> 4) as u8) & 0x07;
+        self.period_high = ((value >> 8) as u8) & 0x07;
     }
 
     pub fn get_sampler(&self) -> PulseSampler {

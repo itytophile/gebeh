@@ -12,6 +12,11 @@ pub struct WaveChannel {
 }
 
 impl WaveChannel {
+    pub fn tick_length(&mut self) {
+        if self.is_on() {
+            self.length.tick();
+        }
+    }
     pub fn get_nr30(&self) -> u8 {
         ((self.is_dac_on as u8) << 7) | 0b01111111
     }
@@ -76,13 +81,6 @@ impl WaveChannel {
             ram: self.ram,
             period: self.period,
         }
-    }
-
-    pub fn tick(&mut self, div: u8) {
-        if !self.is_on() {
-            return;
-        }
-        self.length.tick(div);
     }
 }
 

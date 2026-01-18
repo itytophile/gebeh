@@ -9,6 +9,16 @@ pub struct NoiseChannel {
 }
 
 impl NoiseChannel {
+    pub fn tick_envelope(&mut self) {
+        if self.is_on() {
+            self.volume_and_envelope.tick();
+        }
+    }
+    pub fn tick_length(&mut self) {
+        if self.is_on() {
+            self.length.tick();
+        }
+    }
     pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
     }
@@ -47,13 +57,6 @@ impl NoiseChannel {
         self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
     }
 
-    pub fn tick(&mut self, div: u8) {
-        if !self.is_on() {
-            return;
-        }
-        self.length.tick(div);
-        self.volume_and_envelope.tick(div);
-    }
     fn get_divider(&self) -> u8 {
         self.nr43 & 0x7
     }

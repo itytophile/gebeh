@@ -12,6 +12,17 @@ mod pulse_channel;
 mod sweep;
 mod wave_channel;
 
+#[derive(Default, Clone)]
+pub struct FallingEdge(bool);
+
+impl FallingEdge {
+    pub fn update(&mut self, value: bool) -> bool {
+        let previous = self.0;
+        self.0 = value;
+        previous && !value
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Apu {
     is_on: bool,
@@ -21,6 +32,9 @@ pub struct Apu {
     pub ch2: PulseChannel<()>,
     pub ch3: WaveChannel,
     pub ch4: NoiseChannel,
+    // https://gbdev.io/pandocs/Audio_details.html#div-apu
+    div_apu: u8,
+    falling_edge: FallingEdge,
 }
 
 bitflags::bitflags! {
@@ -97,10 +111,25 @@ impl Apu {
         if !self.is_on {
             return;
         }
-        self.ch1.tick(div);
-        self.ch2.tick(div);
-        self.ch3.tick(div);
-        self.ch4.tick(div);
+
+        // 512 Hz
+        if self.falling_edge.update(div & (1 << 4) != 0) {
+            self.div_apu = self.div_apu.wrapping_add(1);
+            if self.div_apu.is_multiple_of(2) {
+                self.ch1.tick_length();
+                self.ch2.tick_length();
+                self.ch3.tick_length();
+                self.ch4.tick_length();
+            }
+            if self.div_apu.is_multiple_of(4) {
+                self.ch1.tick_sweep();
+            }
+            if self.div_apu.is_multiple_of(8) {
+                self.ch1.tick_envelope();
+                self.ch2.tick_envelope();
+                self.ch4.tick_envelope();
+            }
+        }
     }
 
     pub fn get_sampler(&self) -> Sampler {
@@ -125,27 +154,23 @@ pub struct Sampler {
     nr50: Nr50,
 }
 
-// we have to keep the sound wave between -1 and 1
-const GAIN_NOISE: f32 = 0.15;
-const GAIN_CHANNEL: f32 = (1. - GAIN_NOISE) / 3.;
-
 impl Sampler {
     #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample) * GAIN_CHANNEL
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(sample) * GAIN_CHANNEL
+            self.ch2.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
-            self.ch3.sample(sample) * GAIN_CHANNEL
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
-            self.ch4.sample(sample, noise, short_noise) * GAIN_NOISE
+            self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
         })) * self.get_volume_left()
@@ -154,19 +179,19 @@ impl Sampler {
     #[must_use]
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(sample) * GAIN_CHANNEL
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(sample) * GAIN_CHANNEL
+            self.ch2.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
-            self.ch3.sample(sample) * GAIN_CHANNEL
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
-            self.ch4.sample(sample, noise, short_noise) * GAIN_NOISE
+            self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
         })) * self.get_volume_right()
