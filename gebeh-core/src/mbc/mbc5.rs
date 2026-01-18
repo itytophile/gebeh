@@ -24,8 +24,12 @@ impl<T: Deref<Target = [u8]>> Mbc5<T> {
         }
     }
 
+    fn get_rom_bank_count(&self) -> u16 {
+        get_factor_32_kib_rom(self.rom.deref()) << 1
+    }
+
     fn get_switchable_rom_offset(&self) -> usize {
-        usize::from(self.rom_bank) * usize::from(ROM_BANK_SIZE)
+        usize::from(self.rom_bank & (self.get_rom_bank_count() - 1)) * usize::from(ROM_BANK_SIZE)
     }
 
     fn get_ram_offset(&self) -> usize {
@@ -53,7 +57,7 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc5<T> {
     fn write(&mut self, index: u16, value: u8) {
         match index {
             0x0000..0x2000 => self.ram_enabled = (value & 0x0f) == 0x0a,
-            0x2000..0x3000 => self.rom_bank = u16::from(value),
+            0x2000..0x3000 => self.rom_bank = self.rom_bank & 0xff00 | u16::from(value),
             0x3000..0x4000 => self.rom_bank = (u16::from(value & 1) << 8) | self.rom_bank & 0xff,
             0x4000..0x6000 => self.ram_bank = value & 0x0f,
             EXTERNAL_RAM..WORK_RAM => {
