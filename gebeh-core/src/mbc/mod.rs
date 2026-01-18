@@ -45,6 +45,7 @@ pub enum CartridgeType {
     Mbc1Ram,
     Mbc1RamBattery,
     Mbc3RamBattery,
+    Mbc5,
     Mbc5RamBattery,
 }
 
@@ -52,12 +53,14 @@ impl TryFrom<u8> for CartridgeType {
     type Error = u8;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
+        // https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
         match value {
             0 => Ok(Self::RomOnly),
             1 => Ok(Self::Mbc1),
             2 => Ok(Self::Mbc1Ram),
             3 => Ok(Self::Mbc1RamBattery),
             0x13 => Ok(Self::Mbc3RamBattery),
+            0x19 => Ok(Self::Mbc5),
             0x1b => Ok(Self::Mbc5RamBattery),
             _ => Err(value),
         }
