@@ -116,18 +116,18 @@ impl Apu {
         if self.falling_edge.update(div & (1 << 4) != 0) {
             self.div_apu = self.div_apu.wrapping_add(1);
             if self.div_apu.is_multiple_of(2) {
-                self.ch1.length.tick();
-                self.ch2.length.tick();
-                self.ch3.length.tick();
-                self.ch4.length.tick();
+                self.ch1.tick_length();
+                self.ch2.tick_length();
+                self.ch3.tick_length();
+                self.ch4.tick_length();
             }
             if self.div_apu.is_multiple_of(4) {
                 self.ch1.tick_sweep();
             }
             if self.div_apu.is_multiple_of(8) {
-                self.ch1.volume_and_envelope.tick();
-                self.ch2.volume_and_envelope.tick();
-                self.ch4.volume_and_envelope.tick();
+                self.ch1.tick_envelope();
+                self.ch2.tick_envelope();
+                self.ch4.tick_envelope();
             }
         }
     }

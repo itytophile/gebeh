@@ -14,9 +14,9 @@ const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
-    pub length: Length<64>,
+    length: Length<64>,
     duty_cycle: u8,
-    pub volume_and_envelope: VolumeAndEnvelope,
+    volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,
     period_high: u8,
     is_enabled: bool,
@@ -24,6 +24,16 @@ pub struct PulseChannel<S: Sweep> {
 }
 
 impl<S: Sweep> PulseChannel<S> {
+    pub fn tick_envelope(&mut self) {
+        if self.is_on() {
+            self.volume_and_envelope.tick();
+        }
+    }
+    pub fn tick_length(&mut self) {
+        if self.is_on() {
+            self.length.tick();
+        }
+    }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
     }
@@ -69,7 +79,7 @@ impl<S: Sweep> PulseChannel<S> {
 
     pub fn tick_sweep(&mut self) {
         if !self.is_on() {
-            return
+            return;
         }
         let (is_enabled_from_sweep, new_period) = self.sweep.tick();
         if let Some(period) = new_period {

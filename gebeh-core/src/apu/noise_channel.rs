@@ -2,13 +2,23 @@ use crate::apu::{envelope::VolumeAndEnvelope, length::Length};
 
 #[derive(Default, Clone)]
 pub struct NoiseChannel {
-    pub length: Length<64>,
-    pub volume_and_envelope: VolumeAndEnvelope,
+    length: Length<64>,
+    volume_and_envelope: VolumeAndEnvelope,
     nr43: u8,
     is_enabled: bool,
 }
 
 impl NoiseChannel {
+    pub fn tick_envelope(&mut self) {
+        if self.is_on() {
+            self.volume_and_envelope.tick();
+        }
+    }
+    pub fn tick_length(&mut self) {
+        if self.is_on() {
+            self.length.tick();
+        }
+    }
     pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
     }
