@@ -72,8 +72,6 @@ impl<S: Sweep> PulseChannel<S> {
         if !self.is_on() {
             return;
         }
-        // don't use && directly because it is lazy
-        // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.bool-logic.conditional-evaluation
         let (is_enabled_from_sweep, new_period) = self.sweep.tick(div);
         if let Some(period) = new_period {
             self.set_period_value(period);
@@ -90,7 +88,7 @@ impl<S: Sweep> PulseChannel<S> {
 
     fn set_period_value(&mut self, value: u16) {
         self.period_low = value as u8;
-        self.period_high = self.period_high & 0b11000000 | ((value >> 4) as u8) & 0x07;
+        self.period_high = ((value >> 8) as u8) & 0x07;
     }
 
     pub fn get_sampler(&self) -> PulseSampler {

@@ -84,7 +84,7 @@ impl Sweep for Ch1Sweep {
             return (true, None);
         }
         // 128 Hz
-        let has_ticked = div & (1 << 4) != 0;
+        let has_ticked = div & (1 << 6) != 0;
 
         if self.falling_edge == has_ticked {
             return (true, None);
@@ -110,11 +110,10 @@ impl Sweep for Ch1Sweep {
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: then frequency calculation and overflow check are run again immediately
         // using this new value, but this second new frequency is not written back
-        if self.compute_next_value_and_check_overflow().is_none() {
-            return (false, Some(new_period_value));
-        }
-
-        (true, Some(new_period_value))
+        (
+            self.compute_next_value_and_check_overflow().is_some(),
+            Some(new_period_value),
+        )
     }
 
     fn get_period_value(&self) -> Option<u16> {
