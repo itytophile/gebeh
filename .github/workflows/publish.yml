@@ -29,7 +29,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Page dir
-        run: mkdir page && cp -R assets/ dist/ pkg/ index.html style.css page/
+        run: mkdir page && cp -R assets/ dist/ pkg/ polyfill/ index.html style.css page/
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
