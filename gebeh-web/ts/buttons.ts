@@ -51,7 +51,10 @@ export function addButtons(port: MessagePort) {
     down: false,
   };
 
+  let isPointerDown = false;
+
   dpad.addEventListener("pointerdown", (event) => {
+    isPointerDown = true;
     event.preventDefault();
     // to be able to move the finger while pressing and change buttons
     dpad.setPointerCapture(event.pointerId);
@@ -64,11 +67,16 @@ export function addButtons(port: MessagePort) {
   dpad.addEventListener("pointercancel", cancelPointer);
 
   function cancelPointer(event: PointerEvent) {
+    isPointerDown = false;
     dpad.releasePointerCapture(event.pointerId);
     applyDpadState({ down: false, left: false, right: false, up: false });
   }
 
   function handlePress(event: PointerEvent) {
+    if (!isPointerDown) {
+      return;
+    }
+
     const rect = dpad.getBoundingClientRect();
 
     const inside =
