@@ -13,11 +13,13 @@ body {
 canvas {
   image-rendering: pixelated;
 }
+
 .content {
   display: flex;
   flex-direction: column;
   max-width: 60dvh;
   width: 100%;
+  touch-action: none; /* To prevent double tap on mobile */
 }
 
 .buttons-dpads-row {
