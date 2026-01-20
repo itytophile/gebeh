@@ -18,11 +18,8 @@ pub struct WebEmulator {
     error: u32,
 }
 
-#[wasm_bindgen]
-impl WebEmulator {
-    #[allow(clippy::new_without_default)]
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
+impl Default for WebEmulator {
+    fn default() -> Self {
         Self {
             emulator: Default::default(),
             noise: get_noise(false),
@@ -31,6 +28,14 @@ impl WebEmulator {
             mbc: None,
             error: 0,
         }
+    }
+}
+
+#[wasm_bindgen]
+impl WebEmulator {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Default::default()
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
@@ -91,7 +96,10 @@ impl WebEmulator {
             return;
         };
         console::log_1(&JsValue::from_str("Rom loaded!"));
-        self.mbc = Some(mbc);
+        *self = Self {
+            mbc: Some(mbc),
+            ..Default::default()
+        };
     }
 
     pub fn set_a(&mut self, value: bool) {
