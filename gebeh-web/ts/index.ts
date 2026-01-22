@@ -28,11 +28,15 @@ romInput.addEventListener("change", async () => {
   const node = await getAudioWorkletNode();
 
   if (isNodeReady) {
-    node.port.postMessage({
-      type: "rom",
-      bytes,
-      save: await getSave(getTitleFromRom(new Uint8Array(bytes))),
-    } satisfies FromMainMessage);
+    const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
+    node.port.postMessage(
+      {
+        type: "rom",
+        bytes,
+        save,
+      } satisfies FromMainMessage,
+      save ? [bytes, save] : [bytes],
+    );
   } else {
     notReadyRom = bytes;
   }
@@ -79,15 +83,16 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
           // ready
           isNodeReady = true;
           if (notReadyRom) {
+            const save = await getSave(
+              getTitleFromRom(new Uint8Array(notReadyRom)),
+            );
             port.postMessage(
               {
                 type: "rom",
                 bytes: notReadyRom,
-                save: await getSave(
-                  getTitleFromRom(new Uint8Array(notReadyRom)),
-                ),
+                save,
               } satisfies FromMainMessage,
-              [notReadyRom],
+              save ? [notReadyRom, save] : [notReadyRom],
             );
           }
           break;
