@@ -89,7 +89,7 @@ where
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     // don't forget to use arc or you will clone the rom for each save state
-    let mut mbc = get_mbc::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
     let mut emulator = Emulator::default();
 
     let config = StreamConfig {

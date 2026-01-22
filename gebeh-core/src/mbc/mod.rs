@@ -53,6 +53,20 @@ pub enum CartridgeType {
     Mbc5RamBattery,
 }
 
+impl CartridgeType {
+    pub fn has_battery(&self) -> bool {
+        use CartridgeType::*;
+        matches!(
+            self,
+            Mbc1RamBattery
+                | Mbc3TimerBattery
+                | Mbc3TimerRamBattery
+                | Mbc3RamBattery
+                | Mbc5RamBattery
+        )
+    }
+}
+
 impl TryFrom<u8> for CartridgeType {
     type Error = u8;
 

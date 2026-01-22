@@ -16,6 +16,7 @@ pub struct WebEmulator {
     mbc: Option<Box<dyn CloneMbc<'static>>>,
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
+    is_save_enabled: bool,
 }
 
 impl Default for WebEmulator {
@@ -27,6 +28,7 @@ impl Default for WebEmulator {
             sample_index: 0,
             mbc: None,
             error: 0,
+            is_save_enabled: false,
         }
     }
 }
@@ -91,13 +93,14 @@ impl WebEmulator {
 
     pub fn load_rom(&mut self, rom: Vec<u8>) {
         console::log_1(&JsValue::from_str("Loading rom"));
-        let Some(mbc) = get_mbc::<_, NullRtc>(rom) else {
+        let Some((cartridge_type, mbc)) = get_mbc::<_, NullRtc>(rom) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return;
         };
         console::log_1(&JsValue::from_str("Rom loaded!"));
         *self = Self {
             mbc: Some(mbc),
+            is_save_enabled: cartridge_type.has_battery(),
             ..Default::default()
         };
     }

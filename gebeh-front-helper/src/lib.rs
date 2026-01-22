@@ -18,21 +18,21 @@ pub fn get_mbc<
     U: Rtc + Default + Send + Clone + 'a,
 >(
     rom: T,
-) -> Option<Box<dyn CloneMbc<'a> + 'a + Send>> {
-    let mbc: Box<dyn CloneMbc<'a> + Send> =
-        match CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()? {
-            CartridgeType::RomOnly => Box::new(rom),
-            CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-                Box::new(Mbc1::new(rom))
-            }
-            CartridgeType::Mbc3
-            | CartridgeType::Mbc3Ram
-            | CartridgeType::Mbc3RamBattery
-            | CartridgeType::Mbc3TimerBattery
-            | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, U::default())),
-            CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
-        };
-    Some(mbc)
+) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a + Send>)> {
+    let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
+    let mbc: Box<dyn CloneMbc<'a> + Send> = match cartridge_type {
+        CartridgeType::RomOnly => Box::new(rom),
+        CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
+            Box::new(Mbc1::new(rom))
+        }
+        CartridgeType::Mbc3
+        | CartridgeType::Mbc3Ram
+        | CartridgeType::Mbc3RamBattery
+        | CartridgeType::Mbc3TimerBattery
+        | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, U::default())),
+        CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
+    };
+    Some((cartridge_type, mbc))
 }
 
 // for sampling reasons we have to generate the noise values at program start
