@@ -91,13 +91,22 @@ impl WebEmulator {
         }
     }
 
-    pub fn load_rom(&mut self, rom: Vec<u8>) {
+    pub fn load_rom(&mut self, rom: Vec<u8>, save: Option<Vec<u8>>) {
         console::log_1(&JsValue::from_str("Loading rom"));
-        let Some((cartridge_type, mbc)) = get_mbc::<_, NullRtc>(rom) else {
+        let Some((cartridge_type, mut mbc)) = get_mbc::<_, NullRtc>(rom) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return;
         };
+        if let Some(save) = save {
+            console::log_1(&JsValue::from_str("Loading save"));
+            mbc.load_saved_ram(&save);
+        }
         console::log_1(&JsValue::from_str("Rom loaded!"));
+
+        if cartridge_type.has_battery() {
+            console::log_1(&JsValue::from_str("Saves enabled"));
+        }
+
         *self = Self {
             mbc: Some(mbc),
             is_save_enabled: cartridge_type.has_battery(),

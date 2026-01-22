@@ -51,7 +51,10 @@ class WasmProcessor
       ({ data }: MessageEvent<FromMainMessage>) => {
         switch (data.type) {
           case "rom": {
-            this.emulator?.load_rom(new Uint8Array(data.bytes));
+            this.emulator?.load_rom(
+              new Uint8Array(data.bytes),
+              data.save ? new Uint8Array(data.save) : undefined,
+            );
             break;
           }
           case "wasm": {
