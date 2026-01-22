@@ -72,12 +72,13 @@ fn create_stream<T>(
 where
     T: SizedSample + FromSample<f32>,
 {
-    // let rom = std::fs::read("/home/ityt/Téléchargements/dmg-acid2.gb").unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/pocket/pocket.gb").unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/gejmboj/gejmboj.gb").unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/oh_2/oh.gb").unwrap();
-    // let rom = std::fs::read("/home/ityt/Téléchargements/20y/20y.gb").unwrap();
-    let rom = std::fs::read("/home/ityt/Téléchargements/mallard/mallard.gb").unwrap();
+    let rom = std::fs::read(
+        std::env::args()
+            .nth(1)
+            .expect("Please provide a path as first argument"),
+    )
+    .unwrap();
+
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
     let title = &rom[0x134..0x143];
     let end_zero_pos = title
