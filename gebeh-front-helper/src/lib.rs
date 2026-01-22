@@ -62,3 +62,13 @@ pub fn get_noise(is_short: bool) -> Vec<u8> {
     }
     noise
 }
+
+// https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
+pub fn get_title_from_rom(rom: &[u8]) -> &str {
+    let title = &rom[0x134..0x143];
+    let end_zero_pos = title
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(title.len());
+    str::from_utf8(&title[..end_zero_pos]).unwrap()
+}

@@ -127,3 +127,8 @@ impl WebEmulator {
         self.emulator.get_joypad_mut().up = value;
     }
 }
+
+#[wasm_bindgen]
+pub fn get_title_from_rom(rom: &[u8]) -> String {
+    gebeh_front_helper::get_title_from_rom(rom).to_owned()
+}

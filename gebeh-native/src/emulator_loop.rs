@@ -11,7 +11,7 @@ use gebeh_core::{
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Color,
 };
-use gebeh_front_helper::{get_mbc, get_noise};
+use gebeh_front_helper::{get_mbc, get_noise, get_title_from_rom};
 
 pub fn spawn_emulator(
     device: &cpal::Device,
@@ -79,14 +79,7 @@ where
     )
     .unwrap();
 
-    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0134-0143--title
-    let title = &rom[0x134..0x143];
-    let end_zero_pos = title
-        .iter()
-        .position(|byte| *byte == 0)
-        .unwrap_or(title.len());
-    let title = str::from_utf8(&title[..end_zero_pos]).unwrap();
-    println!("Title: {title}");
+    println!("Title: {}", get_title_from_rom(&rom));
 
     // https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
     let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();

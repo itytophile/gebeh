@@ -1,5 +1,6 @@
 // try to not import wasm functions here (let's have some fun)
 
+import { get_title_from_rom } from "../pkg/gebeh_web.js";
 import { addButtons } from "./buttons.js";
 import {
   AUDIO_PROCESSOR_NAME,
@@ -9,24 +10,7 @@ import {
   GB_WIDTH,
 } from "./common.js";
 import { addInputs } from "./keyboard.js";
-
-const request = indexedDB.open("gebeh", 0);
-
-let database: IDBDatabase | undefined;
-
-request.onupgradeneeded = () => {
-  const database = request.result;
-
-  database.addEventListener("error", (event) => {
-    console.error("Error loading database", event);
-  });
-
-  database.createObjectStore("saves");
-};
-
-request.onsuccess = () => {
-  database = request.result;
-};
+import { getSave, writeSave } from "./saves.js";
 
 const romInput = document.getElementById("rom-input");
 
@@ -43,10 +27,12 @@ romInput.addEventListener("change", async () => {
 
   const bytes = await file.arrayBuffer();
   const node = await getAudioWorkletNode();
+
   if (isNodeReady) {
     node.port.postMessage({
       type: "rom",
       bytes,
+      save: await getSave(get_title_from_rom(new Uint8Array(bytes))),
     } satisfies FromMainMessage);
   } else {
     notReadyRom = bytes;
@@ -88,14 +74,20 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
   port.addEventListener(
     "message",
-    ({ data }: MessageEvent<FromNodeMessage>) => {
+    async ({ data }: MessageEvent<FromNodeMessage>) => {
       switch (data.type) {
         case "ready": {
           // ready
           isNodeReady = true;
           if (notReadyRom) {
             port.postMessage(
-              { type: "rom", bytes: notReadyRom } satisfies FromMainMessage,
+              {
+                type: "rom",
+                bytes: notReadyRom,
+                save: await getSave(
+                  get_title_from_rom(new Uint8Array(notReadyRom)),
+                ),
+              } satisfies FromMainMessage,
               [notReadyRom],
             );
           }
@@ -125,6 +117,10 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
             imageData.data[offset + 3] = 255; // A value
           }
           context.putImageData(imageData, 0, 0);
+          break;
+        }
+        case "save": {
+          await writeSave(data.title, data.buffer);
         }
       }
     },
