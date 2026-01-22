@@ -15,7 +15,7 @@ fn cpu_instrs() {
 
     let rom = std::fs::read("./downloads/gb-test-roms-master/cpu_instrs/cpu_instrs.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
     let mut serial = TestSerial(None);
 
@@ -34,7 +34,7 @@ fn instr_timing() {
     let rom =
         std::fs::read("./downloads/gb-test-roms-master/instr_timing/instr_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
     let mut serial = TestSerial(None);
 
@@ -52,7 +52,7 @@ fn mem_timing() {
 
     let rom = std::fs::read("./downloads/gb-test-roms-master/mem_timing/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
     let mut serial = TestSerial(None);
 
@@ -68,7 +68,7 @@ fn mem_timing_2() {
     const EXPECTED: &str = "mem_timing\n\n01:ok  02:ok  03:ok  \n\nPassed\n";
     let rom = std::fs::read("./downloads/gb-test-roms-master/mem_timing-2/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
 
     let output = loop {

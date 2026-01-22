@@ -6,7 +6,7 @@ use gebeh_front_helper::get_mbc;
 fn dmg_acid2() {
     let rom = std::fs::read("./downloads/dmg-acid2.gb").unwrap();
     let rom = rom.as_slice();
-    let mut mbc = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let expected = include_bytes!("acid2_expected.txt");
