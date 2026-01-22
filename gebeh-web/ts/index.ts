@@ -1,6 +1,5 @@
 // try to not import wasm functions here (let's have some fun)
 
-import { get_title_from_rom } from "../pkg/gebeh_web.js";
 import { addButtons } from "./buttons.js";
 import {
   AUDIO_PROCESSOR_NAME,
@@ -32,7 +31,7 @@ romInput.addEventListener("change", async () => {
     node.port.postMessage({
       type: "rom",
       bytes,
-      save: await getSave(get_title_from_rom(new Uint8Array(bytes))),
+      save: await getSave(getTitleFromRom(new Uint8Array(bytes))),
     } satisfies FromMainMessage);
   } else {
     notReadyRom = bytes;
@@ -85,7 +84,7 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
                 type: "rom",
                 bytes: notReadyRom,
                 save: await getSave(
-                  get_title_from_rom(new Uint8Array(notReadyRom)),
+                  getTitleFromRom(new Uint8Array(notReadyRom)),
                 ),
               } satisfies FromMainMessage,
               [notReadyRom],
@@ -129,3 +128,15 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   node.connect(audioContext.destination);
   return node;
 };
+
+function getTitleFromRom(rom: Uint8Array): string {
+  const title = rom.slice(0x134, 0x143);
+
+  let endZeroPos = title.indexOf(0);
+  if (endZeroPos === -1) {
+    endZeroPos = title.length;
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  return decoder.decode(title.slice(0, endZeroPos));
+}
