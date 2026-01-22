@@ -24,7 +24,7 @@ romInput.addEventListener("change", async () => {
     return;
   }
 
-  const bytes = await file.bytes();
+  const bytes = new Uint8Array(await file.arrayBuffer());
   const node = await getAudioWorkletNode();
 
   if (isNodeReady) {
