@@ -141,4 +141,8 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
     fn get_additional_data_to_save(&self, _: &mut [u8]) -> usize {
         0
     }
+
+    fn get_rom(&self) -> &[u8] {
+        &self.rom
+    }
 }

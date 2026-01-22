@@ -1,5 +1,5 @@
 use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH};
-use gebeh_front_helper::{CloneMbc, get_mbc, get_noise};
+use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
 
@@ -114,6 +114,19 @@ impl WebEmulator {
         };
     }
 
+    pub fn get_save(&self) -> Option<Save> {
+        if !self.is_save_enabled {
+            return None;
+        }
+
+        let mbc = self.mbc.as_deref()?;
+
+        Some(Save {
+            ram: mbc.get_ram_to_save()?.into(),
+            game_title: get_title_from_rom(mbc.get_rom()).to_owned(),
+        })
+    }
+
     pub fn set_a(&mut self, value: bool) {
         self.emulator.get_joypad_mut().a = value;
     }
@@ -137,5 +150,22 @@ impl WebEmulator {
     }
     pub fn set_up(&mut self, value: bool) {
         self.emulator.get_joypad_mut().up = value;
+    }
+}
+
+#[wasm_bindgen]
+pub struct Save {
+    ram: Box<[u8]>,
+    game_title: String,
+}
+
+#[wasm_bindgen]
+impl Save {
+    pub fn get_ram(&self) -> Box<[u8]> {
+        self.ram.clone()
+    }
+
+    pub fn get_game_title(&self) -> String {
+        self.game_title.clone()
     }
 }

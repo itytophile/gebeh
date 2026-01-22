@@ -24,7 +24,7 @@ romInput.addEventListener("change", async () => {
     return;
   }
 
-  const bytes = await file.arrayBuffer();
+  const bytes = await file.bytes();
   const node = await getAudioWorkletNode();
 
   if (isNodeReady) {
@@ -35,7 +35,7 @@ romInput.addEventListener("change", async () => {
         bytes,
         save,
       } satisfies FromMainMessage,
-      save ? [bytes, save] : [bytes],
+      save ? [bytes.buffer, save.buffer] : [bytes.buffer],
     );
   } else {
     notReadyRom = bytes;
@@ -44,7 +44,7 @@ romInput.addEventListener("change", async () => {
 
 let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
-let notReadyRom: ArrayBuffer | undefined;
+let notReadyRom: Uint8Array | undefined;
 
 const canvas = document.getElementById("canvas");
 
@@ -92,7 +92,7 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
                 bytes: notReadyRom,
                 save,
               } satisfies FromMainMessage,
-              save ? [notReadyRom, save] : [notReadyRom],
+              save ? [notReadyRom.buffer, save.buffer] : [notReadyRom.buffer],
             );
           }
           break;
@@ -101,11 +101,11 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
           console.log("Sending wasm");
           // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
           void fetch("pkg/gebeh_web_bg.wasm")
-            .then((response) => response.arrayBuffer())
+            .then((response) => response.bytes())
             .then((bytes) => {
               port.postMessage(
                 { type: "wasm", bytes } satisfies FromMainMessage,
-                [bytes],
+                [bytes.buffer],
               );
             });
           break;

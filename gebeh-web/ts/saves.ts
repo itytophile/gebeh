@@ -22,7 +22,7 @@ async function getDatabase(): Promise<IDBDatabase> {
   return database;
 }
 
-export async function writeSave(title: string, buffer: ArrayBuffer) {
+export async function writeSave(title: string, buffer: Uint8Array) {
   const database = await getDatabase();
   const request = database
     .transaction(OBJECT_STORE_NAME, "readwrite")
@@ -31,7 +31,7 @@ export async function writeSave(title: string, buffer: ArrayBuffer) {
   await waitRequest(request);
 }
 
-export async function getSave(title: string): Promise<ArrayBuffer | undefined> {
+export async function getSave(title: string): Promise<Uint8Array | undefined> {
   const database = await getDatabase();
   const request = database
     .transaction(OBJECT_STORE_NAME, "readonly")
@@ -40,7 +40,7 @@ export async function getSave(title: string): Promise<ArrayBuffer | undefined> {
   await waitRequest(request);
   const result: unknown = request.result;
 
-  if (result === undefined || result instanceof ArrayBuffer) {
+  if (result === undefined || result instanceof Uint8Array) {
     return result;
   }
 
