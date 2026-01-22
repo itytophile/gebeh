@@ -1,5 +1,5 @@
 use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH};
-use gebeh_front_helper::{CloneMbc, get_mbc, get_noise};
+use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
 
@@ -16,6 +16,7 @@ pub struct WebEmulator {
     mbc: Option<Box<dyn CloneMbc<'static>>>,
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
+    is_save_enabled: bool,
 }
 
 impl Default for WebEmulator {
@@ -27,6 +28,7 @@ impl Default for WebEmulator {
             sample_index: 0,
             mbc: None,
             error: 0,
+            is_save_enabled: false,
         }
     }
 }
@@ -89,17 +91,40 @@ impl WebEmulator {
         }
     }
 
-    pub fn load_rom(&mut self, rom: Vec<u8>) {
+    pub fn load_rom(&mut self, rom: Vec<u8>, save: Option<Vec<u8>>) {
         console::log_1(&JsValue::from_str("Loading rom"));
-        let Some(mbc) = get_mbc::<_, NullRtc>(rom) else {
+        let Some((cartridge_type, mut mbc)) = get_mbc::<_, NullRtc>(rom) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return;
         };
+        if let Some(save) = save {
+            console::log_1(&JsValue::from_str("Loading save"));
+            mbc.load_saved_ram(&save);
+        }
         console::log_1(&JsValue::from_str("Rom loaded!"));
+
+        if cartridge_type.has_battery() {
+            console::log_1(&JsValue::from_str("Saves enabled"));
+        }
+
         *self = Self {
             mbc: Some(mbc),
+            is_save_enabled: cartridge_type.has_battery(),
             ..Default::default()
         };
+    }
+
+    pub fn get_save(&self) -> Option<Save> {
+        if !self.is_save_enabled {
+            return None;
+        }
+
+        let mbc = self.mbc.as_deref()?;
+
+        Some(Save {
+            ram: mbc.get_ram_to_save()?.into(),
+            game_title: get_title_from_rom(mbc.get_rom()).to_owned(),
+        })
     }
 
     pub fn set_a(&mut self, value: bool) {
@@ -125,5 +150,22 @@ impl WebEmulator {
     }
     pub fn set_up(&mut self, value: bool) {
         self.emulator.get_joypad_mut().up = value;
+    }
+}
+
+#[wasm_bindgen]
+pub struct Save {
+    ram: Box<[u8]>,
+    game_title: String,
+}
+
+#[wasm_bindgen]
+impl Save {
+    pub fn get_ram(&self) -> Box<[u8]> {
+        self.ram.clone()
+    }
+
+    pub fn get_game_title(&self) -> String {
+        self.game_title.clone()
     }
 }

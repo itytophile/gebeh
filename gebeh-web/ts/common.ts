@@ -4,7 +4,8 @@ export type FromNodeMessage =
       type: "ready";
     }
   | { type: "wasm" }
-  | { type: "frame"; buffer: ArrayBuffer };
+  | { type: "frame"; buffer: Uint8Array }
+  | { type: "save"; buffer: Uint8Array; title: string };
 export type GebehButton =
   | "a"
   | "b"
@@ -17,9 +18,10 @@ export type GebehButton =
 export type FromMainMessage =
   | {
       type: "rom";
-      bytes: ArrayBuffer;
+      bytes: Uint8Array;
+      save?: Uint8Array;
     }
-  | { type: "wasm"; bytes: ArrayBuffer }
+  | { type: "wasm"; bytes: Uint8Array }
   | {
       type: "input";
       event: "up" | "down";

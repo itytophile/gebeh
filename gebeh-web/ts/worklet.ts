@@ -43,6 +43,7 @@ class WasmProcessor
 {
   emulator?: WebEmulator;
   currentFrame = new Uint8Array(new ArrayBuffer(GB_WIDTH * GB_HEIGHT));
+  poor_mans_time = 0;
 
   constructor() {
     super();
@@ -51,7 +52,10 @@ class WasmProcessor
       ({ data }: MessageEvent<FromMainMessage>) => {
         switch (data.type) {
           case "rom": {
-            this.emulator?.load_rom(new Uint8Array(data.bytes));
+            this.emulator?.load_rom(
+              new Uint8Array(data.bytes),
+              data.save ? new Uint8Array(data.save) : undefined,
+            );
             break;
           }
           case "wasm": {
@@ -119,18 +123,43 @@ class WasmProcessor
       throw new Error("No stereo");
     }
 
-    this.emulator?.drive_and_sample(
+    if (!this.emulator) {
+      return true;
+    }
+
+    this.emulator.drive_and_sample(
       left,
       right,
       sampleRate,
       () => {
         this.port.postMessage({
           type: "frame",
-          buffer: this.currentFrame.buffer,
+          buffer: this.currentFrame,
         } satisfies FromNodeMessage);
       },
       this.currentFrame,
     );
+
+    // https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletProcessor/process
+    // Citation: audio data blocks are always 128 frames long
+    // loop every ~5 seconds
+    this.poor_mans_time =
+      (this.poor_mans_time + 1) % Math.round((sampleRate / 128) * 5);
+
+    if (this.poor_mans_time === 0) {
+      const save = this.emulator.get_save();
+      if (save) {
+        const ram = save.get_ram();
+        this.port.postMessage(
+          {
+            type: "save",
+            buffer: ram,
+            title: save.get_game_title(),
+          } satisfies FromNodeMessage,
+          [ram.buffer],
+        );
+      }
+    }
 
     return true;
   }

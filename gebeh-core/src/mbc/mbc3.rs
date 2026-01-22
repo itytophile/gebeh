@@ -198,4 +198,8 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
     fn get_additional_data_to_save(&self, buffer: &mut [u8]) -> usize {
         self.rtc.serialize(buffer)
     }
+
+    fn get_rom(&self) -> &[u8] {
+        &self.rom
+    }
 }

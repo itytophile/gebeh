@@ -9,6 +9,7 @@ import {
   GB_WIDTH,
 } from "./common.js";
 import { addInputs } from "./keyboard.js";
+import { getSave, writeSave } from "./saves.js";
 
 const romInput = document.getElementById("rom-input");
 
@@ -23,13 +24,19 @@ romInput.addEventListener("change", async () => {
     return;
   }
 
-  const bytes = await file.arrayBuffer();
+  const bytes = await file.bytes();
   const node = await getAudioWorkletNode();
+
   if (isNodeReady) {
-    node.port.postMessage({
-      type: "rom",
-      bytes,
-    } satisfies FromMainMessage);
+    const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
+    node.port.postMessage(
+      {
+        type: "rom",
+        bytes,
+        save,
+      } satisfies FromMainMessage,
+      save ? [bytes.buffer, save.buffer] : [bytes.buffer],
+    );
   } else {
     notReadyRom = bytes;
   }
@@ -37,7 +44,7 @@ romInput.addEventListener("change", async () => {
 
 let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
-let notReadyRom: ArrayBuffer | undefined;
+let notReadyRom: Uint8Array | undefined;
 
 const canvas = document.getElementById("canvas");
 
@@ -70,15 +77,22 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
   port.addEventListener(
     "message",
-    ({ data }: MessageEvent<FromNodeMessage>) => {
+    async ({ data }: MessageEvent<FromNodeMessage>) => {
       switch (data.type) {
         case "ready": {
           // ready
           isNodeReady = true;
           if (notReadyRom) {
+            const save = await getSave(
+              getTitleFromRom(new Uint8Array(notReadyRom)),
+            );
             port.postMessage(
-              { type: "rom", bytes: notReadyRom } satisfies FromMainMessage,
-              [notReadyRom],
+              {
+                type: "rom",
+                bytes: notReadyRom,
+                save,
+              } satisfies FromMainMessage,
+              save ? [notReadyRom.buffer, save.buffer] : [notReadyRom.buffer],
             );
           }
           break;
@@ -87,11 +101,11 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
           console.log("Sending wasm");
           // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
           void fetch("pkg/gebeh_web_bg.wasm")
-            .then((response) => response.arrayBuffer())
+            .then((response) => response.bytes())
             .then((bytes) => {
               port.postMessage(
                 { type: "wasm", bytes } satisfies FromMainMessage,
-                [bytes],
+                [bytes.buffer],
               );
             });
           break;
@@ -107,6 +121,10 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
             imageData.data[offset + 3] = 255; // A value
           }
           context.putImageData(imageData, 0, 0);
+          break;
+        }
+        case "save": {
+          await writeSave(data.title, data.buffer);
         }
       }
     },
@@ -115,3 +133,15 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   node.connect(audioContext.destination);
   return node;
 };
+
+function getTitleFromRom(rom: Uint8Array): string {
+  const title = rom.slice(0x134, 0x143);
+
+  let endZeroPos = title.indexOf(0);
+  if (endZeroPos === -1) {
+    endZeroPos = title.length;
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  return decoder.decode(title.slice(0, endZeroPos));
+}

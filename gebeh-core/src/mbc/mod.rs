@@ -11,6 +11,7 @@ pub use mbc5::*;
 // this trait will make people able to build alien MBCs.
 // Be careful about monomorphization
 pub trait Mbc {
+    fn get_rom(&self) -> &[u8];
     // maybe too much responsibility?
     fn load_saved_ram(&mut self, save: &[u8]);
     // useful for RTC at the moment
@@ -36,6 +37,10 @@ impl<T: Deref<Target = [u8]>> Mbc for T {
     }
     fn load_saved_ram(&mut self, _: &[u8]) {}
     fn load_additional_data(&mut self, _: &[u8]) {}
+
+    fn get_rom(&self) -> &[u8] {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -51,6 +56,20 @@ pub enum CartridgeType {
     Mbc3RamBattery,
     Mbc5,
     Mbc5RamBattery,
+}
+
+impl CartridgeType {
+    pub fn has_battery(&self) -> bool {
+        use CartridgeType::*;
+        matches!(
+            self,
+            Mbc1RamBattery
+                | Mbc3TimerBattery
+                | Mbc3TimerRamBattery
+                | Mbc3RamBattery
+                | Mbc5RamBattery
+        )
+    }
 }
 
 impl TryFrom<u8> for CartridgeType {
