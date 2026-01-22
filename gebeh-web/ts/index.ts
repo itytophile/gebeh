@@ -10,6 +10,24 @@ import {
 } from "./common.js";
 import { addInputs } from "./keyboard.js";
 
+const request = indexedDB.open("gebeh", 0);
+
+let database: IDBDatabase | undefined;
+
+request.onupgradeneeded = () => {
+  const database = request.result;
+
+  database.addEventListener("error", (event) => {
+    console.error("Error loading database", event);
+  });
+
+  database.createObjectStore("saves");
+};
+
+request.onsuccess = () => {
+  database = request.result;
+};
+
 const romInput = document.getElementById("rom-input");
 
 if (!(romInput instanceof HTMLInputElement)) {
