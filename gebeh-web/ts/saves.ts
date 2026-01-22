@@ -7,7 +7,7 @@ async function getDatabase(): Promise<IDBDatabase> {
     return database;
   }
 
-  const request = indexedDB.open("gebeh", 0);
+  const request = indexedDB.open("gebeh", 1);
   request.onupgradeneeded = () => {
     const database = request.result;
 
