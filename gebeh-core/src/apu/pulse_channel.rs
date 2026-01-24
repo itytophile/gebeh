@@ -58,6 +58,8 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8, cycles: u64) {
         if !self.length.is_enable && value & 0x40 != 0 {
             self.length.is_enable = true;
+            // for this hack to work, the cpu must be executed after the apu (I suppose)
+            // according to blargg "Enabling in first half of length period should clock length"
             if div_apu.is_multiple_of(2) {
                 self.length.tick(cycles, ch);
             }
