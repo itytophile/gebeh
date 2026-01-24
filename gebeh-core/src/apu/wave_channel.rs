@@ -82,6 +82,13 @@ impl WaveChannel {
             period: self.period,
         }
     }
+
+    pub fn reset_but_keep_ram(&self) -> Self {
+        Self {
+            ram: self.ram,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Default)]

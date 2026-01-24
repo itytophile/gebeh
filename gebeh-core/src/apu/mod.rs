@@ -91,7 +91,10 @@ impl Apu {
         }
         self.is_on = is_on;
         if !self.is_on {
-            *self = Default::default();
+            *self = Self {
+                ch3: self.ch3.reset_but_keep_ram(),
+                ..Default::default()
+            }
         }
     }
     pub fn get_nr51(&self) -> u8 {
