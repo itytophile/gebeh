@@ -13,7 +13,7 @@ pub struct WaveChannel {
 
 impl WaveChannel {
     pub fn tick_length(&mut self, cycles: u64) {
-        self.length.tick(cycles, "wave");
+        self.is_enabled &= !self.length.tick(cycles, "wave");
     }
     pub fn get_nr30(&self) -> u8 {
         ((self.is_dac_on as u8) << 7) | 0b01111111
@@ -60,7 +60,7 @@ impl WaveChannel {
         self.effective_output_level = self.output_level;
     }
     pub fn is_on(&self) -> bool {
-        self.is_enabled && !self.length.is_expired()
+        self.is_enabled
     }
     // let's ignore specific behaviors
     // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram

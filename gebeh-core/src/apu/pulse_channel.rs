@@ -30,7 +30,7 @@ impl<S: Sweep> PulseChannel<S> {
         }
     }
     pub fn tick_length(&mut self, cycles: u64, ch: &'static str) {
-        self.length.tick(cycles, ch);
+        self.is_enabled &= !self.length.tick(cycles, ch);
     }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
@@ -61,7 +61,7 @@ impl<S: Sweep> PulseChannel<S> {
             // for this hack to work, the cpu must be executed after the apu (I suppose)
             // according to blargg "Enabling in first half of length period should clock length"
             if div_apu.is_multiple_of(2) {
-                self.length.tick(cycles, ch);
+                self.tick_length(cycles, ch);
             }
             log::info!("{ch} length enabled!")
         }
@@ -93,7 +93,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     pub fn is_on(&self) -> bool {
-        self.is_enabled && !self.length.is_expired()
+        self.is_enabled
     }
 
     pub fn tick_sweep(&mut self) {

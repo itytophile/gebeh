@@ -18,7 +18,7 @@ impl NoiseChannel {
         }
     }
     pub fn tick_length(&mut self, cycles: u64) {
-        self.length.tick(cycles, "noise");
+        self.is_enabled &= !self.length.tick(cycles, "noise");
     }
     pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
@@ -60,7 +60,7 @@ impl NoiseChannel {
     }
 
     pub fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
+        self.volume_and_envelope.is_dac_on() && self.is_enabled
     }
 
     fn get_divider(&self) -> u8 {
