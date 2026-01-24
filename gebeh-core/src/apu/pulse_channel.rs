@@ -58,12 +58,13 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8, cycles: u64) {
         if !self.length.is_enable && value & 0x40 != 0 {
             self.length.is_enable = true;
+            log::info!("{ch} length enabled!");
             // for this hack to work, the cpu must be executed after the apu (I suppose)
             // according to blargg "Enabling in first half of length period should clock length"
             if div_apu.is_multiple_of(2) {
+                log::info!("extra tick");
                 self.tick_length(cycles, ch);
             }
-            log::info!("{ch} length enabled!")
         }
         if self.length.is_enable && value & 0x40 == 0 {
             log::info!("{ch} length disabled!")
@@ -72,16 +73,16 @@ impl<S: Sweep> PulseChannel<S> {
 
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {
-            self.trigger(ch);
+            self.trigger(ch, div_apu.is_multiple_of(2));
         }
     }
 
-    pub fn trigger(&mut self, ch: &'static str) {
+    pub fn trigger(&mut self, ch: &'static str, extra_clock: bool) {
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.volume_and_envelope.is_dac_on() {
             return;
         }
-        self.length.trigger();
+        self.length.trigger(extra_clock);
         if !self.is_enabled {
             log::info!("{ch} enabled!")
         }

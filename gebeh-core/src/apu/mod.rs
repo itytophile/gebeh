@@ -214,7 +214,7 @@ impl Apu {
             CH3_PERIOD_LOW => self.ch3.write_nr33(value),
             CH3_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch3 control");
-                self.ch3.write_nr34(value)
+                self.ch3.write_nr34(value, self.div_apu)
             }
             0xff1f => {}
             CH4_LENGTH_TIMER => self.ch4.write_nr41(value),
@@ -222,7 +222,7 @@ impl Apu {
             CH4_FREQUENCY_AND_RANDOMNESS => self.ch4.write_nr43(value),
             CH4_CONTROL => {
                 log::info!("Writing to ch4 control");
-                self.ch4.write_nr44(value)
+                self.ch4.write_nr44(value, self.div_apu)
             }
             MASTER_VOLUME_AND_VIN_PANNING => self.write_nr50(value),
             SOUND_PANNING => self.write_nr51(value),

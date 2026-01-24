@@ -43,19 +43,19 @@ impl WaveChannel {
     pub fn get_nr34(&self) -> u8 {
         ((self.length.is_enable as u8) << 6) | 0b10111111
     }
-    pub fn write_nr34(&mut self, value: u8) {
+    pub fn write_nr34(&mut self, value: u8, div_apu: u8) {
         self.period = (u16::from(value & 0x07) << 8) | self.period & 0x00ff;
         self.length.is_enable = value & 0x40 != 0;
         if value & 0x80 != 0 {
-            self.trigger();
+            self.trigger(div_apu.is_multiple_of(2));
         }
     }
-    fn trigger(&mut self) {
+    fn trigger(&mut self, extra_clock: bool) {
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.is_dac_on {
             return;
         }
-        self.length.trigger();
+        self.length.trigger(extra_clock);
         self.is_enabled = true;
         self.effective_output_level = self.output_level;
     }

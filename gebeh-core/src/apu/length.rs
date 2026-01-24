@@ -4,37 +4,34 @@ pub const MASK_6_BITS: u8 = 0x3f;
 #[derive(Clone, Default, Debug)]
 pub struct Length<const MASK: u8> {
     pub is_enable: bool,
-    current_timer_value: u8,
+    current_timer_value: Option<u8>, // None = overflowed
 }
 
 impl<const MASK: u8> Length<MASK> {
     pub fn set_initial_timer_length(&mut self, value: u8) {
         // according to blargg "Length can be reloaded at any time"
-        self.current_timer_value = MASK - (value & MASK);
+        self.current_timer_value = Some(MASK - (value & MASK));
     }
 
-    pub fn trigger(&mut self) {
-        log::info!("trigger {:?}", self);
-        if self.current_timer_value == 0 {
-            self.current_timer_value = MASK;
+    pub fn trigger(&mut self, extra_clock: bool) {
+        log::info!("trigger with extra = {}, {:?}", extra_clock, self);
+        if self.current_timer_value.is_none() {
+            // according to blargg "Trigger that un-freezes enabled length should clock it"
+            self.current_timer_value = Some(MASK - (extra_clock && self.is_enable) as u8);
         }
     }
 
     // returns true if overflow
     #[must_use]
     pub fn tick(&mut self, cycles: u64, ch: &'static str) -> bool {
-        if !self.is_enable {
+        let (Some(prout), true) = (self.current_timer_value, self.is_enable) else {
             return false;
-        }
+        };
 
-        log::info!("{cycles}: {ch} tick! {}", self.current_timer_value);
+        log::info!("{cycles}: {ch} tick! {}", prout);
 
-        if let Some(lol) = self.current_timer_value.checked_sub(1) {
-            self.current_timer_value = lol;
-            return false;
-        }
+        self.current_timer_value = prout.checked_sub(1);
 
-        log::info!("{ch} Expired!");
-        true
+        self.current_timer_value.is_none()
     }
 }
