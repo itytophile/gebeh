@@ -30,9 +30,7 @@ impl<S: Sweep> PulseChannel<S> {
         }
     }
     pub fn tick_length(&mut self, cycles: u64) {
-        if self.is_on() {
-            self.length.tick(cycles);
-        }
+        self.length.tick(cycles);
     }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111

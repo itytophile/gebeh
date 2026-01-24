@@ -23,11 +23,11 @@ impl<const MASK: u8> Length<MASK> {
         self.has_overflowed = false;
     }
 
-    pub fn tick(&mut self, cycles: u64) {
+    pub fn tick(&mut self, _: u64) {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
-        if !self.is_expired() && self.is_enable {
+        if self.is_enable {
             self.current_timer_value = self.current_timer_value.wrapping_add(1) & MASK;
-            self.has_overflowed = self.current_timer_value == 0;
+            self.has_overflowed |= self.current_timer_value == 0;
         }
     }
 }

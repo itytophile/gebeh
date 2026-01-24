@@ -18,9 +18,7 @@ impl NoiseChannel {
         }
     }
     pub fn tick_length(&mut self, cycles: u64) {
-        if self.is_on() {
-            self.length.tick(cycles);
-        }
+        self.length.tick(cycles);
     }
     pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
