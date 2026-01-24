@@ -1,4 +1,4 @@
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Length<const L: u16> {
     pub is_enable: bool,
     initial_timer_length: u8,
@@ -22,8 +22,8 @@ impl<const L: u16> Length<L> {
         self.current_timer_value == L
     }
 
-    pub fn trigger(&mut self) {
-        if self.is_expired() {
+    pub fn trigger(&mut self, force_reset: bool) {
+        if self.is_expired() || force_reset {
             self.current_timer_value = u16::from(self.initial_timer_length);
         }
     }
@@ -32,6 +32,10 @@ impl<const L: u16> Length<L> {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
         if !self.is_expired() && self.is_enable {
             self.current_timer_value += 1;
+            log::info!("{} / {}", self.current_timer_value, L);
+            if self.is_expired() {
+                log::info!("Expiré !")
+            }
         }
     }
 }

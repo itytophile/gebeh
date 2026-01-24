@@ -633,6 +633,9 @@ impl Cpu {
                 self.sbc(self.get_8bit_register(register));
             }
             NoRead(And8Bit(register)) => {
+                if register == Register8Bit::B {
+                    log::info!("AND B");
+                }
                 let result = self.a & self.get_8bit_register(register);
                 self.a = result;
                 let flags = &mut self.f;

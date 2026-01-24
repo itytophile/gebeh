@@ -82,6 +82,9 @@ impl Apu {
         flags.set(Nr52::CH3_ON, self.ch3.is_on());
         flags.set(Nr52::CH2_ON, self.ch2.is_on());
         flags.set(Nr52::CH1_ON, self.ch1.is_on());
+
+        log::info!("{flags:?}");
+
         flags.bits() | 0b01110000
     }
     pub fn write_nr52(&mut self, value: u8) {
@@ -187,25 +190,40 @@ impl Apu {
 
         match index {
             CH1_SWEEP => self.ch1.write_nr10(value),
-            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch1.write_nrx1(value),
+            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => {
+                log::info!("ch1 Writing to length 0b{value:08b}");
+                self.ch1.write_nrx1(value)
+            }
             CH1_VOLUME_AND_ENVELOPE => self.ch1.write_nrx2(value),
             CH1_PERIOD_LOW => self.ch1.write_nrx3(value),
-            CH1_PERIOD_HIGH_AND_CONTROL => self.ch1.write_nrx4(value),
+            CH1_PERIOD_HIGH_AND_CONTROL => {
+                log::info!("Writing to ch1 control");
+                self.ch1.write_nrx4(value)
+            }
             0xff15 => {}
             CH2_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch2.write_nrx1(value),
             CH2_VOLUME_AND_ENVELOPE => self.ch2.write_nrx2(value),
             CH2_PERIOD_LOW => self.ch2.write_nrx3(value),
-            CH2_PERIOD_HIGH_AND_CONTROL => self.ch2.write_nrx4(value),
+            CH2_PERIOD_HIGH_AND_CONTROL => {
+                log::info!("Writing to ch2 control");
+                self.ch2.write_nrx4(value)
+            }
             CH3_DAC_ENABLE => self.ch3.write_nr30(value),
             CH3_LENGTH_TIMER => self.ch3.write_nr31(value),
             CH3_OUTPUT_LEVEL => self.ch3.write_nr32(value),
             CH3_PERIOD_LOW => self.ch3.write_nr33(value),
-            CH3_PERIOD_HIGH_AND_CONTROL => self.ch3.write_nr34(value),
+            CH3_PERIOD_HIGH_AND_CONTROL => {
+                log::info!("Writing to ch3 control");
+                self.ch3.write_nr34(value)
+            }
             0xff1f => {}
             CH4_LENGTH_TIMER => self.ch4.write_nr41(value),
             CH4_VOLUME_AND_ENVELOPE => self.ch4.write_nr42(value),
             CH4_FREQUENCY_AND_RANDOMNESS => self.ch4.write_nr43(value),
-            CH4_CONTROL => self.ch4.write_nr44(value),
+            CH4_CONTROL => {
+                log::info!("Writing to ch4 control");
+                self.ch4.write_nr44(value)
+            }
             MASTER_VOLUME_AND_VIN_PANNING => self.write_nr50(value),
             SOUND_PANNING => self.write_nr51(value),
             AUDIO_MASTER_CONTROL => self.write_nr52(value),

@@ -48,8 +48,8 @@ impl NoiseChannel {
     }
 
     fn trigger(&mut self) {
+        self.length.trigger(!self.is_enabled);
         self.is_enabled = true;
-        self.length.trigger();
         self.volume_and_envelope.trigger();
     }
 

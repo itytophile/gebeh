@@ -65,8 +65,8 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     pub fn trigger(&mut self) {
+        self.length.trigger(!self.is_enabled);
         self.is_enabled = true;
-        self.length.trigger();
         self.volume_and_envelope.trigger();
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
             self.set_period_value(new_period);
