@@ -55,8 +55,12 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn get_nrx4(&self) -> u8 {
         ((self.length.is_enable as u8) << 6) | 0b10111111
     }
-    pub fn write_nrx4(&mut self, value: u8, ch: &'static str) {
+    pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8, cycles: u64) {
         if !self.length.is_enable && value & 0x40 != 0 {
+            self.length.is_enable = true;
+            if div_apu.is_multiple_of(2) {
+                self.length.tick(cycles, ch);
+            }
             log::info!("{ch} length enabled!")
         }
         if self.length.is_enable && value & 0x40 == 0 {

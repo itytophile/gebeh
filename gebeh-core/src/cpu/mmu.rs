@@ -104,7 +104,7 @@ impl MmuCpuExt for State {
         &mut self,
         index: u16,
         value: u8,
-        _: u64,
+        cycles: u64,
         cpu: &mut Cpu,
         peripherals: Peripherals<M>,
     ) {
@@ -141,7 +141,7 @@ impl MmuCpuExt for State {
             TIMER_CONTROL => peripherals.timer.set_tac(value),
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
-            CH1_SWEEP..LCD_CONTROL => peripherals.apu.write(index, value),
+            CH1_SWEEP..LCD_CONTROL => peripherals.apu.write(index, value, cycles),
             LCD_CONTROL => self.lcd_control = LcdControl::from_bits_truncate(value),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),

@@ -181,7 +181,7 @@ impl Apu {
         }
     }
 
-    pub fn write(&mut self, index: u16, value: u8) {
+    pub fn write(&mut self, index: u16, value: u8, cycles: u64) {
         use crate::state::*;
 
         if (CH1_SWEEP..AUDIO_MASTER_CONTROL).contains(&index) && !self.is_on {
@@ -198,7 +198,7 @@ impl Apu {
             CH1_PERIOD_LOW => self.ch1.write_nrx3(value),
             CH1_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch1 control");
-                self.ch1.write_nrx4(value, "ch1")
+                self.ch1.write_nrx4(value, "ch1", self.div_apu, cycles)
             }
             0xff15 => {}
             CH2_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch2.write_nrx1(value),
@@ -206,7 +206,7 @@ impl Apu {
             CH2_PERIOD_LOW => self.ch2.write_nrx3(value),
             CH2_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch2 control");
-                self.ch2.write_nrx4(value, "ch2")
+                self.ch2.write_nrx4(value, "ch2", self.div_apu, cycles)
             }
             CH3_DAC_ENABLE => self.ch3.write_nr30(value),
             CH3_LENGTH_TIMER => self.ch3.write_nr31(value),
