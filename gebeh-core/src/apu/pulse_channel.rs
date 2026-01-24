@@ -44,6 +44,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
     pub fn write_nrx2(&mut self, value: u8) {
         self.volume_and_envelope.write_register(value);
+        self.is_enabled &= self.volume_and_envelope.is_dac_on();
     }
     pub fn get_nrx3(&self) -> u8 {
         0xff
@@ -63,6 +64,10 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     pub fn trigger(&mut self) {
+        // according to blargg "Disabled DAC should prevent enable at trigger"
+        if !self.volume_and_envelope.is_dac_on() {
+            return;
+        }
         self.length.trigger();
         self.is_enabled = true;
         self.volume_and_envelope.trigger();
@@ -72,7 +77,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     pub fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
+        self.is_enabled && !self.length.is_expired()
     }
 
     pub fn tick_sweep(&mut self) {

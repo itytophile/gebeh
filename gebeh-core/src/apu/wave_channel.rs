@@ -20,6 +20,7 @@ impl WaveChannel {
     }
     pub fn write_nr30(&mut self, value: u8) {
         self.is_dac_on = value & 0x80 != 0;
+        self.is_enabled &= self.is_dac_on;
     }
     pub fn get_nr31(&self) -> u8 {
         0xff
@@ -50,12 +51,16 @@ impl WaveChannel {
         }
     }
     fn trigger(&mut self) {
+        // according to blargg "Disabled DAC should prevent enable at trigger"
+        if !self.is_dac_on {
+            return;
+        }
         self.length.trigger();
         self.is_enabled = true;
         self.effective_output_level = self.output_level;
     }
     pub fn is_on(&self) -> bool {
-        self.is_enabled && self.is_dac_on && !self.length.is_expired()
+        self.is_enabled && !self.length.is_expired()
     }
     // let's ignore specific behaviors
     // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram

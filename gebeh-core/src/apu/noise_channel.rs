@@ -28,6 +28,7 @@ impl NoiseChannel {
     }
     pub fn write_nr42(&mut self, value: u8) {
         self.volume_and_envelope.write_register(value);
+        self.is_enabled &= self.volume_and_envelope.is_dac_on();
     }
     pub fn read_nr42(&self) -> u8 {
         self.volume_and_envelope.get_register()
@@ -49,6 +50,10 @@ impl NoiseChannel {
     }
 
     fn trigger(&mut self) {
+        // according to blargg "Disabled DAC should prevent enable at trigger"
+        if !self.volume_and_envelope.is_dac_on() {
+            return;
+        }
         self.length.trigger();
         self.is_enabled = true;
         self.volume_and_envelope.trigger();
