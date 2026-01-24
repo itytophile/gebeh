@@ -180,6 +180,11 @@ impl Apu {
 
     pub fn write(&mut self, index: u16, value: u8) {
         use crate::state::*;
+
+        if (CH1_SWEEP..AUDIO_MASTER_CONTROL).contains(&index) && !self.is_on {
+            return;
+        }
+
         match index {
             CH1_SWEEP => self.ch1.write_nr10(value),
             CH1_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch1.write_nrx1(value),
