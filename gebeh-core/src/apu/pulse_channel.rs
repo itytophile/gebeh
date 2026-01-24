@@ -53,20 +53,13 @@ impl<S: Sweep> PulseChannel<S> {
         self.period_low = value;
     }
     pub fn get_nrx4(&self) -> u8 {
-        ((self.length.is_enabled as u8) << 6) | 0b10111111
+        ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
     pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8, cycles: u64) {
-        let previous_is_length_enabled = self.length.is_enabled;
-        self.length.is_enabled = value & 0x40 != 0;
-        if !previous_is_length_enabled && self.length.is_enabled {
-            log::info!("{ch} length enabled!");
-            // for this hack to work, the cpu must be executed after the apu (I suppose)
-            // according to blargg "Enabling in first half of length period should clock length"
-            if div_apu.is_multiple_of(2) {
-                log::info!("extra tick");
-                self.tick_length(cycles, ch);
-            }
-        }
+        self.is_enabled &=
+            !self
+                .length
+                .set_is_enabled(value & 0x40 != 0, ch, div_apu.is_multiple_of(2), cycles);
 
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {
