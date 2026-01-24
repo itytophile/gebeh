@@ -23,17 +23,18 @@ impl<const MASK: u8> Length<MASK> {
     // returns true if overflow
     #[must_use]
     pub fn tick(&mut self, cycles: u64, ch: &'static str) -> bool {
-        // https://gbdev.io/pandocs/Audio_details.html#div-apu
-        if self.is_enable {
-            log::info!("{cycles}: {ch} tick! {}", self.current_timer_value);
-            if let Some(lol) = self.current_timer_value.checked_sub(1) {
-                self.current_timer_value = lol;
-            } else {
-                log::info!("{ch} Expired!");
-                return true;
-            }
+        if !self.is_enable {
+            return false;
         }
 
-        false
+        log::info!("{cycles}: {ch} tick! {}", self.current_timer_value);
+
+        if let Some(lol) = self.current_timer_value.checked_sub(1) {
+            self.current_timer_value = lol;
+            return false;
+        }
+
+        log::info!("{ch} Expired!");
+        true
     }
 }
