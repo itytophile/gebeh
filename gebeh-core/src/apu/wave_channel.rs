@@ -52,7 +52,7 @@ impl WaveChannel {
         }
     }
     fn trigger(&mut self) {
-        self.length.trigger(!self.is_enabled);
+        self.length.trigger();
         self.is_enabled = true;
         self.effective_output_level = self.output_level;
     }

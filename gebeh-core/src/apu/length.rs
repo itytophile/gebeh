@@ -8,6 +8,8 @@ pub struct Length<const L: u16> {
 impl Length<64> {
     pub fn set_initial_timer_length(&mut self, value: u8) {
         self.initial_timer_length = value & 0x3f;
+        // according to blargg "Length can be reloaded at any time"
+        self.current_timer_value = u16::from(self.initial_timer_length);
     }
 }
 
@@ -22,8 +24,8 @@ impl<const L: u16> Length<L> {
         self.current_timer_value == L
     }
 
-    pub fn trigger(&mut self, force_reset: bool) {
-        if self.is_expired() || force_reset {
+    pub fn trigger(&mut self) {
+        if self.is_expired() {
             self.current_timer_value = u16::from(self.initial_timer_length);
         }
     }
