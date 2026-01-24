@@ -14,9 +14,9 @@ impl NoiseChannel {
             self.volume_and_envelope.tick();
         }
     }
-    pub fn tick_length(&mut self) {
+    pub fn tick_length(&mut self, cycles: u64) {
         if self.is_on() {
-            self.length.tick();
+            self.length.tick(cycles);
         }
     }
     pub fn write_nr41(&mut self, value: u8) {

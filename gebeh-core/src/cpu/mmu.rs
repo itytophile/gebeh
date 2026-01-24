@@ -49,7 +49,7 @@ impl MmuCpuExt for State {
     fn read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        _: u64,
+        cycles: u64,
         cpu: &Cpu,
         peripherals: PeripheralsRef<M>,
     ) -> u8 {
@@ -75,7 +75,7 @@ impl MmuCpuExt for State {
             TIMER_CONTROL => peripherals.timer.get_tac(),
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
-            CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index),
+            CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
             LCD_CONTROL => self.lcd_control.bits(),
             LCD_STATUS => self.lcd_status.bits() | 0b10000000,
             SCY => self.scy,

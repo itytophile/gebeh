@@ -75,7 +75,7 @@ bitflags::bitflags! {
 }
 
 impl Apu {
-    pub fn get_nr52(&self) -> u8 {
+    pub fn get_nr52(&self, cycles: u64) -> u8 {
         let mut flags = Nr52::empty();
         flags.set(Nr52::AUDIO_ON_OFF, self.is_on);
         flags.set(Nr52::CH4_ON, self.ch4.is_on());
@@ -83,7 +83,7 @@ impl Apu {
         flags.set(Nr52::CH2_ON, self.ch2.is_on());
         flags.set(Nr52::CH1_ON, self.ch1.is_on());
 
-        log::info!("{flags:?}");
+        log::info!("{cycles}: {flags:?}");
 
         flags.bits() | 0b01110000
     }
@@ -113,7 +113,7 @@ impl Apu {
         self.nr50 = Nr50::from_bits_retain(value);
     }
 
-    pub fn execute(&mut self, div: u8) {
+    pub fn execute(&mut self, div: u8, cycles: u64) {
         if !self.is_on {
             return;
         }
@@ -122,10 +122,10 @@ impl Apu {
         if self.falling_edge.update(div & (1 << 4) != 0) {
             self.div_apu = self.div_apu.wrapping_add(1);
             if self.div_apu.is_multiple_of(2) {
-                self.ch1.tick_length();
-                self.ch2.tick_length();
-                self.ch3.tick_length();
-                self.ch4.tick_length();
+                self.ch1.tick_length(cycles);
+                self.ch2.tick_length(cycles);
+                self.ch3.tick_length(cycles);
+                self.ch4.tick_length(cycles);
             }
             if self.div_apu.is_multiple_of(4) {
                 self.ch1.tick_sweep();
@@ -149,7 +149,7 @@ impl Apu {
         }
     }
 
-    pub fn read(&self, index: u16) -> u8 {
+    pub fn read(&self, index: u16, cycles: u64) -> u8 {
         use crate::state::*;
         match index {
             CH1_SWEEP => self.ch1.get_nr10(),
@@ -174,7 +174,7 @@ impl Apu {
             CH4_CONTROL => self.ch4.read_nr44(),
             MASTER_VOLUME_AND_VIN_PANNING => self.get_nr50(),
             SOUND_PANNING => self.get_nr51(),
-            AUDIO_MASTER_CONTROL => self.get_nr52(),
+            AUDIO_MASTER_CONTROL => self.get_nr52(cycles),
             0xff27..WAVE => 0xff,
             WAVE..LCD_CONTROL => self.ch3.read_ram(u8::try_from(index - WAVE).unwrap()),
             _ => unreachable!(),

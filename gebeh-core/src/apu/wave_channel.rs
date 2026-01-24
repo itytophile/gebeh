@@ -12,9 +12,9 @@ pub struct WaveChannel {
 }
 
 impl WaveChannel {
-    pub fn tick_length(&mut self) {
+    pub fn tick_length(&mut self, cycles: u64) {
         if self.is_on() {
-            self.length.tick();
+            self.length.tick(cycles);
         }
     }
     pub fn get_nr30(&self) -> u8 {

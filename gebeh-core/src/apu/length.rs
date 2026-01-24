@@ -27,16 +27,19 @@ impl<const L: u16> Length<L> {
     }
 
     pub fn trigger(&mut self) {
+        log::info!("trigger {self:?}");
         if self.is_expired() {
-            self.current_timer_value = u16::from(self.initial_timer_length);
+            log::info!("Setting to {}", self.initial_timer_length);
+            // according to blargg, it is not reset to the initial_timer_length but to 0
+            self.current_timer_value = 0;
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, cycles: u64) {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
         if !self.is_expired() && self.is_enable {
             self.current_timer_value += 1;
-            log::info!("{} / {}", self.current_timer_value, L);
+            log::info!("{cycles}: {} / {}", self.current_timer_value, L);
             if self.is_expired() {
                 log::info!("Expiré !")
             }
