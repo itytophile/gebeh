@@ -16,6 +16,7 @@ impl<const MASK: u8> Length<MASK> {
     }
 
     pub fn trigger(&mut self) {
+        log::info!("trigger {:?}", self);
         self.has_overflowed = false;
     }
 
@@ -24,7 +25,7 @@ impl<const MASK: u8> Length<MASK> {
     pub fn tick(&mut self, cycles: u64, ch: &'static str) -> bool {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
         if self.is_enable && !self.has_overflowed {
-            log::info!("{cycles}: {ch} tick!");
+            log::info!("{cycles}: {ch} tick! {} / {}", self.current_timer_value, MASK);
             self.current_timer_value = self.current_timer_value.wrapping_add(1) & MASK;
             if !self.has_overflowed && self.current_timer_value == 0 {
                 log::info!("{ch} Expired!")
