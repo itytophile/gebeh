@@ -19,14 +19,17 @@ impl<const MASK: u8> Length<MASK> {
     }
 
     pub fn trigger(&mut self) {
-        log::info!("trigger {self:?}");
         self.has_overflowed = false;
     }
 
-    pub fn tick(&mut self, _: u64) {
+    pub fn tick(&mut self, cycles: u64, ch: &'static str) {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
         if self.is_enable {
+            log::info!("{cycles}: {ch} tick!");
             self.current_timer_value = self.current_timer_value.wrapping_add(1) & MASK;
+            if !self.has_overflowed && self.current_timer_value == 0 {
+                log::info!("{ch} Expired!")
+            }
             self.has_overflowed |= self.current_timer_value == 0;
         }
     }

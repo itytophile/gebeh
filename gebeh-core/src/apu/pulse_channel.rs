@@ -29,8 +29,8 @@ impl<S: Sweep> PulseChannel<S> {
             self.volume_and_envelope.tick();
         }
     }
-    pub fn tick_length(&mut self, cycles: u64) {
-        self.length.tick(cycles);
+    pub fn tick_length(&mut self, cycles: u64, ch: &'static str) {
+        self.length.tick(cycles, ch);
     }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
@@ -55,20 +55,30 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn get_nrx4(&self) -> u8 {
         ((self.length.is_enable as u8) << 6) | 0b10111111
     }
-    pub fn write_nrx4(&mut self, value: u8) {
+    pub fn write_nrx4(&mut self, value: u8, ch: &'static str) {
+        if !self.length.is_enable && value & 0x40 != 0 {
+            log::info!("{ch} length enabled!")
+        }
+        if self.length.is_enable && value & 0x40 == 0 {
+            log::info!("{ch} length disabled!")
+        }
         self.length.is_enable = value & 0x40 != 0;
+
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {
-            self.trigger();
+            self.trigger(ch);
         }
     }
 
-    pub fn trigger(&mut self) {
+    pub fn trigger(&mut self, ch: &'static str) {
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.volume_and_envelope.is_dac_on() {
             return;
         }
         self.length.trigger();
+        if !self.is_enabled {
+            log::info!("{ch} enabled!")
+        }
         self.is_enabled = true;
         self.volume_and_envelope.trigger();
         if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
