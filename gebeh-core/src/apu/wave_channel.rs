@@ -1,10 +1,10 @@
-use crate::apu::length::Length;
+use crate::apu::length::{Length, MASK_8_BITS};
 
 #[derive(Default, Clone)]
 pub struct WaveChannel {
     is_enabled: bool,
     is_dac_on: bool,
-    length: Length<256>,
+    length: Length<MASK_8_BITS>,
     output_level: u8, // 2 bits
     effective_output_level: u8,
     period: u16, // 11 bits

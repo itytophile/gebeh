@@ -1,6 +1,6 @@
 use crate::apu::{
     envelope::VolumeAndEnvelope,
-    length::Length,
+    length::{Length, MASK_6_BITS},
     sweep::{Ch1Sweep, Sweep},
 };
 
@@ -14,7 +14,7 @@ const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
-    length: Length<64>,
+    length: Length<MASK_6_BITS>,
     duty_cycle: u8,
     volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,

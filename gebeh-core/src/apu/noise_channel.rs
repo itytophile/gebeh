@@ -1,8 +1,11 @@
-use crate::apu::{envelope::VolumeAndEnvelope, length::Length};
+use crate::apu::{
+    envelope::VolumeAndEnvelope,
+    length::{Length, MASK_6_BITS},
+};
 
 #[derive(Default, Clone)]
 pub struct NoiseChannel {
-    length: Length<64>,
+    length: Length<MASK_6_BITS>,
     volume_and_envelope: VolumeAndEnvelope,
     nr43: u8,
     is_enabled: bool,

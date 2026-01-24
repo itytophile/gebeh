@@ -1,48 +1,33 @@
+pub const MASK_8_BITS: u8 = 0xff;
+pub const MASK_6_BITS: u8 = 0x3f;
+
 #[derive(Clone, Default, Debug)]
-pub struct Length<const L: u16> {
+pub struct Length<const MASK: u8> {
     pub is_enable: bool,
-    initial_timer_length: u8,
-    current_timer_value: u16,
+    current_timer_value: u8,
+    has_overflowed: bool,
 }
 
-impl Length<64> {
+impl<const MASK: u8> Length<MASK> {
     pub fn set_initial_timer_length(&mut self, value: u8) {
-        self.initial_timer_length = value & 0x3f;
         // according to blargg "Length can be reloaded at any time"
-        self.current_timer_value = u16::from(self.initial_timer_length);
+        self.current_timer_value = value & MASK;
     }
-}
 
-impl Length<256> {
-    pub fn set_initial_timer_length(&mut self, value: u8) {
-        self.initial_timer_length = value;
-        // according to blargg "Length can be reloaded at any time"
-        self.current_timer_value = u16::from(self.initial_timer_length);
-    }
-}
-
-impl<const L: u16> Length<L> {
     pub fn is_expired(&self) -> bool {
-        self.current_timer_value == L
+        self.has_overflowed
     }
 
     pub fn trigger(&mut self) {
         log::info!("trigger {self:?}");
-        if self.is_expired() {
-            log::info!("Setting to {}", self.initial_timer_length);
-            // according to blargg, it is not reset to the initial_timer_length but to 0
-            self.current_timer_value = 0;
-        }
+        self.has_overflowed = false;
     }
 
     pub fn tick(&mut self, cycles: u64) {
         // https://gbdev.io/pandocs/Audio_details.html#div-apu
         if !self.is_expired() && self.is_enable {
-            self.current_timer_value += 1;
-            log::info!("{cycles}: {} / {}", self.current_timer_value, L);
-            if self.is_expired() {
-                log::info!("Expiré !")
-            }
+            self.current_timer_value = self.current_timer_value.wrapping_add(1) & MASK;
+            self.has_overflowed = self.current_timer_value == 0;
         }
     }
 }
