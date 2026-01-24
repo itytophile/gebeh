@@ -3,7 +3,7 @@ pub const MASK_6_BITS: u8 = 0x3f;
 
 #[derive(Clone, Default, Debug)]
 pub struct Length<const MASK: u8> {
-    pub is_enable: bool,
+    pub is_enabled: bool,
     current_timer_value: Option<u8>, // None = overflowed
 }
 
@@ -17,14 +17,14 @@ impl<const MASK: u8> Length<MASK> {
         log::info!("trigger with extra = {}, {:?}", extra_clock, self);
         if self.current_timer_value.is_none() {
             // according to blargg "Trigger that un-freezes enabled length should clock it"
-            self.current_timer_value = Some(MASK - (extra_clock && self.is_enable) as u8);
+            self.current_timer_value = Some(MASK - (extra_clock && self.is_enabled) as u8);
         }
     }
 
     // returns true if overflow
     #[must_use]
     pub fn tick(&mut self, cycles: u64, ch: &'static str) -> bool {
-        let (Some(prout), true) = (self.current_timer_value, self.is_enable) else {
+        let (Some(prout), true) = (self.current_timer_value, self.is_enabled) else {
             return false;
         };
 

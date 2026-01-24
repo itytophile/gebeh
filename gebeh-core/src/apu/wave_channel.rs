@@ -41,11 +41,11 @@ impl WaveChannel {
         self.period = self.period & 0xff00 | u16::from(value);
     }
     pub fn get_nr34(&self) -> u8 {
-        ((self.length.is_enable as u8) << 6) | 0b10111111
+        ((self.length.is_enabled as u8) << 6) | 0b10111111
     }
     pub fn write_nr34(&mut self, value: u8, div_apu: u8) {
         self.period = (u16::from(value & 0x07) << 8) | self.period & 0x00ff;
-        self.length.is_enable = value & 0x40 != 0;
+        self.length.is_enabled = value & 0x40 != 0;
         if value & 0x80 != 0 {
             self.trigger(div_apu.is_multiple_of(2));
         }

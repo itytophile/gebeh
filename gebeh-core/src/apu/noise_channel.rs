@@ -40,13 +40,13 @@ impl NoiseChannel {
         self.nr43
     }
     pub fn write_nr44(&mut self, value: u8, div_apu: u8) {
-        self.length.is_enable = value & 0x40 != 0;
+        self.length.is_enabled = value & 0x40 != 0;
         if value & 0x80 != 0 {
             self.trigger(div_apu.is_multiple_of(2));
         }
     }
     pub fn read_nr44(&self) -> u8 {
-        ((self.length.is_enable as u8) << 6) | 0b10111111
+        ((self.length.is_enabled as u8) << 6) | 0b10111111
     }
 
     fn trigger(&mut self, extra_clock: bool) {
