@@ -78,11 +78,13 @@ impl<S: Sweep> PulseChannel<S> {
     }
 
     pub fn trigger(&mut self, ch: &'static str, extra_clock: bool) {
+        self.length.trigger(extra_clock);
+        
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.volume_and_envelope.is_dac_on() {
             return;
         }
-        self.length.trigger(extra_clock);
+        
         if !self.is_enabled {
             log::info!("{ch} enabled!")
         }
