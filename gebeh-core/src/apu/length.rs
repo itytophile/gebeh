@@ -16,6 +16,8 @@ impl Length<64> {
 impl Length<256> {
     pub fn set_initial_timer_length(&mut self, value: u8) {
         self.initial_timer_length = value;
+        // according to blargg "Length can be reloaded at any time"
+        self.current_timer_value = u16::from(self.initial_timer_length);
     }
 }
 
