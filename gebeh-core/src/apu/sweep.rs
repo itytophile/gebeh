@@ -1,11 +1,27 @@
-#[derive(Clone, Default)]
+use core::num::NonZeroU8;
+
+#[derive(Clone)]
 pub struct Ch1Sweep {
     nr10: u8,
-    pace_countdown: u8,
+    pace_countdown: NonZeroU8,
     period_value: u16,
     // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
     // The “enabled flag” is set if either the sweep pace or individual step are non-zero, cleared otherwise.
     is_enabled: bool,
+}
+
+// according to blargg "Timer treats period 0 as 8"
+const DEFAULT_PACE_COUTDOWN: NonZeroU8 = NonZeroU8::new(8).unwrap();
+
+impl Default for Ch1Sweep {
+    fn default() -> Self {
+        Self {
+            nr10: 0,
+            pace_countdown: DEFAULT_PACE_COUTDOWN,
+            period_value: 0,
+            is_enabled: false,
+        }
+    }
 }
 
 impl Ch1Sweep {
@@ -63,7 +79,7 @@ pub trait Sweep {
 impl Sweep for Ch1Sweep {
     fn trigger(&mut self, period: u16) -> (bool, Option<u16>) {
         self.period_value = period;
-        self.pace_countdown = if self.pace() == 0 { 8 } else { self.pace() };
+        self.pace_countdown = NonZeroU8::new(self.pace()).unwrap_or(DEFAULT_PACE_COUTDOWN);
         self.is_enabled = self.pace() != 0 || self.individual_step() != 0;
         log::info!("sweep trigger {}", self.is_enabled);
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
@@ -85,16 +101,15 @@ impl Sweep for Ch1Sweep {
             return (true, None);
         }
 
-        // thanks gameroy
-        self.pace_countdown -= 1;
-
-        if self.pace_countdown > 0 {
+        // thanks gameroy for the order of steps
+        if let Some(new_countdown) = NonZeroU8::new(self.pace_countdown.get() - 1) {
+            self.pace_countdown = new_countdown;
             return (true, None);
         }
 
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: Note that the value written to this field is not re-read by the hardware until a sweep iteration completes
-        self.pace_countdown = if self.pace() == 0 { 8 } else { self.pace() };
+        self.pace_countdown = NonZeroU8::new(self.pace()).unwrap_or(DEFAULT_PACE_COUTDOWN);
 
         if self.pace() == 0 {
             log::info!("sweep tick discarded");
