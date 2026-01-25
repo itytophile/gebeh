@@ -10,14 +10,7 @@ pub struct Ch1Sweep {
 
 impl Ch1Sweep {
     pub fn set_nr10(&mut self, value: u8) {
-        let old_pace = self.pace();
         self.nr10 = value;
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
-        // Citation: However, if 0 is written to this field, then iterations are instantly
-        // disabled, and **it will be reloaded as soon as it’s set to something else**.
-        if old_pace == 0 && self.pace() != 0 {
-            self.pace_countdown = self.pace();
-        }
     }
     pub fn get_nr10(&self) -> u8 {
         self.nr10
@@ -92,14 +85,8 @@ impl Sweep for Ch1Sweep {
             return (true, None);
         }
 
-        if self.pace() == 0 {
-            log::info!("sweep tick discarded");
-            return (true, None);
-        }
-
+        // thanks gameroy
         self.pace_countdown -= 1;
-
-        log::info!("sweep tick {}", self.pace_countdown);
 
         if self.pace_countdown > 0 {
             return (true, None);
@@ -107,7 +94,12 @@ impl Sweep for Ch1Sweep {
 
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: Note that the value written to this field is not re-read by the hardware until a sweep iteration completes
-        self.pace_countdown = self.pace();
+        self.pace_countdown = if self.pace() == 0 { 8 } else { self.pace() };
+
+        if self.pace() == 0 {
+            log::info!("sweep tick discarded");
+            return (true, None);
+        }
 
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
