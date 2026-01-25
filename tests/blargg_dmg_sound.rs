@@ -1,14 +1,10 @@
-use crate::common::{TestSerial, machine_to_serial_iter};
+use std::ffi::CStr;
+
 use gebeh::InstantRtc;
 use gebeh_core::Emulator;
 use gebeh_front_helper::get_mbc;
 
-mod common;
-
 fn dmg_sound(name: &str) {
-    let expected = format!("{name}\n");
-    let len = expected.len();
-
     let rom = std::fs::read(format!(
         "./downloads/gb-test-roms-master/dmg_sound/rom_singles/{name}.gb"
     ))
@@ -16,13 +12,20 @@ fn dmg_sound(name: &str) {
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut machine = Emulator::default();
-    let mut serial = TestSerial(None);
 
-    let buffer: Vec<_> = machine_to_serial_iter(&mut machine, &mut serial, mbc.as_mut())
-        .take(len)
-        .collect();
+    while mbc.get_ram_to_save().unwrap()[0] == 0x80
+        || mbc.get_ram_to_save().unwrap()[1..4] != [0xde, 0xb0, 0x61]
+        || mbc.get_ram_to_save().unwrap()[4] == 0
+    {
+        machine.execute(mbc.as_mut());
+    }
 
-    assert_eq!(expected, str::from_utf8(&buffer).unwrap());
+    let output = CStr::from_bytes_until_nul(&mbc.get_ram_to_save().unwrap()[4..])
+        .unwrap()
+        .to_str()
+        .unwrap();
+
+    assert!(output.contains("Passed"), "Received: {output}");
 }
 
 #[test]
