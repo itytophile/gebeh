@@ -54,11 +54,11 @@ impl<const MASK: u8> Length<MASK> {
         };
 
         self.current_timer_value = prout.checked_sub(1);
-        
+
         if self.current_timer_value.is_none() {
             log::info!("length expired");
         }
-        
+
         self.current_timer_value.is_none()
     }
 }

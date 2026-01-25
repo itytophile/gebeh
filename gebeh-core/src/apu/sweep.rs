@@ -60,9 +60,11 @@ impl Sweep for Ch1Sweep {
         self.pace_count = 0;
         self.pace = (self.nr10 >> 4) & 0x07;
         self.is_enabled = self.pace != 0 || self.individual_step() != 0;
+        log::info!("sweep trigger {}", self.is_enabled);
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
         if self.individual_step() != 0 {
+            log::info!("trigger tick");
             let Some(new_period_value) = self.compute_next_value_and_check_overflow() else {
                 return (false, None);
             };
@@ -79,13 +81,6 @@ impl Sweep for Ch1Sweep {
         }
 
         log::info!("sweep tick");
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
-        // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
-        // strictly more than $7FF), the channel is turned off instead. This occurs even
-        // if sweep iterations are disabled by the pace being 0.
-        let Some(new_period_value) = self.compute_next_value_and_check_overflow() else {
-            return (false, None);
-        };
 
         if self.pace == 0 {
             return (true, None);
@@ -98,13 +93,29 @@ impl Sweep for Ch1Sweep {
         }
 
         self.pace_count = 0;
+
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
+        // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
+        // strictly more than $7FF), the channel is turned off instead. This occurs even
+        // if sweep iterations are disabled by the pace being 0.
+        let Some(new_period_value) = self.compute_next_value_and_check_overflow() else {
+            return (false, None);
+        };
+
+        // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
+        // Citation: If the new frequency is 2047 or less and **the individual step is not zero**,
+        // this new frequency is written back to the “shadow register”
+        if self.individual_step() == 0 {
+            return (true, None);
+        }
+
         self.period_value = new_period_value;
 
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: Note that the value written to this field is not re-read by the hardware until a sweep iteration completes
-        if new_period_value == 0 {
-            self.pace = (self.nr10 >> 4) & 0x07;
-        }
+        // if new_period_value == 0 {
+        //     self.pace = (self.nr10 >> 4) & 0x07;
+        // }
 
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: then frequency calculation and overflow check are run again immediately
