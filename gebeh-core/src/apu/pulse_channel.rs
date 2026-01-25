@@ -134,10 +134,10 @@ impl<S: Sweep> PulseChannel<S> {
 
 impl PulseChannel<Ch1Sweep> {
     pub fn get_nr10(&self) -> u8 {
-        self.sweep.nr10 | 0x80
+        self.sweep.get_nr10() | 0x80
     }
     pub fn write_nr10(&mut self, value: u8) {
-        self.sweep.nr10 = value;
+        self.sweep.set_nr10(value);
     }
 }
 

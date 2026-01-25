@@ -1,6 +1,6 @@
 #[derive(Clone, Default)]
 pub struct Ch1Sweep {
-    pub nr10: u8,
+    nr10: u8,
     pace_countdown: u8,
     period_value: u16,
     // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
@@ -9,6 +9,19 @@ pub struct Ch1Sweep {
 }
 
 impl Ch1Sweep {
+    pub fn set_nr10(&mut self, value: u8) {
+        let old_pace = self.pace();
+        self.nr10 = value;
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
+        // Citation: However, if 0 is written to this field, then iterations are instantly
+        // disabled, and **it will be reloaded as soon as it’s set to something else**.
+        if old_pace == 0 && self.pace() != 0 {
+            self.pace_countdown = self.pace();
+        }
+    }
+    pub fn get_nr10(&self) -> u8 {
+        self.nr10
+    }
     fn is_decreasing(&self) -> bool {
         self.nr10 & 0x08 != 0
     }
@@ -79,13 +92,14 @@ impl Sweep for Ch1Sweep {
             return (true, None);
         }
 
-        log::info!("sweep tick");
-
         if self.pace() == 0 {
+            log::info!("sweep tick discarded");
             return (true, None);
         }
 
         self.pace_countdown -= 1;
+
+        log::info!("sweep tick {}", self.pace_countdown);
 
         if self.pace_countdown > 0 {
             return (true, None);
