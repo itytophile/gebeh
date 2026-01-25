@@ -55,11 +55,13 @@ impl NoiseChannel {
     }
 
     fn trigger(&mut self, extra_clock: bool) {
+        // according to blargg "Disabled DAC shouldn't stop other trigger effects"
+        self.length.trigger(extra_clock);
+        
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.volume_and_envelope.is_dac_on() {
             return;
         }
-        self.length.trigger(extra_clock);
         self.is_enabled = true;
         self.volume_and_envelope.trigger();
     }
