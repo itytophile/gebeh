@@ -137,19 +137,6 @@ impl PulseChannel<Ch1Sweep> {
         self.sweep.nr10 | 0x80
     }
     pub fn write_nr10(&mut self, value: u8) {
-        let new_pace = (value >> 4) & 0x07;
-
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
-        // Citation: However, if 0 is written to this field, then iterations are instantly
-        // disabled, and it will be reloaded as soon as it’s set to something else.
-        if new_pace == 0 {
-            self.sweep.pace = new_pace;
-        }
-
-        if (self.sweep.nr10 >> 4) & 0x07 == 0 {
-            self.sweep.pace = new_pace;
-        }
-
         self.sweep.nr10 = value;
     }
 }

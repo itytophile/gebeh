@@ -1,12 +1,8 @@
 #[derive(Clone, Default)]
 pub struct Ch1Sweep {
     pub nr10: u8,
-    pace_count: u8,
+    pace_countdown: u8,
     period_value: u16,
-    // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
-    // Citation: Note that the value written to this field is not re-read by the hardware
-    // until a sweep iteration completes, or the channel is (re)triggered.
-    pub pace: u8,
     // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
     // The “enabled flag” is set if either the sweep pace or individual step are non-zero, cleared otherwise.
     is_enabled: bool,
@@ -19,6 +15,10 @@ impl Ch1Sweep {
     // 3 bits
     fn individual_step(&self) -> u8 {
         self.nr10 & 0x07
+    }
+
+    fn pace(&self) -> u8 {
+        (self.nr10 >> 4) & 0x07
     }
 
     // None -> overflow
@@ -57,9 +57,8 @@ pub trait Sweep {
 impl Sweep for Ch1Sweep {
     fn trigger(&mut self, period: u16) -> (bool, Option<u16>) {
         self.period_value = period;
-        self.pace_count = 0;
-        self.pace = (self.nr10 >> 4) & 0x07;
-        self.is_enabled = self.pace != 0 || self.individual_step() != 0;
+        self.pace_countdown = if self.pace() == 0 { 8 } else { self.pace() };
+        self.is_enabled = self.pace() != 0 || self.individual_step() != 0;
         log::info!("sweep trigger {}", self.is_enabled);
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
@@ -82,17 +81,19 @@ impl Sweep for Ch1Sweep {
 
         log::info!("sweep tick");
 
-        if self.pace == 0 {
+        if self.pace() == 0 {
             return (true, None);
         }
 
-        self.pace_count += 1;
+        self.pace_countdown -= 1;
 
-        if self.pace_count != self.pace {
+        if self.pace_countdown > 0 {
             return (true, None);
         }
 
-        self.pace_count = 0;
+        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
+        // Citation: Note that the value written to this field is not re-read by the hardware until a sweep iteration completes
+        self.pace_countdown = self.pace();
 
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
@@ -111,12 +112,6 @@ impl Sweep for Ch1Sweep {
 
         self.period_value = new_period_value;
 
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
-        // Citation: Note that the value written to this field is not re-read by the hardware until a sweep iteration completes
-        // if new_period_value == 0 {
-        //     self.pace = (self.nr10 >> 4) & 0x07;
-        // }
-
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: then frequency calculation and overflow check are run again immediately
         // using this new value, but this second new frequency is not written back
@@ -127,7 +122,7 @@ impl Sweep for Ch1Sweep {
     }
 
     fn get_period_value(&self) -> Option<u16> {
-        if self.pace == 0 && self.individual_step() == 0 {
+        if self.pace() == 0 && self.individual_step() == 0 {
             None
         } else {
             Some(self.period_value)
