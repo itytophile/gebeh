@@ -15,7 +15,6 @@ impl<const MASK: u8> Length<MASK> {
         is_enabled: bool,
         ch: &'static str,
         extra_clock: bool,
-        cycles: u64,
     ) -> bool {
         let previous_is_length_enabled = self.is_enabled;
         self.is_enabled = is_enabled;
@@ -25,7 +24,7 @@ impl<const MASK: u8> Length<MASK> {
             // according to blargg "Enabling in first half of length period should clock length"
             if extra_clock {
                 log::info!("extra tick");
-                return self.tick(cycles, ch);
+                return self.tick();
             }
         }
 
@@ -49,15 +48,12 @@ impl<const MASK: u8> Length<MASK> {
 
     // returns true if overflow
     #[must_use]
-    pub fn tick(&mut self, cycles: u64, ch: &'static str) -> bool {
+    pub fn tick(&mut self) -> bool {
         let (Some(prout), true) = (self.current_timer_value, self.is_enabled) else {
             return false;
         };
 
-        log::info!("{cycles}: {ch} tick! {}", prout);
-
         self.current_timer_value = prout.checked_sub(1);
-
         self.current_timer_value.is_none()
     }
 }

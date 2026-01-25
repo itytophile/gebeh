@@ -17,8 +17,8 @@ impl NoiseChannel {
             self.volume_and_envelope.tick();
         }
     }
-    pub fn tick_length(&mut self, cycles: u64) {
-        self.is_enabled &= !self.length.tick(cycles, "noise");
+    pub fn tick_length(&mut self) {
+        self.is_enabled &= !self.length.tick();
     }
     pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
@@ -39,12 +39,11 @@ impl NoiseChannel {
     pub fn read_nr43(&self) -> u8 {
         self.nr43
     }
-    pub fn write_nr44(&mut self, value: u8, div_apu: u8, cycles: u64) {
+    pub fn write_nr44(&mut self, value: u8, div_apu: u8) {
         self.is_enabled &= !self.length.set_is_enabled(
             value & 0x40 != 0,
             "noise",
             div_apu.is_multiple_of(2),
-            cycles,
         );
         if value & 0x80 != 0 {
             self.trigger(div_apu.is_multiple_of(2));

@@ -81,7 +81,7 @@ impl Emulator {
         self.ly_handler.execute(&mut self.state, self.cycles);
         self.ppu.execute(&mut self.state, self.cycles);
         self.timer.execute(&mut self.state, self.cycles);
-        self.apu.execute(self.timer.get_div(), self.cycles);
+        self.apu.execute(self.timer.get_div());
         self.cpu.execute(
             &mut self.state,
             Peripherals {

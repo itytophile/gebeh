@@ -29,8 +29,8 @@ impl<S: Sweep> PulseChannel<S> {
             self.volume_and_envelope.tick();
         }
     }
-    pub fn tick_length(&mut self, cycles: u64, ch: &'static str) {
-        self.is_enabled &= !self.length.tick(cycles, ch);
+    pub fn tick_length(&mut self) {
+        self.is_enabled &= !self.length.tick();
     }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
@@ -55,11 +55,11 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn get_nrx4(&self) -> u8 {
         ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
-    pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8, cycles: u64) {
+    pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8) {
         self.is_enabled &=
             !self
                 .length
-                .set_is_enabled(value & 0x40 != 0, ch, div_apu.is_multiple_of(2), cycles);
+                .set_is_enabled(value & 0x40 != 0, ch, div_apu.is_multiple_of(2));
 
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {

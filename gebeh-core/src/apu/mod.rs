@@ -113,7 +113,7 @@ impl Apu {
         self.nr50 = Nr50::from_bits_retain(value);
     }
 
-    pub fn execute(&mut self, div: u8, cycles: u64) {
+    pub fn execute(&mut self, div: u8) {
         if !self.is_on {
             return;
         }
@@ -122,10 +122,10 @@ impl Apu {
         if self.falling_edge.update(div & (1 << 4) != 0) {
             self.div_apu = self.div_apu.wrapping_add(1);
             if self.div_apu.is_multiple_of(2) {
-                self.ch1.tick_length(cycles, "ch1");
-                self.ch2.tick_length(cycles, "ch2");
-                self.ch3.tick_length(cycles);
-                self.ch4.tick_length(cycles);
+                self.ch1.tick_length();
+                self.ch2.tick_length();
+                self.ch3.tick_length();
+                self.ch4.tick_length();
             }
             if self.div_apu.is_multiple_of(4) {
                 self.ch1.tick_sweep();
@@ -181,7 +181,7 @@ impl Apu {
         }
     }
 
-    pub fn write(&mut self, index: u16, value: u8, cycles: u64) {
+    pub fn write(&mut self, index: u16, value: u8) {
         use crate::state::*;
 
         if (CH1_SWEEP..AUDIO_MASTER_CONTROL).contains(&index) && !self.is_on {
@@ -198,7 +198,7 @@ impl Apu {
             CH1_PERIOD_LOW => self.ch1.write_nrx3(value),
             CH1_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch1 control 0b{value:08b}");
-                self.ch1.write_nrx4(value, "ch1", self.div_apu, cycles)
+                self.ch1.write_nrx4(value, "ch1", self.div_apu)
             }
             0xff15 => {}
             CH2_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch2.write_nrx1(value),
@@ -206,7 +206,7 @@ impl Apu {
             CH2_PERIOD_LOW => self.ch2.write_nrx3(value),
             CH2_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch2 control");
-                self.ch2.write_nrx4(value, "ch2", self.div_apu, cycles)
+                self.ch2.write_nrx4(value, "ch2", self.div_apu)
             }
             CH3_DAC_ENABLE => self.ch3.write_nr30(value),
             CH3_LENGTH_TIMER => self.ch3.write_nr31(value),
@@ -214,7 +214,7 @@ impl Apu {
             CH3_PERIOD_LOW => self.ch3.write_nr33(value),
             CH3_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch3 control");
-                self.ch3.write_nr34(value, self.div_apu, cycles)
+                self.ch3.write_nr34(value, self.div_apu)
             }
             0xff1f => {}
             CH4_LENGTH_TIMER => self.ch4.write_nr41(value),
@@ -222,7 +222,7 @@ impl Apu {
             CH4_FREQUENCY_AND_RANDOMNESS => self.ch4.write_nr43(value),
             CH4_CONTROL => {
                 log::info!("Writing to ch4 control");
-                self.ch4.write_nr44(value, self.div_apu, cycles)
+                self.ch4.write_nr44(value, self.div_apu)
             }
             MASTER_VOLUME_AND_VIN_PANNING => self.write_nr50(value),
             SOUND_PANNING => self.write_nr51(value),

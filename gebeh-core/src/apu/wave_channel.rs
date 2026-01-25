@@ -12,8 +12,8 @@ pub struct WaveChannel {
 }
 
 impl WaveChannel {
-    pub fn tick_length(&mut self, cycles: u64) {
-        self.is_enabled &= !self.length.tick(cycles, "wave");
+    pub fn tick_length(&mut self) {
+        self.is_enabled &= !self.length.tick();
     }
     pub fn get_nr30(&self) -> u8 {
         ((self.is_dac_on as u8) << 7) | 0b01111111
@@ -43,13 +43,12 @@ impl WaveChannel {
     pub fn get_nr34(&self) -> u8 {
         ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
-    pub fn write_nr34(&mut self, value: u8, div_apu: u8, cycles: u64) {
+    pub fn write_nr34(&mut self, value: u8, div_apu: u8) {
         self.period = (u16::from(value & 0x07) << 8) | self.period & 0x00ff;
         self.is_enabled &= !self.length.set_is_enabled(
             value & 0x40 != 0,
             "wave",
-            div_apu.is_multiple_of(2),
-            cycles,
+            div_apu.is_multiple_of(2)
         );
         if value & 0x80 != 0 {
             self.trigger(div_apu.is_multiple_of(2));
