@@ -59,6 +59,7 @@ impl Sweep for Ch1Sweep {
         if self.individual_step() != 0
             && let Some(new_period) = self.compute_next_value_and_check_overflow()
         {
+            log::info!("burp");
             self.period_value = new_period;
             return Some(new_period);
         }

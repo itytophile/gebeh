@@ -45,11 +45,10 @@ impl WaveChannel {
     }
     pub fn write_nr34(&mut self, value: u8, div_apu: u8) {
         self.period = (u16::from(value & 0x07) << 8) | self.period & 0x00ff;
-        self.is_enabled &= !self.length.set_is_enabled(
-            value & 0x40 != 0,
-            "wave",
-            div_apu.is_multiple_of(2)
-        );
+        self.is_enabled &=
+            !self
+                .length
+                .set_is_enabled(value & 0x40 != 0, "wave", div_apu.is_multiple_of(2));
         if value & 0x80 != 0 {
             self.trigger(div_apu.is_multiple_of(2));
         }
@@ -57,7 +56,7 @@ impl WaveChannel {
     fn trigger(&mut self, extra_clock: bool) {
         // according to blargg "Disabled DAC shouldn't stop other trigger effects"
         self.length.trigger(extra_clock);
-        
+
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.is_dac_on {
             return;
