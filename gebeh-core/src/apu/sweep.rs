@@ -29,6 +29,12 @@ impl Ch1Sweep {
 
         let new_period = self.period_value + (self.period_value >> self.individual_step());
 
+        log::info!(
+            "0x{:04x} + 0x{:04x} = 0x{new_period:04x}",
+            self.period_value,
+            self.period_value >> self.individual_step(),
+        );
+
         if new_period > 0x7ff {
             return None;
         }
@@ -57,7 +63,10 @@ impl Sweep for Ch1Sweep {
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
         if self.individual_step() != 0 {
-            return self.tick();
+            let Some(new_period_value) = self.compute_next_value_and_check_overflow() else {
+                return (false, None);
+            };
+            return (true, Some(new_period_value));
         }
 
         (true, None)
@@ -68,6 +77,8 @@ impl Sweep for Ch1Sweep {
         if !self.is_enabled {
             return (true, None);
         }
+
+        log::info!("sweep tick");
         // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
         // Citation: In addition mode, if the period value would overflow (i.e. Lt+1 is
         // strictly more than $7FF), the channel is turned off instead. This occurs even

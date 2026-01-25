@@ -84,6 +84,9 @@ impl<S: Sweep> PulseChannel<S> {
         if let Some(period) = new_period {
             self.set_period_value(period);
         }
+        if !is_enabled_from_sweep {
+            log::info!("disabled from trigger")
+        }
         self.is_enabled = is_enabled_from_sweep;
     }
 
@@ -97,7 +100,11 @@ impl<S: Sweep> PulseChannel<S> {
         }
         let (is_enabled_from_sweep, new_period) = self.sweep.tick();
         if let Some(period) = new_period {
+            log::info!("new period: 0x{period:04x}");
             self.set_period_value(period);
+        }
+        if self.is_enabled && !is_enabled_from_sweep {
+            log::info!("Disabled from sweep");
         }
         self.is_enabled = is_enabled_from_sweep;
     }
