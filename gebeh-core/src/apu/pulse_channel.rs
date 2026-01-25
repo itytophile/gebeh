@@ -79,11 +79,12 @@ impl<S: Sweep> PulseChannel<S> {
         if !self.is_enabled {
             log::info!("{ch} enabled!")
         }
-        self.is_enabled = true;
         self.volume_and_envelope.trigger();
-        if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
-            self.set_period_value(new_period);
+        let (is_enabled_from_sweep, new_period) = self.sweep.trigger(self.get_period_value());
+        if let Some(period) = new_period {
+            self.set_period_value(period);
         }
+        self.is_enabled = is_enabled_from_sweep;
     }
 
     pub fn is_on(&self) -> bool {

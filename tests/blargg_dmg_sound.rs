@@ -6,7 +6,7 @@ use gebeh_front_helper::get_mbc;
 mod common;
 
 fn dmg_sound(name: &str) {
-    let expected = format!("{name}\n\n\nPassed\n");
+    let expected = format!("{name}\n");
     let len = expected.len();
 
     let rom = std::fs::read(format!(

@@ -40,7 +40,7 @@ impl Ch1Sweep {
 pub trait Sweep {
     // returns new period value
     #[must_use]
-    fn trigger(&mut self, period: u16) -> Option<u16>;
+    fn trigger(&mut self, period: u16) -> (bool, Option<u16>);
     // is channel still enable, new period value
     #[must_use]
     fn tick(&mut self) -> (bool, Option<u16>);
@@ -49,22 +49,18 @@ pub trait Sweep {
 }
 
 impl Sweep for Ch1Sweep {
-    fn trigger(&mut self, period: u16) -> Option<u16> {
+    fn trigger(&mut self, period: u16) -> (bool, Option<u16>) {
         self.period_value = period;
         self.pace_count = 0;
         self.pace = (self.nr10 >> 4) & 0x07;
         self.is_enabled = self.pace != 0 || self.individual_step() != 0;
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
-        if self.individual_step() != 0
-            && let Some(new_period) = self.compute_next_value_and_check_overflow()
-        {
-            log::info!("burp");
-            self.period_value = new_period;
-            return Some(new_period);
+        if self.individual_step() != 0 {
+            return self.tick();
         }
 
-        None
+        (true, None)
     }
 
     // Returns channel on/off
@@ -118,8 +114,8 @@ impl Sweep for Ch1Sweep {
 }
 
 impl Sweep for () {
-    fn trigger(&mut self, _: u16) -> Option<u16> {
-        None
+    fn trigger(&mut self, _: u16) -> (bool, Option<u16>) {
+        (true, None)
     }
 
     fn tick(&mut self) -> (bool, Option<u16>) {

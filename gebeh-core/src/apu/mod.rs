@@ -189,13 +189,19 @@ impl Apu {
         }
 
         match index {
-            CH1_SWEEP => self.ch1.write_nr10(value),
+            CH1_SWEEP => {
+                log::info!("Writing to sweep 0b{value:08b}");
+                self.ch1.write_nr10(value)
+            }
             CH1_LENGTH_TIMER_AND_DUTY_CYCLE => {
                 log::info!("ch1 Writing to length 0b{value:08b}");
                 self.ch1.write_nrx1(value)
             }
             CH1_VOLUME_AND_ENVELOPE => self.ch1.write_nrx2(value),
-            CH1_PERIOD_LOW => self.ch1.write_nrx3(value),
+            CH1_PERIOD_LOW => {
+                log::info!("ch1 Writing to period low 0b{value:08b}");
+                self.ch1.write_nrx3(value)
+            }
             CH1_PERIOD_HIGH_AND_CONTROL => {
                 log::info!("Writing to ch1 control 0b{value:08b}");
                 self.ch1.write_nrx4(value, "ch1", self.div_apu)
