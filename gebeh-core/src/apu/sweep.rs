@@ -8,6 +8,10 @@ pub struct Ch1Sweep {
     // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
     // The “enabled flag” is set if either the sweep pace or individual step are non-zero, cleared otherwise.
     is_enabled: bool,
+    // https://gbdev.io/pandocs/Audio_details.html#obscure-behavior
+    // Citation: Clearing the sweep direction bit in NR10 after at least one sweep calculation
+    // has been made using the substraction mode since the last trigger causes the channel to be immediately disabled.
+    has_computed_in_decrease_mode: bool,
 }
 
 // according to blargg "Timer treats period 0 as 8"
@@ -20,13 +24,17 @@ impl Default for Ch1Sweep {
             pace_countdown: DEFAULT_PACE_COUTDOWN,
             period_value: 0,
             is_enabled: false,
+            has_computed_in_decrease_mode: false,
         }
     }
 }
 
 impl Ch1Sweep {
-    pub fn set_nr10(&mut self, value: u8) {
+    // false -> disable channel
+    #[must_use]
+    pub fn set_nr10(&mut self, value: u8) -> bool {
         self.nr10 = value;
+        self.is_decreasing() || !self.has_computed_in_decrease_mode
     }
     pub fn get_nr10(&self) -> u8 {
         self.nr10
@@ -44,8 +52,9 @@ impl Ch1Sweep {
     }
 
     // None -> overflow
-    fn compute_next_value_and_check_overflow(&self) -> Option<u16> {
+    fn compute_next_value_and_check_overflow(&mut self) -> Option<u16> {
         if self.is_decreasing() {
+            self.has_computed_in_decrease_mode = true;
             return Some(self.period_value - (self.period_value >> self.individual_step()));
         }
 
@@ -81,6 +90,7 @@ impl Sweep for Ch1Sweep {
         self.period_value = period;
         self.pace_countdown = NonZeroU8::new(self.pace()).unwrap_or(DEFAULT_PACE_COUTDOWN);
         self.is_enabled = self.pace() != 0 || self.individual_step() != 0;
+        self.has_computed_in_decrease_mode = false;
         log::info!("sweep trigger {}", self.is_enabled);
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.

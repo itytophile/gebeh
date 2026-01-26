@@ -134,7 +134,7 @@ impl PulseChannel<Ch1Sweep> {
         self.sweep.get_nr10() | 0x80
     }
     pub fn write_nr10(&mut self, value: u8) {
-        self.sweep.set_nr10(value);
+        self.is_enabled &= self.sweep.set_nr10(value);
     }
 }
 
