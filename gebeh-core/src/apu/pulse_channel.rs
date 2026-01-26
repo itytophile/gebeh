@@ -80,10 +80,7 @@ impl<S: Sweep> PulseChannel<S> {
             log::info!("{ch} enabled!")
         }
         self.volume_and_envelope.trigger();
-        let (is_enabled_from_sweep, new_period) = self.sweep.trigger(self.get_period_value());
-        if let Some(period) = new_period {
-            self.set_period_value(period);
-        }
+        let is_enabled_from_sweep = self.sweep.trigger(self.get_period_value());
         if !is_enabled_from_sweep {
             log::info!("disabled from trigger")
         }
