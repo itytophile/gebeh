@@ -12,6 +12,13 @@ pub struct NoiseChannel {
 }
 
 impl NoiseChannel {
+    #[must_use]
+    pub fn reset(&self) -> Self {
+        Self {
+            length: self.length.reset(),
+            ..Default::default()
+        }
+    }
     pub fn tick_envelope(&mut self) {
         if self.is_on() {
             self.volume_and_envelope.tick();

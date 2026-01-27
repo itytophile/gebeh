@@ -12,6 +12,13 @@ pub fn is_length_extra_clock(div_apu: u8) -> bool {
 }
 
 impl<const MASK: u8> Length<MASK> {
+    #[must_use]
+    pub fn reset(&self) -> Self {
+        Self {
+            current_timer_value: self.current_timer_value,
+            ..Default::default()
+        }
+    }
     // returns true if overflow
     #[must_use]
     pub fn set_is_enabled(&mut self, is_enabled: bool, ch: &'static str, div_apu: u8) -> bool {
@@ -19,7 +26,6 @@ impl<const MASK: u8> Length<MASK> {
         self.is_enabled = is_enabled;
         if !previous_is_length_enabled && self.is_enabled {
             log::info!("{ch} length enabled!");
-            // for this hack to work, the cpu must be executed after the apu (I suppose)
             // according to blargg "Enabling in first half of length period should clock length"
             if is_length_extra_clock(div_apu) {
                 log::info!("extra tick");
@@ -34,6 +40,8 @@ impl<const MASK: u8> Length<MASK> {
     }
     pub fn set_initial_timer_length(&mut self, value: u8) {
         // according to blargg "Length can be reloaded at any time"
+        let lol = MASK - (value & MASK);
+        log::info!("Setting to {lol} (0b{value:08b})");
         self.current_timer_value = Some(MASK - (value & MASK));
     }
 

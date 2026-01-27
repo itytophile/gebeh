@@ -90,8 +90,10 @@ impl WaveChannel {
         }
     }
 
-    pub fn reset_but_keep_ram(&self) -> Self {
+    #[must_use]
+    pub fn reset(&self) -> Self {
         Self {
+            length: self.length.reset(),
             ram: self.ram,
             ..Default::default()
         }

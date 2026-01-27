@@ -98,7 +98,10 @@ impl Apu {
         self.is_on = is_on;
         if !self.is_on {
             *self = Self {
-                ch3: self.ch3.reset_but_keep_ram(),
+                ch1: self.ch1.reset(),
+                ch2: self.ch2.reset(),
+                ch3: self.ch3.reset(),
+                ch4: self.ch4.reset(),
                 ..Default::default()
             }
         }
@@ -187,61 +190,55 @@ impl Apu {
     pub fn write(&mut self, index: u16, value: u8) {
         use crate::state::*;
 
-        if (CH1_SWEEP..AUDIO_MASTER_CONTROL).contains(&index) && !self.is_on {
-            return;
-        }
-
-        match index {
-            CH1_SWEEP => {
+        // according to blargg we can write to the initial length timer registers when the apu is off
+        match (index, self.is_on) {
+            (CH1_SWEEP, true) => {
                 log::info!("Writing to sweep 0b{value:08b}");
                 self.ch1.write_nr10(value)
             }
-            CH1_LENGTH_TIMER_AND_DUTY_CYCLE => {
+            (CH1_LENGTH_TIMER_AND_DUTY_CYCLE, _) => {
                 log::info!("ch1 Writing to length 0b{value:08b}");
-                self.ch1.write_nrx1(value)
+                self.ch1.write_nrx1(value, self.is_on)
             }
-            CH1_VOLUME_AND_ENVELOPE => self.ch1.write_nrx2(value),
-            CH1_PERIOD_LOW => {
+            (CH1_VOLUME_AND_ENVELOPE, true) => self.ch1.write_nrx2(value),
+            (CH1_PERIOD_LOW, true) => {
                 log::info!("ch1 Writing to period low 0b{value:08b}");
                 self.ch1.write_nrx3(value)
             }
-            CH1_PERIOD_HIGH_AND_CONTROL => {
+            (CH1_PERIOD_HIGH_AND_CONTROL, true) => {
                 log::info!("Writing to ch1 control 0b{value:08b}");
                 self.ch1.write_nrx4(value, "ch1", self.div_apu)
             }
-            0xff15 => {}
-            CH2_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch2.write_nrx1(value),
-            CH2_VOLUME_AND_ENVELOPE => self.ch2.write_nrx2(value),
-            CH2_PERIOD_LOW => self.ch2.write_nrx3(value),
-            CH2_PERIOD_HIGH_AND_CONTROL => {
+            (CH2_LENGTH_TIMER_AND_DUTY_CYCLE, _) => self.ch2.write_nrx1(value, self.is_on),
+            (CH2_VOLUME_AND_ENVELOPE, true) => self.ch2.write_nrx2(value),
+            (CH2_PERIOD_LOW, true) => self.ch2.write_nrx3(value),
+            (CH2_PERIOD_HIGH_AND_CONTROL, true) => {
                 log::info!("Writing to ch2 control");
                 self.ch2.write_nrx4(value, "ch2", self.div_apu)
             }
-            CH3_DAC_ENABLE => self.ch3.write_nr30(value),
-            CH3_LENGTH_TIMER => self.ch3.write_nr31(value),
-            CH3_OUTPUT_LEVEL => self.ch3.write_nr32(value),
-            CH3_PERIOD_LOW => self.ch3.write_nr33(value),
-            CH3_PERIOD_HIGH_AND_CONTROL => {
+            (CH3_DAC_ENABLE, true) => self.ch3.write_nr30(value),
+            (CH3_LENGTH_TIMER, _) => self.ch3.write_nr31(value),
+            (CH3_OUTPUT_LEVEL, true) => self.ch3.write_nr32(value),
+            (CH3_PERIOD_LOW, true) => self.ch3.write_nr33(value),
+            (CH3_PERIOD_HIGH_AND_CONTROL, true) => {
                 log::info!("Writing to ch3 control");
                 self.ch3.write_nr34(value, self.div_apu)
             }
-            0xff1f => {}
-            CH4_LENGTH_TIMER => self.ch4.write_nr41(value),
-            CH4_VOLUME_AND_ENVELOPE => self.ch4.write_nr42(value),
-            CH4_FREQUENCY_AND_RANDOMNESS => self.ch4.write_nr43(value),
-            CH4_CONTROL => {
+            (CH4_LENGTH_TIMER, _) => self.ch4.write_nr41(value),
+            (CH4_VOLUME_AND_ENVELOPE, true) => self.ch4.write_nr42(value),
+            (CH4_FREQUENCY_AND_RANDOMNESS, true) => self.ch4.write_nr43(value),
+            (CH4_CONTROL, true) => {
                 log::info!("Writing to ch4 control");
                 self.ch4.write_nr44(value, self.div_apu)
             }
-            MASTER_VOLUME_AND_VIN_PANNING => self.write_nr50(value),
-            SOUND_PANNING => self.write_nr51(value),
-            AUDIO_MASTER_CONTROL => self.write_nr52(value),
-            0xff27..WAVE => {}
-            WAVE..LCD_CONTROL => {
+            (MASTER_VOLUME_AND_VIN_PANNING, true) => self.write_nr50(value),
+            (SOUND_PANNING, true) => self.write_nr51(value),
+            (AUDIO_MASTER_CONTROL, _) => self.write_nr52(value),
+            (WAVE..LCD_CONTROL, _) => {
                 self.ch3
                     .write_ram(u8::try_from(index - WAVE).unwrap(), value);
             }
-            _ => unreachable!(),
+            _ => {}
         }
     }
 }

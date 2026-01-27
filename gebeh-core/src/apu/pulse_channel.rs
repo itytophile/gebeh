@@ -23,7 +23,7 @@ pub struct PulseChannel<S: Sweep> {
     sweep: S,
 }
 
-impl<S: Sweep> PulseChannel<S> {
+impl<S: Sweep + Default> PulseChannel<S> {
     pub fn tick_envelope(&mut self) {
         if self.is_on() {
             self.volume_and_envelope.tick();
@@ -35,8 +35,10 @@ impl<S: Sweep> PulseChannel<S> {
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
     }
-    pub fn write_nrx1(&mut self, value: u8) {
-        self.duty_cycle = value >> 6;
+    pub fn write_nrx1(&mut self, value: u8, is_apu_on: bool) {
+        if is_apu_on {
+            self.duty_cycle = value >> 6;
+        }
         self.length.set_initial_timer_length(value);
     }
     pub fn get_nrx2(&self) -> u8 {
@@ -122,6 +124,14 @@ impl<S: Sweep> PulseChannel<S> {
                 .get_period_value()
                 .unwrap_or(self.get_period_value()),
             volume: self.volume_and_envelope.get_volume(),
+        }
+    }
+
+    #[must_use]
+    pub fn reset(&self) -> Self {
+        Self {
+            length: self.length.reset(),
+            ..Default::default()
         }
     }
 }
