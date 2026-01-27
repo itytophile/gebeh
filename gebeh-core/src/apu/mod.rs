@@ -78,15 +78,13 @@ impl Apu {
     pub fn increment_div_apu(&mut self) {
         self.div_apu = self.div_apu.wrapping_add(1);
     }
-    pub fn get_nr52(&self, cycles: u64) -> u8 {
+    pub fn get_nr52(&self, _: u64) -> u8 {
         let mut flags = Nr52::empty();
         flags.set(Nr52::AUDIO_ON_OFF, self.is_on);
         flags.set(Nr52::CH4_ON, self.ch4.is_on());
         flags.set(Nr52::CH3_ON, self.ch3.is_on());
         flags.set(Nr52::CH2_ON, self.ch2.is_on());
         flags.set(Nr52::CH1_ON, self.ch1.is_on());
-
-        log::info!("{cycles}: {flags:?}");
 
         flags.bits() | 0b01110000
     }
@@ -192,45 +190,24 @@ impl Apu {
 
         // according to blargg we can write to the initial length timer registers when the apu is off
         match (index, self.is_on) {
-            (CH1_SWEEP, true) => {
-                log::info!("Writing to sweep 0b{value:08b}");
-                self.ch1.write_nr10(value)
-            }
-            (CH1_LENGTH_TIMER_AND_DUTY_CYCLE, _) => {
-                log::info!("ch1 Writing to length 0b{value:08b}");
-                self.ch1.write_nrx1(value, self.is_on)
-            }
+            (CH1_SWEEP, true) => self.ch1.write_nr10(value),
+            (CH1_LENGTH_TIMER_AND_DUTY_CYCLE, _) => self.ch1.write_nrx1(value, self.is_on),
             (CH1_VOLUME_AND_ENVELOPE, true) => self.ch1.write_nrx2(value),
-            (CH1_PERIOD_LOW, true) => {
-                log::info!("ch1 Writing to period low 0b{value:08b}");
-                self.ch1.write_nrx3(value)
-            }
-            (CH1_PERIOD_HIGH_AND_CONTROL, true) => {
-                log::info!("Writing to ch1 control 0b{value:08b}");
-                self.ch1.write_nrx4(value, "ch1", self.div_apu)
-            }
+            (CH1_PERIOD_LOW, true) => self.ch1.write_nrx3(value),
+            (CH1_PERIOD_HIGH_AND_CONTROL, true) => self.ch1.write_nrx4(value, self.div_apu),
             (CH2_LENGTH_TIMER_AND_DUTY_CYCLE, _) => self.ch2.write_nrx1(value, self.is_on),
             (CH2_VOLUME_AND_ENVELOPE, true) => self.ch2.write_nrx2(value),
             (CH2_PERIOD_LOW, true) => self.ch2.write_nrx3(value),
-            (CH2_PERIOD_HIGH_AND_CONTROL, true) => {
-                log::info!("Writing to ch2 control");
-                self.ch2.write_nrx4(value, "ch2", self.div_apu)
-            }
+            (CH2_PERIOD_HIGH_AND_CONTROL, true) => self.ch2.write_nrx4(value, self.div_apu),
             (CH3_DAC_ENABLE, true) => self.ch3.write_nr30(value),
             (CH3_LENGTH_TIMER, _) => self.ch3.write_nr31(value),
             (CH3_OUTPUT_LEVEL, true) => self.ch3.write_nr32(value),
             (CH3_PERIOD_LOW, true) => self.ch3.write_nr33(value),
-            (CH3_PERIOD_HIGH_AND_CONTROL, true) => {
-                log::info!("Writing to ch3 control");
-                self.ch3.write_nr34(value, self.div_apu)
-            }
+            (CH3_PERIOD_HIGH_AND_CONTROL, true) => self.ch3.write_nr34(value, self.div_apu),
             (CH4_LENGTH_TIMER, _) => self.ch4.write_nr41(value),
             (CH4_VOLUME_AND_ENVELOPE, true) => self.ch4.write_nr42(value),
             (CH4_FREQUENCY_AND_RANDOMNESS, true) => self.ch4.write_nr43(value),
-            (CH4_CONTROL, true) => {
-                log::info!("Writing to ch4 control");
-                self.ch4.write_nr44(value, self.div_apu)
-            }
+            (CH4_CONTROL, true) => self.ch4.write_nr44(value, self.div_apu),
             (MASTER_VOLUME_AND_VIN_PANNING, true) => self.write_nr50(value),
             (SOUND_PANNING, true) => self.write_nr51(value),
             (AUDIO_MASTER_CONTROL, _) => self.write_nr52(value),

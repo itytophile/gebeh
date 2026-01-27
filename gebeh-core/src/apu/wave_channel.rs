@@ -45,9 +45,7 @@ impl WaveChannel {
     }
     pub fn write_nr34(&mut self, value: u8, div_apu: u8) {
         self.period = (u16::from(value & 0x07) << 8) | self.period & 0x00ff;
-        self.is_enabled &= !self
-            .length
-            .set_is_enabled(value & 0x40 != 0, "wave", div_apu);
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, div_apu);
         if value & 0x80 != 0 {
             self.trigger(div_apu);
         }

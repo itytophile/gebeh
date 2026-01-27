@@ -60,12 +60,6 @@ impl Ch1Sweep {
 
         let new_period = self.period_value + (self.period_value >> self.individual_step());
 
-        log::info!(
-            "0x{:04x} + 0x{:04x} = 0x{new_period:04x}",
-            self.period_value,
-            self.period_value >> self.individual_step(),
-        );
-
         if new_period > 0x7ff {
             return None;
         }
@@ -91,7 +85,6 @@ impl Sweep for Ch1Sweep {
         self.pace_countdown = NonZeroU8::new(self.pace()).unwrap_or(DEFAULT_PACE_COUTDOWN);
         self.is_enabled = self.pace() != 0 || self.individual_step() != 0;
         self.has_computed_in_decrease_mode = false;
-        log::info!("sweep trigger {}", self.is_enabled);
         // https://gbdev.io/pandocs/Audio_details.html#pulse-channel-with-sweep-ch1
         // Citation: If the individual step is non-zero, frequency calculation and overflow check are performed immediately.
         self.individual_step() == 0 || self.compute_next_value_and_check_overflow().is_some()
@@ -114,7 +107,6 @@ impl Sweep for Ch1Sweep {
         self.pace_countdown = NonZeroU8::new(self.pace()).unwrap_or(DEFAULT_PACE_COUTDOWN);
 
         if self.pace() == 0 {
-            log::info!("sweep tick discarded");
             return (true, None);
         }
 

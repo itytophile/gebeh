@@ -47,9 +47,7 @@ impl NoiseChannel {
         self.nr43
     }
     pub fn write_nr44(&mut self, value: u8, div_apu: u8) {
-        self.is_enabled &= !self
-            .length
-            .set_is_enabled(value & 0x40 != 0, "noise", div_apu);
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, div_apu);
         if value & 0x80 != 0 {
             self.trigger(div_apu);
         }

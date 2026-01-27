@@ -21,16 +21,13 @@ impl<const MASK: u8> Length<MASK> {
     }
     // returns true if overflow
     #[must_use]
-    pub fn set_is_enabled(&mut self, is_enabled: bool, ch: &'static str, div_apu: u8) -> bool {
+    pub fn set_is_enabled(&mut self, is_enabled: bool, div_apu: u8) -> bool {
         let previous_is_length_enabled = self.is_enabled;
         self.is_enabled = is_enabled;
-        if !previous_is_length_enabled && self.is_enabled {
-            log::info!("{ch} length enabled!");
-            // according to blargg "Enabling in first half of length period should clock length"
-            if is_length_extra_clock(div_apu) {
-                log::info!("extra tick");
-                return self.tick();
-            }
+        // according to blargg "Enabling in first half of length period should clock length"
+
+        if !previous_is_length_enabled && self.is_enabled && is_length_extra_clock(div_apu) {
+            return self.tick();
         }
 
         false
@@ -40,14 +37,11 @@ impl<const MASK: u8> Length<MASK> {
     }
     pub fn set_initial_timer_length(&mut self, value: u8) {
         // according to blargg "Length can be reloaded at any time"
-        let lol = MASK - (value & MASK);
-        log::info!("Setting to {lol} (0b{value:08b})");
         self.current_timer_value = Some(MASK - (value & MASK));
     }
 
     pub fn trigger(&mut self, div_apu: u8) {
         let extra_clock = is_length_extra_clock(div_apu);
-        log::info!("trigger with extra = {}, {:?}", extra_clock, self);
         if self.current_timer_value.is_none() {
             // according to blargg "Trigger that un-freezes enabled length should clock it"
             self.current_timer_value = Some(MASK - (extra_clock && self.is_enabled) as u8);
@@ -57,17 +51,11 @@ impl<const MASK: u8> Length<MASK> {
     // returns true if overflow
     #[must_use]
     pub fn tick(&mut self) -> bool {
-        let (Some(prout), true) = (self.current_timer_value, self.is_enabled) else {
+        let (Some(value), true) = (self.current_timer_value, self.is_enabled) else {
             return false;
         };
 
-        log::info!("tick length {prout}");
-
-        self.current_timer_value = prout.checked_sub(1);
-
-        if self.current_timer_value.is_none() {
-            log::info!("length expired");
-        }
+        self.current_timer_value = value.checked_sub(1);
 
         self.current_timer_value.is_none()
     }

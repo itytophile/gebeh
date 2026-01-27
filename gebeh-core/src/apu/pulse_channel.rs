@@ -57,16 +57,16 @@ impl<S: Sweep + Default> PulseChannel<S> {
     pub fn get_nrx4(&self) -> u8 {
         ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
-    pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8) {
-        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, ch, div_apu);
+    pub fn write_nrx4(&mut self, value: u8, div_apu: u8) {
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, div_apu);
 
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {
-            self.trigger(ch, div_apu);
+            self.trigger(div_apu);
         }
     }
 
-    pub fn trigger(&mut self, ch: &'static str, div_apu: u8) {
+    pub fn trigger(&mut self, div_apu: u8) {
         // according to blargg "Disabled DAC shouldn't stop other trigger effects"
         self.length.trigger(div_apu);
 
@@ -75,15 +75,9 @@ impl<S: Sweep + Default> PulseChannel<S> {
             return;
         }
 
-        if !self.is_enabled {
-            log::info!("{ch} enabled!")
-        }
         self.volume_and_envelope.trigger();
-        let is_enabled_from_sweep = self.sweep.trigger(self.get_period_value());
-        if !is_enabled_from_sweep {
-            log::info!("disabled from trigger")
-        }
-        self.is_enabled = is_enabled_from_sweep;
+
+        self.is_enabled = self.sweep.trigger(self.get_period_value());
     }
 
     pub fn is_on(&self) -> bool {
@@ -96,11 +90,7 @@ impl<S: Sweep + Default> PulseChannel<S> {
         }
         let (is_enabled_from_sweep, new_period) = self.sweep.tick();
         if let Some(period) = new_period {
-            log::info!("new period: 0x{period:04x}");
             self.set_period_value(period);
-        }
-        if self.is_enabled && !is_enabled_from_sweep {
-            log::info!("Disabled from sweep");
         }
         self.is_enabled = is_enabled_from_sweep;
     }

@@ -559,9 +559,6 @@ impl Cpu {
                     .to_be_bytes()
             }
             NoRead(Cp8Bit(register)) => {
-                if register == Register8Bit::B {
-                    log::info!("CP B (0x{:02x}) with a = 0x{:02x}", self.b, self.a);
-                }
                 let a = self.a;
                 let value = self.get_8bit_register(register);
                 let (result, carry) = a.overflowing_sub(value);
@@ -636,9 +633,6 @@ impl Cpu {
                 self.sbc(self.get_8bit_register(register));
             }
             NoRead(And8Bit(register)) => {
-                if register == Register8Bit::B {
-                    log::info!("AND B");
-                }
                 let result = self.a & self.get_8bit_register(register);
                 self.a = result;
                 let flags = &mut self.f;
