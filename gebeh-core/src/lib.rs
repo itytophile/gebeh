@@ -81,7 +81,7 @@ impl Emulator {
         self.ly_handler.execute(&mut self.state, self.cycles);
         self.ppu.execute(&mut self.state, self.cycles);
         self.timer.execute(&mut self.state, self.cycles);
-        self.apu.execute(self.timer.get_div());
+        let must_increment_div_apu = self.apu.execute(self.timer.get_div());
         self.cpu.execute(
             &mut self.state,
             Peripherals {
@@ -92,6 +92,9 @@ impl Emulator {
             },
             self.cycles,
         );
+        if must_increment_div_apu {
+            self.apu.increment_div_apu();
+        }
         self.timer.commit_tima_overflow();
         self.cycles = self.cycles.wrapping_add(1);
     }

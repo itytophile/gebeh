@@ -75,6 +75,9 @@ bitflags::bitflags! {
 }
 
 impl Apu {
+    pub fn increment_div_apu(&mut self) {
+        self.div_apu = self.div_apu.wrapping_add(1);
+    }
     pub fn get_nr52(&self, cycles: u64) -> u8 {
         let mut flags = Nr52::empty();
         flags.set(Nr52::AUDIO_ON_OFF, self.is_on);
@@ -113,29 +116,29 @@ impl Apu {
         self.nr50 = Nr50::from_bits_retain(value);
     }
 
-    pub fn execute(&mut self, div: u8) {
-        if !self.is_on {
-            return;
+    #[must_use]
+    pub fn execute(&mut self, div: u8) -> bool {
+        if !self.is_on || !self.falling_edge.update(div & (1 << 4) != 0) {
+            return false;
         }
 
         // 512 Hz
-        if self.falling_edge.update(div & (1 << 4) != 0) {
-            if self.div_apu.is_multiple_of(2) {
-                self.ch1.tick_length();
-                self.ch2.tick_length();
-                self.ch3.tick_length();
-                self.ch4.tick_length();
-            }
-            if self.div_apu % 4 == 2 {
-                self.ch1.tick_sweep();
-            }
-            if self.div_apu % 8 == 7 {
-                self.ch1.tick_envelope();
-                self.ch2.tick_envelope();
-                self.ch4.tick_envelope();
-            }
-            self.div_apu = self.div_apu.wrapping_add(1);
+        if self.div_apu.is_multiple_of(2) {
+            self.ch1.tick_length();
+            self.ch2.tick_length();
+            self.ch3.tick_length();
+            self.ch4.tick_length();
         }
+        if self.div_apu % 4 == 2 {
+            self.ch1.tick_sweep();
+        }
+        if self.div_apu % 8 == 7 {
+            self.ch1.tick_envelope();
+            self.ch2.tick_envelope();
+            self.ch4.tick_envelope();
+        }
+
+        true
     }
 
     pub fn get_sampler(&self) -> Sampler {

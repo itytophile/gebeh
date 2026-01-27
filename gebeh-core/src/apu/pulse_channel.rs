@@ -56,20 +56,17 @@ impl<S: Sweep> PulseChannel<S> {
         ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
     pub fn write_nrx4(&mut self, value: u8, ch: &'static str, div_apu: u8) {
-        self.is_enabled &=
-            !self
-                .length
-                .set_is_enabled(value & 0x40 != 0, ch, div_apu.is_multiple_of(2));
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, ch, div_apu);
 
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {
-            self.trigger(ch, div_apu.is_multiple_of(2));
+            self.trigger(ch, div_apu);
         }
     }
 
-    pub fn trigger(&mut self, ch: &'static str, extra_clock: bool) {
+    pub fn trigger(&mut self, ch: &'static str, div_apu: u8) {
         // according to blargg "Disabled DAC shouldn't stop other trigger effects"
-        self.length.trigger(extra_clock);
+        self.length.trigger(div_apu);
 
         // according to blargg "Disabled DAC should prevent enable at trigger"
         if !self.volume_and_envelope.is_dac_on() {

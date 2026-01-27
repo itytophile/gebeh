@@ -36,7 +36,7 @@ Pronounced gebeh.
 
 ### Debugger & Disassembler
 
-- [Gameroy](https://github.com/Rodrigodd/gameroy). It's an emulator too! Used it to know what Snorpung demos were doing.
+- [Gameroy](https://github.com/Rodrigodd/gameroy). It's an emulator too! Used it to know what Snorpung demos were doing. Used as a reference to pass blargg sound test roms.
 
 ### Stress test roms
 

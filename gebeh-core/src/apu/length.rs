@@ -7,22 +7,21 @@ pub struct Length<const MASK: u8> {
     current_timer_value: Option<u8>, // None = overflowed
 }
 
+pub fn is_length_extra_clock(div_apu: u8) -> bool {
+    div_apu % 2 == 1
+}
+
 impl<const MASK: u8> Length<MASK> {
     // returns true if overflow
     #[must_use]
-    pub fn set_is_enabled(
-        &mut self,
-        is_enabled: bool,
-        ch: &'static str,
-        extra_clock: bool,
-    ) -> bool {
+    pub fn set_is_enabled(&mut self, is_enabled: bool, ch: &'static str, div_apu: u8) -> bool {
         let previous_is_length_enabled = self.is_enabled;
         self.is_enabled = is_enabled;
         if !previous_is_length_enabled && self.is_enabled {
             log::info!("{ch} length enabled!");
             // for this hack to work, the cpu must be executed after the apu (I suppose)
             // according to blargg "Enabling in first half of length period should clock length"
-            if extra_clock {
+            if is_length_extra_clock(div_apu) {
                 log::info!("extra tick");
                 return self.tick();
             }
@@ -38,7 +37,8 @@ impl<const MASK: u8> Length<MASK> {
         self.current_timer_value = Some(MASK - (value & MASK));
     }
 
-    pub fn trigger(&mut self, extra_clock: bool) {
+    pub fn trigger(&mut self, div_apu: u8) {
+        let extra_clock = is_length_extra_clock(div_apu);
         log::info!("trigger with extra = {}, {:?}", extra_clock, self);
         if self.current_timer_value.is_none() {
             // according to blargg "Trigger that un-freezes enabled length should clock it"
@@ -52,7 +52,7 @@ impl<const MASK: u8> Length<MASK> {
         let (Some(prout), true) = (self.current_timer_value, self.is_enabled) else {
             return false;
         };
-        
+
         log::info!("tick length {prout}");
 
         self.current_timer_value = prout.checked_sub(1);
