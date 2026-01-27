@@ -1,6 +1,6 @@
 use crate::apu::{
     envelope::VolumeAndEnvelope,
-    length::Length,
+    length::{Length, MASK_6_BITS},
     sweep::{Ch1Sweep, Sweep},
 };
 
@@ -14,7 +14,7 @@ const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
-    length: Length<64>,
+    length: Length<MASK_6_BITS>,
     duty_cycle: u8,
     volume_and_envelope: VolumeAndEnvelope,
     period_low: u8,
@@ -23,22 +23,22 @@ pub struct PulseChannel<S: Sweep> {
     sweep: S,
 }
 
-impl<S: Sweep> PulseChannel<S> {
+impl<S: Sweep + Default> PulseChannel<S> {
     pub fn tick_envelope(&mut self) {
         if self.is_on() {
             self.volume_and_envelope.tick();
         }
     }
     pub fn tick_length(&mut self) {
-        if self.is_on() {
-            self.length.tick();
-        }
+        self.is_enabled &= !self.length.tick();
     }
     pub fn get_nrx1(&self) -> u8 {
         (self.duty_cycle << 6) | 0b00111111
     }
-    pub fn write_nrx1(&mut self, value: u8) {
-        self.duty_cycle = value >> 6;
+    pub fn write_nrx1(&mut self, value: u8, is_apu_on: bool) {
+        if is_apu_on {
+            self.duty_cycle = value >> 6;
+        }
         self.length.set_initial_timer_length(value);
     }
     pub fn get_nrx2(&self) -> u8 {
@@ -46,6 +46,7 @@ impl<S: Sweep> PulseChannel<S> {
     }
     pub fn write_nrx2(&mut self, value: u8) {
         self.volume_and_envelope.write_register(value);
+        self.is_enabled &= self.volume_and_envelope.is_dac_on();
     }
     pub fn get_nrx3(&self) -> u8 {
         0xff
@@ -54,27 +55,33 @@ impl<S: Sweep> PulseChannel<S> {
         self.period_low = value;
     }
     pub fn get_nrx4(&self) -> u8 {
-        ((self.length.is_enable as u8) << 6) | 0b10111111
+        ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
-    pub fn write_nrx4(&mut self, value: u8) {
-        self.length.is_enable = value & 0x40 != 0;
+    pub fn write_nrx4(&mut self, value: u8, div_apu: u8) {
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, div_apu);
+
         self.period_high = value & 0x07;
         if value & 0x80 != 0 {
-            self.trigger();
+            self.trigger(div_apu);
         }
     }
 
-    pub fn trigger(&mut self) {
-        self.is_enabled = true;
-        self.length.trigger();
-        self.volume_and_envelope.trigger();
-        if let Some(new_period) = self.sweep.trigger(self.get_period_value()) {
-            self.set_period_value(new_period);
+    pub fn trigger(&mut self, div_apu: u8) {
+        // according to blargg "Disabled DAC shouldn't stop other trigger effects"
+        self.length.trigger(div_apu);
+
+        // according to blargg "Disabled DAC should prevent enable at trigger"
+        if !self.volume_and_envelope.is_dac_on() {
+            return;
         }
+
+        self.volume_and_envelope.trigger();
+
+        self.is_enabled = self.sweep.trigger(self.get_period_value());
     }
 
     pub fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
+        self.is_enabled
     }
 
     pub fn tick_sweep(&mut self) {
@@ -109,27 +116,22 @@ impl<S: Sweep> PulseChannel<S> {
             volume: self.volume_and_envelope.get_volume(),
         }
     }
+
+    #[must_use]
+    pub fn reset(&self) -> Self {
+        Self {
+            length: self.length.reset(),
+            ..Default::default()
+        }
+    }
 }
 
 impl PulseChannel<Ch1Sweep> {
     pub fn get_nr10(&self) -> u8 {
-        self.sweep.nr10 | 0x80
+        self.sweep.get_nr10() | 0x80
     }
     pub fn write_nr10(&mut self, value: u8) {
-        let new_pace = (value >> 4) & 0x07;
-
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff10--nr10-channel-1-sweep
-        // Citation: However, if 0 is written to this field, then iterations are instantly
-        // disabled, and it will be reloaded as soon as it’s set to something else.
-        if new_pace == 0 {
-            self.sweep.pace = new_pace;
-        }
-
-        if (self.sweep.nr10 >> 4) & 0x07 == 0 {
-            self.sweep.pace = new_pace;
-        }
-
-        self.sweep.nr10 = value;
+        self.is_enabled &= self.sweep.set_nr10(value);
     }
 }
 

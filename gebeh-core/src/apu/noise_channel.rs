@@ -1,23 +1,31 @@
-use crate::apu::{envelope::VolumeAndEnvelope, length::Length};
+use crate::apu::{
+    envelope::VolumeAndEnvelope,
+    length::{Length, MASK_6_BITS},
+};
 
 #[derive(Default, Clone)]
 pub struct NoiseChannel {
-    length: Length<64>,
+    length: Length<MASK_6_BITS>,
     volume_and_envelope: VolumeAndEnvelope,
     nr43: u8,
     is_enabled: bool,
 }
 
 impl NoiseChannel {
+    #[must_use]
+    pub fn reset(&self) -> Self {
+        Self {
+            length: self.length.reset(),
+            ..Default::default()
+        }
+    }
     pub fn tick_envelope(&mut self) {
         if self.is_on() {
             self.volume_and_envelope.tick();
         }
     }
     pub fn tick_length(&mut self) {
-        if self.is_on() {
-            self.length.tick();
-        }
+        self.is_enabled &= !self.length.tick();
     }
     pub fn write_nr41(&mut self, value: u8) {
         self.length.set_initial_timer_length(value);
@@ -27,6 +35,7 @@ impl NoiseChannel {
     }
     pub fn write_nr42(&mut self, value: u8) {
         self.volume_and_envelope.write_register(value);
+        self.is_enabled &= self.volume_and_envelope.is_dac_on();
     }
     pub fn read_nr42(&self) -> u8 {
         self.volume_and_envelope.get_register()
@@ -37,24 +46,30 @@ impl NoiseChannel {
     pub fn read_nr43(&self) -> u8 {
         self.nr43
     }
-    pub fn write_nr44(&mut self, value: u8) {
-        self.length.is_enable = value & 0x40 != 0;
+    pub fn write_nr44(&mut self, value: u8, div_apu: u8) {
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, div_apu);
         if value & 0x80 != 0 {
-            self.trigger();
+            self.trigger(div_apu);
         }
     }
     pub fn read_nr44(&self) -> u8 {
-        ((self.length.is_enable as u8) << 6) | 0b10111111
+        ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
 
-    fn trigger(&mut self) {
+    fn trigger(&mut self, div_apu: u8) {
+        // according to blargg "Disabled DAC shouldn't stop other trigger effects"
+        self.length.trigger(div_apu);
+
+        // according to blargg "Disabled DAC should prevent enable at trigger"
+        if !self.volume_and_envelope.is_dac_on() {
+            return;
+        }
         self.is_enabled = true;
-        self.length.trigger();
         self.volume_and_envelope.trigger();
     }
 
     pub fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled && !self.length.is_expired()
+        self.volume_and_envelope.is_dac_on() && self.is_enabled
     }
 
     fn get_divider(&self) -> u8 {

@@ -1,10 +1,10 @@
-use crate::apu::length::Length;
+use crate::apu::length::{Length, MASK_8_BITS};
 
 #[derive(Default, Clone)]
 pub struct WaveChannel {
     is_enabled: bool,
     is_dac_on: bool,
-    length: Length<256>,
+    length: Length<MASK_8_BITS>,
     output_level: u8, // 2 bits
     effective_output_level: u8,
     period: u16, // 11 bits
@@ -13,15 +13,14 @@ pub struct WaveChannel {
 
 impl WaveChannel {
     pub fn tick_length(&mut self) {
-        if self.is_on() {
-            self.length.tick();
-        }
+        self.is_enabled &= !self.length.tick();
     }
     pub fn get_nr30(&self) -> u8 {
         ((self.is_dac_on as u8) << 7) | 0b01111111
     }
     pub fn write_nr30(&mut self, value: u8) {
         self.is_dac_on = value & 0x80 != 0;
+        self.is_enabled &= self.is_dac_on;
     }
     pub fn get_nr31(&self) -> u8 {
         0xff
@@ -42,22 +41,28 @@ impl WaveChannel {
         self.period = self.period & 0xff00 | u16::from(value);
     }
     pub fn get_nr34(&self) -> u8 {
-        ((self.length.is_enable as u8) << 6) | 0b10111111
+        ((self.length.is_enabled() as u8) << 6) | 0b10111111
     }
-    pub fn write_nr34(&mut self, value: u8) {
+    pub fn write_nr34(&mut self, value: u8, div_apu: u8) {
         self.period = (u16::from(value & 0x07) << 8) | self.period & 0x00ff;
-        self.length.is_enable = value & 0x40 != 0;
+        self.is_enabled &= !self.length.set_is_enabled(value & 0x40 != 0, div_apu);
         if value & 0x80 != 0 {
-            self.trigger();
+            self.trigger(div_apu);
         }
     }
-    fn trigger(&mut self) {
+    fn trigger(&mut self, div_apu: u8) {
+        // according to blargg "Disabled DAC shouldn't stop other trigger effects"
+        self.length.trigger(div_apu);
+
+        // according to blargg "Disabled DAC should prevent enable at trigger"
+        if !self.is_dac_on {
+            return;
+        }
         self.is_enabled = true;
-        self.length.trigger();
         self.effective_output_level = self.output_level;
     }
     pub fn is_on(&self) -> bool {
-        self.is_enabled && self.is_dac_on && !self.length.is_expired()
+        self.is_enabled
     }
     // let's ignore specific behaviors
     // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
@@ -80,6 +85,15 @@ impl WaveChannel {
             effective_output_level: self.effective_output_level,
             ram: self.ram,
             period: self.period,
+        }
+    }
+
+    #[must_use]
+    pub fn reset(&self) -> Self {
+        Self {
+            length: self.length.reset(),
+            ram: self.ram,
+            ..Default::default()
         }
     }
 }
