@@ -24,8 +24,8 @@ impl<const MASK: u8> Length<MASK> {
     pub fn set_is_enabled(&mut self, is_enabled: bool, div_apu: u8) -> bool {
         let previous_is_length_enabled = self.is_enabled;
         self.is_enabled = is_enabled;
-        // according to blargg "Enabling in first half of length period should clock length"
 
+        // according to blargg "Enabling in first half of length period should clock length"
         if !previous_is_length_enabled && self.is_enabled && is_length_extra_clock(div_apu) {
             return self.tick();
         }
@@ -41,6 +41,7 @@ impl<const MASK: u8> Length<MASK> {
     }
 
     pub fn trigger(&mut self, div_apu: u8) {
+        // according to GameRoy there is an extra clock here
         let extra_clock = is_length_extra_clock(div_apu);
         if self.current_timer_value.is_none() {
             // according to blargg "Trigger that un-freezes enabled length should clock it"
