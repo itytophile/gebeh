@@ -230,6 +230,9 @@ pub struct Sampler {
     nr50: Nr50,
 }
 
+// keep the sound between -1 and 1
+const CHANNEL_COUNT: f32 = 4.;
+
 impl Sampler {
     #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
@@ -250,6 +253,7 @@ impl Sampler {
         } else {
             0.
         })) * self.get_volume_left()
+            / CHANNEL_COUNT
     }
 
     #[must_use]
@@ -271,6 +275,7 @@ impl Sampler {
         } else {
             0.
         })) * self.get_volume_right()
+            / CHANNEL_COUNT
     }
 
     fn get_volume_left(&self) -> f32 {
