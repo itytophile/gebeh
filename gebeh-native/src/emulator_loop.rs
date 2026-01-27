@@ -11,7 +11,7 @@ use gebeh_core::{
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Color,
 };
-use gebeh_front_helper::{get_mbc, get_noise, get_title_from_rom};
+use gebeh_front_helper::{get_mbc, get_title_from_rom};
 
 pub fn spawn_emulator(
     device: &cpal::Device,
@@ -102,8 +102,8 @@ where
     let sample_rate = config.sample_rate;
     let mut sample_index = 0u32;
 
-    let noise = get_noise(false);
-    let short_noise = get_noise(true);
+    // let noise = get_noise(false);
+    // let short_noise = get_noise(true);
 
     let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -145,11 +145,13 @@ where
                         }
                     }
 
-                    let sampler = emulator.get_apu().get_sampler();
+                    // let sampler = emulator.get_apu().get_sampler();
 
-                    let sample = sample_index as f32 / sample_rate as f32;
-                    frame[0] = T::from_sample(sampler.sample_left(sample, &noise, &short_noise));
-                    frame[1] = T::from_sample(sampler.sample_right(sample, &noise, &short_noise));
+                    // let sample = sample_index as f32 / sample_rate as f32;
+                    // frame[0] = T::from_sample(sampler.sample_left(sample, &noise, &short_noise));
+                    // frame[1] = T::from_sample(sampler.sample_right(sample, &noise, &short_noise));
+                    frame[0] = T::from_sample(0.);
+                    frame[1] = T::from_sample(0.);
                     // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
                     sample_index = sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
                 }

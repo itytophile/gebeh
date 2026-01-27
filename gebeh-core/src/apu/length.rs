@@ -52,6 +52,8 @@ impl<const MASK: u8> Length<MASK> {
         let (Some(prout), true) = (self.current_timer_value, self.is_enabled) else {
             return false;
         };
+        
+        log::info!("tick length {prout}");
 
         self.current_timer_value = prout.checked_sub(1);
 

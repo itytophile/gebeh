@@ -120,21 +120,21 @@ impl Apu {
 
         // 512 Hz
         if self.falling_edge.update(div & (1 << 4) != 0) {
-            self.div_apu = self.div_apu.wrapping_add(1);
             if self.div_apu.is_multiple_of(2) {
                 self.ch1.tick_length();
                 self.ch2.tick_length();
                 self.ch3.tick_length();
                 self.ch4.tick_length();
             }
-            if self.div_apu.is_multiple_of(4) {
+            if self.div_apu % 4 == 2 {
                 self.ch1.tick_sweep();
             }
-            if self.div_apu.is_multiple_of(8) {
+            if self.div_apu % 8 == 7 {
                 self.ch1.tick_envelope();
                 self.ch2.tick_envelope();
                 self.ch4.tick_envelope();
             }
+            self.div_apu = self.div_apu.wrapping_add(1);
         }
     }
 
