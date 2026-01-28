@@ -1,16 +1,17 @@
 use crate::apu::{
+    MAX_VOLUME,
     envelope::VolumeAndEnvelope,
     length::{Length, MASK_6_BITS},
     sweep::{Ch1Sweep, Sweep},
 };
 
-type Wave = [f32; 8];
+type Wave = [u8; 8];
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff11--nr11-channel-1-length-timer--duty-cycle
-const WAVE_00: Wave = [1., 1., 1., 1., 1., 1., 1., -1.];
-const WAVE_01: Wave = [-1., 1., 1., 1., 1., 1., 1., -1.];
-const WAVE_10: Wave = [-1., 1., 1., 1., 1., -1., -1., -1.];
-const WAVE_11: Wave = [1., -1., -1., -1., -1., -1., -1., 1.];
+const WAVE_00: Wave = [1, 1, 1, 1, 1, 1, 1, 0];
+const WAVE_01: Wave = [0, 1, 1, 1, 1, 1, 1, 0];
+const WAVE_10: Wave = [0, 1, 1, 1, 1, 0, 0, 0];
+const WAVE_11: Wave = [1, 0, 0, 0, 0, 0, 0, 1];
 
 #[derive(Clone, Default)]
 pub struct PulseChannel<S: Sweep> {
@@ -162,7 +163,7 @@ impl PulseSampler {
             0b11 => WAVE_11,
             _ => unreachable!(),
         };
-        wave[index] * self.volume as f32 / 15.
+        (wave[index] * self.volume) as f32 / MAX_VOLUME as f32 * 2. - 1.
     }
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {

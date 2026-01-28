@@ -1,4 +1,5 @@
 use crate::apu::{
+    MAX_VOLUME,
     envelope::VolumeAndEnvelope,
     length::{Length, MASK_6_BITS},
 };
@@ -113,14 +114,14 @@ impl NoiseSampler {
         // The noise is cyclic so we can use modulo if the index is greater than the provided noise values.
         let index = (sample * freq) as usize;
 
-        // in [0;1]
+        // 0 or 1
         let raw_sample = if self.is_short_mode {
-            short_noise[index % short_noise.len()] as f32
+            short_noise[index % short_noise.len()]
         } else {
-            noise[index % noise.len()] as f32
+            noise[index % noise.len()]
         };
 
-        (raw_sample * 2. - 1.) * self.volume as f32 / 15.
+        (raw_sample * self.volume) as f32 / MAX_VOLUME as f32 * 2. - 1.
     }
     fn get_tick_frequency(&self) -> f32 {
         // https://gbdev.io/pandocs/Audio_Registers.html#ff22--nr43-channel-4-frequency--randomness
