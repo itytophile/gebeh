@@ -90,6 +90,7 @@ impl NoiseChannel {
             shift: self.get_shift(),
             is_short_mode: self.is_short_mode(),
             volume: self.volume_and_envelope.get_volume(),
+            is_dac_on: self.volume_and_envelope.is_dac_on(),
         }
     }
 }
@@ -101,12 +102,18 @@ pub struct NoiseSampler {
     shift: u8,
     is_short_mode: bool,
     volume: u8,
+    is_dac_on: bool,
 }
 
 impl NoiseSampler {
     pub fn sample(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
-        if !self.is_on {
+        // https://gbdev.io/pandocs/Audio_details.html#channels
+        // Citation: a disabled channel outputs 0, which an enabled DAC will dutifully convert into “analog 1”.
+        if !self.is_dac_on {
             return 0.;
+        }
+        if !self.is_on {
+            return 1.;
         }
 
         let freq = self.get_tick_frequency();

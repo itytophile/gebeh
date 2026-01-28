@@ -88,6 +88,7 @@ impl WaveChannel {
             effective_output_level: self.effective_output_level,
             ram: self.ram,
             period: self.period,
+            is_dac_on: self.is_dac_on,
         }
     }
 
@@ -107,13 +108,19 @@ pub struct WaveSampler {
     effective_output_level: u8,
     ram: [u8; 16],
     period: u16,
+    is_dac_on: bool,
 }
 
 impl WaveSampler {
     pub fn sample(&self, sample: f32) -> f32 {
+        // https://gbdev.io/pandocs/Audio_details.html#channels
+        // Citation: a disabled channel outputs 0, which an enabled DAC will dutifully convert into “analog 1”.
+        if !self.is_dac_on {
+            return 0.;
+        }
         // About output level https://gbdev.io/pandocs/Audio_Registers.html#ff1c--nr32-channel-3-output-level
         if !self.is_on || self.effective_output_level == 0 {
-            return 0.;
+            return 1.;
         }
 
         let index = (sample * self.get_tone_frequency()) % 1.;
