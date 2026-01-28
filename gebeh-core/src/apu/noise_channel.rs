@@ -121,7 +121,7 @@ impl NoiseSampler {
             noise[index % noise.len()]
         };
 
-        (raw_sample * self.volume) as f32 / MAX_VOLUME as f32 * 2. - 1.
+        1. - (raw_sample * self.volume) as f32 / MAX_VOLUME as f32 * 2.
     }
     fn get_tick_frequency(&self) -> f32 {
         // https://gbdev.io/pandocs/Audio_Registers.html#ff22--nr43-channel-4-frequency--randomness

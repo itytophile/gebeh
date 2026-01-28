@@ -163,7 +163,7 @@ impl PulseSampler {
             0b11 => WAVE_11,
             _ => unreachable!(),
         };
-        (wave[index] * self.volume) as f32 / MAX_VOLUME as f32 * 2. - 1.
+        1. - (wave[index] * self.volume) as f32 / MAX_VOLUME as f32 * 2.
     }
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
     fn get_tone_frequency(&self) -> f32 {

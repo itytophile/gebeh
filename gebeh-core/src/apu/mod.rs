@@ -14,6 +14,7 @@ mod wave_channel;
 
 // https://gbdev.io/pandocs/Audio_details.html#dacs
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
+// Importantly, the slope is negative: “digital 0” maps to “analog 1”, not “analog -1”.
 const MAX_VOLUME: u8 = 0x0f;
 
 #[derive(Default, Clone)]
