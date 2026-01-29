@@ -108,40 +108,39 @@ impl WaveChannel {
 }
 
 #[derive(Default)]
-pub struct WavePeriodCorrector {
+pub struct WaveCorrector {
     period: u16,
     shift: f32,
     is_on: Option<NonZeroU8>,
 }
 
-fn get_index(sample: f32, period: u16) -> usize {
-    (((sample * get_tone_frequency(period)) % 1.) * 32.) as usize
+fn get_index(sample: f32, period: u16) -> f32 {
+    ((sample * get_tone_frequency(period)) % 1.) * 32.
 }
 
-impl WavePeriodCorrector {
+impl WaveCorrector {
     pub fn correct(&mut self, wave_sampler: &mut WaveSampler, sample: f32, mut is_on: bool) {
         is_on &= wave_sampler.is_dac_on
             && wave_sampler.is_on
             && wave_sampler.effective_output_level != 0;
 
+        // before disabling/enabling the wave we have to wait the wave to reach its middle (in the best world, analog zero)
         if self.is_on.is_some() != is_on {
-            let level = self.is_on
+            let level = self
+                .is_on
                 .unwrap_or(NonZeroU8::new(wave_sampler.effective_output_level).unwrap());
-            let digital_sample = digital_sample(
-                sample - self.shift,
-                self.period,
-                &wave_sampler.ram,
-                level,
-            );
+            let digital_sample =
+                digital_sample(sample - self.shift, self.period, &wave_sampler.ram, level);
             if digital_sample == get_median(&wave_sampler.ram, level) {
                 self.is_on =
                     is_on.then_some(NonZeroU8::new(wave_sampler.effective_output_level).unwrap());
             }
         }
 
+        // wait for the wave to finish before changing the period
         if self.is_on.is_some()
             && self.period != wave_sampler.period
-            && get_index(sample - self.shift, self.period) == 0
+            && get_index(sample - self.shift, self.period) as usize == 0
         {
             self.period = wave_sampler.period;
             // we shift the sampler by the current sample to reset the wave
@@ -183,11 +182,12 @@ impl WaveSampler {
             return 0.; // should return 1. but who cares
         }
 
-        let sample = sample - self.sample_shift;
-        let index_lol = ((sample * get_tone_frequency(self.period)) % 1.) * 32.;
-        let index = index_lol as usize;
+        let index_float = get_index(sample - self.sample_shift, self.period);
+        let index = index_float as usize;
         let start = index_ram(&self.ram, index) as f32;
-        let value = start + (index_ram(&self.ram, (index + 1) % 32) as f32 - start) * (index_lol % 1.);
+        // interpolation
+        let value =
+            start + (index_ram(&self.ram, (index + 1) % 32) as f32 - start) * (index_float % 1.);
 
         1. - value as f32 / MAX_VOLUME as f32 * 2.
     }
@@ -199,7 +199,7 @@ fn digital_sample(
     ram: &[u8; 16],
     effective_output_level: NonZeroU8,
 ) -> u8 {
-    index_ram(ram, get_index(sample, period)) >> (effective_output_level.get() - 1)
+    index_ram(ram, get_index(sample, period) as usize) >> (effective_output_level.get() - 1)
 }
 
 fn index_ram(ram: &[u8; 16], index: usize) -> u8 {
@@ -214,8 +214,12 @@ fn index_ram(ram: &[u8; 16], index: usize) -> u8 {
     }
 }
 
+// don't know what i am doing.
+// Useful to "know" (far from perfect) when the wave reach its "middle"
 fn get_median(ram: &[u8; 16], effective_output_level: NonZeroU8) -> u8 {
-    let mut values: ArrayVec<u8, 32> = (0..32).map(|index|index_ram(ram, index) >> (effective_output_level.get() - 1)).collect();
+    let mut values: ArrayVec<u8, 32> = (0..32)
+        .map(|index| index_ram(ram, index) >> (effective_output_level.get() - 1))
+        .collect();
     values.sort_unstable();
     // not really the median but who cares
     values[15]

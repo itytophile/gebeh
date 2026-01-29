@@ -12,7 +12,7 @@ mod pulse_channel;
 mod sweep;
 mod wave_channel;
 
-pub use wave_channel::WavePeriodCorrector;
+pub use wave_channel::WaveCorrector;
 
 // https://gbdev.io/pandocs/Audio_details.html#dacs
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
@@ -247,14 +247,14 @@ impl Sampler {
         sample: f32,
         noise: &[u8],
         short_noise: &[u8],
-        wave_corrector: &mut WavePeriodCorrector,
+        wave_corrector: &mut WaveCorrector,
     ) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample) * 0.
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(sample) * 0.
+            self.ch2.sample(sample)
         } else {
             0.
         }) + {
@@ -262,7 +262,7 @@ impl Sampler {
             wave_corrector.correct(&mut sampler, sample, self.nr51.contains(Nr51::CH3_LEFT));
             sampler.sample(sample)
         } + (if self.nr51.contains(Nr51::CH4_LEFT) {
-            self.ch4.sample(sample, noise, short_noise) * 0.
+            self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
         })) * self.get_volume_left()
@@ -275,14 +275,14 @@ impl Sampler {
         sample: f32,
         noise: &[u8],
         short_noise: &[u8],
-        wave_corrector: &mut WavePeriodCorrector,
+        wave_corrector: &mut WaveCorrector,
     ) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(sample) * 0.
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(sample) * 0.
+            self.ch2.sample(sample)
         } else {
             0.
         }) + {
@@ -290,7 +290,7 @@ impl Sampler {
             wave_corrector.correct(&mut sampler, sample, self.nr51.contains(Nr51::CH3_RIGHT));
             sampler.sample(sample)
         } + (if self.nr51.contains(Nr51::CH4_RIGHT) {
-            self.ch4.sample(sample, noise, short_noise) * 0.
+            self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
         })) * self.get_volume_right()
