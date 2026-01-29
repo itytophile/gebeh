@@ -12,6 +12,8 @@ mod pulse_channel;
 mod sweep;
 mod wave_channel;
 
+pub use wave_channel::WavePeriodCorrector;
+
 // https://gbdev.io/pandocs/Audio_details.html#dacs
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
 // Importantly, the slope is negative: “digital 0” maps to “analog 1”, not “analog -1”.
@@ -225,7 +227,7 @@ impl Apu {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct Sampler {
     ch1: PulseSampler,
     ch2: PulseSampler,
@@ -240,21 +242,27 @@ const CHANNEL_COUNT: f32 = 4.;
 
 impl Sampler {
     #[must_use]
-    pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
+    pub fn sample_left(
+        &self,
+        sample: f32,
+        noise: &[u8],
+        short_noise: &[u8],
+        wave_corrector: &mut WavePeriodCorrector,
+    ) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample)
+            self.ch1.sample(sample) * 0.
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(sample)
+            self.ch2.sample(sample) * 0.
         } else {
             0.
-        }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
-            self.ch3.sample(sample)
-        } else {
-            0.
-        }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
-            self.ch4.sample(sample, noise, short_noise)
+        }) + {
+            let mut sampler = self.ch3.clone();
+            wave_corrector.correct(&mut sampler, sample, self.nr51.contains(Nr51::CH3_LEFT));
+            sampler.sample(sample)
+        } + (if self.nr51.contains(Nr51::CH4_LEFT) {
+            self.ch4.sample(sample, noise, short_noise) * 0.
         } else {
             0.
         })) * self.get_volume_left()
@@ -262,21 +270,27 @@ impl Sampler {
     }
 
     #[must_use]
-    pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
+    pub fn sample_right(
+        &self,
+        sample: f32,
+        noise: &[u8],
+        short_noise: &[u8],
+        wave_corrector: &mut WavePeriodCorrector,
+    ) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(sample)
+            self.ch1.sample(sample) * 0.
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(sample)
+            self.ch2.sample(sample) * 0.
         } else {
             0.
-        }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
-            self.ch3.sample(sample)
-        } else {
-            0.
-        }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
-            self.ch4.sample(sample, noise, short_noise)
+        }) + {
+            let mut sampler = self.ch3.clone();
+            wave_corrector.correct(&mut sampler, sample, self.nr51.contains(Nr51::CH3_RIGHT));
+            sampler.sample(sample)
+        } + (if self.nr51.contains(Nr51::CH4_RIGHT) {
+            self.ch4.sample(sample, noise, short_noise) * 0.
         } else {
             0.
         })) * self.get_volume_right()
@@ -289,5 +303,9 @@ impl Sampler {
 
     fn get_volume_right(&self) -> f32 {
         ((self.nr50.bits() & 0x7) + 1) as f32 / 8.
+    }
+
+    pub fn get_wave_sampler_mut(&mut self) -> &mut WaveSampler {
+        &mut self.ch3
     }
 }

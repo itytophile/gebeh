@@ -89,6 +89,7 @@ impl WaveChannel {
             ram: self.ram,
             period: self.period,
             is_dac_on: self.is_dac_on,
+            sample_shift: 0.,
         }
     }
 
@@ -102,13 +103,49 @@ impl WaveChannel {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Default)]
+#[derive(Default)]
+pub struct WavePeriodCorrector {
+    period: u16,
+    shift: f32,
+    is_on: Option<u8>
+}
+
+fn get_index(sample: f32, period: u16) -> usize {
+    (((sample * get_tone_frequency(period)) % 1.) * 32.) as usize
+}
+
+impl WavePeriodCorrector {
+    pub fn correct(&mut self, wave_sampler: &mut WaveSampler, sample: f32, mut is_on: bool) {
+        is_on &= wave_sampler.is_dac_on && wave_sampler.is_on && wave_sampler.effective_output_level != 0;
+
+        if (self.period != wave_sampler.period || self.is_on.is_some() != is_on) && get_index(sample - self.shift, self.period) == 0 {
+            self.period = wave_sampler.period;
+            // we shift the sampler by the current sample to reset the wave
+            self.shift = sample;
+            self.is_on = is_on.then_some(wave_sampler.effective_output_level);
+        }
+        
+        if let Some(level) = self.is_on {
+            wave_sampler.is_dac_on = true;
+            wave_sampler.is_on = true;
+            wave_sampler.effective_output_level = level;
+        } else {
+            wave_sampler.is_on = false;
+        }
+
+        wave_sampler.period = self.period;
+        wave_sampler.sample_shift = self.shift;
+    }
+}
+
+#[derive(Clone, PartialEq, Default)]
 pub struct WaveSampler {
     is_on: bool,
     effective_output_level: u8,
     ram: [u8; 16],
     period: u16,
     is_dac_on: bool,
+    sample_shift: f32,
 }
 
 impl WaveSampler {
@@ -120,11 +157,10 @@ impl WaveSampler {
         }
         // About output level https://gbdev.io/pandocs/Audio_Registers.html#ff1c--nr32-channel-3-output-level
         if !self.is_on || self.effective_output_level == 0 {
-            return 1.;
+            return 0.; // should return 1. but who cares
         }
 
-        let index = (sample * self.get_tone_frequency()) % 1.;
-        let index = (index * 32.) as usize;
+        let index = get_index(sample - self.sample_shift, self.period);
         let two_samples = self.ram[index / 2];
 
         // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
@@ -137,8 +173,9 @@ impl WaveSampler {
 
         1. - value as f32 / MAX_VOLUME as f32 * 2.
     }
-    // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
-    fn get_tone_frequency(&self) -> f32 {
-        65536. / (2048. - self.period as f32)
-    }
+}
+
+// https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
+fn get_tone_frequency(period: u16) -> f32 {
+    65536. / (2048. - period as f32)
 }
