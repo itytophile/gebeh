@@ -1,3 +1,5 @@
+use core::num::NonZeroU8;
+
 use crate::apu::{
     MAX_VOLUME,
     length::{Length, MASK_8_BITS},
@@ -107,7 +109,7 @@ impl WaveChannel {
 pub struct WavePeriodCorrector {
     period: u16,
     shift: f32,
-    is_on: Option<u8>
+    is_on: Option<NonZeroU8>,
 }
 
 fn get_index(sample: f32, period: u16) -> usize {
@@ -116,19 +118,37 @@ fn get_index(sample: f32, period: u16) -> usize {
 
 impl WavePeriodCorrector {
     pub fn correct(&mut self, wave_sampler: &mut WaveSampler, sample: f32, mut is_on: bool) {
-        is_on &= wave_sampler.is_dac_on && wave_sampler.is_on && wave_sampler.effective_output_level != 0;
+        is_on &= wave_sampler.is_dac_on
+            && wave_sampler.is_on
+            && wave_sampler.effective_output_level != 0;
 
-        if (self.period != wave_sampler.period || self.is_on.is_some() != is_on) && get_index(sample - self.shift, self.period) == 0 {
+        if self.is_on.is_some() != is_on {
+            let digital_sample = digital_sample(
+                sample - self.shift,
+                self.period,
+                &wave_sampler.ram,
+                self.is_on
+                    .unwrap_or(NonZeroU8::new(wave_sampler.effective_output_level).unwrap()),
+            );
+            if digital_sample == 8 || digital_sample == 7 {
+                self.is_on =
+                    is_on.then_some(NonZeroU8::new(wave_sampler.effective_output_level).unwrap());
+            }
+        }
+
+        if self.is_on.is_some()
+            && self.period != wave_sampler.period
+            && get_index(sample - self.shift, self.period) == 0
+        {
             self.period = wave_sampler.period;
             // we shift the sampler by the current sample to reset the wave
             self.shift = sample;
-            self.is_on = is_on.then_some(wave_sampler.effective_output_level);
         }
-        
+
         if let Some(level) = self.is_on {
             wave_sampler.is_dac_on = true;
             wave_sampler.is_on = true;
-            wave_sampler.effective_output_level = level;
+            wave_sampler.effective_output_level = level.into();
         } else {
             wave_sampler.is_on = false;
         }
@@ -173,6 +193,24 @@ impl WaveSampler {
 
         1. - value as f32 / MAX_VOLUME as f32 * 2.
     }
+}
+
+fn digital_sample(
+    sample: f32,
+    period: u16,
+    ram: &[u8; 16],
+    effective_output_level: NonZeroU8,
+) -> u8 {
+    let index = get_index(sample, period);
+    let two_samples = ram[index / 2];
+
+    // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
+    // Citation: As CH3 plays, it reads wave RAM left to right, upper nibble first
+    (if index.is_multiple_of(2) {
+        two_samples >> 4
+    } else {
+        two_samples & 0x0f
+    }) >> (effective_output_level.get() - 1)
 }
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
