@@ -1,5 +1,7 @@
 use core::num::NonZeroU8;
 
+use arrayvec::ArrayVec;
+
 use crate::apu::{
     MAX_VOLUME,
     length::{Length, MASK_8_BITS},
@@ -123,14 +125,15 @@ impl WavePeriodCorrector {
             && wave_sampler.effective_output_level != 0;
 
         if self.is_on.is_some() != is_on {
+            let level = self.is_on
+                .unwrap_or(NonZeroU8::new(wave_sampler.effective_output_level).unwrap());
             let digital_sample = digital_sample(
                 sample - self.shift,
                 self.period,
                 &wave_sampler.ram,
-                self.is_on
-                    .unwrap_or(NonZeroU8::new(wave_sampler.effective_output_level).unwrap()),
+                level,
             );
-            if digital_sample == 8 || digital_sample == 7 {
+            if digital_sample == get_median(&wave_sampler.ram, level) {
                 self.is_on =
                     is_on.then_some(NonZeroU8::new(wave_sampler.effective_output_level).unwrap());
             }
@@ -201,16 +204,26 @@ fn digital_sample(
     ram: &[u8; 16],
     effective_output_level: NonZeroU8,
 ) -> u8 {
-    let index = get_index(sample, period);
+    index_ram(ram, get_index(sample, period)) >> (effective_output_level.get() - 1)
+}
+
+fn index_ram(ram: &[u8; 16], index: usize) -> u8 {
     let two_samples = ram[index / 2];
 
     // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
     // Citation: As CH3 plays, it reads wave RAM left to right, upper nibble first
-    (if index.is_multiple_of(2) {
+    if index.is_multiple_of(2) {
         two_samples >> 4
     } else {
         two_samples & 0x0f
-    }) >> (effective_output_level.get() - 1)
+    }
+}
+
+fn get_median(ram: &[u8; 16], effective_output_level: NonZeroU8) -> u8 {
+    let mut values: ArrayVec<u8, 32> = (0..32).map(|index|index_ram(ram, index) >> (effective_output_level.get() - 1)).collect();
+    values.sort_unstable();
+    // not really the median but who cares
+    values[15]
 }
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
