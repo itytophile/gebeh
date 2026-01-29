@@ -1,4 +1,4 @@
-use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH};
+use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::WaveCorrector};
 use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
@@ -17,6 +17,8 @@ pub struct WebEmulator {
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
     is_save_enabled: bool,
+    wave_corrector_left: WaveCorrector,
+    wave_corrector_right: WaveCorrector,
 }
 
 impl Default for WebEmulator {
@@ -29,6 +31,8 @@ impl Default for WebEmulator {
             mbc: None,
             error: 0,
             is_save_enabled: false,
+            wave_corrector_left: WaveCorrector::default(),
+            wave_corrector_right: WaveCorrector::default(),
         }
     }
 }
@@ -84,8 +88,18 @@ impl WebEmulator {
             }
             let sampler = self.emulator.get_apu().get_sampler();
             let sample = self.sample_index as f32 / sample_rate as f32;
-            *left = sampler.sample_left(sample, &self.noise, &self.short_noise);
-            *right = sampler.sample_right(sample, &self.noise, &self.short_noise);
+            *left = sampler.sample_left(
+                sample,
+                &self.noise,
+                &self.short_noise,
+                &mut self.wave_corrector_left,
+            );
+            *right = sampler.sample_right(
+                sample,
+                &self.noise,
+                &self.short_noise,
+                &mut self.wave_corrector_right,
+            );
             // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
             self.sample_index = self.sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
         }
