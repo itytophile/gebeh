@@ -183,16 +183,11 @@ impl WaveSampler {
             return 0.; // should return 1. but who cares
         }
 
-        let index = get_index(sample - self.sample_shift, self.period);
-        let two_samples = self.ram[index / 2];
-
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
-        // Citation: As CH3 plays, it reads wave RAM left to right, upper nibble first
-        let value = (if index.is_multiple_of(2) {
-            two_samples >> 4
-        } else {
-            two_samples & 0x0f
-        }) >> (self.effective_output_level - 1);
+        let sample = sample - self.sample_shift;
+        let index_lol = ((sample * get_tone_frequency(self.period)) % 1.) * 32.;
+        let index = index_lol as usize;
+        let start = index_ram(&self.ram, index) as f32;
+        let value = start + (index_ram(&self.ram, (index + 1) % 32) as f32 - start) * (index_lol % 1.);
 
         1. - value as f32 / MAX_VOLUME as f32 * 2.
     }
