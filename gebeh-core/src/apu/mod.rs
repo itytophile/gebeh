@@ -256,15 +256,15 @@ impl Sampler {
     #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample) *0.
+            self.ch1.sample(sample) * 0.
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(sample) *0.
+            self.ch2.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
-            self.ch3.sample(sample)
+            self.ch3.sample(sample) * 0.
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
@@ -282,11 +282,11 @@ impl Sampler {
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(sample) * 0.
+            self.ch2.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
-            self.ch3.sample(sample)
+            self.ch3.sample(sample) * 0.
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
@@ -348,6 +348,8 @@ impl Hpf {
 pub struct Mixer<T: Deref<Target = [u8]>> {
     hpf_left: Hpf,
     hpf_right: Hpf,
+    ch1_corrector: PeriodCorrector,
+    ch2_corrector: PeriodCorrector,
     ch3_corrector: PeriodCorrector,
     noise: T,
     short_noise: T,
@@ -364,16 +366,39 @@ impl<T: Deref<Target = [u8]>> Mixer<T> {
         Self {
             hpf_left: Hpf::new(50., sample_rate),
             hpf_right: Hpf::new(50., sample_rate),
+            ch1_corrector: Default::default(),
+            ch2_corrector: Default::default(),
             ch3_corrector: Default::default(),
             noise,
             short_noise,
         }
     }
     pub fn mix<'a>(&'a mut self, mut sampler: Sampler, sample: f32) -> MixedSampler<'a, T> {
-        self.ch3_corrector
-            .correct(sampler.ch3.period, WaveSampler::get_tone_frequency, sample);
-        sampler.ch3.period = self.ch3_corrector.period;
-        sampler.ch3.sample_shift = self.ch3_corrector.shift;
+        for (corrector, period, shift, get_tone_frequency) in [
+            (
+                &mut self.ch1_corrector,
+                &mut sampler.ch1.period,
+                &mut sampler.ch1.sample_shift,
+                PulseSampler::get_tone_frequency as fn(u16) -> f32,
+            ),
+            (
+                &mut self.ch2_corrector,
+                &mut sampler.ch2.period,
+                &mut sampler.ch2.sample_shift,
+                PulseSampler::get_tone_frequency,
+            ),
+            (
+                &mut self.ch3_corrector,
+                &mut sampler.ch3.period,
+                &mut sampler.ch3.sample_shift,
+                WaveSampler::get_tone_frequency,
+            ),
+        ] {
+            corrector.correct(*period, get_tone_frequency, sample);
+            *period = corrector.period;
+            *shift = corrector.shift;
+        }
+
         MixedSampler {
             sampler,
             sample,
