@@ -7,7 +7,7 @@ use cpal::{
 use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
-    apu::{Hpf, WaveCorrector},
+    apu::Mixer,
     joypad::JoypadInput,
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Color,
@@ -110,11 +110,7 @@ where
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
     let mut error = 0;
     let mut current_frame = [Color::Black; WIDTH as usize * HEIGHT as usize];
-
-    let mut wave_corrector_left = WaveCorrector::default();
-    let mut wave_corrector_right = WaveCorrector::default();
-    let mut hpf_left = Hpf::new(50., sample_rate as f32);
-    let mut hpf_right = Hpf::new(50., sample_rate as f32);
+    let mut mixer = Mixer::new(sample_rate as f32, noise, short_noise);
 
     device
         .build_output_stream(
@@ -151,22 +147,11 @@ where
                         }
                     }
 
-                    let sampler = emulator.get_apu().get_sampler();
-
                     let sample = sample_index as f32 / sample_rate as f32;
+                    let mut sampler = mixer.mix(emulator.get_apu().get_sampler(), sample);
 
-                    frame[0] = T::from_sample(hpf_left.apply(sampler.sample_left(
-                        sample,
-                        &noise,
-                        &short_noise,
-                        &mut wave_corrector_left,
-                    )));
-                    frame[1] = T::from_sample(hpf_right.apply(sampler.sample_right(
-                        sample,
-                        &noise,
-                        &short_noise,
-                        &mut wave_corrector_right,
-                    )));
+                    frame[0] = T::from_sample(sampler.sample_left());
+                    frame[1] = T::from_sample(sampler.sample_right());
                     // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
                     sample_index = sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
                 }

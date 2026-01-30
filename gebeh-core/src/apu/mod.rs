@@ -1,4 +1,4 @@
-use core::f32::consts::PI;
+use core::{f32::consts::PI, ops::Deref};
 
 use crate::apu::{
     noise_channel::{NoiseChannel, NoiseSampler},
@@ -244,13 +244,7 @@ const CHANNEL_COUNT: f32 = 4.;
 
 impl Sampler {
     #[must_use]
-    pub fn sample_left(
-        &self,
-        sample: f32,
-        noise: &[u8],
-        short_noise: &[u8],
-        wave_corrector: &mut WaveCorrector,
-    ) -> f32 {
+    pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
             self.ch1.sample(sample)
         } else {
@@ -260,9 +254,7 @@ impl Sampler {
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
-            let mut sampler = self.ch3.clone();
-            wave_corrector.correct(&mut sampler, sample);
-            sampler.sample(sample)
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
@@ -274,13 +266,7 @@ impl Sampler {
     }
 
     #[must_use]
-    pub fn sample_right(
-        &self,
-        sample: f32,
-        noise: &[u8],
-        short_noise: &[u8],
-        wave_corrector: &mut WaveCorrector,
-    ) -> f32 {
+    pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
             self.ch1.sample(sample)
         } else {
@@ -290,9 +276,7 @@ impl Sampler {
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
-            let mut sampler = self.ch3.clone();
-            wave_corrector.correct(&mut sampler, sample);
-            sampler.sample(sample)
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
@@ -327,7 +311,7 @@ impl Hpf {
         Self {
             // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
             // with dt = 1 / sample_rate
-            alpha:  rc / (rc + 1. / sample_rate),
+            alpha: rc / (rc + 1. / sample_rate),
             previous: None,
         }
     }
@@ -348,5 +332,56 @@ impl Hpf {
     // https://en.wikipedia.org/wiki/High-pass_filter#First-order_passive
     fn get_rc(cutoff_frequency: f32) -> f32 {
         1. / (2. * PI * cutoff_frequency)
+    }
+}
+
+pub struct Mixer<T: Deref<Target = [u8]>> {
+    hpf_left: Hpf,
+    hpf_right: Hpf,
+    wave_corrector: WaveCorrector,
+    noise: T,
+    short_noise: T,
+}
+
+pub struct MixedSampler<'a, T: Deref<Target = [u8]>> {
+    sampler: Sampler,
+    sample: f32,
+    mixer: &'a mut Mixer<T>,
+}
+
+impl<T: Deref<Target = [u8]>> Mixer<T> {
+    pub fn new(sample_rate: f32, noise: T, short_noise: T) -> Self {
+        Self {
+            hpf_left: Hpf::new(50., sample_rate),
+            hpf_right: Hpf::new(50., sample_rate),
+            wave_corrector: Default::default(),
+            noise,
+            short_noise,
+        }
+    }
+    pub fn mix<'a>(&'a mut self, mut sampler: Sampler, sample: f32) -> MixedSampler<'a, T> {
+        self.wave_corrector.correct(&mut sampler.ch3, sample);
+        MixedSampler {
+            sampler,
+            sample,
+            mixer: self,
+        }
+    }
+}
+
+impl<T: Deref<Target = [u8]>> MixedSampler<'_, T> {
+    pub fn sample_left(&mut self) -> f32 {
+        self.mixer.hpf_left.apply(self.sampler.sample_left(
+            self.sample,
+            &self.mixer.noise,
+            &self.mixer.short_noise,
+        ))
+    }
+    pub fn sample_right(&mut self) -> f32 {
+        self.mixer.hpf_right.apply(self.sampler.sample_right(
+            self.sample,
+            &self.mixer.noise,
+            &self.mixer.short_noise,
+        ))
     }
 }
