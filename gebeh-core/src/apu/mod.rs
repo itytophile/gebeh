@@ -1,3 +1,5 @@
+use core::f32::consts::PI;
+
 use crate::apu::{
     noise_channel::{NoiseChannel, NoiseSampler},
     pulse_channel::{PulseChannel, PulseSampler},
@@ -311,5 +313,40 @@ impl Sampler {
 
     pub fn get_wave_sampler_mut(&mut self) -> &mut WaveSampler {
         &mut self.ch3
+    }
+}
+
+pub struct Hpf {
+    previous: Option<(f32, f32)>, // input, output
+    alpha: f32,
+}
+
+impl Hpf {
+    pub fn new(cutoff_frequency: f32, sample_rate: f32) -> Self {
+        let rc = Self::get_rc(cutoff_frequency);
+        Self {
+            // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
+            // with dt = 1 / sample_rate
+            alpha: rc / (rc + 1. / sample_rate),
+            previous: None,
+        }
+    }
+
+    // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
+    pub fn apply(&mut self, input: f32) -> f32 {
+        if let Some((previous_input, previous_output)) = &mut self.previous {
+            let output = self.alpha * (*previous_output + input + *previous_input);
+            *previous_input = input;
+            *previous_output = output;
+            output
+        } else {
+            self.previous = Some((input, input));
+            input
+        }
+    }
+
+    // https://en.wikipedia.org/wiki/High-pass_filter#First-order_passive
+    fn get_rc(cutoff_frequency: f32) -> f32 {
+        1. / 2. / PI / cutoff_frequency
     }
 }
