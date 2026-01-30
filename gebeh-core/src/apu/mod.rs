@@ -1,3 +1,5 @@
+use core::{f32::consts::PI, ops::Deref};
+
 use crate::apu::{
     noise_channel::{NoiseChannel, NoiseSampler},
     pulse_channel::{PulseChannel, PulseSampler},
@@ -11,6 +13,13 @@ mod noise_channel;
 mod pulse_channel;
 mod sweep;
 mod wave_channel;
+
+pub use wave_channel::WaveCorrector;
+
+// https://gbdev.io/pandocs/Audio_details.html#dacs
+// Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
+// Importantly, the slope is negative: “digital 0” maps to “analog 1”, not “analog -1”.
+const MAX_VOLUME: u8 = 0x0f;
 
 #[derive(Default, Clone)]
 pub struct FallingEdge(bool);
@@ -220,7 +229,7 @@ impl Apu {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct Sampler {
     ch1: PulseSampler,
     ch2: PulseSampler,
@@ -284,5 +293,95 @@ impl Sampler {
 
     fn get_volume_right(&self) -> f32 {
         ((self.nr50.bits() & 0x7) + 1) as f32 / 8.
+    }
+
+    pub fn get_wave_sampler_mut(&mut self) -> &mut WaveSampler {
+        &mut self.ch3
+    }
+}
+
+pub struct Hpf {
+    previous: Option<(f32, f32)>, // input, output
+    alpha: f32,
+}
+
+impl Hpf {
+    pub fn new(cutoff_frequency: f32, sample_rate: f32) -> Self {
+        let rc = Self::get_rc(cutoff_frequency);
+        Self {
+            // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
+            // with dt = 1 / sample_rate
+            alpha: rc / (rc + 1. / sample_rate),
+            previous: None,
+        }
+    }
+
+    // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
+    pub fn apply(&mut self, input: f32) -> f32 {
+        if let Some((previous_input, previous_output)) = &mut self.previous {
+            let output = self.alpha * (*previous_output + input - *previous_input);
+            *previous_input = input;
+            *previous_output = output;
+            output
+        } else {
+            self.previous = Some((input, input));
+            input
+        }
+    }
+
+    // https://en.wikipedia.org/wiki/High-pass_filter#First-order_passive
+    fn get_rc(cutoff_frequency: f32) -> f32 {
+        1. / (2. * PI * cutoff_frequency)
+    }
+}
+
+pub struct Mixer<T: Deref<Target = [u8]>> {
+    hpf_left: Hpf,
+    hpf_right: Hpf,
+    wave_corrector: WaveCorrector,
+    noise: T,
+    short_noise: T,
+}
+
+pub struct MixedSampler<'a, T: Deref<Target = [u8]>> {
+    sampler: Sampler,
+    sample: f32,
+    mixer: &'a mut Mixer<T>,
+}
+
+impl<T: Deref<Target = [u8]>> Mixer<T> {
+    pub fn new(sample_rate: f32, noise: T, short_noise: T) -> Self {
+        Self {
+            hpf_left: Hpf::new(50., sample_rate),
+            hpf_right: Hpf::new(50., sample_rate),
+            wave_corrector: Default::default(),
+            noise,
+            short_noise,
+        }
+    }
+    pub fn mix<'a>(&'a mut self, mut sampler: Sampler, sample: f32) -> MixedSampler<'a, T> {
+        self.wave_corrector.correct(&mut sampler.ch3, sample);
+        MixedSampler {
+            sampler,
+            sample,
+            mixer: self,
+        }
+    }
+}
+
+impl<T: Deref<Target = [u8]>> MixedSampler<'_, T> {
+    pub fn sample_left(&mut self) -> f32 {
+        self.mixer.hpf_left.apply(self.sampler.sample_left(
+            self.sample,
+            &self.mixer.noise,
+            &self.mixer.short_noise,
+        ))
+    }
+    pub fn sample_right(&mut self) -> f32 {
+        self.mixer.hpf_right.apply(self.sampler.sample_right(
+            self.sample,
+            &self.mixer.noise,
+            &self.mixer.short_noise,
+        ))
     }
 }

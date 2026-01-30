@@ -1,3 +1,5 @@
+use crate::apu::MAX_VOLUME;
+
 #[derive(Clone, Default)]
 struct EnvelopeTimer {
     value: u8, // 4 bits
@@ -30,7 +32,7 @@ impl EnvelopeTimer {
         self.pace_count = 0;
 
         match (self.is_increasing, self.value) {
-            (true, 0x0f) | (false, 0) => {}
+            (true, MAX_VOLUME) | (false, 0) => {}
             (true, _) => self.value += 1,
             (false, _) => self.value -= 1,
         }

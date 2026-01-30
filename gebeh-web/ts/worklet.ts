@@ -52,16 +52,16 @@ class WasmProcessor
       ({ data }: MessageEvent<FromMainMessage>) => {
         switch (data.type) {
           case "rom": {
-            this.emulator?.load_rom(
+            this.emulator = WebEmulator.new(
               new Uint8Array(data.bytes),
               data.save ? new Uint8Array(data.save) : undefined,
+              sampleRate,
             );
             break;
           }
           case "wasm": {
             console.log("Initializing wasm");
             initSync({ module: data.bytes });
-            this.emulator = new WebEmulator();
             this.port.postMessage({ type: "ready" } satisfies FromNodeMessage);
             console.log("Ready!");
             break;
