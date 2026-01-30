@@ -1,4 +1,4 @@
-use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::WaveCorrector};
+use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer};
 use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
@@ -10,38 +10,39 @@ mod rtc;
 #[wasm_bindgen]
 pub struct WebEmulator {
     emulator: Emulator,
-    noise: Vec<u8>,
-    short_noise: Vec<u8>,
     sample_index: u32,
-    mbc: Option<Box<dyn CloneMbc<'static>>>,
+    mbc: Box<dyn CloneMbc<'static>>,
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
     is_save_enabled: bool,
-    wave_corrector_left: WaveCorrector,
-    wave_corrector_right: WaveCorrector,
-}
-
-impl Default for WebEmulator {
-    fn default() -> Self {
-        Self {
-            emulator: Default::default(),
-            noise: get_noise(false),
-            short_noise: get_noise(true),
-            sample_index: 0,
-            mbc: None,
-            error: 0,
-            is_save_enabled: false,
-            wave_corrector_left: WaveCorrector::default(),
-            wave_corrector_right: WaveCorrector::default(),
-        }
-    }
+    mixer: Mixer<Vec<u8>>,
 }
 
 #[wasm_bindgen]
 impl WebEmulator {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
+        console::log_1(&JsValue::from_str("Loading rom"));
+        let Some((cartridge_type, mut mbc)) = get_mbc::<_, NullRtc>(rom) else {
+            console::error_1(&JsValue::from_str("MBC type not recognized"));
+            return None;
+        };
+        if let Some(save) = save {
+            console::log_1(&JsValue::from_str("Loading save"));
+            mbc.load_saved_ram(&save);
+        }
+        console::log_1(&JsValue::from_str("Rom loaded!"));
+
+        if cartridge_type.has_battery() {
+            console::log_1(&JsValue::from_str("Saves enabled"));
+        }
+        Some(Self {
+            mbc,
+            is_save_enabled: cartridge_type.has_battery(),
+            emulator: Default::default(),
+            sample_index: 0,
+            error: 0,
+            mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
+        })
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
@@ -53,10 +54,6 @@ impl WebEmulator {
         on_new_frame: &js_sys::Function,
         current_frame: &mut [u8],
     ) {
-        let Some(mbc) = &mut self.mbc else {
-            return;
-        };
-
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
 
@@ -70,7 +67,7 @@ impl WebEmulator {
             }
 
             for _ in 0..cycles {
-                self.emulator.execute(mbc.as_mut());
+                self.emulator.execute(self.mbc.as_mut());
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     for (src, dst) in scanline.iter().zip(
                         current_frame[usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
@@ -86,46 +83,15 @@ impl WebEmulator {
                     }
                 }
             }
-            let sampler = self.emulator.get_apu().get_sampler();
             let sample = self.sample_index as f32 / sample_rate as f32;
-            *left = sampler.sample_left(
-                sample,
-                &self.noise,
-                &self.short_noise,
-                &mut self.wave_corrector_left,
-            );
-            *right = sampler.sample_right(
-                sample,
-                &self.noise,
-                &self.short_noise,
-                &mut self.wave_corrector_right,
-            );
+            let mut sampler = self
+                .mixer
+                .mix(self.emulator.get_apu().get_sampler(), sample);
+            *left = sampler.sample_left();
+            *right = sampler.sample_right();
             // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
             self.sample_index = self.sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
         }
-    }
-
-    pub fn load_rom(&mut self, rom: Vec<u8>, save: Option<Vec<u8>>) {
-        console::log_1(&JsValue::from_str("Loading rom"));
-        let Some((cartridge_type, mut mbc)) = get_mbc::<_, NullRtc>(rom) else {
-            console::error_1(&JsValue::from_str("MBC type not recognized"));
-            return;
-        };
-        if let Some(save) = save {
-            console::log_1(&JsValue::from_str("Loading save"));
-            mbc.load_saved_ram(&save);
-        }
-        console::log_1(&JsValue::from_str("Rom loaded!"));
-
-        if cartridge_type.has_battery() {
-            console::log_1(&JsValue::from_str("Saves enabled"));
-        }
-
-        *self = Self {
-            mbc: Some(mbc),
-            is_save_enabled: cartridge_type.has_battery(),
-            ..Default::default()
-        };
     }
 
     pub fn get_save(&self) -> Option<Save> {
@@ -133,11 +99,9 @@ impl WebEmulator {
             return None;
         }
 
-        let mbc = self.mbc.as_deref()?;
-
         Some(Save {
-            ram: mbc.get_ram_to_save()?.into(),
-            game_title: get_title_from_rom(mbc.get_rom()).to_owned(),
+            ram: self.mbc.get_ram_to_save()?.into(),
+            game_title: get_title_from_rom(self.mbc.get_rom()).to_owned(),
         })
     }
 
