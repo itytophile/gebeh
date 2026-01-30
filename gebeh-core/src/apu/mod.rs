@@ -14,8 +14,6 @@ mod pulse_channel;
 mod sweep;
 mod wave_channel;
 
-pub use wave_channel::WaveCorrector;
-
 // https://gbdev.io/pandocs/Audio_details.html#dacs
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
 // Importantly, the slope is negative: “digital 0” maps to “analog 1”, not “analog -1”.
@@ -204,10 +202,22 @@ impl Apu {
             (CH1_VOLUME_AND_ENVELOPE, true) => self.ch1.write_nrx2(value),
             (CH1_PERIOD_LOW, true) => self.ch1.write_nrx3(value),
             (CH1_PERIOD_HIGH_AND_CONTROL, true) => self.ch1.write_nrx4(value, self.div_apu),
-            (CH2_LENGTH_TIMER_AND_DUTY_CYCLE, _) => self.ch2.write_nrx1(value, self.is_on),
-            (CH2_VOLUME_AND_ENVELOPE, true) => self.ch2.write_nrx2(value),
-            (CH2_PERIOD_LOW, true) => self.ch2.write_nrx3(value),
-            (CH2_PERIOD_HIGH_AND_CONTROL, true) => self.ch2.write_nrx4(value, self.div_apu),
+            (CH2_LENGTH_TIMER_AND_DUTY_CYCLE, _) => {
+                log::info!("length timer & duty 0b{value:08b}");
+                self.ch2.write_nrx1(value, self.is_on)
+            }
+            (CH2_VOLUME_AND_ENVELOPE, true) => {
+                log::info!("volume envelope 0b{value:08b}");
+                self.ch2.write_nrx2(value)
+            }
+            (CH2_PERIOD_LOW, true) => {
+                log::info!("period low 0b{value:08b}");
+                self.ch2.write_nrx3(value)
+            }
+            (CH2_PERIOD_HIGH_AND_CONTROL, true) => {
+                log::info!("period high & control 0b{value:08b}");
+                self.ch2.write_nrx4(value, self.div_apu)
+            }
             (CH3_DAC_ENABLE, true) => self.ch3.write_nr30(value),
             (CH3_LENGTH_TIMER, _) => self.ch3.write_nr31(value),
             (CH3_OUTPUT_LEVEL, true) => self.ch3.write_nr32(value),
@@ -246,11 +256,11 @@ impl Sampler {
     #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample)
+            self.ch1.sample(sample) *0.
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
-            self.ch2.sample(sample)
+            self.ch2.sample(sample) *0.
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
@@ -258,7 +268,7 @@ impl Sampler {
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
-            self.ch4.sample(sample, noise, short_noise)
+            self.ch4.sample(sample, noise, short_noise) * 0.
         } else {
             0.
         })) * self.get_volume_left()
@@ -268,11 +278,11 @@ impl Sampler {
     #[must_use]
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(sample)
+            self.ch1.sample(sample) * 0.
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
-            self.ch2.sample(sample)
+            self.ch2.sample(sample) * 0.
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
@@ -280,7 +290,7 @@ impl Sampler {
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
-            self.ch4.sample(sample, noise, short_noise)
+            self.ch4.sample(sample, noise, short_noise) * 0.
         } else {
             0.
         })) * self.get_volume_right()
@@ -338,7 +348,7 @@ impl Hpf {
 pub struct Mixer<T: Deref<Target = [u8]>> {
     hpf_left: Hpf,
     hpf_right: Hpf,
-    wave_corrector: WaveCorrector,
+    ch3_corrector: PeriodCorrector,
     noise: T,
     short_noise: T,
 }
@@ -354,13 +364,16 @@ impl<T: Deref<Target = [u8]>> Mixer<T> {
         Self {
             hpf_left: Hpf::new(50., sample_rate),
             hpf_right: Hpf::new(50., sample_rate),
-            wave_corrector: Default::default(),
+            ch3_corrector: Default::default(),
             noise,
             short_noise,
         }
     }
     pub fn mix<'a>(&'a mut self, mut sampler: Sampler, sample: f32) -> MixedSampler<'a, T> {
-        self.wave_corrector.correct(&mut sampler.ch3, sample);
+        self.ch3_corrector
+            .correct(sampler.ch3.period, WaveSampler::get_tone_frequency, sample);
+        sampler.ch3.period = self.ch3_corrector.period;
+        sampler.ch3.sample_shift = self.ch3_corrector.shift;
         MixedSampler {
             sampler,
             sample,
@@ -383,5 +396,24 @@ impl<T: Deref<Target = [u8]>> MixedSampler<'_, T> {
             &self.mixer.noise,
             &self.mixer.short_noise,
         ))
+    }
+}
+
+#[derive(Default)]
+struct PeriodCorrector {
+    pub period: u16,
+    pub shift: f32,
+}
+
+impl PeriodCorrector {
+    pub fn correct(&mut self, period: u16, get_tone_frequency: impl Fn(u16) -> f32, sample: f32) {
+        // wait for the wave to finish before changing the period
+        if self.period != period
+            && (((sample - self.shift) * get_tone_frequency(self.period)) % 1.) < 1. / 32.
+        {
+            self.period = period;
+            // we shift the sampler by the current sample to reset the wave
+            self.shift = sample;
+        }
     }
 }

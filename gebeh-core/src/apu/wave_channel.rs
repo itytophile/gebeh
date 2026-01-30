@@ -103,40 +103,14 @@ impl WaveChannel {
     }
 }
 
-#[derive(Default)]
-pub struct WaveCorrector {
-    period: u16,
-    shift: f32,
-}
-
-fn get_index(sample: f32, period: u16) -> f32 {
-    ((sample * get_tone_frequency(period)) % 1.) * 32.
-}
-
-impl WaveCorrector {
-    pub fn correct(&mut self, wave_sampler: &mut WaveSampler, sample: f32) {
-        // wait for the wave to finish before changing the period
-        if self.period != wave_sampler.period
-            && get_index(sample - self.shift, self.period) as usize == 0
-        {
-            self.period = wave_sampler.period;
-            // we shift the sampler by the current sample to reset the wave
-            self.shift = sample;
-        }
-
-        wave_sampler.period = self.period;
-        wave_sampler.sample_shift = self.shift;
-    }
-}
-
 #[derive(Clone, PartialEq, Default)]
 pub struct WaveSampler {
     is_on: bool,
     effective_output_level: u8,
     ram: [u8; 16],
-    period: u16,
+    pub period: u16,
     is_dac_on: bool,
-    sample_shift: f32,
+    pub sample_shift: f32,
 }
 
 impl WaveSampler {
@@ -151,14 +125,18 @@ impl WaveSampler {
             return 1.;
         }
 
-        let index_float = get_index(sample - self.sample_shift, self.period);
-        let index = index_float as usize;
-        // let start = index_ram(&self.ram, index) as f32;
-        // // interpolation
-        // let value =
-        //     start + (index_ram(&self.ram, (index + 1) % 32) as f32 - start) * (index_float % 1.);
+        1. - (index_ram(
+            &self.ram,
+            ((((sample - self.sample_shift) * Self::get_tone_frequency(self.period)) % 1.) * 32.)
+                as usize,
+        ) as f32) as f32
+            / MAX_VOLUME as f32
+            * 2.
+    }
 
-        1. - (index_ram(&self.ram, index) as f32) as f32 / MAX_VOLUME as f32 * 2.
+    // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
+    pub fn get_tone_frequency(period: u16) -> f32 {
+        65536. / (2048. - period as f32)
     }
 }
 
@@ -172,9 +150,4 @@ fn index_ram(ram: &[u8; 16], index: usize) -> u8 {
     } else {
         two_samples & 0x0f
     }
-}
-
-// https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
-fn get_tone_frequency(period: u16) -> f32 {
-    65536. / (2048. - period as f32)
 }
