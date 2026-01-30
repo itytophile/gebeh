@@ -118,7 +118,7 @@ fn get_index(sample: f32, period: u16) -> f32 {
 }
 
 impl WaveCorrector {
-    pub fn correct(&mut self, wave_sampler: &mut WaveSampler, sample: f32, mut is_on: bool) {
+    pub fn correct(&mut self, wave_sampler: &mut WaveSampler, sample: f32) {
         // wait for the wave to finish before changing the period
         if self.period != wave_sampler.period
             && get_index(sample - self.shift, self.period) as usize == 0
@@ -127,8 +127,6 @@ impl WaveCorrector {
             // we shift the sampler by the current sample to reset the wave
             self.shift = sample;
         }
-        
-        wave_sampler.is_dac_on &= is_on;
 
         wave_sampler.period = self.period;
         wave_sampler.sample_shift = self.shift;
@@ -168,15 +166,6 @@ impl WaveSampler {
     }
 }
 
-fn digital_sample(
-    sample: f32,
-    period: u16,
-    ram: &[u8; 16],
-    effective_output_level: NonZeroU8,
-) -> u8 {
-    index_ram(ram, get_index(sample, period) as usize) >> (effective_output_level.get() - 1)
-}
-
 fn index_ram(ram: &[u8; 16], index: usize) -> u8 {
     let two_samples = ram[index / 2];
 
@@ -187,17 +176,6 @@ fn index_ram(ram: &[u8; 16], index: usize) -> u8 {
     } else {
         two_samples & 0x0f
     }
-}
-
-// don't know what i am doing.
-// Useful to "know" (far from perfect) when the wave reach its "middle"
-fn get_median(ram: &[u8; 16], effective_output_level: NonZeroU8) -> u8 {
-    let mut values: ArrayVec<u8, 32> = (0..32)
-        .map(|index| index_ram(ram, index) >> (effective_output_level.get() - 1))
-        .collect();
-    values.sort_unstable();
-    // not really the median but who cares
-    values[15]
 }
 
 // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only

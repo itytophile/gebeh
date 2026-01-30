@@ -257,11 +257,13 @@ impl Sampler {
             self.ch2.sample(sample)
         } else {
             0.
-        }) + {
+        }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
             let mut sampler = self.ch3.clone();
-            wave_corrector.correct(&mut sampler, sample, self.nr51.contains(Nr51::CH3_LEFT));
+            wave_corrector.correct(&mut sampler, sample);
             sampler.sample(sample)
-        } + (if self.nr51.contains(Nr51::CH4_LEFT) {
+        } else {
+            0.
+        }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
             self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
@@ -285,11 +287,13 @@ impl Sampler {
             self.ch2.sample(sample)
         } else {
             0.
-        }) + {
+        }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
             let mut sampler = self.ch3.clone();
-            wave_corrector.correct(&mut sampler, sample, self.nr51.contains(Nr51::CH3_RIGHT));
+            wave_corrector.correct(&mut sampler, sample);
             sampler.sample(sample)
-        } + (if self.nr51.contains(Nr51::CH4_RIGHT) {
+        } else {
+            0.
+        }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
             self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
