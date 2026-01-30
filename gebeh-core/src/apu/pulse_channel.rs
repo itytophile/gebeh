@@ -116,6 +116,7 @@ impl<S: Sweep + Default> PulseChannel<S> {
                 .unwrap_or(self.get_period_value()),
             volume: self.volume_and_envelope.get_volume(),
             is_dac_on: self.volume_and_envelope.is_dac_on(),
+            sample_shift: 0.,
         }
     }
 
@@ -137,13 +138,14 @@ impl PulseChannel<Ch1Sweep> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct PulseSampler {
     is_on: bool,
     duty_cycle: u8,
-    period: u16,
+    pub period: u16,
     volume: u8,
     is_dac_on: bool,
+    pub sample_shift: f32,
 }
 
 impl PulseSampler {
@@ -161,7 +163,7 @@ impl PulseSampler {
         // let normalized_index = index_in_freq_space / space_size;
         // Better function thanks to
         // (a % b) / b = (a / b) % 1.0
-        let index = (sample * self.get_tone_frequency()) % 1.;
+        let index = ((sample - self.sample_shift) * Self::get_tone_frequency(self.period)) % 1.;
         let index = (index * 8.) as usize;
         let wave = match self.duty_cycle {
             0b00 => WAVE_00,
@@ -173,7 +175,7 @@ impl PulseSampler {
         1. - (wave[index] * self.volume) as f32 / MAX_VOLUME as f32 * 2.
     }
     // https://gbdev.io/pandocs/Audio_Registers.html#ff13--nr13-channel-1-period-low-write-only
-    fn get_tone_frequency(&self) -> f32 {
-        131072.0 / (2048.0 - self.period as f32)
+    pub fn get_tone_frequency(period: u16) -> f32 {
+        131072.0 / (2048.0 - period as f32)
     }
 }

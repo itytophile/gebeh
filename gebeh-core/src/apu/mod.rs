@@ -14,8 +14,6 @@ mod pulse_channel;
 mod sweep;
 mod wave_channel;
 
-pub use wave_channel::WaveCorrector;
-
 // https://gbdev.io/pandocs/Audio_details.html#dacs
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
 // Importantly, the slope is negative: “digital 0” maps to “analog 1”, not “analog -1”.
@@ -338,7 +336,9 @@ impl Hpf {
 pub struct Mixer<T: Deref<Target = [u8]>> {
     hpf_left: Hpf,
     hpf_right: Hpf,
-    wave_corrector: WaveCorrector,
+    ch1_corrector: PeriodCorrector,
+    ch2_corrector: PeriodCorrector,
+    ch3_corrector: PeriodCorrector,
     noise: T,
     short_noise: T,
 }
@@ -354,13 +354,39 @@ impl<T: Deref<Target = [u8]>> Mixer<T> {
         Self {
             hpf_left: Hpf::new(50., sample_rate),
             hpf_right: Hpf::new(50., sample_rate),
-            wave_corrector: Default::default(),
+            ch1_corrector: Default::default(),
+            ch2_corrector: Default::default(),
+            ch3_corrector: Default::default(),
             noise,
             short_noise,
         }
     }
     pub fn mix<'a>(&'a mut self, mut sampler: Sampler, sample: f32) -> MixedSampler<'a, T> {
-        self.wave_corrector.correct(&mut sampler.ch3, sample);
+        for (corrector, period, shift, get_tone_frequency) in [
+            (
+                &mut self.ch1_corrector,
+                &mut sampler.ch1.period,
+                &mut sampler.ch1.sample_shift,
+                PulseSampler::get_tone_frequency as fn(u16) -> f32,
+            ),
+            (
+                &mut self.ch2_corrector,
+                &mut sampler.ch2.period,
+                &mut sampler.ch2.sample_shift,
+                PulseSampler::get_tone_frequency,
+            ),
+            (
+                &mut self.ch3_corrector,
+                &mut sampler.ch3.period,
+                &mut sampler.ch3.sample_shift,
+                WaveSampler::get_tone_frequency,
+            ),
+        ] {
+            corrector.correct(*period, get_tone_frequency, sample);
+            *period = corrector.period;
+            *shift = corrector.shift;
+        }
+
         MixedSampler {
             sampler,
             sample,
@@ -383,5 +409,24 @@ impl<T: Deref<Target = [u8]>> MixedSampler<'_, T> {
             &self.mixer.noise,
             &self.mixer.short_noise,
         ))
+    }
+}
+
+#[derive(Default)]
+struct PeriodCorrector {
+    pub period: u16,
+    pub shift: f32,
+}
+
+impl PeriodCorrector {
+    pub fn correct(&mut self, period: u16, get_tone_frequency: impl Fn(u16) -> f32, sample: f32) {
+        // wait for the wave to finish before changing the period
+        if self.period != period
+            && (((sample - self.shift) * get_tone_frequency(self.period)) % 1.) < 1. / 32.
+        {
+            self.period = period;
+            // we shift the sampler by the current sample to reset the wave
+            self.shift = sample;
+        }
     }
 }
