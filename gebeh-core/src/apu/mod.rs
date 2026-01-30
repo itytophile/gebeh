@@ -327,7 +327,7 @@ impl Hpf {
         Self {
             // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
             // with dt = 1 / sample_rate
-            alpha: rc / (rc + 1. / sample_rate),
+            alpha:  rc / (rc + 1. / sample_rate),
             previous: None,
         }
     }
@@ -335,7 +335,7 @@ impl Hpf {
     // https://en.wikipedia.org/wiki/High-pass_filter#Algorithmic_implementation
     pub fn apply(&mut self, input: f32) -> f32 {
         if let Some((previous_input, previous_output)) = &mut self.previous {
-            let output = self.alpha * (*previous_output + input + *previous_input);
+            let output = self.alpha * (*previous_output + input - *previous_input);
             *previous_input = input;
             *previous_output = output;
             output
@@ -347,6 +347,6 @@ impl Hpf {
 
     // https://en.wikipedia.org/wiki/High-pass_filter#First-order_passive
     fn get_rc(cutoff_frequency: f32) -> f32 {
-        1. / 2. / PI / cutoff_frequency
+        1. / (2. * PI * cutoff_frequency)
     }
 }
