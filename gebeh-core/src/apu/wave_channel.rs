@@ -148,7 +148,7 @@ impl WaveSampler {
         }
         // About output level https://gbdev.io/pandocs/Audio_Registers.html#ff1c--nr32-channel-3-output-level
         if !self.is_on || self.effective_output_level == 0 {
-            return 0.; // should return 1. but who cares
+            return 1.;
         }
 
         let index_float = get_index(sample - self.sample_shift, self.period);
