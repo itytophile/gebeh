@@ -116,7 +116,7 @@ impl<S: Sweep + Default> PulseChannel<S> {
                 .unwrap_or(self.get_period_value()),
             volume: self.volume_and_envelope.get_volume(),
             is_dac_on: self.volume_and_envelope.is_dac_on(),
-            sample_shift: 0.
+            sample_shift: 0.,
         }
     }
 

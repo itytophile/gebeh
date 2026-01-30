@@ -202,22 +202,10 @@ impl Apu {
             (CH1_VOLUME_AND_ENVELOPE, true) => self.ch1.write_nrx2(value),
             (CH1_PERIOD_LOW, true) => self.ch1.write_nrx3(value),
             (CH1_PERIOD_HIGH_AND_CONTROL, true) => self.ch1.write_nrx4(value, self.div_apu),
-            (CH2_LENGTH_TIMER_AND_DUTY_CYCLE, _) => {
-                log::info!("length timer & duty 0b{value:08b}");
-                self.ch2.write_nrx1(value, self.is_on)
-            }
-            (CH2_VOLUME_AND_ENVELOPE, true) => {
-                log::info!("volume envelope 0b{value:08b}");
-                self.ch2.write_nrx2(value)
-            }
-            (CH2_PERIOD_LOW, true) => {
-                log::info!("period low 0b{value:08b}");
-                self.ch2.write_nrx3(value)
-            }
-            (CH2_PERIOD_HIGH_AND_CONTROL, true) => {
-                log::info!("period high & control 0b{value:08b}");
-                self.ch2.write_nrx4(value, self.div_apu)
-            }
+            (CH2_LENGTH_TIMER_AND_DUTY_CYCLE, _) => self.ch2.write_nrx1(value, self.is_on),
+            (CH2_VOLUME_AND_ENVELOPE, true) => self.ch2.write_nrx2(value),
+            (CH2_PERIOD_LOW, true) => self.ch2.write_nrx3(value),
+            (CH2_PERIOD_HIGH_AND_CONTROL, true) => self.ch2.write_nrx4(value, self.div_apu),
             (CH3_DAC_ENABLE, true) => self.ch3.write_nr30(value),
             (CH3_LENGTH_TIMER, _) => self.ch3.write_nr31(value),
             (CH3_OUTPUT_LEVEL, true) => self.ch3.write_nr32(value),
@@ -256,7 +244,7 @@ impl Sampler {
     #[must_use]
     pub fn sample_left(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_LEFT) {
-            self.ch1.sample(sample) * 0.
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_LEFT) {
@@ -264,11 +252,11 @@ impl Sampler {
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_LEFT) {
-            self.ch3.sample(sample) * 0.
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_LEFT) {
-            self.ch4.sample(sample, noise, short_noise) * 0.
+            self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
         })) * self.get_volume_left()
@@ -278,7 +266,7 @@ impl Sampler {
     #[must_use]
     pub fn sample_right(&self, sample: f32, noise: &[u8], short_noise: &[u8]) -> f32 {
         ((if self.nr51.contains(Nr51::CH1_RIGHT) {
-            self.ch1.sample(sample) * 0.
+            self.ch1.sample(sample)
         } else {
             0.0
         }) + (if self.nr51.contains(Nr51::CH2_RIGHT) {
@@ -286,11 +274,11 @@ impl Sampler {
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH3_RIGHT) {
-            self.ch3.sample(sample) * 0.
+            self.ch3.sample(sample)
         } else {
             0.
         }) + (if self.nr51.contains(Nr51::CH4_RIGHT) {
-            self.ch4.sample(sample, noise, short_noise) * 0.
+            self.ch4.sample(sample, noise, short_noise)
         } else {
             0.
         })) * self.get_volume_right()
