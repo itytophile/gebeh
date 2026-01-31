@@ -27,7 +27,7 @@ fn dmg_acid2() {
             && previous_ly != Some(emulator.state.ly)
         {
             previous_ly = Some(emulator.state.ly);
-            all_good &= working_split.next().unwrap().eq(scanline.iter().copied());
+            all_good &= working_split.next().unwrap().eq(scanline.iter_colors());
             if emulator.state.ly == HEIGHT - 1 {
                 if all_good {
                     return;
