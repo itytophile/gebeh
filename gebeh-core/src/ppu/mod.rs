@@ -2,6 +2,7 @@ mod background_fetcher;
 mod fifos;
 mod ly_handler;
 mod renderer;
+mod scanline;
 mod sprite_fetcher;
 
 use core::num::NonZeroU8;
@@ -215,6 +216,17 @@ pub enum Color {
     LightGray,
     DarkGray,
     Black,
+}
+
+impl Color {
+    pub fn get_bits(self) -> u8 {
+        match self {
+            Color::White => 0b11,
+            Color::LightGray => 0b10,
+            Color::DarkGray => 0b01,
+            Color::Black => 0b00,
+        }
+    }
 }
 
 impl From<Color> for u32 {
