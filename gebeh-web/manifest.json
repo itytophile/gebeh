@@ -1,0 +1,12 @@
+{
+  "name": "gebeh",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/assets/gebeh.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    }
+  ]
+}
