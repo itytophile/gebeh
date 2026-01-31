@@ -13,6 +13,7 @@ gebeh-front-helper = { path = "./gebeh-front-helper" }
 
 [dev-dependencies]
 arrayvec = "0.7.6"
+png = "0.18.0"
 
 [profile.release]
 opt-level = "z"
