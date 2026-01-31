@@ -21,8 +21,8 @@ use arrayvec::ArrayVec;
 
 use crate::{
     ppu::{
-        Color, LcdControl, ObjectAttribute, background_fetcher::BackgroundFetcher, fifos::Fifos,
-        sprite_fetcher::SpriteFetcher,
+        LcdControl, ObjectAttribute, background_fetcher::BackgroundFetcher, fifos::Fifos,
+        scanline::ScanlineBuilder, sprite_fetcher::SpriteFetcher,
     },
     state::{Scrolling, State},
 };
@@ -33,7 +33,7 @@ pub struct Renderer {
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
     pub objects: ArrayVec<ObjectAttribute, 10>,
-    pub scanline: ArrayVec<Color, 160>,
+    pub scanline: ScanlineBuilder,
     pub first_pixels_to_skip: u8,
     wx_condition: bool,
 }
@@ -114,12 +114,13 @@ impl Renderer {
         }
 
         if cursor >= 8 {
-            self.scanline.push(self.rendering_state.fifos.render_pixel(
-                state.bgp_register,
-                state.obp0,
-                state.obp1,
-                state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE),
-            ));
+            self.scanline
+                .push_pixel(self.rendering_state.fifos.render_pixel(
+                    state.bgp_register,
+                    state.obp0,
+                    state.obp1,
+                    state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE),
+                ));
         }
 
         self.rendering_state.fifos.shift();
@@ -153,7 +154,7 @@ mod tests {
     ) -> u16 {
         let mut renderer = Renderer::new(objects, state.scx);
         let mut dots = 0;
-        while renderer.scanline.len() < usize::from(WIDTH) {
+        while renderer.scanline.len() < WIDTH {
             renderer.execute(state, dots, &mut window_y);
             dots += 1;
         }

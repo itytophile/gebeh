@@ -10,11 +10,13 @@ use core::num::NonZeroU8;
 use arrayvec::ArrayVec;
 
 use crate::{
+    WIDTH,
     ppu::renderer::Renderer,
     state::{Interruptions, LcdStatus, State},
 };
 
 pub use ly_handler::LyHandler;
+pub use scanline::Scanline;
 
 #[derive(Clone)]
 pub enum PpuStep {
@@ -42,7 +44,7 @@ pub enum PpuStep {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
-        scanline: [Color; 160],
+        scanline: Scanline,
     }, // <= 204
     VerticalBlankScanline {
         dots_count: u16,
@@ -218,9 +220,9 @@ pub enum Color {
     Black,
 }
 
-impl Color {
-    pub fn get_bits(self) -> u8 {
-        match self {
+impl From<Color> for u8 {
+    fn from(value: Color) -> Self {
+        match value {
             Color::White => 0b11,
             Color::LightGray => 0b10,
             Color::DarkGray => 0b01,
@@ -247,6 +249,18 @@ impl From<Color> for [u8; 4] {
             Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
             Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
             Color::Black => [0, 0, 0, 0xff],
+        }
+    }
+}
+
+impl From<u8> for Color {
+    fn from(value: u8) -> Self {
+        match value & 0b11 {
+            0 => Self::Black,
+            0b01 => Self::DarkGray,
+            0b10 => Self::LightGray,
+            0b11 => Self::White,
+            _ => unreachable!(),
         }
     }
 }
@@ -289,7 +303,7 @@ impl From<Color> for [u8; 4] {
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
     #[must_use]
-    pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
+    pub fn get_scanline_if_ready(&self) -> Option<&Scanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,
@@ -351,12 +365,12 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                if let Ok(scanline) = scanline.as_slice().try_into() {
+                if scanline.len() == WIDTH {
                     self.step = PpuStep::HorizontalBlank {
                         remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
                         window_y: *window_y,
                         dots_count: 0,
-                        scanline,
+                        scanline: *scanline.get_scanline(),
                     }
                 }
             }

@@ -2,7 +2,12 @@ use std::{fs::File, io::BufReader};
 
 #[test]
 fn prout() {
-    let decoder = png::Decoder::new(BufReader::new(File::open("downloads/mealybug-tearoom-tests-master/expected/DMG-blob/m2_win_en_toggle.png").unwrap()));
+    let decoder = png::Decoder::new(BufReader::new(
+        File::open(
+            "downloads/mealybug-tearoom-tests-master/expected/DMG-blob/m2_win_en_toggle.png",
+        )
+        .unwrap(),
+    ));
     let mut reader = decoder.read_info().unwrap();
     // Allocate the output buffer.
     let mut buf = vec![0; reader.output_buffer_size().unwrap()];
