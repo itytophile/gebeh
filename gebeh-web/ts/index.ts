@@ -129,6 +129,13 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
       }
     },
   );
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState == "visible") {
+      port.postMessage({ type: "enableMessages" } satisfies FromMainMessage);
+    } else {
+      port.postMessage({ type: "disableMessages" } satisfies FromMainMessage);
+    }
+  });
   port.start();
   node.connect(audioContext.destination);
   return node;

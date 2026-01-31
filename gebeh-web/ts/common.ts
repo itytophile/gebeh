@@ -26,6 +26,8 @@ export type FromMainMessage =
       type: "input";
       event: "up" | "down";
       button: GebehButton;
-    };
+    }
+  | { type: "disableMessages" }
+  | { type: "enableMessages" };
 export const GB_WIDTH = 160;
 export const GB_HEIGHT = 144;

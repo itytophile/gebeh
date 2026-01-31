@@ -44,6 +44,7 @@ class WasmProcessor
   emulator?: WebEmulator;
   currentFrame = new Uint8Array(new ArrayBuffer(GB_WIDTH * GB_HEIGHT));
   poor_mans_time = 0;
+  isMessagesEnabled = true;
 
   constructor() {
     super();
@@ -102,6 +103,15 @@ class WasmProcessor
                 break;
               }
             }
+            break;
+          }
+          case "disableMessages": {
+            this.isMessagesEnabled = false;
+            break;
+          }
+          case "enableMessages": {
+            this.isMessagesEnabled = true;
+            break;
           }
         }
       },
@@ -132,6 +142,9 @@ class WasmProcessor
       right,
       sampleRate,
       () => {
+        if (!this.isMessagesEnabled) {
+          return;
+        }
         this.port.postMessage({
           type: "frame",
           buffer: this.currentFrame,
@@ -146,7 +159,7 @@ class WasmProcessor
     this.poor_mans_time =
       (this.poor_mans_time + 1) % Math.round((sampleRate / 128) * 5);
 
-    if (this.poor_mans_time === 0) {
+    if (this.poor_mans_time === 0 && this.isMessagesEnabled) {
       const save = this.emulator.get_save();
       if (save) {
         const ram = save.get_ram();
