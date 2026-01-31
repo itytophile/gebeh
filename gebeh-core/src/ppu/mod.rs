@@ -26,15 +26,6 @@ pub enum PpuStep {
         window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 80
-    // I have to delay (2 M-cycles) the drawing phase because I miss an edit of the SCX register during the OH demo.
-    // There are maybe two causes:
-    // - the LY=LYC interrupt is not detected by the CPU fast enough
-    // - when SCX is written in the same cycle the drawing phase starts, the drawing must catch that value (not possible with the current implementation)
-    DelayedDrawing {
-        dots_count: u16,
-        window_y: Option<u8>,
-        objects: ArrayVec<ObjectAttribute, 10>,
-    },
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
@@ -57,7 +48,7 @@ impl PpuStep {
         use PpuStep::*;
         match self {
             OamScan { .. } => LcdStatus::OAM_SCAN,
-            DelayedDrawing { .. } | Drawing { .. } => LcdStatus::DRAWING,
+            Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
             VerticalBlankScanline { .. } => LcdStatus::VBLANK,
         }
@@ -322,24 +313,13 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 objects,
             } => {
-                self.step = PpuStep::DelayedDrawing {
-                    dots_count: 0,
-                    window_y: *window_y,
-                    objects: core::mem::take(objects),
-                };
-            }
-            PpuStep::DelayedDrawing {
-                dots_count: dots_count @ 8,
-                window_y,
-                objects,
-            } => {
                 let mut objects_to_sort: ArrayVec<_, 10> =
                     objects.iter().copied().enumerate().collect();
                 // https://gbdev.io/pandocs/OAM.html#drawing-priority
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let mut renderer = Renderer::new(
+                let renderer = Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
@@ -350,11 +330,8 @@ impl Ppu {
                     // the low 3 bits of SCX, which are only read at the beginning of the scanline
                     state.scx,
                 );
-                for _ in 0..*dots_count + 2 {
-                    renderer.execute(state, *dots_count, window_y);
-                }
                 self.step = PpuStep::Drawing {
-                    dots_count: *dots_count,
+                    dots_count: 0,
                     renderer,
                     window_y: *window_y,
                 }
@@ -488,7 +465,6 @@ impl Ppu {
                 }
                 *dots_count += 1;
             }
-            PpuStep::DelayedDrawing { dots_count, .. } => *dots_count += 1,
             PpuStep::Drawing {
                 dots_count,
                 renderer,
