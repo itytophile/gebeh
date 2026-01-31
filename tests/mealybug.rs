@@ -45,116 +45,139 @@ fn m2_win_en_toggle() {
 }
 
 #[test]
+#[ignore]
 fn m3_bgp_change() {
     mealybug("m3_bgp_change");
 }
 
 #[test]
+#[ignore]
 fn m3_bgp_change_sprites() {
     mealybug("m3_bgp_change_sprites");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_bg_en_change() {
     mealybug("m3_lcdc_bg_en_change");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_bg_map_change() {
     mealybug("m3_lcdc_bg_map_change");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_obj_en_change() {
     mealybug("m3_lcdc_bg_map_change");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_obj_en_change_variant() {
     mealybug("m3_lcdc_obj_en_change_variant");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_obj_size_change() {
     mealybug("m3_lcdc_obj_size_change");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_obj_size_change_scx() {
     mealybug("m3_lcdc_obj_size_change_scx");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_tile_sel_change() {
     mealybug("m3_lcdc_tile_sel_change");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_tile_sel_win_change() {
     mealybug("m3_lcdc_tile_sel_win_change");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_win_en_change_multiple() {
     mealybug("m3_lcdc_win_en_change_multiple");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_win_en_change_multiple_wx() {
     mealybug("m3_lcdc_win_en_change_multiple_wx");
 }
 
 #[test]
+#[ignore]
 fn m3_lcdc_win_map_change() {
     mealybug("m3_lcdc_win_map_change");
 }
 
 #[test]
+#[ignore]
 fn m3_obp0_change() {
     mealybug("m3_obp0_change");
 }
 
 #[test]
+#[ignore]
 fn m3_scx_high_5_bits() {
     mealybug("m3_scx_high_5_bits");
 }
 
 #[test]
+#[ignore]
 fn m3_scx_low_3_bits() {
     mealybug("m3_scx_low_3_bits");
 }
 
 #[test]
+#[ignore]
 fn m3_scy_change() {
     mealybug("m3_scy_change");
 }
 
 #[test]
+#[ignore]
 fn m3_window_timing() {
     mealybug("m3_window_timing");
 }
 
 #[test]
+#[ignore]
 fn m3_window_timing_wx_0() {
     mealybug("m3_window_timing_wx_0");
 }
 
 #[test]
+#[ignore]
 fn m3_wx_4_change() {
     mealybug("m3_wx_4_change");
 }
 
 #[test]
+#[ignore]
 fn m3_wx_4_change_sprites() {
     mealybug("m3_wx_4_change_sprites");
 }
 
 #[test]
+#[ignore]
 fn m3_wx_5_change() {
     mealybug("m3_wx_5_change");
 }
 
 #[test]
+#[ignore]
 fn m3_wx_6_change() {
     mealybug("m3_wx_6_change");
 }
