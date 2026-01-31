@@ -40,6 +40,6 @@ fn mealybug(name: &str) {
 }
 
 #[test]
-fn prout() {
+fn m2_win_en_toggle() {
     mealybug("m2_win_en_toggle");
 }
