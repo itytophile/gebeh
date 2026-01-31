@@ -18,6 +18,9 @@ impl Scanline {
             })
             .map(Color::from)
     }
+    pub fn raw(&self) -> &[u8; 40] {
+        &self.0
+    }
 }
 
 impl Default for Scanline {
