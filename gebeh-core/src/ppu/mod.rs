@@ -412,22 +412,24 @@ impl Ppu {
         }
 
         let stat_mode_irq = match &self.step {
-            // one M-cycle delay
+            // one M-cycle delay (except on line 0)
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_2_0_timing.s
-            PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
+            PpuStep::OamScan { dots_count, .. } => {
+                (*dots_count >= 4 || state.ly != 0) && state.lcd_status.contains(LcdStatus::OAM_INT)
+            }
             // one M-cycle delay (to delay a LY read) + must jump M-cycle when drawing has a one dot penalty
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/hblank_ly_scx_timing-GS.s
             PpuStep::HorizontalBlank {
-                dots_count: 3.., ..
+                dots_count: 7.., ..
             } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
             // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-            PpuStep::VerticalBlankScanline { dots_count: 0 } if state.ly == 144 => {
+            PpuStep::VerticalBlankScanline { dots_count: 4 } if state.ly == 144 => {
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     | state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
             // Must be synchronized with the OAM interrupt so one M-cycle delay too
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_1_2_timing-GS.s
-            PpuStep::VerticalBlankScanline { .. } => {
+            PpuStep::VerticalBlankScanline { dots_count: 4.. } => {
                 state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
             _ => false,
@@ -443,7 +445,7 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            state.delayed.interrupt_flag.insert(Interruptions::LCD);
+            state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
 
