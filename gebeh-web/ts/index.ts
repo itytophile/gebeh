@@ -111,14 +111,16 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
           break;
         }
         case "frame": {
-          for (const [index, value] of new Uint8Array(data.buffer).entries()) {
-            const offset = index * 4;
-            const color =
-              value === 0 ? 0xff : value === 1 ? 0xaa : value === 2 ? 0x55 : 0;
-            imageData.data[offset] = color; // R value
-            imageData.data[offset + 1] = color; // G value
-            imageData.data[offset + 2] = color; // B value
-            imageData.data[offset + 3] = 255; // A value
+          for (const [index, byte] of new Uint8Array(data.buffer).entries()) {
+            for (let index_2bits = 0; index_2bits < 4; ++index_2bits) {
+              const gray = (((byte >> (6 - 2 * index_2bits)) & 0b11) * 255) / 3;
+              const index_color = (index * 4 + index_2bits) * 4;
+              const data = imageData.data;
+              data[index_color] = gray;
+              data[index_color + 1] = gray;
+              data[index_color + 2] = gray;
+              data[index_color + 3] = 255;
+            }
           }
           context.putImageData(imageData, 0, 0);
           break;
