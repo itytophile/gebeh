@@ -33,7 +33,7 @@ pub enum BackgroundFetcherStep {
 #[derive(Clone, Default)]
 pub struct BackgroundFetcher {
     pub step: BackgroundFetcherStep,
-    pub x: u8, // will be used like x.max(1) - 0 thus 0 is the dummy fetch
+    pub x: u8, // will be used like x.max(1) - 1 thus 0 is the dummy fetch
 }
 
 impl BackgroundFetcher {
