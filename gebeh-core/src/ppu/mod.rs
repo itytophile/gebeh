@@ -381,7 +381,7 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State) {
+    pub fn fire_interrupts(&mut self, state: &mut State, cycles: u64) {
         // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
         if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
             // must be synchronized with the STAT vblank so one M-cycle delay too
@@ -422,17 +422,18 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
+            log::info!("{cycles} FIRE");
             state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, _: u64) {
+    pub fn execute(&mut self, state: &mut State, cycles: u64) {
         if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
 
         self.switch_from_finished_mode(state);
-        self.fire_interrupts(state);
+        self.fire_interrupts(state, cycles);
         state.delayed.ppu_mode = self.step.get_ppu_mode();
 
         match &mut self.step {
@@ -471,7 +472,7 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                renderer.execute(state, *dots_count, window_y);
+                renderer.execute(state, *dots_count, window_y, cycles);
 
                 *dots_count += 1;
             }

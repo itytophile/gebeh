@@ -455,6 +455,7 @@ impl Cpu {
                 if let Some(interrupt) = interrupt {
                     state.interrupt_flag.remove(interrupt);
                 }
+                log::info!("{cycle_count} Interrupt finished");
             }
             NoRead(Res(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) & !(1 << bit));
@@ -917,6 +918,7 @@ impl Cpu {
             inst
         } else if self.is_dispatching_interrupt {
             self.ime = false;
+            log::info!("{cycle_count}: Interrupt");
             // no need to set is_dispatching_interrupt to false
             use NoReadInstruction::*;
             self.instruction_register.0 = vec([

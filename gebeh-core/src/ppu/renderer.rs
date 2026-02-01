@@ -55,7 +55,13 @@ impl Renderer {
         }
     }
 
-    pub fn execute(&mut self, state: &State, dots_count: u16, window_y: &mut Option<u8>) {
+    pub fn execute(
+        &mut self,
+        state: &State,
+        dots_count: u16,
+        window_y: &mut Option<u8>,
+        cycles: u64,
+    ) {
         let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
             - i16::from(self.first_pixels_to_skip);
 
@@ -114,6 +120,11 @@ impl Renderer {
         }
 
         if cursor >= 8 {
+            // log::info!(
+            //     "{cycles} pushing pixel on {} with bgp 0b{:08b}",
+            //     self.scanline.len(),
+            //     state.bgp_register
+            // );
             self.scanline
                 .push_pixel(self.rendering_state.fifos.render_pixel(
                     state.bgp_register,
@@ -155,7 +166,7 @@ mod tests {
         let mut renderer = Renderer::new(objects, state.scx);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
-            renderer.execute(state, dots, &mut window_y);
+            renderer.execute(state, dots, &mut window_y, 0);
             dots += 1;
         }
         dots

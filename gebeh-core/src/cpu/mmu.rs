@@ -80,7 +80,10 @@ impl MmuCpuExt for State {
             LCD_STATUS => self.lcd_status.bits() | 0b10000000,
             SCY => self.scy,
             SCX => self.scx,
-            LY => self.ly,
+            LY => {
+                log::info!("{cycles}: Reading ly {}", self.ly);
+                self.ly
+            }
             LYC => self.lyc,
             DMA => self.dma_register,
             BGP => self.bgp_register,
@@ -104,7 +107,7 @@ impl MmuCpuExt for State {
         &mut self,
         index: u16,
         value: u8,
-        _: u64,
+        cycles: u64,
         cpu: &mut Cpu,
         peripherals: Peripherals<M>,
     ) {
@@ -153,7 +156,10 @@ impl MmuCpuExt for State {
                 self.dma_register = value;
                 self.dma_request = true;
             }
-            BGP => self.bgp_register = value,
+            BGP => {
+                log::info!("{cycles}: Writing to bgp 0b{value:08b}");
+                self.bgp_register = value
+            }
             OBP0 => self.obp0 = value,
             OBP1 => self.obp1 = value,
             WY => self.wy = value,
