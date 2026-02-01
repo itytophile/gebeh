@@ -131,9 +131,6 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 pub struct Delayed {
     // according to some mooneye tests, interrupts from PPU are delayed by one M-cycle
     pub interrupt_flag: Interruptions,
-    // according to some mooneye tests and a comment in SameBoy PPU implementation, STAT mode is delayed by one M-cycle
-    // https://github.com/LIJI32/SameBoy/blob/858f0034650fc91778f2cf9adaf801ce77d2fe68/Core/display.c#L1530
-    pub ppu_mode: LcdStatus,
 }
 
 #[derive(Clone)]
@@ -208,15 +205,18 @@ impl State {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
-    fn set_ppu_mode(&mut self, mode: LcdStatus) {
+    pub fn set_ppu_mode(&mut self, mode: LcdStatus, cycles: u64) {
         assert!(matches!(
             mode,
             LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
         ));
+        if self.lcd_status & LcdStatus::PPU_MASK != mode {
+            log::info!("{cycles} set ppu mode {}", mode.bits())
+        }
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
-    pub fn apply_delayed(&mut self) {
-        self.set_ppu_mode(self.delayed.ppu_mode);
+    pub fn apply_delayed(&mut self, cycles: u64) {
+        // self.set_ppu_mode(self.delayed.ppu_mode, cycles);
         self.interrupt_flag |= self.delayed.interrupt_flag;
         self.delayed.interrupt_flag = Interruptions::empty();
     }

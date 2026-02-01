@@ -296,6 +296,9 @@ impl Cpu {
                 );
             }
             NoRead(Inc(register)) => {
+                if register == Register8Bit::B {
+                    log::info!("{cycle_count} INC B");
+                }
                 let incremented = self.inc(self.get_8bit_register(register));
                 self.set_8bit_register(register, incremented);
             }
@@ -907,7 +910,7 @@ impl Cpu {
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
-                state.apply_delayed();
+                state.apply_delayed(cycle_count);
                 return;
             }
             self.is_halted = false;
@@ -954,6 +957,9 @@ impl Cpu {
                     state.read(self.pc, cycle_count, self, peripherals.get_ref()),
                 ),
             };
+            // if self.pc == 0x4ab5 {
+            //     panic!()
+            // }
         }
 
         // todo revoir la logique de lecture
@@ -998,7 +1004,7 @@ impl Cpu {
         };
 
         // to do after read
-        state.apply_delayed();
+        state.apply_delayed(cycle_count);
 
         self.execute_instruction(state, inst, interrupts_to_execute, cycle_count, peripherals);
     }

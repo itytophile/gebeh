@@ -422,7 +422,7 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            log::info!("{cycles} FIRE");
+            // log::info!("{cycles} FIRE");
             state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
@@ -434,7 +434,7 @@ impl Ppu {
 
         self.switch_from_finished_mode(state);
         self.fire_interrupts(state, cycles);
-        state.delayed.ppu_mode = self.step.get_ppu_mode();
+        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
 
         match &mut self.step {
             PpuStep::OamScan {

@@ -77,11 +77,14 @@ impl MmuCpuExt for State {
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
             LCD_CONTROL => self.lcd_control.bits(),
-            LCD_STATUS => self.lcd_status.bits() | 0b10000000,
+            LCD_STATUS => {
+                log::info!("{cycles} Reading STAT: {:?}", self.lcd_status);
+                self.lcd_status.bits() | 0b10000000
+            }
             SCY => self.scy,
             SCX => self.scx,
             LY => {
-                log::info!("{cycles}: Reading ly {}", self.ly);
+                // log::info!("{cycles}: Reading ly {}", self.ly);
                 self.ly
             }
             LYC => self.lyc,
