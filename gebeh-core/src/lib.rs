@@ -59,8 +59,8 @@ impl Emulator {
 impl Emulator {
     pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
         self.dma.execute(&mut self.state, mbc, self.cycles);
-        for _ in 0..3 {
-            self.ppu.execute(&mut self.state, self.cycles);
+        for i in 0..3 {
+            self.ppu.execute(&mut self.state, self.cycles, i);
         }
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
@@ -75,7 +75,7 @@ impl Emulator {
             },
             self.cycles,
         );
-        self.ppu.execute(&mut self.state, self.cycles);
+        self.ppu.execute(&mut self.state, self.cycles, 3);
         if must_increment_div_apu {
             self.apu.increment_div_apu();
         }

@@ -57,6 +57,8 @@ pub struct Ppu {
     pub step: PpuStep,
     stat_irq: bool,
     state: PpuState,
+    // one dot delay to resync the PPU with the machine clock when turning it on (find a better way)
+    delay_turning_on: bool,
 }
 
 #[derive(Clone, Default)]
@@ -191,11 +193,22 @@ impl Ppu {
         self.state.ly
     }
     pub fn set_lcd_control(&mut self, new_control: LcdControl) {
+        // if on -> off && not vblank
+        if self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && !new_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && !matches!(self.step, PpuStep::VerticalBlankScanline { .. })
+        {
+            // https://gbdev.io/pandocs/LCDC.html#lcdc7--lcd-enable
+            panic!("LCD turned off outside of VBLANK (may damage hardware irl)")
+        }
         // if off -> on
         if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
             && new_control.contains(LcdControl::LCD_PPU_ENABLE)
         {
-            *self = Default::default()
+            *self = Self {
+                delay_turning_on: true,
+                ..Default::default()
+            }
         }
         self.state.lcd_control = new_control;
     }
@@ -300,7 +313,7 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
+    pub fn fire_interrupts(&mut self, state: &mut State, cycles: u64, prout: u8) {
         // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
         if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
             // must be synchronized with the STAT vblank so one M-cycle delay too
@@ -342,18 +355,23 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            // log::info!("{cycles} FIRE");
+            log::info!("{cycles} {prout} FIRE");
             state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, cycles: u64) {
+    pub fn execute(&mut self, state: &mut State, cycles: u64, prout: u8) {
         if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
 
+        if self.delay_turning_on {
+            self.delay_turning_on = false;
+            return;
+        }
+
         self.switch_from_finished_mode(state);
-        self.fire_interrupts(state, cycles);
+        self.fire_interrupts(state, cycles, prout);
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
         state
             .lcd_status
@@ -418,10 +436,12 @@ mod tests {
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
+        // turn on delay
+        ppu.execute(&mut state, 0, 0);
         // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
-        ppu.execute(&mut state, 0);
+        ppu.execute(&mut state, 0, 0);
         loop {
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut state, 0, 0);
             duration += 1;
             if let PpuStep::OamScan { dots_count: 1, .. } = ppu.step {
                 break;
@@ -435,9 +455,11 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
+        // turn on delay (yes that's bad as hell)
+        ppu.execute(&mut state, 0, 0);
         let mut duration = 0;
         loop {
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut state, 0, 0);
             duration += 1;
             if let PpuStep::VerticalBlankScanline {
                 dots_count: VERTICAL_BLANK_DURATION,

@@ -942,9 +942,13 @@ impl Cpu {
 
         // fetch step
         if self.instruction_register.0.is_empty() {
+            let lol = self.is_dispatching_interrupt;
             self.is_dispatching_interrupt = self.ime
                 && self.instruction_register.1.check_interrupts
                 && !interrupts_to_execute.is_empty();
+            if !lol && self.is_dispatching_interrupt {
+                log::info!("{cycle_count} ça va dispatch des interrupts les boys");
+            }
             (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
