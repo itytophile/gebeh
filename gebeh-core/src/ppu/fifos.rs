@@ -1,4 +1,4 @@
-use crate::ppu::{Color, ColorIndex};
+use crate::ppu::color::{Color, ColorIndex};
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
 #[derive(Default, Clone)]

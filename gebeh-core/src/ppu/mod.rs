@@ -1,4 +1,5 @@
 mod background_fetcher;
+pub mod color;
 mod fifos;
 mod renderer;
 mod scanline;
@@ -118,64 +119,6 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum ColorIndex {
-    Zero,
-    One,
-    Two,
-    Three,
-}
-
-impl ColorIndex {
-    pub fn new(least_significant_bit: bool, most_significant_bit: bool) -> Self {
-        match (most_significant_bit, least_significant_bit) {
-            (true, true) => Self::Three,
-            (true, false) => Self::Two,
-            (false, true) => Self::One,
-            (false, false) => Self::Zero,
-        }
-    }
-
-    pub fn get_color(self, palette: u8) -> Color {
-        let shift: u8 = match self {
-            ColorIndex::Zero => 0,
-            ColorIndex::One => 2,
-            ColorIndex::Two => 4,
-            ColorIndex::Three => 6,
-        };
-        match (palette >> shift) & 0b11 {
-            0 => Color::White,
-            1 => Color::LightGray,
-            2 => Color::DarkGray,
-            _ => Color::Black,
-        }
-    }
-}
-
-pub fn get_line_from_tile(tile: &Tile, y: u8) -> [u8; 2] {
-    assert!(y < 8);
-    tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
-        .try_into()
-        .unwrap()
-}
-
-pub fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
-    assert!(x < 8);
-    ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
-}
-
-#[must_use]
-pub fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
-    let base = if is_signed_addressing {
-        0x1000usize.strict_add_signed(isize::from(index.cast_signed()) * isize::from(TILE_LENGTH))
-    } else {
-        usize::from(index) * usize::from(TILE_LENGTH)
-    };
-    vram[base..base + usize::from(TILE_LENGTH)]
-        .try_into()
-        .unwrap()
-}
-
 bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
     pub struct ObjectFlags: u8 {
@@ -206,59 +149,6 @@ impl From<[u8; 4]> for ObjectAttribute {
 }
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum Color {
-    White,
-    LightGray,
-    DarkGray,
-    Black,
-}
-
-impl From<Color> for u8 {
-    fn from(value: Color) -> Self {
-        match value {
-            Color::White => 0b11,
-            Color::LightGray => 0b10,
-            Color::DarkGray => 0b01,
-            Color::Black => 0b00,
-        }
-    }
-}
-
-impl From<Color> for u32 {
-    fn from(c: Color) -> u32 {
-        match c {
-            Color::White => 0xffffff,
-            Color::LightGray => 0xaaaaaa,
-            Color::DarkGray => 0x555555,
-            Color::Black => 0,
-        }
-    }
-}
-
-impl From<Color> for [u8; 4] {
-    fn from(c: Color) -> Self {
-        match c {
-            Color::White => [0xff; 4],
-            Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
-            Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
-            Color::Black => [0, 0, 0, 0xff],
-        }
-    }
-}
-
-impl From<u8> for Color {
-    fn from(value: u8) -> Self {
-        match value & 0b11 {
-            0 => Self::Black,
-            0b01 => Self::DarkGray,
-            0b10 => Self::LightGray,
-            0b11 => Self::White,
-            _ => unreachable!(),
-        }
-    }
-}
 
 // D'après "The cycle accurate gameboy docs":
 // - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
@@ -410,7 +300,7 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State, cycles: u64) {
+    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
         // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
         if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
             // must be synchronized with the STAT vblank so one M-cycle delay too

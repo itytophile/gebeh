@@ -1,4 +1,4 @@
-use crate::ppu::Color;
+use crate::ppu::color::Color;
 
 #[derive(Clone, Copy)]
 pub struct Scanline([u8; 40]);

@@ -1,5 +1,5 @@
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, ppu::Color};
+use gebeh_core::{Emulator, HEIGHT, ppu::color::Color};
 use gebeh_front_helper::get_mbc;
 
 #[test]

@@ -3,7 +3,7 @@ use arrayvec::ArrayVec;
 use crate::{
     ppu::{
         LcdControl, ObjectAttribute, ObjectFlags, PpuState, TILE_LENGTH, Tile, TileVramObj,
-        get_line_from_tile, renderer::RenderingState,
+        renderer::RenderingState,
     },
     state::{State, VIDEO_RAM},
 };
@@ -130,6 +130,13 @@ fn get_object_tile_line(state: &State, obj: &ObjectAttribute, ppu_state: &PpuSta
 fn get_object_tile(vram: &TileVramObj, index: u8) -> &Tile {
     let base = usize::from(index) * usize::from(TILE_LENGTH);
     vram[base..base + usize::from(TILE_LENGTH)]
+        .try_into()
+        .unwrap()
+}
+
+pub fn get_line_from_tile(tile: &Tile, y: u8) -> [u8; 2] {
+    assert!(y < 8);
+    tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
         .try_into()
         .unwrap()
 }

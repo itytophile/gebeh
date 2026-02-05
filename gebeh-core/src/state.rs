@@ -1,4 +1,4 @@
-use crate::{mbc::Mbc, ppu::LcdControl};
+use crate::mbc::Mbc;
 
 pub const ROM_BANK: u16 = 0x0000;
 pub const SWITCHABLE_ROM_BANK: u16 = 0x4000;

@@ -55,13 +55,13 @@ impl Renderer {
         }
     }
 
-    pub fn execute(
+    pub(super) fn execute(
         &mut self,
         state: &State,
         dots_count: u16,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState,
-        cycles: u64,
+        _: u64,
     ) {
         let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
             - i16::from(self.first_pixels_to_skip);
