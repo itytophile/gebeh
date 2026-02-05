@@ -1,15 +1,13 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use core::num::NonZeroU8;
-
 use crate::{
     apu::Apu,
     cpu::{Cpu, Peripherals},
     dma::Dma,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
-    ppu::{LyHandler, Ppu, Speeder},
+    ppu::Ppu,
     state::State,
     timer::Timer,
 };
@@ -28,10 +26,9 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Emulator {
-    ly_handler: LyHandler,
-    ppu: Speeder,
+    ppu: Ppu,
     dma: Dma,
     cpu: Cpu,
     pub state: State,
@@ -43,7 +40,7 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn get_ppu(&self) -> &Ppu {
-        &self.ppu.0
+        &self.ppu
     }
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
@@ -59,27 +56,12 @@ impl Emulator {
     }
 }
 
-impl Default for Emulator {
-    fn default() -> Self {
-        Self {
-            ly_handler: LyHandler::default(),
-            ppu: Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
-            dma: Default::default(),
-            cpu: Default::default(),
-            state: Default::default(),
-            timer: Default::default(),
-            joypad: Default::default(),
-            apu: Default::default(),
-            cycles: 0,
-        }
-    }
-}
-
 impl Emulator {
     pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
         self.dma.execute(&mut self.state, mbc, self.cycles);
-        self.ly_handler.execute(&mut self.state, self.cycles);
-        self.ppu.execute(&mut self.state, self.cycles);
+        for _ in 0..3 {
+            self.ppu.execute(&mut self.state, self.cycles);
+        }
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
         self.cpu.execute(
@@ -89,9 +71,11 @@ impl Emulator {
                 timer: &mut self.timer,
                 joypad: &mut self.joypad,
                 apu: &mut self.apu,
+                ppu: &mut self.ppu,
             },
             self.cycles,
         );
+        self.ppu.execute(&mut self.state, self.cycles);
         if must_increment_div_apu {
             self.apu.increment_div_apu();
         }

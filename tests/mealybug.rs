@@ -26,13 +26,13 @@ fn mealybug(name: &str) {
     loop {
         emulator.execute(mbc.as_mut());
         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready()
-            && previous_ly != Some(emulator.state.ly)
+            && previous_ly != Some(emulator.get_ppu().get_ly())
         {
-            previous_ly = Some(emulator.state.ly);
-            current_frame[usize::from(emulator.state.ly) * usize::from(WIDTH) / 4
-                ..usize::from(emulator.state.ly + 1) * usize::from(WIDTH) / 4]
+            previous_ly = Some(emulator.get_ppu().get_ly());
+            current_frame[usize::from(emulator.get_ppu().get_ly()) * usize::from(WIDTH) / 4
+                ..usize::from(emulator.get_ppu().get_ly() + 1) * usize::from(WIDTH) / 4]
                 .copy_from_slice(scanline.raw());
-            if emulator.state.ly == HEIGHT - 1 && current_frame == buf.as_slice() {
+            if emulator.get_ppu().get_ly() == HEIGHT - 1 && current_frame == buf.as_slice() {
                 break;
             }
         }

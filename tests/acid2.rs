@@ -24,11 +24,11 @@ fn dmg_acid2() {
     loop {
         emulator.execute(mbc.as_mut());
         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready()
-            && previous_ly != Some(emulator.state.ly)
+            && previous_ly != Some(emulator.get_ppu().get_ly())
         {
-            previous_ly = Some(emulator.state.ly);
+            previous_ly = Some(emulator.get_ppu().get_ly());
             all_good &= working_split.next().unwrap().eq(scanline.iter_colors());
-            if emulator.state.ly == HEIGHT - 1 {
+            if emulator.get_ppu().get_ly() == HEIGHT - 1 {
                 if all_good {
                     return;
                 }

@@ -1,11 +1,8 @@
 mod background_fetcher;
 mod fifos;
-mod ly_handler;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
-
-use core::num::NonZeroU8;
 
 use arrayvec::ArrayVec;
 
@@ -15,7 +12,6 @@ use crate::{
     state::{Interruptions, LcdStatus, State},
 };
 
-pub use ly_handler::LyHandler;
 pub use scanline::Scanline;
 
 #[derive(Clone)]
@@ -59,6 +55,13 @@ impl PpuStep {
 pub struct Ppu {
     pub step: PpuStep,
     stat_irq: bool,
+    state: PpuState,
+}
+
+#[derive(Clone, Default)]
+struct PpuState {
+    lcd_control: LcdControl,
+    ly: u8,
 }
 
 bitflags::bitflags! {
@@ -94,7 +97,8 @@ impl LcdControl {
 }
 
 const OAM_SCAN_DURATION: u8 = 80;
-const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456 * 10;
+const SCANLINE_DURATION: u16 = 456;
+const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
 impl Default for PpuStep {
     fn default() -> Self {
@@ -293,6 +297,23 @@ impl From<u8> for Color {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn get_ly(&self) -> u8 {
+        self.state.ly
+    }
+    pub fn set_lcd_control(&mut self, new_control: LcdControl) {
+        // if off -> on
+        if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && new_control.contains(LcdControl::LCD_PPU_ENABLE)
+        {
+            *self = Default::default()
+        }
+        self.state.lcd_control = new_control;
+    }
+
+    pub fn get_lcd_control(&self) -> LcdControl {
+        self.state.lcd_control
+    }
+
     #[must_use]
     pub fn get_scanline_if_ready(&self) -> Option<&Scanline> {
         match &self.step {
@@ -301,7 +322,11 @@ impl Ppu {
                 remaining_dots,
                 scanline,
                 ..
-            } if dots_count == remaining_dots => Some(scanline),
+            } if remaining_dots - dots_count < 4 => {
+                // true once per scanline
+                Some(scanline)
+            }
+
             _ => None,
         }
     }
@@ -357,9 +382,11 @@ impl Ppu {
                 dots_count,
                 ..
             } if remaining_dots == dots_count => {
-                self.step = if state.ly == 144 {
+                // TODO changer toute la gestion de LY
+                self.step = if self.state.ly >= 143 {
                     PpuStep::VerticalBlankScanline { dots_count: 0 }
                 } else {
+                    self.state.ly += 1;
                     PpuStep::OamScan {
                         window_y: *window_y,
                         dots_count: 0,
@@ -367,14 +394,16 @@ impl Ppu {
                     }
                 };
             }
-            PpuStep::VerticalBlankScanline {
-                dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
-                ..
-            } => {
-                self.step = PpuStep::OamScan {
-                    window_y: Default::default(),
-                    dots_count: 0,
-                    objects: Default::default(),
+            PpuStep::VerticalBlankScanline { dots_count, .. } => {
+                if *dots_count == VERTICAL_BLANK_DURATION {
+                    self.state.ly = 0;
+                    self.step = PpuStep::OamScan {
+                        window_y: Default::default(),
+                        dots_count: 0,
+                        objects: Default::default(),
+                    }
+                } else if *dots_count % SCANLINE_DURATION == 0 {
+                    self.state.ly += 1;
                 }
             }
             _ => {}
@@ -385,14 +414,15 @@ impl Ppu {
         // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
         if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
             // must be synchronized with the STAT vblank so one M-cycle delay too
-            state.delayed.interrupt_flag.insert(Interruptions::VBLANK);
+            state.interrupt_flag.insert(Interruptions::VBLANK);
         }
 
         let stat_mode_irq = match &self.step {
             // one M-cycle delay (except on line 0)
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_2_0_timing.s
             PpuStep::OamScan { dots_count, .. } => {
-                (*dots_count >= 4 || state.ly != 0) && state.lcd_status.contains(LcdStatus::OAM_INT)
+                (*dots_count >= 4 || self.state.ly != 0)
+                    && state.lcd_status.contains(LcdStatus::OAM_INT)
             }
             // one M-cycle delay (to delay a LY read) + must jump M-cycle when drawing has a one dot penalty
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/hblank_ly_scx_timing-GS.s
@@ -400,7 +430,7 @@ impl Ppu {
                 dots_count: 7.., ..
             } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
             // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-            PpuStep::VerticalBlankScanline { dots_count: 4 } if state.ly == 144 => {
+            PpuStep::VerticalBlankScanline { dots_count: 4 } if self.state.ly == 144 => {
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     | state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
@@ -412,7 +442,7 @@ impl Ppu {
             _ => false,
         };
         let stat_irq = stat_mode_irq
-            || (state.lcd_status.contains(LcdStatus::LYC_INT) && state.ly == state.lyc);
+            || (state.lcd_status.contains(LcdStatus::LYC_INT) && self.state.ly == state.lyc);
 
         if stat_irq == self.stat_irq {
             return;
@@ -428,13 +458,16 @@ impl Ppu {
     }
 
     pub fn execute(&mut self, state: &mut State, cycles: u64) {
-        if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
+        if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
             return;
         }
 
         self.switch_from_finished_mode(state);
         self.fire_interrupts(state, cycles);
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
+        state
+            .lcd_status
+            .set(LcdStatus::LYC_EQUAL_TO_LY, state.lyc == self.state.ly);
 
         match &mut self.step {
             PpuStep::OamScan {
@@ -443,7 +476,7 @@ impl Ppu {
                 objects,
                 ..
             } => {
-                if state.lcd_control.contains(LcdControl::OBJ_ENABLE)
+                if self.state.lcd_control.contains(LcdControl::OBJ_ENABLE)
                     && *dots_count % 2 == 0
                     && objects.len() < objects.capacity()
                 {
@@ -451,9 +484,9 @@ impl Ppu {
                     let obj = ObjectAttribute::from(
                         <[u8; 4]>::try_from(&state.oam[base..base + 4]).unwrap(),
                     );
-                    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
-                    if obj.y <= state.ly + 16
-                        && state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+                    let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
+                    if obj.y <= self.state.ly + 16
+                        && self.state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
                     {
                         objects.push(obj);
                     }
@@ -461,7 +494,7 @@ impl Ppu {
 
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                if window_y.is_none() && *dots_count == 0 && state.ly == state.wy {
+                if window_y.is_none() && *dots_count == 0 && self.state.ly == state.wy {
                     *window_y = Some(0);
                 }
                 *dots_count += 1;
@@ -472,7 +505,7 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                renderer.execute(state, *dots_count, window_y, cycles);
+                renderer.execute(state, *dots_count, window_y, &self.state, cycles);
 
                 *dots_count += 1;
             }
@@ -482,21 +515,10 @@ impl Ppu {
     }
 }
 
-#[derive(Clone)]
-pub struct Speeder(pub Ppu, pub NonZeroU8);
-
-impl Speeder {
-    pub fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        for _ in 0..self.1.get() {
-            self.0.execute(state, cycle_count);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
-        ppu::{LcdControl, LyHandler, Ppu, PpuStep, VERTICAL_BLANK_SCANLINE_DURATION},
+        ppu::{LcdControl, Ppu, PpuStep, VERTICAL_BLANK_DURATION},
         state::State,
     };
 
@@ -504,7 +526,7 @@ mod tests {
     fn first_line_duration() {
         let mut ppu = Ppu::default();
         let mut state = State::default();
-        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
+        ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
         // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
         ppu.execute(&mut state, 0);
@@ -521,19 +543,14 @@ mod tests {
     #[test]
     fn frame_duration() {
         let mut ppu = Ppu::default();
-        let mut ly_handler = LyHandler::default();
         let mut state = State::default();
-        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
+        ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
         loop {
-            if duration % 4 == 0 {
-                ly_handler.execute(&mut state, 0);
-            }
-
             ppu.execute(&mut state, 0);
             duration += 1;
             if let PpuStep::VerticalBlankScanline {
-                dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
+                dots_count: VERTICAL_BLANK_DURATION,
                 ..
             } = ppu.step
             {

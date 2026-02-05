@@ -1,5 +1,11 @@
 use crate::{
-    apu::Apu, cpu::Cpu, joypad::Joypad, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer,
+    apu::Apu,
+    cpu::Cpu,
+    joypad::Joypad,
+    mbc::Mbc,
+    ppu::{LcdControl, Ppu},
+    state::*,
+    timer::Timer,
 };
 
 pub struct Peripherals<'a, M: Mbc + ?Sized> {
@@ -7,6 +13,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
+    pub ppu: &'a mut Ppu,
 }
 
 impl<M: Mbc + ?Sized> Peripherals<'_, M> {
@@ -16,6 +23,7 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
             timer: self.timer,
             joypad: self.joypad,
             apu: self.apu,
+            ppu: self.ppu,
         }
     }
 }
@@ -25,6 +33,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
+    pub ppu: &'a Ppu,
 }
 
 pub trait MmuCpuExt {
@@ -76,7 +85,7 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
-            LCD_CONTROL => self.lcd_control.bits(),
+            LCD_CONTROL => peripherals.ppu.get_lcd_control().bits(),
             LCD_STATUS => {
                 log::info!("{cycles} Reading STAT: {:?}", self.lcd_status);
                 self.lcd_status.bits() | 0b10000000
@@ -85,7 +94,7 @@ impl MmuCpuExt for State {
             SCX => self.scx,
             LY => {
                 // log::info!("{cycles}: Reading ly {}", self.ly);
-                self.ly
+                peripherals.ppu.get_ly()
             }
             LYC => self.lyc,
             DMA => self.dma_register,
@@ -148,7 +157,9 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.write(index, value),
-            LCD_CONTROL => self.lcd_control = LcdControl::from_bits_truncate(value),
+            LCD_CONTROL => peripherals
+                .ppu
+                .set_lcd_control(LcdControl::from_bits_truncate(value)),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
             SCY => self.scy = value,

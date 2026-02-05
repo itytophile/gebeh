@@ -124,15 +124,6 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
 
-// if read by the cpu the same cycle they are written, then the cpu will read the old value.
-// The delayed value will be read the next cycle.
-// Be careful, delayed state can be written over the same cycle by the CPU thus it will never be read.
-#[derive(Clone, Default)]
-pub struct Delayed {
-    // according to some mooneye tests, interrupts from PPU are delayed by one M-cycle
-    pub interrupt_flag: Interruptions,
-}
-
 #[derive(Clone)]
 pub struct State {
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
@@ -148,17 +139,14 @@ pub struct State {
     pub audio_master_control: u8,
     pub scy: u8,
     pub scx: u8,
-    pub lcd_control: LcdControl,
+
     pub lcd_status: LcdStatus,
-    pub ly: u8,
     pub lyc: u8,
     pub sb: u8,
     pub sc: SerialControl,
     pub wy: u8,
     pub wx: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
-    pub delayed: Delayed,
-    // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
 }
 
 #[derive(Clone, Copy, Default)]
@@ -185,8 +173,6 @@ impl Default for State {
             audio_master_control: 0,
             scx: 0,
             scy: 0,
-            lcd_control: LcdControl::empty(),
-            ly: 0,
             lyc: 0,
             sb: 0,
             sc: SerialControl::empty(),
@@ -194,8 +180,6 @@ impl Default for State {
             wx: 0,
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
-            // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
-            delayed: Default::default(),
         }
     }
 }
@@ -215,11 +199,7 @@ impl State {
         }
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
-    pub fn apply_delayed(&mut self, cycles: u64) {
-        // self.set_ppu_mode(self.delayed.ppu_mode, cycles);
-        self.interrupt_flag |= self.delayed.interrupt_flag;
-        self.delayed.interrupt_flag = Interruptions::empty();
-    }
+
     pub fn get_scrolling(&self) -> Scrolling {
         Scrolling {
             x: self.scx,
