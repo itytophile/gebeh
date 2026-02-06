@@ -92,13 +92,10 @@ impl MmuCpuExt for State {
             }
             SCY => self.scy,
             SCX => self.scx,
-            LY => {
-                // log::info!("{cycles}: Reading ly {}", self.ly);
-                peripherals.ppu.get_ly()
-            }
+            LY => peripherals.ppu.get_ly(),
             LYC => self.lyc,
             DMA => self.dma_register,
-            BGP => self.bgp_register,
+            BGP => peripherals.ppu.get_bgp(),
             OBP0 => self.obp0,
             OBP1 => self.obp1,
             WY => self.wy,
@@ -172,7 +169,7 @@ impl MmuCpuExt for State {
             }
             BGP => {
                 log::info!("{cycles}: Writing to bgp 0b{value:08b}");
-                self.bgp_register = value
+                peripherals.ppu.set_bgp(value)
             }
             OBP0 => self.obp0 = value,
             OBP1 => self.obp1 = value,

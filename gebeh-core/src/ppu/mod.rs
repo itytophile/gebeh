@@ -65,6 +65,15 @@ pub struct Ppu {
 struct PpuState {
     lcd_control: LcdControl,
     ly: u8,
+    bgp: u8,
+    // OR effect on bgp change
+    old_bgp: u8,
+}
+
+impl PpuState {
+    pub fn get_effective_bgp(&self) -> u8 {
+        self.bgp | self.old_bgp
+    }
 }
 
 bitflags::bitflags! {
@@ -191,6 +200,12 @@ impl From<[u8; 4]> for ObjectAttribute {
 impl Ppu {
     pub fn get_ly(&self) -> u8 {
         self.state.ly
+    }
+    pub fn get_bgp(&self) -> u8 {
+        self.state.bgp
+    }
+    pub fn set_bgp(&mut self, bgp: u8) {
+        self.state.bgp = bgp;
     }
     pub fn set_lcd_control(&mut self, new_control: LcdControl) {
         // if on -> off && not vblank
@@ -424,6 +439,8 @@ impl Ppu {
             PpuStep::HorizontalBlank { dots_count, .. } => *dots_count += 1,
             PpuStep::VerticalBlankScanline { dots_count } => *dots_count += 1,
         };
+
+        self.state.old_bgp = self.state.bgp;
     }
 }
 

@@ -133,7 +133,7 @@ impl Renderer {
             // );
             self.scanline.push_pixel(
                 self.rendering_state.fifos.render_pixel(
-                    state.bgp_register,
+                    ppu_state.get_effective_bgp(),
                     state.obp0,
                     state.obp1,
                     ppu_state
@@ -212,7 +212,7 @@ mod tests {
                     Default::default(),
                     &PpuState {
                         lcd_control: LcdControl::WINDOW_ENABLE,
-                        ly: 0
+                        ..Default::default()
                     }
                 ),
                 MINIMUM_TIME + 6,
@@ -229,7 +229,7 @@ mod tests {
                 Default::default(),
                 &PpuState {
                     lcd_control: LcdControl::WINDOW_ENABLE,
-                    ly: 0
+                    ..Default::default()
                 }
             ),
             MINIMUM_TIME,
@@ -255,7 +255,7 @@ mod tests {
                 objects,
                 &PpuState {
                     lcd_control: LcdControl::OBJ_ENABLE,
-                    ly: 0
+                    ..Default::default()
                 }
             ),
             MINIMUM_TIME + 11
