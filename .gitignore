@@ -2,3 +2,5 @@
 *.save
 dist/
 downloads/
+*.gb
+*.o
