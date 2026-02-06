@@ -323,19 +323,23 @@ impl Ppu {
         let stat_mode_irq = match &self.step {
             // one M-cycle delay (except on line 0)
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_2_0_timing.s
-            PpuStep::OamScan { dots_count, .. } => {
-                (*dots_count >= 4 || self.state.ly != 0)
-                    && state.lcd_status.contains(LcdStatus::OAM_INT)
-            }
+            PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
             // one M-cycle delay (to delay a LY read) + must jump M-cycle when drawing has a one dot penalty
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/hblank_ly_scx_timing-GS.s
+            // TODO tester la théorie du hblank qui cause le STAT Mode 2 IRQ
             PpuStep::HorizontalBlank {
-                dots_count: 7.., ..
-            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+                dots_count,
+                remaining_dots,
+                ..
+            } => {
+                // hblank end causing STAT Mode 2 interrupt is from my ass
+                remaining_dots - dots_count < 3 && state.lcd_status.contains(LcdStatus::OAM_INT)
+                    || remaining_dots - dots_count >= 3
+                        && state.lcd_status.contains(LcdStatus::HBLANK_INT)
+            }
             // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
             PpuStep::VerticalBlankScanline { dots_count: 4 } if self.state.ly == 144 => {
-                state.lcd_status.contains(LcdStatus::OAM_INT)
-                    | state.lcd_status.contains(LcdStatus::VBLANK_INT)
+                state.lcd_status.contains(LcdStatus::VBLANK_INT)
             }
             // Must be synchronized with the OAM interrupt so one M-cycle delay too
             // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_1_2_timing-GS.s
