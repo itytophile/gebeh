@@ -220,10 +220,9 @@ impl Ppu {
         if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
             && new_control.contains(LcdControl::LCD_PPU_ENABLE)
         {
-            *self = Self {
-                delay_turning_on: true,
-                ..Default::default()
-            }
+            self.state.ly = 0;
+            self.step = Default::default();
+            self.delay_turning_on = true;
         }
         self.state.lcd_control = new_control;
     }
