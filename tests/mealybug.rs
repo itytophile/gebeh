@@ -44,7 +44,7 @@ fn mealybug_inner(rom: &str, expected: &str) {
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
-    // let path = Path::new(r"prout.png");
+    let path = std::path::Path::new(r"prout.png");
     // let mut file = File::create(path).unwrap();
     loop {
         emulator.execute(mbc.as_mut());
@@ -58,8 +58,8 @@ fn mealybug_inner(rom: &str, expected: &str) {
 
             // if emulator.get_ppu().get_ly() == HEIGHT - 1 {
             //     file.set_len(0).unwrap();
-            //     file.seek(SeekFrom::Start(0)).unwrap();
-            //     let w = &mut BufWriter::new(&mut file);
+            //     std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(0)).unwrap();
+            //     let w = &mut std::io::BufWriter::new(&mut file);
             //     let mut encoder = png::Encoder::new(w, WIDTH.into(), HEIGHT.into());
             //     encoder.set_color(png::ColorType::Grayscale);
             //     encoder.set_depth(png::BitDepth::Two);
@@ -114,9 +114,12 @@ fn m3_lcdc_obj_en_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_obj_en_change_variant() {
-    mealybug("m3_lcdc_obj_en_change_variant");
+    // Different output on gameboy pocket
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_obj_en_change_variant.gb",
+        "tests/mealybug_pocket_expected/m3_lcdc_obj_en_change_variant.png",
+    );
 }
 
 #[test]

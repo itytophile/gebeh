@@ -88,7 +88,7 @@ impl PpuState {
         // however, no delay when turning it back on
         (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
     }
-    
+
     pub fn is_obj_enabled(&self) -> bool {
         self.old_lcd_control.contains(LcdControl::OBJ_ENABLE)
     }
