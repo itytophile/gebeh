@@ -131,16 +131,13 @@ impl Renderer {
             //     self.scanline.len(),
             //     state.bgp_register
             // );
-            self.scanline.push_pixel(
-                self.rendering_state.fifos.render_pixel(
+            self.scanline
+                .push_pixel(self.rendering_state.fifos.render_pixel(
                     ppu_state.get_effective_bgp(),
                     state.obp0,
                     state.obp1,
-                    ppu_state
-                        .lcd_control
-                        .contains(LcdControl::BG_AND_WINDOW_ENABLE),
-                ),
-            );
+                    ppu_state.is_background_enabled(),
+                ));
         }
 
         self.rendering_state.fifos.shift();
