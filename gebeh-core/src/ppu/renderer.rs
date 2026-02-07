@@ -21,8 +21,11 @@ use arrayvec::ArrayVec;
 
 use crate::{
     ppu::{
-        LcdControl, ObjectAttribute, PpuState, background_fetcher::BackgroundFetcher, fifos::Fifos,
-        scanline::ScanlineBuilder, sprite_fetcher::SpriteFetcher,
+        LcdControl, ObjectAttribute, PpuState,
+        background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
+        fifos::Fifos,
+        scanline::ScanlineBuilder,
+        sprite_fetcher::SpriteFetcher,
     },
     state::{Scrolling, State},
 };
@@ -85,8 +88,7 @@ impl Renderer {
         // those systems can run "concurrently"
 
         if let Some(window_y) = window_y
-            && cursor >= i16::from(state.wx + 1)
-            && ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            && self.saved_wx.is_some()
         {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
@@ -97,6 +99,15 @@ impl Renderer {
                 window_y.wrapping_sub(1),
                 ppu_state.is_signed_addressing(),
             );
+            // according to mealybug, when the window is disabled, we have to wait for the fetch to end
+            // before disabling the window for real
+            if matches!(
+                self.background_pixel_fetcher.step,
+                BackgroundFetcherStep::Ready(_)
+            ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            {
+                self.saved_wx = None;
+            }
         } else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,

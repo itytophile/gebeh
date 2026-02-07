@@ -175,7 +175,6 @@ fn m3_lcdc_tile_sel_win_change2() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_win_en_change_multiple() {
     mealybug("m3_lcdc_win_en_change_multiple");
 }
