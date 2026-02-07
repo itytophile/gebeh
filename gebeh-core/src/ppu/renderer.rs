@@ -103,9 +103,16 @@ impl Renderer {
             // before disabling the window for real
             if matches!(
                 self.background_pixel_fetcher.step,
-                BackgroundFetcherStep::Ready(_)
+                // yeah it works with this step, don't know why
+                BackgroundFetcherStep::FetchingTileIndex { .. }
             ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             {
+                // as the scrolling given to the BackgroundFetcherStep while in window mode is (0;0)
+                // we have to reset them to the good value
+                self.background_pixel_fetcher.step = BackgroundFetcherStep::FetchingTileIndex {
+                    scx: state.scx,
+                    scy: state.scy,
+                };
                 self.saved_wx = None;
             }
         } else {
