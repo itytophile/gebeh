@@ -59,6 +59,8 @@ pub struct Ppu {
     state: PpuState,
     // one dot delay to resync the PPU with the machine clock when turning it on (find a better way)
     delay_turning_on: bool,
+    // one dot delay before disabling the background
+    disable_background_delay: bool,
 }
 
 #[derive(Clone, Default)]
@@ -207,7 +209,7 @@ impl Ppu {
     pub fn set_bgp(&mut self, bgp: u8) {
         self.state.bgp = bgp;
     }
-    pub fn set_lcd_control(&mut self, new_control: LcdControl) {
+    pub fn set_lcd_control(&mut self, mut new_control: LcdControl) {
         // if on -> off && not vblank
         if self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
             && !new_control.contains(LcdControl::LCD_PPU_ENABLE)
@@ -223,6 +225,15 @@ impl Ppu {
             self.state.ly = 0;
             self.step = Default::default();
             self.delay_turning_on = true;
+        }
+        if self
+            .state
+            .lcd_control
+            .contains(LcdControl::BG_AND_WINDOW_ENABLE)
+            && !new_control.contains(LcdControl::BG_AND_WINDOW_ENABLE)
+        {
+            self.disable_background_delay = true;
+            new_control.insert(LcdControl::BG_AND_WINDOW_ENABLE);
         }
         self.state.lcd_control = new_control;
     }
@@ -440,6 +451,12 @@ impl Ppu {
         };
 
         self.state.old_bgp = self.state.bgp;
+        if self.disable_background_delay {
+            self.disable_background_delay = false;
+            self.state
+                .lcd_control
+                .remove(LcdControl::BG_AND_WINDOW_ENABLE);
+        }
     }
 }
 

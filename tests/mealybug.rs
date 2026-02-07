@@ -5,19 +5,18 @@ use gebeh_core::{Emulator, HEIGHT, WIDTH};
 use gebeh_front_helper::get_mbc;
 
 fn mealybug(name: &str) {
-    let decoder = png::Decoder::new(BufReader::new(
-        File::open(format!(
-            "downloads/mealybug-tearoom-tests-master/expected/DMG-blob/{name}.png"
-        ))
-        .unwrap(),
-    ));
+    mealybug_inner(
+        &format!("downloads/mealybug-tearoom-tests-master/roms/{name}.gb"),
+        &format!("downloads/mealybug-tearoom-tests-master/expected/DMG-blob/{name}.png"),
+    )
+}
+
+fn mealybug_inner(rom: &str, expected: &str) {
+    let decoder = png::Decoder::new(BufReader::new(File::open(expected).unwrap()));
     let mut reader = decoder.read_info().unwrap();
     let mut buf = vec![0; reader.output_buffer_size().unwrap()];
     reader.next_frame(&mut buf).unwrap();
-    let rom = std::fs::read(format!(
-        "./downloads/mealybug-tearoom-tests-master/roms/{name}.gb"
-    ))
-    .unwrap();
+    let rom = std::fs::read(rom).unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut emulator = Emulator::default();
@@ -55,9 +54,12 @@ fn m3_bgp_change_sprites() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_bg_en_change() {
-    mealybug("m3_lcdc_bg_en_change");
+    // Different output on gameboy pocket
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_bg_en_change.gb",
+        "tests/mealybug_pocket_expected/m3_lcdc_bg_en_change.png",
+    );
 }
 
 #[test]
