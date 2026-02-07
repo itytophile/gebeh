@@ -154,8 +154,24 @@ fn m3_lcdc_tile_sel_change() {
 }
 
 #[test]
+fn m3_lcdc_tile_sel_change2() {
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_tile_sel_change2.gb",
+        "tests/mealybug_pocket_expected/m3_lcdc_tile_sel_change2.png",
+    );
+}
+
+#[test]
 fn m3_lcdc_tile_sel_win_change() {
     mealybug("m3_lcdc_tile_sel_win_change");
+}
+
+#[test]
+fn m3_lcdc_tile_sel_win_change2() {
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_tile_sel_win_change2.gb",
+        "tests/mealybug_pocket_expected/m3_lcdc_tile_sel_win_change2.png",
+    );
 }
 
 #[test]
