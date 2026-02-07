@@ -50,7 +50,6 @@ fn m3_bgp_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_bgp_change_sprites() {
     mealybug("m3_bgp_change_sprites");
 }
