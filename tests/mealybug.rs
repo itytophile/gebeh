@@ -44,8 +44,7 @@ fn mealybug_inner(rom: &str, expected: &str) {
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
-    let path = std::path::Path::new(r"prout.png");
-    // let mut file = File::create(path).unwrap();
+    // let mut file = File::create(std::path::Path::new(r"prout.png")).unwrap();
     loop {
         emulator.execute(mbc.as_mut());
         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready()
