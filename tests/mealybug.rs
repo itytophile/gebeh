@@ -103,6 +103,15 @@ fn m3_lcdc_bg_en_change() {
 }
 
 #[test]
+fn m3_lcdc_bg_en_change2() {
+    // Different output on gameboy pocket
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_bg_en_change2.gb",
+        "tests/mealybug_pocket_expected/m3_lcdc_bg_en_change2.png",
+    );
+}
+
+#[test]
 fn m3_lcdc_bg_map_change() {
     mealybug("m3_lcdc_bg_map_change");
 }
