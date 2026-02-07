@@ -79,13 +79,11 @@ fn m3_lcdc_obj_en_change_variant() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_obj_size_change() {
     mealybug("m3_lcdc_obj_size_change");
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_obj_size_change_scx() {
     mealybug("m3_lcdc_obj_size_change_scx");
 }
@@ -121,13 +119,11 @@ fn m3_lcdc_win_map_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_obp0_change() {
     mealybug("m3_obp0_change");
 }
 
 #[test]
-#[ignore]
 fn m3_scx_high_5_bits() {
     mealybug("m3_scx_high_5_bits");
 }
