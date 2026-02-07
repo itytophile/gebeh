@@ -35,7 +35,8 @@ pub struct Renderer {
     pub objects: ArrayVec<ObjectAttribute, 10>,
     pub scanline: ScanlineBuilder,
     pub first_pixels_to_skip: u8,
-    wx_condition: bool,
+    // TODO: faire mieux
+    saved_wx: Option<u8>,
 }
 
 impl Renderer {
@@ -51,7 +52,7 @@ impl Renderer {
             scanline: Default::default(),
             objects,
             first_pixels_to_skip: scx_at_scanline_start % 8,
-            wx_condition: false,
+            saved_wx: None,
         }
     }
 
@@ -70,22 +71,21 @@ impl Renderer {
         if ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             && cursor == i16::from(state.wx + 1)
             && let Some(window_y) = window_y
-            && !self.wx_condition
+            && Some(state.wx + 1) != self.saved_wx
         {
             self.background_pixel_fetcher = BackgroundFetcher {
                 step: Default::default(),
                 x: 1,
             };
             self.rendering_state.fifos.reset_background();
-            self.wx_condition = true;
-            *window_y += 1;
+            *window_y = window_y.wrapping_add(1);
+            self.saved_wx = Some(state.wx + 1)
         }
 
         // those systems can run "concurrently"
 
-        // will hopefully reproduce the glitch described by https://gbdev.io/pandocs/Scrolling.html#window
         if let Some(window_y) = window_y
-            && self.wx_condition
+            && cursor >= i16::from(state.wx + 1)
             && ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
         {
             self.background_pixel_fetcher.execute(
@@ -94,7 +94,7 @@ impl Renderer {
                 ppu_state.lcd_control.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
-                *window_y - 1,
+                window_y.wrapping_sub(1),
                 ppu_state.is_signed_addressing(),
             );
         } else {
