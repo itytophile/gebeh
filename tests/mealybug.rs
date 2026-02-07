@@ -109,7 +109,6 @@ fn m3_lcdc_bg_map_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_obj_en_change() {
     mealybug("m3_lcdc_bg_map_change");
 }
