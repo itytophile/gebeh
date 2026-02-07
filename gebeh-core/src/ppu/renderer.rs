@@ -95,9 +95,7 @@ impl Renderer {
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
                 *window_y - 1,
-                !ppu_state
-                    .lcd_control
-                    .contains(LcdControl::BG_AND_WINDOW_TILES),
+                ppu_state.is_signed_addressing(),
             );
         } else {
             self.background_pixel_fetcher.execute(
@@ -106,9 +104,7 @@ impl Renderer {
                 ppu_state.get_bg_tile_map_address(),
                 state.get_scrolling(),
                 ppu_state.ly,
-                !ppu_state
-                    .lcd_control
-                    .contains(LcdControl::BG_AND_WINDOW_TILES),
+                ppu_state.is_signed_addressing(),
             );
         }
 

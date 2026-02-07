@@ -100,6 +100,12 @@ impl PpuState {
             0x9800
         }
     }
+
+    pub fn is_signed_addressing(&self) -> bool {
+        !self
+            .old_lcd_control
+            .contains(LcdControl::BG_AND_WINDOW_TILES)
+    }
 }
 
 bitflags::bitflags! {

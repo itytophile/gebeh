@@ -149,13 +149,11 @@ fn m3_lcdc_obj_size_change_scx() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_tile_sel_change() {
     mealybug("m3_lcdc_tile_sel_change");
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_tile_sel_win_change() {
     mealybug("m3_lcdc_tile_sel_win_change");
 }
