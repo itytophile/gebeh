@@ -88,6 +88,14 @@ impl PpuState {
         // however, no delay when turning it back on
         (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
     }
+
+    pub fn get_bg_tile_map_address(&self) -> u16 {
+        if self.old_lcd_control.contains(LcdControl::BG_TILE_MAP) {
+            0x9c00
+        } else {
+            0x9800
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -105,14 +113,6 @@ bitflags::bitflags! {
 }
 
 impl LcdControl {
-    pub fn get_bg_tile_map_address(self) -> u16 {
-        if self.contains(LcdControl::BG_TILE_MAP) {
-            0x9c00
-        } else {
-            0x9800
-        }
-    }
-
     pub fn get_window_tile_map_address(self) -> u16 {
         if self.contains(LcdControl::WINDOW_TILE_MAP) {
             0x9c00

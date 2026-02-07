@@ -103,7 +103,7 @@ impl Renderer {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
-                ppu_state.lcd_control.get_bg_tile_map_address(),
+                ppu_state.get_bg_tile_map_address(),
                 state.get_scrolling(),
                 ppu_state.ly,
                 !ppu_state

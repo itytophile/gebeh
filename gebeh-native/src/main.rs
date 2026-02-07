@@ -35,7 +35,7 @@ fn main() {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
         WindowBuilder::new()
-            .with_title("Emulator")
+            .with_title("gebeh")
             .with_inner_size(scaled_size)
             .with_min_inner_size(size)
             .build(&event_loop)

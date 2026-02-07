@@ -3,6 +3,7 @@ use std::{fs::File, io::BufReader};
 use gebeh::InstantRtc;
 use gebeh_core::{Emulator, HEIGHT, WIDTH};
 use gebeh_front_helper::get_mbc;
+use png::BitDepth;
 
 fn mealybug(name: &str) {
     mealybug_inner(
@@ -11,9 +12,30 @@ fn mealybug(name: &str) {
     )
 }
 
+fn two_bits_depth_byte_to_one_bit_depth_nimble(a: u8) -> u8 {
+    (a & 0b11 != 0) as u8
+        | (((a & 0b1100 != 0) as u8) << 1)
+        | (((a & 0b110000 != 0) as u8) << 2)
+        | (((a & 0b11000000 != 0) as u8) << 3)
+}
+
+fn two_bits_depth_to_one_bit_depth_image(two_bits: &[u8]) -> Vec<u8> {
+    two_bits
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .copied()
+        .map(|[a, b]| {
+            (two_bits_depth_byte_to_one_bit_depth_nimble(a) << 4)
+                | two_bits_depth_byte_to_one_bit_depth_nimble(b)
+        })
+        .collect()
+}
+
 fn mealybug_inner(rom: &str, expected: &str) {
     let decoder = png::Decoder::new(BufReader::new(File::open(expected).unwrap()));
     let mut reader = decoder.read_info().unwrap();
+    let (_, depth) = reader.output_color_type();
     let mut buf = vec![0; reader.output_buffer_size().unwrap()];
     reader.next_frame(&mut buf).unwrap();
     let rom = std::fs::read(rom).unwrap();
@@ -22,6 +44,8 @@ fn mealybug_inner(rom: &str, expected: &str) {
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
+    // let path = Path::new(r"prout.png");
+    // let mut file = File::create(path).unwrap();
     loop {
         emulator.execute(mbc.as_mut());
         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready()
@@ -31,7 +55,24 @@ fn mealybug_inner(rom: &str, expected: &str) {
             current_frame[usize::from(emulator.get_ppu().get_ly()) * usize::from(WIDTH) / 4
                 ..usize::from(emulator.get_ppu().get_ly() + 1) * usize::from(WIDTH) / 4]
                 .copy_from_slice(scanline.raw());
-            if emulator.get_ppu().get_ly() == HEIGHT - 1 && current_frame == buf.as_slice() {
+
+            // if emulator.get_ppu().get_ly() == HEIGHT - 1 {
+            //     file.set_len(0).unwrap();
+            //     file.seek(SeekFrom::Start(0)).unwrap();
+            //     let w = &mut BufWriter::new(&mut file);
+            //     let mut encoder = png::Encoder::new(w, WIDTH.into(), HEIGHT.into());
+            //     encoder.set_color(png::ColorType::Grayscale);
+            //     encoder.set_depth(png::BitDepth::Two);
+            //     let mut writer = encoder.write_header().unwrap();
+
+            //     writer.write_image_data(&current_frame).unwrap(); // Save
+            // }
+
+            if emulator.get_ppu().get_ly() == HEIGHT - 1
+                && (depth == BitDepth::One
+                    && two_bits_depth_to_one_bit_depth_image(&current_frame) == buf.as_slice()
+                    || depth == BitDepth::Two && current_frame == buf.as_slice())
+            {
                 break;
             }
         }
@@ -63,7 +104,6 @@ fn m3_lcdc_bg_en_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_bg_map_change() {
     mealybug("m3_lcdc_bg_map_change");
 }
