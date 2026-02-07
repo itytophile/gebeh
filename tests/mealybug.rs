@@ -45,7 +45,6 @@ fn m2_win_en_toggle() {
 }
 
 #[test]
-#[ignore]
 fn m3_bgp_change() {
     mealybug("m3_bgp_change");
 }
