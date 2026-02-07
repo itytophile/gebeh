@@ -88,6 +88,10 @@ impl PpuState {
         // however, no delay when turning it back on
         (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
     }
+    
+    pub fn is_obj_enabled(&self) -> bool {
+        self.old_lcd_control.contains(LcdControl::OBJ_ENABLE)
+    }
 
     pub fn get_bg_tile_map_address(&self) -> u16 {
         if self.old_lcd_control.contains(LcdControl::BG_TILE_MAP) {

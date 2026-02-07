@@ -137,6 +137,7 @@ impl Renderer {
                     state.obp0,
                     state.obp1,
                     ppu_state.is_background_enabled(),
+                    ppu_state.is_obj_enabled()
                 ));
         }
 
