@@ -67,7 +67,6 @@ struct PpuState {
     // OR effect on bgp change
     old_bgp: u8,
     old_lcd_control: LcdControl,
-    old_scx: u8,
     scy: u8,
     scx: u8,
 }
@@ -84,7 +83,6 @@ impl PpuState {
     pub fn refresh_old(&mut self) {
         self.old_bgp = self.bgp;
         self.old_lcd_control = self.lcd_control;
-        self.old_scx = self.scx;
     }
 
     pub fn is_background_enabled(&self) -> bool {
