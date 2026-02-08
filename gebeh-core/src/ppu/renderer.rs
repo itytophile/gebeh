@@ -235,6 +235,7 @@ mod tests {
                     Default::default(),
                     &PpuState {
                         lcd_control: LcdControl::WINDOW_ENABLE,
+                        old_lcd_control: LcdControl::WINDOW_ENABLE,
                         ..Default::default()
                     }
                 ),
