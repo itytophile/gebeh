@@ -143,7 +143,7 @@ impl Renderer {
             if matches!(
                 self.background_pixel_fetcher.step,
                 // yeah it works with this step, don't know why
-                BackgroundFetcherStep::FetchingTileIndex
+                BackgroundFetcherStep::FetchingTileIndex { .. }
             ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             {
                 log::info!("{cycles} {cursor} no more window");

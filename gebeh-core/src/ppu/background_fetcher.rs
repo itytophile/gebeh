@@ -11,7 +11,9 @@ pub enum BackgroundFetcherStep {
     #[default]
     WaitingForScrollRegisters,
     // no delay for him because we have the beautiful WaitingForScrollRegisters
-    FetchingTileIndex,
+    FetchingTileIndex {
+        scy: u8,
+    },
     FetchingTileLow {
         one_dot_delay: bool,
         tile_index: u8,
@@ -21,6 +23,7 @@ pub enum BackgroundFetcherStep {
         one_dot_delay: bool,
         tile_index: u8,
         tile_low: u8,
+        scy: u8,
     },
     Ready([u8; 2]),
 }
@@ -53,11 +56,11 @@ impl BackgroundFetcher {
             self.step = WaitingForScrollRegisters;
         }
         self.step = match self.step {
-            WaitingForScrollRegisters => FetchingTileIndex,
-            FetchingTileIndex => {
+            WaitingForScrollRegisters => FetchingTileIndex { scy: scrolling.y },
+            FetchingTileIndex { scy } => {
                 let address = tile_map_address
                     + u16::from((self.x.max(1) - 1 + scrolling.x / 8) & 0x1f)
-                    + 32 * u16::from(y.wrapping_add(scrolling.y) / 8); // don't simplify 32 / 8 to 4
+                    + 32 * u16::from(y.wrapping_add(scy) / 8); // don't simplify 32 / 8 to 4
                 FetchingTileLow {
                     one_dot_delay: false,
                     tile_index: vram[usize::from(address - VIDEO_RAM)],
@@ -87,21 +90,25 @@ impl BackgroundFetcher {
                     one_dot_delay: false,
                     tile_index,
                     tile_low: tile[2 * ((usize::from(y) + usize::from(scy)) % 8)],
+                    scy: 0,
                 }
             }
             FetchingTileHigh {
                 one_dot_delay: false,
                 tile_index,
                 tile_low,
+                ..
             } => FetchingTileHigh {
                 one_dot_delay: true,
                 tile_index,
                 tile_low,
+                scy: scrolling.y,
             },
             FetchingTileHigh {
                 one_dot_delay: true,
                 tile_index,
                 tile_low,
+                scy,
             } => {
                 // sprite fetcher can start fetching one cycle before the end of background fetching
                 rendering_state.is_sprite_fetching_enable = true;

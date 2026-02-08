@@ -224,7 +224,6 @@ fn m3_scx_low_3_bits() {
 }
 
 #[test]
-#[ignore]
 fn m3_scy_change() {
     mealybug("m3_scy_change");
 }
