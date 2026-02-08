@@ -69,6 +69,8 @@ struct PpuState {
     old_lcd_control: LcdControl,
     scy: u8,
     scx: u8,
+    wx: u8,
+    old_wx: u8,
 }
 
 impl PpuState {
@@ -83,6 +85,7 @@ impl PpuState {
     pub fn refresh_old(&mut self) {
         self.old_bgp = self.bgp;
         self.old_lcd_control = self.lcd_control;
+        self.old_wx = self.wx;
     }
 
     pub fn is_background_enabled(&self) -> bool {
@@ -237,6 +240,12 @@ impl From<[u8; 4]> for ObjectAttribute {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn get_wx(&self) -> u8 {
+        self.state.wx
+    }
+    pub fn set_wx(&mut self, value: u8) {
+        self.state.wx = value;
+    }
     pub fn get_scy(&self) -> u8 {
         self.state.scy
     }

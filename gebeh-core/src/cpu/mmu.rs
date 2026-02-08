@@ -99,7 +99,7 @@ impl MmuCpuExt for State {
             OBP0 => self.obp0,
             OBP1 => self.obp1,
             WY => self.wy,
-            WX => self.wx,
+            WX => peripherals.ppu.get_wx(),
             0xff4c => 0xff,
             0xff4d => 0xff,
             0xff4e => 0xff,
@@ -188,7 +188,7 @@ impl MmuCpuExt for State {
             WY => self.wy = value,
             WX => {
                 log::info!("{cycles}: writing to wx {value}");
-                self.wx = value
+                peripherals.ppu.set_wx(value);
             }
             0xff4c => {}
             0xff4d => {}

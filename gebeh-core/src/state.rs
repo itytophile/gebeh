@@ -142,7 +142,6 @@ pub struct State {
     pub sb: u8,
     pub sc: SerialControl,
     pub wy: u8,
-    pub wx: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
 }
 
@@ -164,7 +163,6 @@ impl Default for State {
             sb: 0,
             sc: SerialControl::empty(),
             wy: 0,
-            wx: 0,
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
         }

@@ -97,7 +97,8 @@ impl Renderer {
                     // And according to mealybug, it's read after the dummy fetch
                     first_pixels_to_skip: ppu_state.scx % 8,
                     saved_wx: None,
-                }
+                };
+                log::info!("{cycles} {prout} Dummy fetch end");
             }
 
             return;
@@ -110,21 +111,24 @@ impl Renderer {
             .old_lcd_control
             .contains(LcdControl::WINDOW_ENABLE)
             // strange race condition showed by mealybug (and my Game Boy Pocket)
-            && (cursor == i16::from(state.wx + 1) || cursor == i16::from(state.wx + 2))
+            && (cursor == i16::from(ppu_state.wx + 1) || cursor == i16::from(ppu_state.wx + 2))
             && let Some(window_y) = window_y
-            && Some(state.wx) != *saved_wx
+            && Some(ppu_state.wx) != *saved_wx
         {
-            log::info!("{cycles} {cursor} switching to window");
+            log::info!(
+                "{cycles} {cursor} switching to window on line {}",
+                ppu_state.ly
+            );
             self.background_pixel_fetcher = BackgroundFetcher {
                 step: Default::default(),
                 x: 1,
             };
             self.rendering_state.fifos.reset_background();
             *window_y = window_y.wrapping_add(1);
-            *saved_wx = Some(state.wx);
-            
+            *saved_wx = Some(ppu_state.wx);
+
             // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
-            if state.wx == 0 && first_pixels_to_skip > 0 {
+            if ppu_state.wx == 0 && first_pixels_to_skip > 0 {
                 return;
             }
         }
@@ -195,6 +199,7 @@ impl Renderer {
                 ));
         }
 
+        log::info!("{cycles} {prout} shift at cursor {cursor}");
         self.rendering_state.fifos.shift();
     }
 }
@@ -254,7 +259,6 @@ mod tests {
         // https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
         // Citation: The Window is visible (if enabled) when both coordinates are in the ranges WX=0..166, WY=0..143 respectively
         for wx in 0..167 {
-            state.wx = wx;
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
             // Citation: After the last non-window pixel is emitted, a 6-dot penalty is incurred
             assert_eq!(
@@ -265,6 +269,8 @@ mod tests {
                     &PpuState {
                         lcd_control: LcdControl::WINDOW_ENABLE,
                         old_lcd_control: LcdControl::WINDOW_ENABLE,
+                        wx,
+                        old_wx: wx,
                         ..Default::default()
                     }
                 ),
@@ -274,7 +280,6 @@ mod tests {
         }
 
         // the window is not visible
-        state.wx = 167;
         assert_eq!(
             get_timing(
                 &state,
@@ -282,6 +287,8 @@ mod tests {
                 Default::default(),
                 &PpuState {
                     lcd_control: LcdControl::WINDOW_ENABLE,
+                    wx: 167,
+                    old_wx: 167,
                     ..Default::default()
                 }
             ),
