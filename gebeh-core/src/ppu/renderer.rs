@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn with_window() {
-        let mut state = State::default();
+        let state = State::default();
 
         // https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
         // Citation: The Window is visible (if enabled) when both coordinates are in the ranges WX=0..166, WY=0..143 respectively

@@ -311,7 +311,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, cycles: u64, prout: u8) {
+    fn switch_from_finished_mode(&mut self, _: u64, _: u8) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
