@@ -180,9 +180,11 @@ fn m3_lcdc_win_en_change_multiple() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_win_en_change_multiple_wx() {
-    mealybug("m3_lcdc_win_en_change_multiple_wx");
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_win_en_change_multiple_wx.gb",
+        "tests/mealybug_pocket_expected/m3_lcdc_win_en_change_multiple_wx.png",
+    );
 }
 
 #[test]
