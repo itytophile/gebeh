@@ -252,7 +252,6 @@ fn m3_wx_4_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_wx_4_change_sprites() {
     mealybug("m3_wx_4_change_sprites");
 }
