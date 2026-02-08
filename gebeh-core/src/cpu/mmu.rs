@@ -165,7 +165,10 @@ impl MmuCpuExt for State {
             }
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
-            SCY => peripherals.ppu.set_scy(value),
+            SCY => {
+                log::info!("{cycles}: Write to scy {value}");
+                peripherals.ppu.set_scy(value)
+            }
             SCX => {
                 log::info!("{cycles}: Write to scx {value}");
                 peripherals.ppu.set_scx(value)

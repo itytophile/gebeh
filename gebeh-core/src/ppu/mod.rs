@@ -311,11 +311,6 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                log::info!(
-                    "{cycles} {} {prout} J'enregistre le scx à {}",
-                    self.state.ly,
-                    self.state.scx
-                );
                 let renderer = Renderer::new(
                     objects_to_sort
                         .into_iter()
@@ -478,7 +473,7 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                renderer.execute(state, *dots_count, window_y, &self.state, cycles);
+                renderer.execute(state, *dots_count, window_y, &self.state, cycles, prout);
 
                 *dots_count += 1;
             }

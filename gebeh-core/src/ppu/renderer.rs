@@ -72,6 +72,7 @@ impl Renderer {
         window_y: &mut Option<u8>,
         ppu_state: &PpuState,
         cycles: u64,
+        prout: u8,
     ) {
         let RendererStep::AfterDummy {
             first_pixels_to_skip,
@@ -128,9 +129,6 @@ impl Renderer {
         if let Some(window_y) = window_y
             && saved_wx.is_some()
         {
-            if state.wx == 16 {
-                log::info!("{cycles} {cursor} windowing");
-            }
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
@@ -145,22 +143,14 @@ impl Renderer {
             if matches!(
                 self.background_pixel_fetcher.step,
                 // yeah it works with this step, don't know why
-                BackgroundFetcherStep::FetchingTileIndex { .. }
+                BackgroundFetcherStep::FetchingTileIndex
             ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             {
                 log::info!("{cycles} {cursor} no more window");
-                // as the scrolling given to the BackgroundFetcherStep while in window mode is (0;0)
-                // we have to reset them to the good value
-                self.background_pixel_fetcher.step = BackgroundFetcherStep::FetchingTileIndex {
-                    scx: ppu_state.scx,
-                    scy: ppu_state.scy,
-                };
+
                 *saved_wx = None;
             }
         } else {
-            if state.wx == 16 {
-                log::info!("{cycles} {cursor} backgrounding");
-            }
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
@@ -233,7 +223,7 @@ mod tests {
         let mut renderer = Renderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
-            renderer.execute(state, dots, &mut window_y, ppu_state, 0);
+            renderer.execute(state, dots, &mut window_y, ppu_state, 0, 0);
             dots += 1;
         }
         dots
