@@ -219,7 +219,6 @@ fn m3_scx_high_5_bits_change2() {
 }
 
 #[test]
-#[ignore]
 fn m3_scx_low_3_bits() {
     mealybug("m3_scx_low_3_bits");
 }

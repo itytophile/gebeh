@@ -300,7 +300,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self) {
+    fn switch_from_finished_mode(&mut self, cycles: u64, prout: u8) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
@@ -313,16 +313,17 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
+                log::info!(
+                    "{cycles} {} {prout} J'enregistre le scx à {}",
+                    self.state.ly,
+                    self.state.scx
+                );
                 let renderer = Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
                         .map(|(_, object)| object)
                         .collect(),
-                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
-                    // Citation: The scroll registers are re-read on each tile fetch, except for
-                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
-                    self.state.scx,
                 );
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
@@ -436,7 +437,7 @@ impl Ppu {
             return;
         }
 
-        self.switch_from_finished_mode();
+        self.switch_from_finished_mode(cycles, prout);
         self.fire_interrupts(state, cycles, prout);
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
         state

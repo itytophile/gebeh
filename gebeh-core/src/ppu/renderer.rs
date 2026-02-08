@@ -31,19 +31,26 @@ use crate::{
 };
 
 #[derive(Clone)]
+pub enum RendererStep {
+    DummyFetch,
+    AfterDummy {
+        first_pixels_to_skip: u8,
+        saved_wx: Option<u8>,
+    },
+}
+
+#[derive(Clone)]
 pub struct Renderer {
     background_pixel_fetcher: BackgroundFetcher,
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
     pub objects: ArrayVec<ObjectAttribute, 10>,
     pub scanline: ScanlineBuilder,
-    pub first_pixels_to_skip: u8,
-    // TODO: faire mieux
-    saved_wx: Option<u8>,
+    step: RendererStep,
 }
 
 impl Renderer {
-    pub fn new(objects: ArrayVec<ObjectAttribute, 10>, scx_at_scanline_start: u8) -> Self {
+    pub fn new(objects: ArrayVec<ObjectAttribute, 10>) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
@@ -54,8 +61,7 @@ impl Renderer {
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
-            first_pixels_to_skip: scx_at_scanline_start % 8,
-            saved_wx: None,
+            step: RendererStep::DummyFetch,
         }
     }
 
@@ -67,8 +73,36 @@ impl Renderer {
         ppu_state: &PpuState,
         cycles: u64,
     ) {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ref mut saved_wx,
+        } = self.step
+        else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &state.video_ram,
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ppu_state.ly,
+                ppu_state.is_signed_addressing(),
+            );
+
+            if let BackgroundFetcherStep::Ready(_) = self.background_pixel_fetcher.step {
+                self.step = RendererStep::AfterDummy {
+                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+                    // Citation: The scroll registers are re-read on each tile fetch, except for
+                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
+                    //
+                    // And according to mealybug, it's read after the dummy fetch
+                    first_pixels_to_skip: ppu_state.scx % 8,
+                    saved_wx: None,
+                }
+            }
+
+            return;
+        };
         let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
-            - i16::from(self.first_pixels_to_skip);
+            - i16::from(first_pixels_to_skip);
 
         // yes can be triggered multiple times if wx changes during the same scanline
         if ppu_state
@@ -77,7 +111,7 @@ impl Renderer {
             // strange race condition showed by mealybug (and my Game Boy Pocket)
             && (cursor == i16::from(state.wx + 1) || cursor == i16::from(state.wx + 2))
             && let Some(window_y) = window_y
-            && Some(state.wx) != self.saved_wx
+            && Some(state.wx) != *saved_wx
         {
             log::info!("{cycles} {cursor} switching to window");
             self.background_pixel_fetcher = BackgroundFetcher {
@@ -86,13 +120,13 @@ impl Renderer {
             };
             self.rendering_state.fifos.reset_background();
             *window_y = window_y.wrapping_add(1);
-            self.saved_wx = Some(state.wx)
+            *saved_wx = Some(state.wx)
         }
 
         // those systems can run "concurrently"
 
         if let Some(window_y) = window_y
-            && self.saved_wx.is_some()
+            && saved_wx.is_some()
         {
             if state.wx == 16 {
                 log::info!("{cycles} {cursor} windowing");
@@ -121,7 +155,7 @@ impl Renderer {
                     scx: ppu_state.scx,
                     scy: ppu_state.scy,
                 };
-                self.saved_wx = None;
+                *saved_wx = None;
             }
         } else {
             if state.wx == 16 {
@@ -196,7 +230,7 @@ mod tests {
         objects: ArrayVec<ObjectAttribute, 10>,
         ppu_state: &PpuState,
     ) -> u16 {
-        let mut renderer = Renderer::new(objects, ppu_state.scx);
+        let mut renderer = Renderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
             renderer.execute(state, dots, &mut window_y, ppu_state, 0);
@@ -288,7 +322,7 @@ mod tests {
 
     #[test]
     fn with_scroll_x() {
-        let mut state = State::default();
+        let state = State::default();
 
         for scx in 0..=u8::MAX {
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
