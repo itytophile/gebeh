@@ -16,14 +16,13 @@ pub enum BackgroundFetcherStep {
         scx: u8,
     },
     FetchingTileLow {
-        one_dot_delay: bool,
         tile_index: u8,
-        scy: u8,
+        scy: Option<u8>,
     },
     FetchingTileHigh {
-        one_dot_delay: bool,
         tile_index: u8,
         tile_low: u8,
+        scy: Option<u8>,
     },
     Ready([u8; 2]),
 }
@@ -65,24 +64,20 @@ impl BackgroundFetcher {
                     + u16::from((self.x.max(1) - 1 + scx / 8) & 0x1f)
                     + 32 * u16::from(y.wrapping_add(scy) / 8); // don't simplify 32 / 8 to 4
                 FetchingTileLow {
-                    one_dot_delay: false,
                     tile_index: vram[usize::from(address - VIDEO_RAM)],
-                    scy: 0,
+                    scy: None,
                 }
             }
             FetchingTileLow {
-                one_dot_delay: false,
+                scy: None,
                 tile_index,
-                ..
             } => FetchingTileLow {
-                one_dot_delay: true,
                 tile_index,
-                scy: scrolling.y,
+                scy: Some(scrolling.y),
             },
             FetchingTileLow {
-                one_dot_delay: true,
                 tile_index,
-                scy,
+                scy: Some(scy),
             } => {
                 let tile = get_bg_win_tile(
                     vram[..0x1800].try_into().unwrap(),
@@ -90,25 +85,24 @@ impl BackgroundFetcher {
                     is_signed_addressing,
                 );
                 FetchingTileHigh {
-                    one_dot_delay: false,
                     tile_index,
                     tile_low: tile[2 * ((usize::from(y) + usize::from(scy)) % 8)],
+                    scy: None,
                 }
             }
             FetchingTileHigh {
-                one_dot_delay: false,
+                scy: None,
                 tile_index,
                 tile_low,
-                ..
             } => FetchingTileHigh {
-                one_dot_delay: true,
                 tile_index,
                 tile_low,
+                scy: Some(scrolling.y),
             },
             FetchingTileHigh {
-                one_dot_delay: true,
                 tile_index,
                 tile_low,
+                scy: Some(scy),
             } => {
                 // sprite fetcher can start fetching one cycle before the end of background fetching
                 rendering_state.is_sprite_fetching_enable = true;
@@ -120,7 +114,7 @@ impl BackgroundFetcher {
                 self.x += 1;
                 Ready([
                     tile_low,
-                    tile[2 * ((usize::from(y) + usize::from(scrolling.y)) % 8) + 1],
+                    tile[2 * ((usize::from(y) + usize::from(scy)) % 8) + 1],
                 ])
             }
             sleeping => sleeping,
