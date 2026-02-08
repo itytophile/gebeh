@@ -67,6 +67,7 @@ struct PpuState {
     // OR effect on bgp change
     old_bgp: u8,
     old_lcd_control: LcdControl,
+    old_old_lcd_control: LcdControl,
     scy: u8,
     scx: u8,
     wx: u8,
@@ -85,6 +86,7 @@ impl PpuState {
 
     pub fn refresh_old(&mut self) {
         self.old_bgp = self.bgp;
+        self.old_old_lcd_control = self.old_lcd_control;
         self.old_lcd_control = self.lcd_control;
         self.old_old_wx = self.old_wx;
         self.old_wx = self.wx;

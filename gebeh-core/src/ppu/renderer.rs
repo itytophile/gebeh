@@ -110,7 +110,12 @@ impl Renderer {
         if ppu_state
             .old_lcd_control
             .contains(LcdControl::WINDOW_ENABLE)
-            && (cursor == i16::from(ppu_state.old_old_wx + 1))
+            && (cursor == i16::from(ppu_state.old_old_wx + 1)
+                // strange race condition showed by mealybug and my Game Boy Pocket
+                || (cursor == i16::from(ppu_state.old_old_wx + 2)
+                    && !ppu_state
+                        .old_old_lcd_control
+                        .contains(LcdControl::WINDOW_ENABLE)))
             && let Some(window_y) = window_y
             && Some(ppu_state.old_old_wx) != *saved_wx
         {
