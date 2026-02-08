@@ -110,8 +110,7 @@ impl Renderer {
         if ppu_state
             .old_lcd_control
             .contains(LcdControl::WINDOW_ENABLE)
-            // strange race condition showed by mealybug (and my Game Boy Pocket)
-            && (cursor == i16::from(ppu_state.old_old_wx + 1) || cursor == i16::from(ppu_state.old_old_wx + 2))
+            && (cursor == i16::from(ppu_state.old_old_wx + 1))
             && let Some(window_y) = window_y
             && Some(ppu_state.old_old_wx) != *saved_wx
         {
@@ -192,11 +191,6 @@ impl Renderer {
         }
 
         if cursor >= 8 {
-            // log::info!(
-            //     "{cycles} pushing pixel on {} with bgp 0b{:08b}",
-            //     self.scanline.len(),
-            //     state.bgp_register
-            // );
             self.scanline
                 .push_pixel(self.rendering_state.fifos.render_pixel(
                     ppu_state.get_effective_bgp(),
@@ -207,7 +201,7 @@ impl Renderer {
                 ));
         }
 
-        log::info!("{cycles} {prout} shift at cursor {cursor}");
+        // log::info!("{cycles} {prout} shift at cursor {cursor}");
         self.rendering_state.fifos.shift();
     }
 }

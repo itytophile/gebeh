@@ -262,7 +262,6 @@ fn m3_wx_5_change() {
 }
 
 #[test]
-#[ignore]
 fn m3_wx_6_change() {
     mealybug("m3_wx_6_change");
 }
