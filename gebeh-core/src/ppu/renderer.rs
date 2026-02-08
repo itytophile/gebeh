@@ -91,7 +91,10 @@ impl Renderer {
         if let Some(window_y) = window_y
             && self.saved_wx.is_some()
         {
-            log::info!("{cycles} {cursor} windowing");
+            if state.wx == 16 {
+                log::info!("{cycles} {cursor} windowing");
+                
+            }
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
@@ -119,6 +122,10 @@ impl Renderer {
                 self.saved_wx = None;
             }
         } else {
+            if state.wx == 16 {
+                log::info!("{cycles} {cursor} backgrounding");
+                
+            }
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
