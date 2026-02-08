@@ -100,7 +100,7 @@ impl Renderer {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
-                ppu_state.lcd_control.get_window_tile_map_address(),
+                ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
                 window_y.wrapping_sub(1),

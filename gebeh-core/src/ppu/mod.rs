@@ -106,6 +106,14 @@ impl PpuState {
             .old_lcd_control
             .contains(LcdControl::BG_AND_WINDOW_TILES)
     }
+
+    pub fn get_window_tile_map_address(&self) -> u16 {
+        if self.old_lcd_control.contains(LcdControl::WINDOW_TILE_MAP) {
+            0x9c00
+        } else {
+            0x9800
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -119,16 +127,6 @@ bitflags::bitflags! {
         const OBJ_SIZE = 1 << 2;
         const OBJ_ENABLE = 1 << 1;
         const BG_AND_WINDOW_ENABLE = 1;
-    }
-}
-
-impl LcdControl {
-    pub fn get_window_tile_map_address(self) -> u16 {
-        if self.contains(LcdControl::WINDOW_TILE_MAP) {
-            0x9c00
-        } else {
-            0x9800
-        }
     }
 }
 

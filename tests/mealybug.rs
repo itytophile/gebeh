@@ -188,7 +188,6 @@ fn m3_lcdc_win_en_change_multiple_wx() {
 }
 
 #[test]
-#[ignore]
 fn m3_lcdc_win_map_change() {
     mealybug("m3_lcdc_win_map_change");
 }
