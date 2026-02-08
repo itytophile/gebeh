@@ -229,7 +229,14 @@ fn m3_scy_change() {
 }
 
 #[test]
-#[ignore]
+fn m3_scy_change2() {
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_scy_change2.gb",
+        "tests/mealybug_pocket_expected/m3_scy_change2.png",
+    );
+}
+
+#[test]
 fn m3_window_timing() {
     mealybug("m3_window_timing");
 }
