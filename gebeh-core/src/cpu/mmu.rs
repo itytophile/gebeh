@@ -90,8 +90,8 @@ impl MmuCpuExt for State {
                 log::info!("{cycles} Reading STAT: {:?}", self.lcd_status);
                 self.lcd_status.bits() | 0b10000000
             }
-            SCY => self.scy,
-            SCX => self.scx,
+            SCY => peripherals.ppu.get_scy(),
+            SCX => peripherals.ppu.get_scx(),
             LY => peripherals.ppu.get_ly(),
             LYC => self.lyc,
             DMA => self.dma_register,
@@ -165,8 +165,8 @@ impl MmuCpuExt for State {
             }
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
-            SCY => self.scy = value,
-            SCX => self.scx = value,
+            SCY => peripherals.ppu.set_scy(value),
+            SCX => peripherals.ppu.set_scx(value),
             LY => {} // read only
             LYC => self.lyc = value,
             DMA => {

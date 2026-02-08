@@ -67,6 +67,9 @@ struct PpuState {
     // OR effect on bgp change
     old_bgp: u8,
     old_lcd_control: LcdControl,
+    old_scx: u8,
+    scy: u8,
+    scx: u8,
 }
 
 impl PpuState {
@@ -81,6 +84,7 @@ impl PpuState {
     pub fn refresh_old(&mut self) {
         self.old_bgp = self.bgp;
         self.old_lcd_control = self.lcd_control;
+        self.old_scx = self.scx;
     }
 
     pub fn is_background_enabled(&self) -> bool {
@@ -114,6 +118,21 @@ impl PpuState {
             0x9800
         }
     }
+
+    pub fn get_scrolling(&self) -> Scrolling {
+        Scrolling {
+            x: self.scx,
+            y: self.scy,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct Scrolling {
+    // 0 < x < 256
+    pub x: u8,
+    // 0 < y < 256
+    pub y: u8,
 }
 
 bitflags::bitflags! {
@@ -220,6 +239,18 @@ impl From<[u8; 4]> for ObjectAttribute {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn get_scy(&self) -> u8 {
+        self.state.scy
+    }
+    pub fn get_scx(&self) -> u8 {
+        self.state.scx
+    }
+    pub fn set_scy(&mut self, value: u8) {
+        self.state.scy = value;
+    }
+    pub fn set_scx(&mut self, value: u8) {
+        self.state.scx = value;
+    }
     pub fn get_ly(&self) -> u8 {
         self.state.ly
     }
@@ -269,7 +300,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State) {
+    fn switch_from_finished_mode(&mut self) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
@@ -291,7 +322,7 @@ impl Ppu {
                     // https://gbdev.io/pandocs/Scrolling.html#scrolling
                     // Citation: The scroll registers are re-read on each tile fetch, except for
                     // the low 3 bits of SCX, which are only read at the beginning of the scanline
-                    state.scx,
+                    self.state.scx,
                 );
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
@@ -405,7 +436,7 @@ impl Ppu {
             return;
         }
 
-        self.switch_from_finished_mode(state);
+        self.switch_from_finished_mode();
         self.fire_interrupts(state, cycles, prout);
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
         state

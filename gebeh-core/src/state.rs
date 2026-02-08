@@ -136,8 +136,6 @@ pub struct State {
     pub interrupt_flag: Interruptions,
     pub sound_panning: u8,
     pub audio_master_control: u8,
-    pub scy: u8,
-    pub scx: u8,
 
     pub lcd_status: LcdStatus,
     pub lyc: u8,
@@ -146,14 +144,6 @@ pub struct State {
     pub wy: u8,
     pub wx: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct Scrolling {
-    // 0 < x < 256
-    pub x: u8,
-    // 0 < y < 256
-    pub y: u8,
 }
 
 impl Default for State {
@@ -169,8 +159,7 @@ impl Default for State {
             interrupt_flag: Interruptions::empty(),
             sound_panning: 0,
             audio_master_control: 0,
-            scx: 0,
-            scy: 0,
+
             lyc: 0,
             sb: 0,
             sc: SerialControl::empty(),
@@ -196,13 +185,6 @@ impl State {
             log::info!("{cycles} set ppu mode {}", mode.bits())
         }
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
-    }
-
-    pub fn get_scrolling(&self) -> Scrolling {
-        Scrolling {
-            x: self.scx,
-            y: self.scy,
-        }
     }
 }
 

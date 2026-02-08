@@ -21,13 +21,13 @@ use arrayvec::ArrayVec;
 
 use crate::{
     ppu::{
-        LcdControl, ObjectAttribute, PpuState,
+        LcdControl, ObjectAttribute, PpuState, Scrolling,
         background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
         fifos::Fifos,
         scanline::ScanlineBuilder,
         sprite_fetcher::SpriteFetcher,
     },
-    state::{Scrolling, State},
+    state::State,
 };
 
 #[derive(Clone)]
@@ -118,8 +118,8 @@ impl Renderer {
                 // as the scrolling given to the BackgroundFetcherStep while in window mode is (0;0)
                 // we have to reset them to the good value
                 self.background_pixel_fetcher.step = BackgroundFetcherStep::FetchingTileIndex {
-                    scx: state.scx,
-                    scy: state.scy,
+                    scx: ppu_state.scx,
+                    scy: ppu_state.scy,
                 };
                 self.saved_wx = None;
             }
@@ -131,7 +131,7 @@ impl Renderer {
                 &mut self.rendering_state,
                 &state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
-                state.get_scrolling(),
+                ppu_state.get_scrolling(),
                 ppu_state.ly,
                 ppu_state.is_signed_addressing(),
             );
@@ -196,7 +196,7 @@ mod tests {
         objects: ArrayVec<ObjectAttribute, 10>,
         ppu_state: &PpuState,
     ) -> u16 {
-        let mut renderer = Renderer::new(objects, state.scx);
+        let mut renderer = Renderer::new(objects, ppu_state.scx);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
             renderer.execute(state, dots, &mut window_y, ppu_state, 0);
@@ -291,11 +291,18 @@ mod tests {
         let mut state = State::default();
 
         for scx in 0..=u8::MAX {
-            state.scx = scx;
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
             // Citation: At the very beginning of Mode 3, rendering is paused for SCX % 8 dots
             assert_eq!(
-                get_timing(&state, None, Default::default(), &Default::default()),
+                get_timing(
+                    &state,
+                    None,
+                    Default::default(),
+                    &PpuState {
+                        scx,
+                        ..Default::default()
+                    }
+                ),
                 MINIMUM_TIME + u16::from(scx % 8),
                 "Failed with scx {scx}"
             );
