@@ -71,8 +71,11 @@ impl Renderer {
             - i16::from(self.first_pixels_to_skip);
 
         // yes can be triggered multiple times if wx changes during the same scanline
-        if ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-            && cursor == i16::from(state.wx + 1)
+        if ppu_state
+            .old_lcd_control
+            .contains(LcdControl::WINDOW_ENABLE)
+            // strange race condition showed by mealybug
+            && (cursor == i16::from(state.wx + 1) || cursor == i16::from(state.wx + 2))
             && let Some(window_y) = window_y
             && Some(state.wx) != self.saved_wx
         {
@@ -93,7 +96,6 @@ impl Renderer {
         {
             if state.wx == 16 {
                 log::info!("{cycles} {cursor} windowing");
-                
             }
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
@@ -124,7 +126,6 @@ impl Renderer {
         } else {
             if state.wx == 16 {
                 log::info!("{cycles} {cursor} backgrounding");
-                
             }
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
