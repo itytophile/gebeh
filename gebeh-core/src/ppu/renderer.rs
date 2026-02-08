@@ -121,7 +121,12 @@ impl Renderer {
             };
             self.rendering_state.fifos.reset_background();
             *window_y = window_y.wrapping_add(1);
-            *saved_wx = Some(state.wx)
+            *saved_wx = Some(state.wx);
+            
+            // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
+            if state.wx == 0 && first_pixels_to_skip > 0 {
+                return;
+            }
         }
 
         // those systems can run "concurrently"
