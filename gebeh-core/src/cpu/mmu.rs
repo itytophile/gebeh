@@ -154,9 +154,15 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.write(index, value),
-            LCD_CONTROL => peripherals
-                .ppu
-                .set_lcd_control(LcdControl::from_bits_truncate(value)),
+            LCD_CONTROL => {
+                log::info!(
+                    "{cycles}: writing to lcdcontrol {:?}",
+                    LcdControl::from_bits_truncate(value)
+                );
+                peripherals
+                    .ppu
+                    .set_lcd_control(LcdControl::from_bits_truncate(value))
+            }
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
             SCY => self.scy = value,
@@ -174,7 +180,10 @@ impl MmuCpuExt for State {
             OBP0 => self.obp0 = value,
             OBP1 => self.obp1 = value,
             WY => self.wy = value,
-            WX => self.wx = value,
+            WX => {
+                log::info!("{cycles}: writing to wx {value}");
+                self.wx = value
+            }
             0xff4c => {}
             0xff4d => {}
             0xff4e => {}

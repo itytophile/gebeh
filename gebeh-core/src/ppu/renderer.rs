@@ -65,7 +65,7 @@ impl Renderer {
         dots_count: u16,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState,
-        _: u64,
+        cycles: u64,
     ) {
         let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
             - i16::from(self.first_pixels_to_skip);
@@ -74,15 +74,16 @@ impl Renderer {
         if ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             && cursor == i16::from(state.wx + 1)
             && let Some(window_y) = window_y
-            && Some(state.wx + 1) != self.saved_wx
+            && Some(state.wx) != self.saved_wx
         {
+            log::info!("{cycles} {cursor} switching to window");
             self.background_pixel_fetcher = BackgroundFetcher {
                 step: Default::default(),
                 x: 1,
             };
             self.rendering_state.fifos.reset_background();
             *window_y = window_y.wrapping_add(1);
-            self.saved_wx = Some(state.wx + 1)
+            self.saved_wx = Some(state.wx)
         }
 
         // those systems can run "concurrently"
@@ -90,6 +91,7 @@ impl Renderer {
         if let Some(window_y) = window_y
             && self.saved_wx.is_some()
         {
+            log::info!("{cycles} {cursor} windowing");
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
@@ -107,6 +109,7 @@ impl Renderer {
                 BackgroundFetcherStep::FetchingTileIndex { .. }
             ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             {
+                log::info!("{cycles} {cursor} no more window");
                 // as the scrolling given to the BackgroundFetcherStep while in window mode is (0;0)
                 // we have to reset them to the good value
                 self.background_pixel_fetcher.step = BackgroundFetcherStep::FetchingTileIndex {

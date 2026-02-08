@@ -131,7 +131,6 @@ where
                     for _ in 0..cycles {
                         emulator.execute(mbc.as_mut());
                         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() {
-                            log::warn!("ly de merde {}", emulator.get_ppu().get_ly());
                             current_frame[usize::from(emulator.get_ppu().get_ly())] = *scanline;
                             if emulator.get_ppu().get_ly() == HEIGHT - 1
                                 && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
