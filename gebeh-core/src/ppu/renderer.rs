@@ -111,9 +111,9 @@ impl Renderer {
             .old_lcd_control
             .contains(LcdControl::WINDOW_ENABLE)
             // strange race condition showed by mealybug (and my Game Boy Pocket)
-            && (cursor == i16::from(ppu_state.old_wx + 1) || cursor == i16::from(ppu_state.old_wx + 2))
+            && (cursor == i16::from(ppu_state.old_old_wx + 1) || cursor == i16::from(ppu_state.old_old_wx + 2))
             && let Some(window_y) = window_y
-            && Some(ppu_state.old_wx) != *saved_wx
+            && Some(ppu_state.old_old_wx) != *saved_wx
         {
             log::info!(
                 "{cycles} {cursor} switching to window on line {}",
@@ -133,10 +133,10 @@ impl Renderer {
                     .insert_window_reactivation_pixel();
             }
 
-            *saved_wx = Some(ppu_state.old_wx);
+            *saved_wx = Some(ppu_state.old_old_wx);
 
             // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
-            if ppu_state.old_wx == 0 && first_pixels_to_skip > 0 {
+            if ppu_state.old_old_wx == 0 && first_pixels_to_skip > 0 {
                 return;
             }
         }

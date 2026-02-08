@@ -71,6 +71,7 @@ struct PpuState {
     scx: u8,
     wx: u8,
     old_wx: u8,
+    old_old_wx: u8,
 }
 
 impl PpuState {
@@ -85,6 +86,7 @@ impl PpuState {
     pub fn refresh_old(&mut self) {
         self.old_bgp = self.bgp;
         self.old_lcd_control = self.lcd_control;
+        self.old_old_wx = self.old_wx;
         self.old_wx = self.wx;
     }
 
