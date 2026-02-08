@@ -13,6 +13,7 @@ pub enum BackgroundFetcherStep {
     // no delay for him because we have the beautiful WaitingForScrollRegisters
     FetchingTileIndex {
         scy: u8,
+        scx: u8,
     },
     FetchingTileLow {
         one_dot_delay: bool,
@@ -23,7 +24,6 @@ pub enum BackgroundFetcherStep {
         one_dot_delay: bool,
         tile_index: u8,
         tile_low: u8,
-        scy: u8,
     },
     Ready([u8; 2]),
 }
@@ -56,10 +56,13 @@ impl BackgroundFetcher {
             self.step = WaitingForScrollRegisters;
         }
         self.step = match self.step {
-            WaitingForScrollRegisters => FetchingTileIndex { scy: scrolling.y },
-            FetchingTileIndex { scy } => {
+            WaitingForScrollRegisters => FetchingTileIndex {
+                scy: scrolling.y,
+                scx: scrolling.x,
+            },
+            FetchingTileIndex { scy, scx } => {
                 let address = tile_map_address
-                    + u16::from((self.x.max(1) - 1 + scrolling.x / 8) & 0x1f)
+                    + u16::from((self.x.max(1) - 1 + scx / 8) & 0x1f)
                     + 32 * u16::from(y.wrapping_add(scy) / 8); // don't simplify 32 / 8 to 4
                 FetchingTileLow {
                     one_dot_delay: false,
@@ -90,7 +93,6 @@ impl BackgroundFetcher {
                     one_dot_delay: false,
                     tile_index,
                     tile_low: tile[2 * ((usize::from(y) + usize::from(scy)) % 8)],
-                    scy: 0,
                 }
             }
             FetchingTileHigh {
@@ -102,13 +104,11 @@ impl BackgroundFetcher {
                 one_dot_delay: true,
                 tile_index,
                 tile_low,
-                scy: scrolling.y,
             },
             FetchingTileHigh {
                 one_dot_delay: true,
                 tile_index,
                 tile_low,
-                scy,
             } => {
                 // sprite fetcher can start fetching one cycle before the end of background fetching
                 rendering_state.is_sprite_fetching_enable = true;
