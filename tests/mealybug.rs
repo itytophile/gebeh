@@ -211,6 +211,14 @@ fn m3_scx_high_5_bits() {
 }
 
 #[test]
+fn m3_scx_high_5_bits_change2() {
+    mealybug_inner(
+        "downloads/mealybug-tearoom-tests-master/roms/m3_scx_high_5_bits_change2.gb",
+        "tests/mealybug_pocket_expected/m3_scx_high_5_bits_change2.png",
+    );
+}
+
+#[test]
 #[ignore]
 fn m3_scx_low_3_bits() {
     mealybug("m3_scx_low_3_bits");
