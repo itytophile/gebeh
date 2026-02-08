@@ -95,4 +95,10 @@ impl Fifos {
     pub fn get_shifted_count(&self) -> u8 {
         self.shifted_count
     }
+
+    pub fn insert_window_reactivation_pixel(&mut self) {
+        self.bg0 >>= 1;
+        self.bg1 >>= 1;
+        self.background_pixels_count = 8.min(self.background_pixels_count + 1);
+    }
 }

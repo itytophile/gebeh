@@ -247,7 +247,6 @@ fn m3_window_timing_wx_0() {
 }
 
 #[test]
-#[ignore]
 fn m3_wx_4_change() {
     mealybug("m3_wx_4_change");
 }

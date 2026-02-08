@@ -111,24 +111,32 @@ impl Renderer {
             .old_lcd_control
             .contains(LcdControl::WINDOW_ENABLE)
             // strange race condition showed by mealybug (and my Game Boy Pocket)
-            && (cursor == i16::from(ppu_state.wx + 1) || cursor == i16::from(ppu_state.wx + 2))
+            && (cursor == i16::from(ppu_state.old_wx + 1) || cursor == i16::from(ppu_state.old_wx + 2))
             && let Some(window_y) = window_y
-            && Some(ppu_state.wx) != *saved_wx
+            && Some(ppu_state.old_wx) != *saved_wx
         {
             log::info!(
                 "{cycles} {cursor} switching to window on line {}",
                 ppu_state.ly
             );
-            self.background_pixel_fetcher = BackgroundFetcher {
-                step: Default::default(),
-                x: 1,
-            };
-            self.rendering_state.fifos.reset_background();
-            *window_y = window_y.wrapping_add(1);
-            *saved_wx = Some(ppu_state.wx);
+            if saved_wx.is_none() {
+                self.background_pixel_fetcher = BackgroundFetcher {
+                    step: Default::default(),
+                    x: 1,
+                };
+                self.rendering_state.fifos.reset_background();
+                *window_y = window_y.wrapping_add(1);
+            } else if self.rendering_state.fifos.is_background_empty() {
+                // according to mealybug m3_wx_4_change
+                self.rendering_state
+                    .fifos
+                    .insert_window_reactivation_pixel();
+            }
+
+            *saved_wx = Some(ppu_state.old_wx);
 
             // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
-            if ppu_state.wx == 0 && first_pixels_to_skip > 0 {
+            if ppu_state.old_wx == 0 && first_pixels_to_skip > 0 {
                 return;
             }
         }
