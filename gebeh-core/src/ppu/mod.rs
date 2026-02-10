@@ -21,7 +21,6 @@ pub enum PpuStep {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         window_y: Option<u8>,
-        objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 80
     Drawing {
         dots_count: u16,
@@ -154,7 +153,7 @@ bitflags::bitflags! {
     }
 }
 
-const OAM_SCAN_DURATION: u8 = 80;
+const OAM_SCAN_DURATION: u8 = 77;
 const SCANLINE_DURATION: u16 = 456;
 const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
@@ -163,7 +162,6 @@ impl Default for PpuStep {
         Self::OamScan {
             dots_count: 0,
             window_y: Default::default(),
-            objects: Default::default(),
         }
     }
 }
@@ -311,15 +309,27 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, _: u64, _: u8) {
+    fn switch_from_finished_mode(&mut self, state: &State, _: u64, _: u8) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
                 dots_count: OAM_SCAN_DURATION,
-                objects,
             } => {
-                let mut objects_to_sort: ArrayVec<_, 10> =
-                    objects.iter().copied().enumerate().collect();
+                let mut objects_to_sort: ArrayVec<_, 10> = state
+                    .oam
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .copied()
+                    .map(ObjectAttribute::from)
+                    .filter(|obj| {
+                        let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
+                        obj.y <= self.state.ly + 16
+                            && self.state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+                    })
+                    .take(10)
+                    .enumerate()
+                    .collect();
                 // https://gbdev.io/pandocs/OAM.html#drawing-priority
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
@@ -345,7 +355,10 @@ impl Ppu {
             } => {
                 if scanline.len() == WIDTH {
                     self.step = PpuStep::HorizontalBlank {
-                        remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                        remaining_dots: u8::try_from(
+                            SCANLINE_DURATION - u16::from(OAM_SCAN_DURATION) - *dots_count,
+                        )
+                        .unwrap(),
                         window_y: *window_y,
                         dots_count: 0,
                         scanline: *scanline.get_scanline(),
@@ -366,7 +379,6 @@ impl Ppu {
                     PpuStep::OamScan {
                         window_y: *window_y,
                         dots_count: 0,
-                        objects: Default::default(),
                     }
                 };
             }
@@ -376,7 +388,6 @@ impl Ppu {
                     self.step = PpuStep::OamScan {
                         window_y: Default::default(),
                         dots_count: 0,
-                        objects: Default::default(),
                     }
                 } else if *dots_count % SCANLINE_DURATION == 0 {
                     self.state.ly += 1;
@@ -443,7 +454,7 @@ impl Ppu {
             return;
         }
 
-        self.switch_from_finished_mode(cycles, prout);
+        self.switch_from_finished_mode(state, cycles, prout);
         self.fire_interrupts(state, cycles, prout);
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
         state
@@ -454,25 +465,8 @@ impl Ppu {
             PpuStep::OamScan {
                 dots_count,
                 window_y,
-                objects,
                 ..
             } => {
-                if self.state.lcd_control.contains(LcdControl::OBJ_ENABLE)
-                    && *dots_count % 2 == 0
-                    && objects.len() < objects.capacity()
-                {
-                    let base = usize::from(*dots_count * 2);
-                    let obj = ObjectAttribute::from(
-                        <[u8; 4]>::try_from(&state.oam[base..base + 4]).unwrap(),
-                    );
-                    let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
-                    if obj.y <= self.state.ly + 16
-                        && self.state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
-                    {
-                        objects.push(obj);
-                    }
-                }
-
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
                 if window_y.is_none() && *dots_count == 0 && self.state.ly == state.wy {
