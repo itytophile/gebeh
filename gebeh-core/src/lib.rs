@@ -62,13 +62,11 @@ impl Emulator {
 
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
-        // _ = self.ppu.pre_execution(&mut self.state, self.cycles, 0);
-        // self.ppu.execute(&mut self.state, self.cycles, 0);
-        // self.ppu.execute(&mut self.state, self.cycles, 1);
 
-        // _ = self.ppu.pre_execution(&mut self.state, self.cycles, 0);
-        self.ppu.execute(&mut self.state, self.cycles, 0);
-        self.ppu.execute(&mut self.state, self.cycles, 1);
+        for i in 0..2 {
+            self.ppu.execute(&mut self.state, self.cycles, i);
+        }
+
         self.cpu.execute(
             &mut self.state,
             Peripherals {
@@ -80,11 +78,10 @@ impl Emulator {
             },
             self.cycles,
         );
+
         for i in 2..4 {
             self.ppu.execute(&mut self.state, self.cycles, i);
         }
-        // self.ppu.execute(&mut self.state, self.cycles, 2);
-        // self.ppu.execute(&mut self.state, self.cycles, 3);
 
         if must_increment_div_apu {
             self.apu.increment_div_apu();

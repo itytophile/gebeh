@@ -915,7 +915,7 @@ impl Cpu {
                 return;
             }
             self.is_halted = false;
-            self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
+            self.instruction_register = Default::default();
         }
 
         // petite douille. On profite que le CPU soit exécuté de manière cyclique pour changer l'ordre des étapes.
