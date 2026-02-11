@@ -144,8 +144,8 @@ where
                     let sample = sample_index as f32 / sample_rate as f32;
                     let mut sampler = mixer.mix(emulator.get_apu().get_sampler(), sample);
 
-                    frame[0] = T::from_sample(sampler.sample_left());
-                    frame[1] = T::from_sample(sampler.sample_right());
+                    frame[0] = T::from_sample(sampler.sample_left() * 0.);
+                    frame[1] = T::from_sample(sampler.sample_right() * 0.);
                     // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
                     sample_index = sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
                 }

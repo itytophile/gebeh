@@ -50,7 +50,7 @@ pub trait MmuCpuExt {
         value: u8,
         cycles: u64,
         cpu: &mut Cpu,
-        peripherals: Peripherals<M>,
+        peripherals: &mut Peripherals<M>,
     );
 }
 
@@ -118,7 +118,7 @@ impl MmuCpuExt for State {
         value: u8,
         cycles: u64,
         cpu: &mut Cpu,
-        peripherals: Peripherals<M>,
+        peripherals: &mut Peripherals<M>,
     ) {
         if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
             return;

@@ -5,6 +5,8 @@ mod renderer;
 mod scanline;
 mod sprite_fetcher;
 
+use core::ops::ControlFlow;
+
 use arrayvec::ArrayVec;
 
 use crate::{
@@ -150,7 +152,7 @@ bitflags::bitflags! {
     }
 }
 
-const OAM_SCAN_DURATION: u8 = 77;
+const OAM_SCAN_DURATION: u8 = 79;
 const SCANLINE_DURATION: u16 = 456;
 const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
@@ -431,15 +433,10 @@ impl Ppu {
     }
 
     pub fn execute(&mut self, state: &mut State, cycles: u64, prout: u8) {
-        self.is_turning_on &= prout != 0;
-
-        if !self.is_ppu_enabled() {
-            self.state.refresh_old();
+        if self.pre_execution(state, cycles, prout).is_break() {
             return;
         }
 
-        self.switch_from_finished_mode(state, cycles, prout);
-        self.fire_interrupts(state, cycles, prout);
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
         state
             .lcd_status
@@ -473,6 +470,18 @@ impl Ppu {
         };
 
         self.state.refresh_old();
+    }
+
+    pub fn pre_execution(&mut self, state: &mut State, cycles: u64, prout: u8) -> ControlFlow<()> {
+        self.is_turning_on &= prout != 0;
+        if !self.is_ppu_enabled() {
+            self.state.refresh_old();
+            return ControlFlow::Break(());
+        }
+        self.switch_from_finished_mode(state, cycles, prout);
+        self.fire_interrupts(state, cycles, prout);
+
+        ControlFlow::Continue(())
     }
 }
 

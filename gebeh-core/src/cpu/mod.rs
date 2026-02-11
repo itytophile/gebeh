@@ -194,7 +194,7 @@ impl Cpu {
         inst: AfterReadInstruction,
         interrupts_to_execute: Interruptions,
         cycle_count: u64,
-        peripherals: Peripherals<M>,
+        peripherals: &mut Peripherals<M>,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
@@ -890,7 +890,7 @@ impl Cpu {
     pub fn execute<M: Mbc + ?Sized>(
         &mut self,
         state: &mut State,
-        peripherals: Peripherals<M>,
+        mut peripherals: Peripherals<M>,
         cycle_count: u64,
     ) {
         let interrupts_to_execute =
@@ -940,30 +940,8 @@ impl Cpu {
             head
         };
 
-        // fetch step
-        if self.instruction_register.0.is_empty() {
-            let lol = self.is_dispatching_interrupt;
-            self.is_dispatching_interrupt = self.ime
-                && self.instruction_register.1.check_interrupts
-                && !interrupts_to_execute.is_empty();
-            if !lol && self.is_dispatching_interrupt {
-                log::info!("{cycle_count} ça va dispatch des interrupts les boys");
-            }
-            (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
-                SetPc::WithIncrement(register) => {
-                    let address = self.get_16bit_register(register);
-                    let opcode = state.read(address, cycle_count, self, peripherals.get_ref());
-                    (address.wrapping_add(1), opcode)
-                }
-                SetPc::NoIncrement => (
-                    self.pc,
-                    state.read(self.pc, cycle_count, self, peripherals.get_ref()),
-                ),
-            };
-            // if self.pc == 0x4ab5 {
-            //     panic!()
-            // }
-        }
+        // EI must not take effect the same cycle so we copy it before executing instructions
+        let old_ime = self.ime;
 
         // todo revoir la logique de lecture
         let inst = match inst {
@@ -1006,6 +984,29 @@ impl Cpu {
             }
         };
 
-        self.execute_instruction(state, inst, interrupts_to_execute, cycle_count, peripherals);
+        self.execute_instruction(
+            state,
+            inst,
+            interrupts_to_execute,
+            cycle_count,
+            &mut peripherals,
+        );
+
+        if self.instruction_register.0.is_empty() {
+            self.is_dispatching_interrupt = old_ime
+                && self.instruction_register.1.check_interrupts
+                && !interrupts_to_execute.is_empty();
+            (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
+                SetPc::WithIncrement(register) => {
+                    let address = self.get_16bit_register(register);
+                    let opcode = state.read(address, cycle_count, self, peripherals.get_ref());
+                    (address.wrapping_add(1), opcode)
+                }
+                SetPc::NoIncrement => (
+                    self.pc,
+                    state.read(self.pc, cycle_count, self, peripherals.get_ref()),
+                ),
+            };
+        }
     }
 }
