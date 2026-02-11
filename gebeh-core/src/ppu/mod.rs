@@ -498,8 +498,6 @@ mod tests {
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
-        // turn on delay
-        ppu.execute(&mut state, 0, 0);
         // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
         ppu.execute(&mut state, 0, 0);
         loop {
@@ -517,8 +515,6 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
-        // turn on delay (yes that's bad as hell)
-        ppu.execute(&mut state, 0, 0);
         let mut duration = 0;
         loop {
             ppu.execute(&mut state, 0, 0);

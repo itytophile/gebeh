@@ -31,6 +31,7 @@ pub struct Cpu {
     pub pc: u16,
     pub instruction_register: (ArrayVec<Instruction, 5>, Prefetch),
     pub ime: bool,
+    old_ime: bool,
     pub is_halted: bool,
     pub stop_mode: bool,
     // test purposes
@@ -62,6 +63,7 @@ impl Default for Cpu {
             // feed a nop or the cpu will fetch + execute the fist opcode in the same cycle
             instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
             ime: false,
+            old_ime: false,
             is_halted: Default::default(),
             stop_mode: Default::default(),
             current_opcode: 0,
@@ -916,6 +918,27 @@ impl Cpu {
             self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
         }
 
+        // petite douille. On profite que le CPU soit exécuté de manière cyclique pour changer l'ordre des étapes.
+        // selon ma compréhension, OAM int est lancé un 0.5 t-cycle avant le début d'un nouveau cycle
+        // peut-être que cela suffit à trigger le is_dispatching_interrupt du m-cycle d'avant (j'en sais rien, je comprends pas
+        // ce que j'écris)
+        if self.instruction_register.0.is_empty() {
+            self.is_dispatching_interrupt = self.old_ime
+                && self.instruction_register.1.check_interrupts
+                && !interrupts_to_execute.is_empty();
+            (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
+                SetPc::WithIncrement(register) => {
+                    let address = self.get_16bit_register(register);
+                    let opcode = state.read(address, cycle_count, self, peripherals.get_ref());
+                    (address.wrapping_add(1), opcode)
+                }
+                SetPc::NoIncrement => (
+                    self.pc,
+                    state.read(self.pc, cycle_count, self, peripherals.get_ref()),
+                ),
+            };
+        }
+
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
         } else if self.is_dispatching_interrupt {
@@ -939,9 +962,6 @@ impl Cpu {
             self.instruction_register.1 = set_pc;
             head
         };
-
-        // EI must not take effect the same cycle so we copy it before executing instructions
-        let old_ime = self.ime;
 
         // todo revoir la logique de lecture
         let inst = match inst {
@@ -984,6 +1004,9 @@ impl Cpu {
             }
         };
 
+        // EI must not take effect the same cycle so we copy it before executing instructions
+        self.old_ime = self.ime;
+
         self.execute_instruction(
             state,
             inst,
@@ -991,22 +1014,5 @@ impl Cpu {
             cycle_count,
             &mut peripherals,
         );
-
-        if self.instruction_register.0.is_empty() {
-            self.is_dispatching_interrupt = old_ime
-                && self.instruction_register.1.check_interrupts
-                && !interrupts_to_execute.is_empty();
-            (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
-                SetPc::WithIncrement(register) => {
-                    let address = self.get_16bit_register(register);
-                    let opcode = state.read(address, cycle_count, self, peripherals.get_ref());
-                    (address.wrapping_add(1), opcode)
-                }
-                SetPc::NoIncrement => (
-                    self.pc,
-                    state.read(self.pc, cycle_count, self, peripherals.get_ref()),
-                ),
-            };
-        }
     }
 }
