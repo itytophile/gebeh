@@ -411,8 +411,9 @@ impl Ppu {
                     && (self.state.ly != 0 || *dots_count >= 2)
             }
             PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
-            PpuStep::VerticalBlankScanline { .. } => {
+            PpuStep::VerticalBlankScanline { dots_count } => {
                 state.lcd_status.contains(LcdStatus::VBLANK_INT)
+                    || *dots_count == 0 && state.lcd_status.contains(LcdStatus::OAM_INT)
             }
             _ => false,
         };
