@@ -58,8 +58,6 @@ impl Emulator {
 
 impl Emulator {
     pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
-        self.dma.execute(&mut self.state, mbc, self.cycles);
-
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
@@ -75,6 +73,7 @@ impl Emulator {
                 joypad: &mut self.joypad,
                 apu: &mut self.apu,
                 ppu: &mut self.ppu,
+                dma: &mut self.dma,
             },
             self.cycles,
         );

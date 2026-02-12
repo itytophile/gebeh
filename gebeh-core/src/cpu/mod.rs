@@ -912,6 +912,7 @@ impl Cpu {
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
+                peripherals.dma.execute(state, peripherals.mbc, cycle_count);
                 return;
             }
             self.is_halted = false;
@@ -930,6 +931,9 @@ impl Cpu {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode = state.read(address, cycle_count, self, peripherals.get_ref());
+                    if (0xfdfe..=0xfe02).contains(&self.pc) {
+                        log::warn!("{cycle_count}: ${address:04x} => {opcode:02x}");
+                    }
                     (address.wrapping_add(1), opcode)
                 }
                 SetPc::NoIncrement => (
@@ -938,6 +942,8 @@ impl Cpu {
                 ),
             };
         }
+
+        peripherals.dma.execute(state, peripherals.mbc, cycle_count);
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst

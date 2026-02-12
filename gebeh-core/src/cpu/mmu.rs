@@ -1,6 +1,7 @@
 use crate::{
     apu::Apu,
     cpu::Cpu,
+    dma::Dma,
     joypad::Joypad,
     mbc::Mbc,
     ppu::{LcdControl, Ppu},
@@ -14,6 +15,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
+    pub dma: &'a mut Dma,
 }
 
 impl<M: Mbc + ?Sized> Peripherals<'_, M> {
@@ -24,6 +26,7 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
             joypad: self.joypad,
             apu: self.apu,
             ppu: self.ppu,
+            dma: self.dma,
         }
     }
 }
@@ -34,6 +37,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
     pub ppu: &'a Ppu,
+    pub dma: &'a Dma,
 }
 
 pub trait MmuCpuExt {
@@ -68,7 +72,10 @@ impl MmuCpuExt for State {
             ..OAM => MmuExt::read(self, index, peripherals.mbc),
             OAM..NOT_USABLE => {
                 let ppu = self.lcd_status & LcdStatus::PPU_MASK;
-                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.is_dma_active {
+                if ppu == LcdStatus::DRAWING
+                    || ppu == LcdStatus::OAM_SCAN
+                    || peripherals.dma.is_active()
+                {
                     0xff
                 } else {
                     self.oam[usize::from(index - OAM)]
@@ -120,7 +127,7 @@ impl MmuCpuExt for State {
         cpu: &mut Cpu,
         peripherals: &mut Peripherals<M>,
     ) {
-        if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
+        if peripherals.dma.is_active() && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
 
