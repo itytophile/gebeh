@@ -172,14 +172,11 @@ impl State {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
-    pub fn set_ppu_mode(&mut self, mode: LcdStatus, cycles: u64) {
+    pub fn set_ppu_mode(&mut self, mode: LcdStatus, _: u64) {
         assert!(matches!(
             mode,
             LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
         ));
-        if self.lcd_status & LcdStatus::PPU_MASK != mode {
-            log::info!("{cycles} set ppu mode {}", mode.bits())
-        }
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
 }

@@ -65,6 +65,22 @@ impl Renderer {
         }
     }
 
+    pub fn is_sprite_on_cursor(&self) -> bool {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ..
+        } = self.step
+        else {
+            return false;
+        };
+        let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
+            - i16::from(first_pixels_to_skip);
+        let Some(obj) = self.objects.last() else {
+            return false;
+        };
+        i16::from(obj.x) == cursor
+    }
+
     pub(super) fn execute(
         &mut self,
         state: &State,
@@ -98,7 +114,6 @@ impl Renderer {
                     first_pixels_to_skip: ppu_state.scx % 8,
                     saved_wx: None,
                 };
-                log::info!("{cycles} {prout} Dummy fetch end");
             }
 
             return;
@@ -119,10 +134,6 @@ impl Renderer {
             && let Some(window_y) = window_y
             && Some(ppu_state.old_old_wx) != *saved_wx
         {
-            log::info!(
-                "{cycles} {cursor} switching to window on line {}",
-                ppu_state.ly
-            );
             if saved_wx.is_none() {
                 self.background_pixel_fetcher = BackgroundFetcher {
                     step: Default::default(),

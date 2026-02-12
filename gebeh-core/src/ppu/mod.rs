@@ -410,9 +410,14 @@ impl Ppu {
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     && (self.state.ly != 0 || *dots_count >= 2)
             }
+            // PpuStep::Drawing { renderer, .. } => {
+            //     renderer.scanline.len() == WIDTH - 1
+            //         && !renderer.is_sprite_on_cursor()
+            //         && state.lcd_status.contains(LcdStatus::HBLANK_INT)
+            // }
             PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
             PpuStep::VerticalBlankScanline { dots_count } => {
-                state.lcd_status.contains(LcdStatus::VBLANK_INT)
+                *dots_count > 2 && state.lcd_status.contains(LcdStatus::VBLANK_INT)
                     || *dots_count == 0 && state.lcd_status.contains(LcdStatus::OAM_INT)
             }
             _ => false,
@@ -428,7 +433,6 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            log::info!("{cycles} {prout} FIRE");
             state.interrupt_flag.insert(Interruptions::LCD);
         }
     }

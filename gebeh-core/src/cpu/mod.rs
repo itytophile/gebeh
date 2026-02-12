@@ -252,6 +252,9 @@ impl Cpu {
                 self.set_16bit_register(register, u16::from_be_bytes([self.msb, self.lsb]))
             }
             NoRead(Xor8Bit(register)) => {
+                if register == Register8Bit::A {
+                    log::info!("{cycle_count} XOR A");
+                }
                 self.a ^= self.get_8bit_register(register);
                 let flags = &mut self.f;
                 flags.set(Flags::Z, self.a == 0);
@@ -298,10 +301,10 @@ impl Cpu {
                 );
             }
             NoRead(Inc(register)) => {
-                if register == Register8Bit::B {
-                    log::info!("{cycle_count} INC B");
-                }
                 let incremented = self.inc(self.get_8bit_register(register));
+                if register == Register8Bit::B {
+                    log::info!("{cycle_count} INC B (0x{incremented:02x})");
+                }
                 self.set_8bit_register(register, incremented);
             }
             NoRead(Inc16Bit(register)) => {
@@ -338,6 +341,9 @@ impl Cpu {
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
             }
             NoRead(Load { to, from }) => {
+                if to == Register8Bit::B && from == Register8Bit::A {
+                    log::info!("{cycle_count} LD B, A");
+                }
                 self.set_8bit_register(to, self.get_8bit_register(from));
             }
             NoRead(Rl(register)) => {
@@ -426,7 +432,10 @@ impl Cpu {
                 self.a = result;
             }
             NoRead(Di) => self.ime = false,
-            NoRead(Ei) => self.enable_ime(),
+            NoRead(Ei) => {
+                log::info!("{cycle_count} EI");
+                self.enable_ime()
+            }
             NoRead(DecPc) => self.pc -= 1,
             NoRead(WriteLsbPcWhereSpPointsAndLoadAbsoluteAddressToPc(address)) => {
                 state.write(

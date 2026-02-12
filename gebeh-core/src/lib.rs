@@ -64,7 +64,6 @@ impl Emulator {
         for i in 0..2 {
             self.ppu.execute(&mut self.state, self.cycles, i);
         }
-
         self.cpu.execute(
             &mut self.state,
             Peripherals {
