@@ -922,6 +922,9 @@ impl Cpu {
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
                 peripherals.dma.execute(state, peripherals.mbc, cycle_count);
+                for i in 2..4 {
+                    peripherals.ppu.execute(state, cycle_count, i);
+                }
                 return;
             }
             self.is_halted = false;
@@ -978,6 +981,12 @@ impl Cpu {
             head
         };
 
+        if let Instruction::Read(_, _) = inst {
+            for i in 2..4 {
+                peripherals.ppu.execute(state, cycle_count, i);
+            }
+        }
+
         // todo revoir la logique de lecture
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
@@ -1029,5 +1038,11 @@ impl Cpu {
             cycle_count,
             &mut peripherals,
         );
+
+        if let AfterReadInstruction::NoRead(_) = inst {
+            for i in 2..4 {
+                peripherals.ppu.execute(state, cycle_count, i);
+            }
+        }
     }
 }

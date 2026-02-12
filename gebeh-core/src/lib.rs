@@ -77,10 +77,6 @@ impl Emulator {
             self.cycles,
         );
 
-        for i in 2..4 {
-            self.ppu.execute(&mut self.state, self.cycles, i);
-        }
-
         if must_increment_div_apu {
             self.apu.increment_div_apu();
         }

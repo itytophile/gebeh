@@ -447,10 +447,6 @@ impl Ppu {
             return;
         }
 
-        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
-        if cycles > 1856085 && cycles < 1856095 {
-            log::info!("{cycles} MODE DE MERDE {:?}", state.lcd_status)
-        }
         state
             .lcd_status
             .set(LcdStatus::LYC_EQUAL_TO_LY, state.lyc == self.state.ly);
@@ -483,6 +479,10 @@ impl Ppu {
         };
 
         self.state.refresh_old();
+        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
+        if cycles > 1856085 && cycles < 1856095 {
+            log::info!("{cycles} MODE DE MERDE {:?}", state.lcd_status)
+        }
     }
 
     pub fn pre_execution(&mut self, state: &mut State, cycles: u64, prout: u8) -> ControlFlow<()> {
