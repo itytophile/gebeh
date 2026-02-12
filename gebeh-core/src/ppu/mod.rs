@@ -46,6 +46,11 @@ impl PpuStep {
         use PpuStep::*;
         match self {
             OamScan { .. } => LcdStatus::OAM_SCAN,
+            Drawing { renderer, .. }
+                if renderer.scanline.len() == WIDTH - 1 && !renderer.is_sprite_on_cursor() =>
+            {
+                LcdStatus::HBLANK
+            }
             Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
             VerticalBlankScanline { .. } => LcdStatus::VBLANK,
@@ -410,11 +415,11 @@ impl Ppu {
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     && (self.state.ly != 0 || *dots_count >= 2)
             }
-            // PpuStep::Drawing { renderer, .. } => {
-            //     renderer.scanline.len() == WIDTH - 1
-            //         && !renderer.is_sprite_on_cursor()
-            //         && state.lcd_status.contains(LcdStatus::HBLANK_INT)
-            // }
+            PpuStep::Drawing { renderer, .. } => {
+                renderer.scanline.len() == WIDTH - 1
+                    && !renderer.is_sprite_on_cursor()
+                    && state.lcd_status.contains(LcdStatus::HBLANK_INT)
+            }
             PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
             PpuStep::VerticalBlankScanline { dots_count } => {
                 *dots_count > 2 && state.lcd_status.contains(LcdStatus::VBLANK_INT)
@@ -443,6 +448,9 @@ impl Ppu {
         }
 
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
+        if cycles > 1856085 && cycles < 1856095 {
+            log::info!("{cycles} MODE DE MERDE {:?}", state.lcd_status)
+        }
         state
             .lcd_status
             .set(LcdStatus::LYC_EQUAL_TO_LY, state.lyc == self.state.ly);
