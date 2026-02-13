@@ -46,11 +46,6 @@ impl PpuStep {
         use PpuStep::*;
         match self {
             OamScan { .. } => LcdStatus::OAM_SCAN,
-            Drawing { renderer, .. }
-                if renderer.scanline.len() == WIDTH - 1 && !renderer.is_sprite_on_cursor() =>
-            {
-                LcdStatus::HBLANK
-            }
             Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
             VerticalBlankScanline { .. } => LcdStatus::VBLANK,
