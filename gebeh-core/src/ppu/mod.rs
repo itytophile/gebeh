@@ -450,6 +450,7 @@ impl Ppu {
         if self.pre_execution(state, cycles, prout, false).is_break() {
             return;
         }
+        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
 
         state
             .lcd_status
@@ -483,7 +484,6 @@ impl Ppu {
         };
 
         self.state.refresh_old();
-        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
         if cycles > 1856085 && cycles < 1856095 {
             log::info!("{cycles} MODE DE MERDE {:?}", state.lcd_status)
         }
