@@ -469,7 +469,10 @@ impl Cpu {
                 if let Some(interrupt) = interrupt {
                     state.interrupt_flag.remove(interrupt);
                 }
-                log::info!("{cycle_count} Interrupt finished");
+                log::info!(
+                    "{cycle_count} Interrupt finished scx = {}",
+                    peripherals.ppu.get_scx()
+                );
             }
             NoRead(Res(bit, register)) => {
                 self.set_8bit_register(register, self.get_8bit_register(register) & !(1 << bit));
@@ -574,6 +577,12 @@ impl Cpu {
                     .to_be_bytes()
             }
             NoRead(Cp8Bit(register)) => {
+                if register == Register8Bit::D {
+                    log::info!("CP D ({})", self.get_8bit_register(register));
+                }
+                if register == Register8Bit::E {
+                    log::info!("CP E ({})", self.get_8bit_register(register));
+                }
                 let a = self.a;
                 let value = self.get_8bit_register(register);
                 let (result, carry) = a.overflowing_sub(value);
@@ -920,15 +929,22 @@ impl Cpu {
 
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
-            if interrupts_to_execute.is_empty() {
+            let Some(interrupt) = interrupts_to_execute.iter().next() else {
                 peripherals.dma.execute(state, peripherals.mbc, cycle_count);
                 for i in 2..4 {
                     peripherals.ppu.execute(state, cycle_count, i);
                 }
                 return;
-            }
+            };
             self.is_halted = false;
-            self.instruction_register = Default::default();
+            self.instruction_register = (
+                if interrupt == Interruptions::LCD {
+                    vec([NoReadInstruction::Nop.into()])
+                } else {
+                    Default::default()
+                },
+                Default::default(),
+            );
         }
 
         // petite douille. On profite que le CPU soit exécuté de manière cyclique pour changer l'ordre des étapes.

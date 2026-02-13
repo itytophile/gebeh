@@ -99,7 +99,10 @@ impl MmuCpuExt for State {
             }
             SCY => peripherals.ppu.get_scy(),
             SCX => peripherals.ppu.get_scx(),
-            LY => peripherals.ppu.get_ly(),
+            LY => {
+                log::info!("{cycles} Reading LY: {}", peripherals.ppu.get_ly());
+                peripherals.ppu.get_ly()
+            }
             LYC => self.lyc,
             DMA => self.dma_register,
             BGP => peripherals.ppu.get_bgp(),
@@ -177,7 +180,10 @@ impl MmuCpuExt for State {
                 peripherals.ppu.set_scy(value)
             }
             SCX => {
-                log::info!("{cycles}: Write to scx {value}");
+                log::warn!(
+                    "{cycles}: Write to scx {value} line {}",
+                    peripherals.ppu.get_ly()
+                );
                 peripherals.ppu.set_scx(value)
             }
             LY => {} // read only

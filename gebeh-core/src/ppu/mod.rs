@@ -405,7 +405,13 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State, cycles: u64, prout: u8) {
+    pub fn fire_interrupts(
+        &mut self,
+        state: &mut State,
+        cycles: u64,
+        prout: u8,
+        disable_oam: bool,
+    ) {
         if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
             state.interrupt_flag.insert(Interruptions::VBLANK);
         }
@@ -414,13 +420,11 @@ impl Ppu {
             PpuStep::OamScan { dots_count, .. } => {
                 state.lcd_status.contains(LcdStatus::OAM_INT)
                     && (self.state.ly != 0 || *dots_count >= 2)
+                    && !disable_oam
             }
-            PpuStep::Drawing { renderer, .. } => {
-                renderer.scanline.len() == WIDTH - 1
-                    && !renderer.is_sprite_on_cursor()
-                    && state.lcd_status.contains(LcdStatus::HBLANK_INT)
-            }
-            PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            PpuStep::HorizontalBlank {
+                dots_count: 4.., ..
+            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
             PpuStep::VerticalBlankScanline { dots_count } => {
                 *dots_count > 2 && state.lcd_status.contains(LcdStatus::VBLANK_INT)
                     || *dots_count == 0 && state.lcd_status.contains(LcdStatus::OAM_INT)
@@ -443,7 +447,7 @@ impl Ppu {
     }
 
     pub fn execute(&mut self, state: &mut State, cycles: u64, prout: u8) {
-        if self.pre_execution(state, cycles, prout).is_break() {
+        if self.pre_execution(state, cycles, prout, false).is_break() {
             return;
         }
 
@@ -485,14 +489,20 @@ impl Ppu {
         }
     }
 
-    pub fn pre_execution(&mut self, state: &mut State, cycles: u64, prout: u8) -> ControlFlow<()> {
+    pub fn pre_execution(
+        &mut self,
+        state: &mut State,
+        cycles: u64,
+        prout: u8,
+        disable_oam: bool,
+    ) -> ControlFlow<()> {
         self.is_turning_on &= prout != 0;
         if !self.is_ppu_enabled() {
             self.state.refresh_old();
             return ControlFlow::Break(());
         }
         self.switch_from_finished_mode(state, cycles, prout);
-        self.fire_interrupts(state, cycles, prout);
+        self.fire_interrupts(state, cycles, prout, disable_oam);
 
         ControlFlow::Continue(())
     }
