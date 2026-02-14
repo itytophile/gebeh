@@ -409,7 +409,7 @@ impl Ppu {
         prout: u8,
         disable_oam: bool,
     ) {
-        if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
+        if let PpuStep::VerticalBlankScanline { dots_count: 2 } = self.step {
             state.interrupt_flag.insert(Interruptions::VBLANK);
         }
 
