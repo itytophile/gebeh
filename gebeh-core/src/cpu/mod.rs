@@ -929,19 +929,12 @@ impl Cpu {
 
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
-            let Some(interrupt) = interrupts_to_execute.iter().next() else {
+            if interrupts_to_execute.is_empty() {
                 peripherals.dma.execute(state, peripherals.mbc, cycle_count);
                 return;
-            };
+            }
             self.is_halted = false;
-            self.instruction_register = (
-                if interrupt == Interruptions::LCD {
-                    vec([NoReadInstruction::Nop.into()])
-                } else {
-                    Default::default()
-                },
-                Default::default(),
-            );
+            self.instruction_register = Default::default();
         }
 
         // petite douille. On profite que le CPU soit exécuté de manière cyclique pour changer l'ordre des étapes.
