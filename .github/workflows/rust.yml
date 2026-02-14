@@ -30,7 +30,7 @@ jobs:
           mkdir rgbds
           tar xf rgbds-linux-x86_64.tar.xz -C rgbds
           cd rgbds
-          ./install.sh
+          sudo ./install.sh
       - name: Restore cached downloads
         id: cache
         uses: actions/cache@v4
