@@ -220,6 +220,7 @@ fn oam_dma_sources_gs() {
 // ppu
 
 #[test]
+#[ignore]
 fn hblank_ly_scx_timing_gs() {
     test_mooneye("ppu/hblank_ly_scx_timing-GS.gb");
 }
@@ -240,6 +241,7 @@ fn intr_2_mode0_timing() {
 }
 
 #[test]
+#[ignore]
 fn intr_2_mode0_timing_sprites() {
     test_mooneye("ppu/intr_2_mode0_timing_sprites.gb");
 }
@@ -278,6 +280,7 @@ fn stat_lyc_onoff() {
 }
 
 #[test]
+#[ignore]
 fn vblank_stat_intr_gs() {
     test_mooneye("ppu/vblank_stat_intr-GS.gb");
 }

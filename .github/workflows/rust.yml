@@ -15,8 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install ALSA development packages
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev rgbds
       - name: Clippy
         run: cargo clippy --workspace --all-targets
   tests:
@@ -35,6 +35,9 @@ jobs:
       - name: Download test roms
         if: steps.cache.outputs.cache-hit != 'true'
         run: bash download-test-roms.sh
+      - name: Compile home-made roms
+        working-directory: gebeh-test-roms
+        run: bash build.sh
       - uses: taiki-e/install-action@nextest
       - name: Run tests
         run: cargo nextest r -p gebeh-core -p gebeh --no-fail-fast
