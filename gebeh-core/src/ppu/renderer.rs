@@ -87,8 +87,7 @@ impl Renderer {
         dots_count: u16,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState,
-        cycles: u64,
-        prout: u8,
+        _: u64,
     ) {
         let RendererStep::AfterDummy {
             first_pixels_to_skip,
@@ -178,8 +177,6 @@ impl Renderer {
                 BackgroundFetcherStep::FetchingTileIndex { .. }
             ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
             {
-                log::info!("{cycles} {cursor} no more window");
-
                 *saved_wx = None;
             }
         } else {
@@ -217,7 +214,6 @@ impl Renderer {
                 ));
         }
 
-        // log::info!("{cycles} {prout} shift at cursor {cursor}");
         self.rendering_state.fifos.shift();
     }
 }
@@ -251,7 +247,7 @@ mod tests {
         let mut renderer = Renderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
-            renderer.execute(state, dots, &mut window_y, ppu_state, 0, 0);
+            renderer.execute(state, dots, &mut window_y, ppu_state, 0);
             dots += 1;
         }
         dots

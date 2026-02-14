@@ -61,14 +61,15 @@ impl Emulator {
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
-        let prout = self.state.interrupt_flag;
+        let interrupts_from_previous_cycle = self.state.interrupt_flag;
         for i in 0..2 {
             self.ppu.execute(&mut self.state, self.cycles, i);
         }
-        let mut mdr = None;
+        // I don't understand halt timings https://gekkio.fi/blog/2016/game-boy-research-status
+        let mut slowed_interrupts_in_halt_mode = None;
         if self.cpu.is_halted {
-            mdr = Some(self.state.interrupt_flag);
-            self.state.interrupt_flag = prout;
+            slowed_interrupts_in_halt_mode = Some(self.state.interrupt_flag);
+            self.state.interrupt_flag = interrupts_from_previous_cycle;
         }
         self.cpu.execute(
             &mut self.state,
@@ -82,8 +83,8 @@ impl Emulator {
             },
             self.cycles,
         );
-        if let Some(mdr) = mdr {
-            self.state.interrupt_flag = mdr;
+        if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
+            self.state.interrupt_flag = interrupt_flag;
         }
         for i in 2..4 {
             self.ppu.execute(&mut self.state, self.cycles, i);

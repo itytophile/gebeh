@@ -5,8 +5,6 @@ mod renderer;
 mod scanline;
 mod sprite_fetcher;
 
-use core::ops::ControlFlow;
-
 use arrayvec::ArrayVec;
 
 use crate::{
@@ -313,7 +311,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, _: u64, _: u8) {
+    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
@@ -402,13 +400,7 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(
-        &mut self,
-        state: &mut State,
-        cycles: u64,
-        prout: u8,
-        disable_oam: bool,
-    ) {
+    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
         if let PpuStep::VerticalBlankScanline { dots_count: 2 } = self.step {
             state.interrupt_flag.insert(Interruptions::VBLANK);
         }
@@ -419,7 +411,6 @@ impl Ppu {
                 *dots_count < 4
                     && state.lcd_status.contains(LcdStatus::OAM_INT)
                     && (self.state.ly != 0 || *dots_count >= 2)
-                    && !disable_oam
             }
             PpuStep::HorizontalBlank {
                 dots_count: 1.., ..
@@ -451,10 +442,15 @@ impl Ppu {
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, cycles: u64, prout: u8) {
-        if self.pre_execution(state, cycles, prout, false).is_break() {
+    pub fn execute(&mut self, state: &mut State, cycles: u64, dot_index_within_m_cycle: u8) {
+        self.is_turning_on &= dot_index_within_m_cycle != 0;
+        if !self.is_ppu_enabled() {
+            self.state.refresh_old();
             return;
         }
+        self.switch_from_finished_mode(state, cycles);
+        self.fire_interrupts(state, cycles);
+
         state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
 
         state
@@ -480,7 +476,7 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                renderer.execute(state, *dots_count, window_y, &self.state, cycles, prout);
+                renderer.execute(state, *dots_count, window_y, &self.state, cycles);
 
                 *dots_count += 1;
             }
@@ -489,27 +485,6 @@ impl Ppu {
         };
 
         self.state.refresh_old();
-        if cycles > 1856085 && cycles < 1856095 {
-            log::info!("{cycles} MODE DE MERDE {:?}", state.lcd_status)
-        }
-    }
-
-    pub fn pre_execution(
-        &mut self,
-        state: &mut State,
-        cycles: u64,
-        prout: u8,
-        disable_oam: bool,
-    ) -> ControlFlow<()> {
-        self.is_turning_on &= prout != 0;
-        if !self.is_ppu_enabled() {
-            self.state.refresh_old();
-            return ControlFlow::Break(());
-        }
-        self.switch_from_finished_mode(state, cycles, prout);
-        self.fire_interrupts(state, cycles, prout, disable_oam);
-
-        ControlFlow::Continue(())
     }
 }
 

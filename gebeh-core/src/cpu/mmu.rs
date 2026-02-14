@@ -44,17 +44,17 @@ pub trait MmuCpuExt {
     fn read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        cycles: u64,
         cpu: &Cpu,
         peripherals: PeripheralsRef<M>,
+        cycles: u64,
     ) -> u8;
     fn write<M: Mbc + ?Sized>(
         &mut self,
         index: u16,
         value: u8,
-        cycles: u64,
         cpu: &mut Cpu,
         peripherals: &mut Peripherals<M>,
+        cycles: u64,
     );
 }
 
@@ -62,9 +62,9 @@ impl MmuCpuExt for State {
     fn read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        cycles: u64,
         cpu: &Cpu,
         peripherals: PeripheralsRef<M>,
+        cycles: u64,
     ) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
@@ -93,16 +93,10 @@ impl MmuCpuExt for State {
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
             LCD_CONTROL => peripherals.ppu.get_lcd_control().bits(),
-            LCD_STATUS => {
-                log::info!("{cycles} Reading STAT: {:?}", self.lcd_status);
-                self.lcd_status.bits() | 0b10000000
-            }
+            LCD_STATUS => self.lcd_status.bits() | 0b10000000,
             SCY => peripherals.ppu.get_scy(),
             SCX => peripherals.ppu.get_scx(),
-            LY => {
-                log::info!("{cycles} Reading LY: {}", peripherals.ppu.get_ly());
-                peripherals.ppu.get_ly()
-            }
+            LY => peripherals.ppu.get_ly(),
             LYC => self.lyc,
             DMA => self.dma_register,
             BGP => peripherals.ppu.get_bgp(),
@@ -126,9 +120,9 @@ impl MmuCpuExt for State {
         &mut self,
         index: u16,
         value: u8,
-        cycles: u64,
         cpu: &mut Cpu,
         peripherals: &mut Peripherals<M>,
+        _: u64,
     ) {
         if peripherals.dma.is_active() && (OAM..NOT_USABLE).contains(&index) {
             return;
@@ -164,43 +158,24 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.write(index, value),
-            LCD_CONTROL => {
-                log::info!(
-                    "{cycles}: writing to lcdcontrol {:?}",
-                    LcdControl::from_bits_truncate(value)
-                );
-                peripherals
-                    .ppu
-                    .set_lcd_control(LcdControl::from_bits_truncate(value))
-            }
+            LCD_CONTROL => peripherals
+                .ppu
+                .set_lcd_control(LcdControl::from_bits_truncate(value)),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
-            SCY => {
-                log::info!("{cycles}: Write to scy {value}");
-                peripherals.ppu.set_scy(value)
-            }
-            SCX => {
-                log::warn!(
-                    "{cycles}: Write to scx {value} line {}",
-                    peripherals.ppu.get_ly()
-                );
-                peripherals.ppu.set_scx(value)
-            }
+            SCY => peripherals.ppu.set_scy(value),
+            SCX => peripherals.ppu.set_scx(value),
             LY => {} // read only
             LYC => self.lyc = value,
             DMA => {
                 self.dma_register = value;
                 self.dma_request = true;
             }
-            BGP => {
-                log::info!("{cycles}: Writing to bgp 0b{value:08b}");
-                peripherals.ppu.set_bgp(value)
-            }
+            BGP => peripherals.ppu.set_bgp(value),
             OBP0 => self.obp0 = value,
             OBP1 => self.obp1 = value,
             WY => self.wy = value,
             WX => {
-                log::info!("{cycles}: writing to wx {value}");
                 peripherals.ppu.set_wx(value);
             }
             0xff4c => {}
