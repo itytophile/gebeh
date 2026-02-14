@@ -26,11 +26,19 @@ EntryPoint:
     ld e, 1
     ei
 wait:
-    REPT 1200
+    REPT 2000
     nop
     ENDR
 lcdc:
-    REPT 9
+    ldh a, [rLY]
+    cp 144
+    jr c, .in_screen
+    xor a
+    ldh [rLYC], a
+    ei
+    jp wait
+.in_screen
+    REPT 1
     nop
     ENDR
     ; 1 m-cycle
@@ -38,16 +46,19 @@ lcdc:
     ld a, e
     ; 2 m-cycles (write at first cycle)
     ldh [c], a
-    ldh a, [rLY]
-    cp 143
-    jr c, .in_screen
-    xor a
-    ldh [rLYC], a
-    jp wait
-.in_screen
+    ldh a, [rLYC]
+    ld d, a
     inc a
     ldh [rLYC], a
-    REPT 24
+    ld a, d
+    ; if lyc 0 then we wait a lot because the interrupt is actually fired on line 153
+    and a
+    jr nz, .prout
+    REPT 74
+    nop
+    ENDR
+.prout
+    REPT 23
     nop
     ENDR
     ; 1 m-cycle
