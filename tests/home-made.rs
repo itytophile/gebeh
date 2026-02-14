@@ -17,7 +17,7 @@ fn home_made(name: &str) {
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
-    // let path = Path::new(r"prout.png");
+    // let path = std::path::Path::new(r"prout.png");
     // let mut file = File::create(path).unwrap();
 
     loop {
@@ -32,8 +32,8 @@ fn home_made(name: &str) {
 
             // if emulator.get_ppu().get_ly() == HEIGHT - 1 {
             //     file.set_len(0).unwrap();
-            //     file.seek(SeekFrom::Start(0)).unwrap();
-            //     let w = &mut BufWriter::new(&mut file);
+            //     std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(0)).unwrap();
+            //     let w = &mut std::io::BufWriter::new(&mut file);
             //     let mut encoder = png::Encoder::new(w, WIDTH.into(), HEIGHT.into());
             //     encoder.set_color(png::ColorType::Grayscale);
             //     encoder.set_depth(png::BitDepth::Two);
@@ -52,4 +52,9 @@ fn home_made(name: &str) {
 #[test]
 fn stat_mode_2_palette_screen_edges() {
     home_made("stat_mode_2_palette_screen_edges");
+}
+
+#[test]
+fn lyc_palette_screen_edges() {
+    home_made("lyc_palette_screen_edges");
 }
