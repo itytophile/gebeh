@@ -58,3 +58,8 @@ fn stat_mode_2_palette_screen_edges() {
 fn lyc_palette_screen_edges() {
     home_made("lyc_palette_screen_edges");
 }
+
+#[test]
+fn halt_lyc_palette_screen_edges() {
+    home_made("halt_lyc_palette_screen_edges");
+}
