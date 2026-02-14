@@ -419,7 +419,9 @@ impl Ppu {
                     && (self.state.ly != 0 || *dots_count >= 2)
                     && !disable_oam
             }
-            PpuStep::HorizontalBlank { .. } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            PpuStep::HorizontalBlank {
+                dots_count: 1.., ..
+            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
             PpuStep::VerticalBlankScanline { dots_count } => {
                 *dots_count > 2 && state.lcd_status.contains(LcdStatus::VBLANK_INT)
                     || *dots_count == 0 && state.lcd_status.contains(LcdStatus::OAM_INT)
