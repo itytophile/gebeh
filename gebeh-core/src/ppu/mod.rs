@@ -1,19 +1,19 @@
 mod background_fetcher;
+pub mod color;
 mod fifos;
-mod ly_handler;
 mod renderer;
+mod scanline;
 mod sprite_fetcher;
-
-use core::num::NonZeroU8;
 
 use arrayvec::ArrayVec;
 
 use crate::{
+    WIDTH,
     ppu::renderer::Renderer,
     state::{Interruptions, LcdStatus, State},
 };
 
-pub use ly_handler::LyHandler;
+pub use scanline::Scanline;
 
 #[derive(Clone)]
 pub enum PpuStep {
@@ -21,17 +21,7 @@ pub enum PpuStep {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         window_y: Option<u8>,
-        objects: ArrayVec<ObjectAttribute, 10>,
     }, // <= 80
-    // I have to delay (2 M-cycles) the drawing phase because I miss an edit of the SCX register during the OH demo.
-    // There are maybe two causes:
-    // - the LY=LYC interrupt is not detected by the CPU fast enough
-    // - when SCX is written in the same cycle the drawing phase starts, the drawing must catch that value (not possible with the current implementation)
-    DelayedDrawing {
-        dots_count: u16,
-        window_y: Option<u8>,
-        objects: ArrayVec<ObjectAttribute, 10>,
-    },
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
@@ -41,7 +31,7 @@ pub enum PpuStep {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
-        scanline: [Color; 160],
+        scanline: Scanline,
     }, // <= 204
     VerticalBlankScanline {
         dots_count: u16,
@@ -54,7 +44,7 @@ impl PpuStep {
         use PpuStep::*;
         match self {
             OamScan { .. } => LcdStatus::OAM_SCAN,
-            DelayedDrawing { .. } | Drawing { .. } => LcdStatus::DRAWING,
+            Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
             VerticalBlankScanline { .. } => LcdStatus::VBLANK,
         }
@@ -65,6 +55,86 @@ impl PpuStep {
 pub struct Ppu {
     pub step: PpuStep,
     stat_irq: bool,
+    state: PpuState,
+    is_turning_on: bool,
+    previous_lyc: u8,
+}
+
+#[derive(Clone, Default)]
+struct PpuState {
+    lcd_control: LcdControl,
+    ly: u8,
+    bgp: u8,
+    // OR effect on bgp change
+    old_bgp: u8,
+    old_lcd_control: LcdControl,
+    old_old_lcd_control: LcdControl,
+    scy: u8,
+    scx: u8,
+    wx: u8,
+    old_wx: u8,
+    old_old_wx: u8,
+}
+
+impl PpuState {
+    pub fn get_effective_bgp(&self) -> u8 {
+        self.bgp | self.old_bgp
+    }
+
+    pub fn refresh_old(&mut self) {
+        self.old_bgp = self.bgp;
+        self.old_old_lcd_control = self.old_lcd_control;
+        self.old_lcd_control = self.lcd_control;
+        self.old_old_wx = self.old_wx;
+        self.old_wx = self.wx;
+    }
+
+    pub fn is_background_enabled(&self) -> bool {
+        // there is a one dot delay when we disable the background
+        // however, no delay when turning it back on
+        (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
+    }
+
+    pub fn is_obj_enabled(&self) -> bool {
+        self.old_lcd_control.contains(LcdControl::OBJ_ENABLE)
+    }
+
+    pub fn get_bg_tile_map_address(&self) -> u16 {
+        if self.old_lcd_control.contains(LcdControl::BG_TILE_MAP) {
+            0x9c00
+        } else {
+            0x9800
+        }
+    }
+
+    pub fn is_signed_addressing(&self) -> bool {
+        !self
+            .old_lcd_control
+            .contains(LcdControl::BG_AND_WINDOW_TILES)
+    }
+
+    pub fn get_window_tile_map_address(&self) -> u16 {
+        if self.old_lcd_control.contains(LcdControl::WINDOW_TILE_MAP) {
+            0x9c00
+        } else {
+            0x9800
+        }
+    }
+
+    pub fn get_scrolling(&self) -> Scrolling {
+        Scrolling {
+            x: self.scx,
+            y: self.scy,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct Scrolling {
+    // 0 < x < 256
+    pub x: u8,
+    // 0 < y < 256
+    pub y: u8,
 }
 
 bitflags::bitflags! {
@@ -81,33 +151,15 @@ bitflags::bitflags! {
     }
 }
 
-impl LcdControl {
-    pub fn get_bg_tile_map_address(self) -> u16 {
-        if self.contains(LcdControl::BG_TILE_MAP) {
-            0x9c00
-        } else {
-            0x9800
-        }
-    }
-
-    pub fn get_window_tile_map_address(self) -> u16 {
-        if self.contains(LcdControl::WINDOW_TILE_MAP) {
-            0x9c00
-        } else {
-            0x9800
-        }
-    }
-}
-
-const OAM_SCAN_DURATION: u8 = 80;
-const VERTICAL_BLANK_SCANLINE_DURATION: u16 = 456 * 10;
+const OAM_SCAN_DURATION: u8 = 79;
+const SCANLINE_DURATION: u16 = 456;
+const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
 impl Default for PpuStep {
     fn default() -> Self {
         Self::OamScan {
             dots_count: 0,
             window_y: Default::default(),
-            objects: Default::default(),
         }
     }
 }
@@ -119,64 +171,6 @@ const TILE_LENGTH: u8 = 16;
 type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum ColorIndex {
-    Zero,
-    One,
-    Two,
-    Three,
-}
-
-impl ColorIndex {
-    pub fn new(least_significant_bit: bool, most_significant_bit: bool) -> Self {
-        match (most_significant_bit, least_significant_bit) {
-            (true, true) => Self::Three,
-            (true, false) => Self::Two,
-            (false, true) => Self::One,
-            (false, false) => Self::Zero,
-        }
-    }
-
-    pub fn get_color(self, palette: u8) -> Color {
-        let shift: u8 = match self {
-            ColorIndex::Zero => 0,
-            ColorIndex::One => 2,
-            ColorIndex::Two => 4,
-            ColorIndex::Three => 6,
-        };
-        match (palette >> shift) & 0b11 {
-            0 => Color::White,
-            1 => Color::LightGray,
-            2 => Color::DarkGray,
-            _ => Color::Black,
-        }
-    }
-}
-
-pub fn get_line_from_tile(tile: &Tile, y: u8) -> [u8; 2] {
-    assert!(y < 8);
-    tile[usize::from(y * 2)..usize::from((y + 1) * 2)]
-        .try_into()
-        .unwrap()
-}
-
-pub fn get_color_from_line(line: [u8; 2], x: u8) -> ColorIndex {
-    assert!(x < 8);
-    ColorIndex::new((line[0] & (0x80 >> x)) != 0, (line[1] & (0x80 >> x)) != 0)
-}
-
-#[must_use]
-pub fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
-    let base = if is_signed_addressing {
-        0x1000usize.strict_add_signed(isize::from(index.cast_signed()) * isize::from(TILE_LENGTH))
-    } else {
-        usize::from(index) * usize::from(TILE_LENGTH)
-    };
-    vram[base..base + usize::from(TILE_LENGTH)]
-        .try_into()
-        .unwrap()
-}
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
@@ -208,36 +202,6 @@ impl From<[u8; 4]> for ObjectAttribute {
 }
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum Color {
-    White,
-    LightGray,
-    DarkGray,
-    Black,
-}
-
-impl From<Color> for u32 {
-    fn from(c: Color) -> u32 {
-        match c {
-            Color::White => 0xffffff,
-            Color::LightGray => 0xaaaaaa,
-            Color::DarkGray => 0x555555,
-            Color::Black => 0,
-        }
-    }
-}
-
-impl From<Color> for [u8; 4] {
-    fn from(c: Color) -> Self {
-        match c {
-            Color::White => [0xff; 4],
-            Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
-            Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
-            Color::Black => [0, 0, 0, 0xff],
-        }
-    }
-}
 
 // D'après "The cycle accurate gameboy docs":
 // - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
@@ -276,59 +240,111 @@ impl From<Color> for [u8; 4] {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn is_ppu_enabled(&self) -> bool {
+        self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) && !self.is_turning_on
+    }
+    pub fn get_wx(&self) -> u8 {
+        self.state.wx
+    }
+    pub fn set_wx(&mut self, value: u8) {
+        self.state.wx = value;
+    }
+    pub fn get_scy(&self) -> u8 {
+        self.state.scy
+    }
+    pub fn get_scx(&self) -> u8 {
+        self.state.scx
+    }
+    pub fn set_scy(&mut self, value: u8) {
+        self.state.scy = value;
+    }
+    pub fn set_scx(&mut self, value: u8) {
+        self.state.scx = value;
+    }
+    pub fn get_ly(&self) -> u8 {
+        self.state.ly
+    }
+    pub fn get_bgp(&self) -> u8 {
+        self.state.bgp
+    }
+    pub fn set_bgp(&mut self, bgp: u8) {
+        self.state.bgp = bgp;
+    }
+    pub fn set_lcd_control(&mut self, new_control: LcdControl) {
+        // if on -> off && not vblank
+        if self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && !new_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && !matches!(self.step, PpuStep::VerticalBlankScanline { .. })
+        {
+            // https://gbdev.io/pandocs/LCDC.html#lcdc7--lcd-enable
+            panic!("LCD turned off outside of VBLANK (may damage hardware irl)")
+        }
+        // if off -> on
+        if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
+            && new_control.contains(LcdControl::LCD_PPU_ENABLE)
+        {
+            self.state.ly = 0;
+            self.step = Default::default();
+            self.is_turning_on = true;
+        }
+        self.state.lcd_control = new_control;
+    }
+
+    pub fn get_lcd_control(&self) -> LcdControl {
+        self.state.lcd_control
+    }
+
     #[must_use]
-    pub fn get_scanline_if_ready(&self) -> Option<&[Color; 160]> {
+    pub fn get_scanline_if_ready(&self) -> Option<&Scanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,
                 remaining_dots,
                 scanline,
                 ..
-            } if dots_count == remaining_dots => Some(scanline),
+            } if remaining_dots - dots_count < 4 => {
+                // true once per scanline
+                Some(scanline)
+            }
+
             _ => None,
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State) {
+    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
                 dots_count: OAM_SCAN_DURATION,
-                objects,
             } => {
-                self.step = PpuStep::DelayedDrawing {
-                    dots_count: 0,
-                    window_y: *window_y,
-                    objects: core::mem::take(objects),
-                };
-            }
-            PpuStep::DelayedDrawing {
-                dots_count: dots_count @ 8,
-                window_y,
-                objects,
-            } => {
-                let mut objects_to_sort: ArrayVec<_, 10> =
-                    objects.iter().copied().enumerate().collect();
+                let mut objects_to_sort: ArrayVec<_, 10> = state
+                    .oam
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .copied()
+                    .map(ObjectAttribute::from)
+                    .filter(|obj| {
+                        let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
+                        obj.y <= self.state.ly + 16
+                            && self.state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+                    })
+                    .take(10)
+                    .enumerate()
+                    .collect();
                 // https://gbdev.io/pandocs/OAM.html#drawing-priority
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let mut renderer = Renderer::new(
+                let renderer = Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
                         .map(|(_, object)| object)
                         .collect(),
-                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
-                    // Citation: The scroll registers are re-read on each tile fetch, except for
-                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
-                    state.scx,
                 );
-                for _ in 0..*dots_count + 2 {
-                    renderer.execute(state, *dots_count, window_y);
-                }
                 self.step = PpuStep::Drawing {
-                    dots_count: *dots_count,
+                    dots_count: 0,
                     renderer,
                     window_y: *window_y,
                 }
@@ -339,12 +355,15 @@ impl Ppu {
                 window_y,
                 ..
             } => {
-                if let Ok(scanline) = scanline.as_slice().try_into() {
+                if scanline.len() == WIDTH {
                     self.step = PpuStep::HorizontalBlank {
-                        remaining_dots: u8::try_from(376 - *dots_count).unwrap(),
+                        remaining_dots: u8::try_from(
+                            SCANLINE_DURATION - u16::from(OAM_SCAN_DURATION) - *dots_count,
+                        )
+                        .unwrap(),
                         window_y: *window_y,
                         dots_count: 0,
-                        scanline,
+                        scanline: *scanline.get_scanline(),
                     }
                 }
             }
@@ -354,60 +373,62 @@ impl Ppu {
                 dots_count,
                 ..
             } if remaining_dots == dots_count => {
-                self.step = if state.ly == 144 {
+                // TODO changer toute la gestion de LY
+                self.step = if self.state.ly >= 143 {
                     PpuStep::VerticalBlankScanline { dots_count: 0 }
                 } else {
+                    self.state.ly += 1;
                     PpuStep::OamScan {
                         window_y: *window_y,
                         dots_count: 0,
-                        objects: Default::default(),
                     }
                 };
             }
-            PpuStep::VerticalBlankScanline {
-                dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
-                ..
-            } => {
-                self.step = PpuStep::OamScan {
-                    window_y: Default::default(),
-                    dots_count: 0,
-                    objects: Default::default(),
+            PpuStep::VerticalBlankScanline { dots_count, .. } => {
+                if *dots_count == VERTICAL_BLANK_DURATION - SCANLINE_DURATION + 7 {
+                    self.state.ly = 0;
+                } else if *dots_count == VERTICAL_BLANK_DURATION {
+                    self.step = PpuStep::OamScan {
+                        window_y: Default::default(),
+                        dots_count: 0,
+                    }
+                } else if *dots_count % SCANLINE_DURATION == 0 {
+                    self.state.ly += 1;
                 }
             }
             _ => {}
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State) {
-        // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-        if let PpuStep::VerticalBlankScanline { dots_count: 0 } = self.step {
-            // must be synchronized with the STAT vblank so one M-cycle delay too
-            state.delayed.interrupt_flag.insert(Interruptions::VBLANK);
+    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
+        if let PpuStep::VerticalBlankScanline { dots_count: 2 } = self.step {
+            state.interrupt_flag.insert(Interruptions::VBLANK);
         }
 
         let stat_mode_irq = match &self.step {
-            // one M-cycle delay
-            // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_2_0_timing.s
-            PpuStep::OamScan { .. } => state.lcd_status.contains(LcdStatus::OAM_INT),
-            // one M-cycle delay (to delay a LY read) + must jump M-cycle when drawing has a one dot penalty
-            // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/hblank_ly_scx_timing-GS.s
-            PpuStep::HorizontalBlank {
-                dots_count: 3.., ..
-            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
-            // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-            PpuStep::VerticalBlankScanline { dots_count: 0 } if state.ly == 144 => {
-                state.lcd_status.contains(LcdStatus::OAM_INT)
-                    | state.lcd_status.contains(LcdStatus::VBLANK_INT)
+            PpuStep::OamScan { dots_count, .. } => {
+                // < 4 according to dmg schematics
+                *dots_count < 4
+                    && state.lcd_status.contains(LcdStatus::OAM_INT)
+                    && (self.state.ly != 0 || *dots_count >= 2)
             }
-            // Must be synchronized with the OAM interrupt so one M-cycle delay too
-            // to pass https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/intr_1_2_timing-GS.s
-            PpuStep::VerticalBlankScanline { .. } => {
-                state.lcd_status.contains(LcdStatus::VBLANK_INT)
+            PpuStep::HorizontalBlank {
+                dots_count: 1.., ..
+            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            PpuStep::VerticalBlankScanline { dots_count } => {
+                *dots_count > 2 && state.lcd_status.contains(LcdStatus::VBLANK_INT)
+                    || *dots_count == 0 && state.lcd_status.contains(LcdStatus::OAM_INT)
             }
             _ => false,
         };
-        let stat_irq = stat_mode_irq
-            || (state.lcd_status.contains(LcdStatus::LYC_INT) && state.ly == state.lyc);
+
+        let lyc = state.lcd_status.contains(LcdStatus::LYC_INT) && self.state.ly == state.lyc;
+
+        let old_lyc = self.previous_lyc & 0x04 != 0;
+        self.previous_lyc <<= 1;
+        self.previous_lyc |= lyc as u8;
+
+        let stat_irq = stat_mode_irq || old_lyc;
 
         if stat_irq == self.stat_irq {
             return;
@@ -417,81 +438,60 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            state.delayed.interrupt_flag.insert(Interruptions::LCD);
+            state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, _: u64) {
-        if !state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) {
+    pub fn execute(&mut self, state: &mut State, cycles: u64, dot_index_within_m_cycle: u8) {
+        self.is_turning_on &= dot_index_within_m_cycle != 0;
+        if !self.is_ppu_enabled() {
+            self.state.refresh_old();
             return;
         }
+        self.switch_from_finished_mode(state, cycles);
+        self.fire_interrupts(state, cycles);
 
-        self.switch_from_finished_mode(state);
-        self.fire_interrupts(state);
-        state.delayed.ppu_mode = self.step.get_ppu_mode();
+        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
+
+        state
+            .lcd_status
+            .set(LcdStatus::LYC_EQUAL_TO_LY, state.lyc == self.state.ly);
 
         match &mut self.step {
             PpuStep::OamScan {
                 dots_count,
                 window_y,
-                objects,
                 ..
             } => {
-                if state.lcd_control.contains(LcdControl::OBJ_ENABLE)
-                    && *dots_count % 2 == 0
-                    && objects.len() < objects.capacity()
-                {
-                    let base = usize::from(*dots_count * 2);
-                    let obj = ObjectAttribute::from(
-                        <[u8; 4]>::try_from(&state.oam[base..base + 4]).unwrap(),
-                    );
-                    let is_big = state.lcd_control.contains(LcdControl::OBJ_SIZE);
-                    if obj.y <= state.ly + 16
-                        && state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
-                    {
-                        objects.push(obj);
-                    }
-                }
-
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                if window_y.is_none() && *dots_count == 0 && state.ly == state.wy {
+                if window_y.is_none() && *dots_count == 0 && self.state.ly == state.wy {
                     *window_y = Some(0);
                 }
                 *dots_count += 1;
             }
-            PpuStep::DelayedDrawing { dots_count, .. } => *dots_count += 1,
             PpuStep::Drawing {
                 dots_count,
                 renderer,
                 window_y,
                 ..
             } => {
-                renderer.execute(state, *dots_count, window_y);
+                renderer.execute(state, *dots_count, window_y, &self.state, cycles);
 
                 *dots_count += 1;
             }
             PpuStep::HorizontalBlank { dots_count, .. } => *dots_count += 1,
             PpuStep::VerticalBlankScanline { dots_count } => *dots_count += 1,
         };
-    }
-}
 
-#[derive(Clone)]
-pub struct Speeder(pub Ppu, pub NonZeroU8);
-
-impl Speeder {
-    pub fn execute(&mut self, state: &mut State, cycle_count: u64) {
-        for _ in 0..self.1.get() {
-            self.0.execute(state, cycle_count);
-        }
+        self.state.refresh_old();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        ppu::{LcdControl, LyHandler, Ppu, PpuStep, VERTICAL_BLANK_SCANLINE_DURATION},
+        ppu::{LcdControl, Ppu, PpuStep, VERTICAL_BLANK_DURATION},
         state::State,
     };
 
@@ -499,12 +499,12 @@ mod tests {
     fn first_line_duration() {
         let mut ppu = Ppu::default();
         let mut state = State::default();
-        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
+        ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
         // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
-        ppu.execute(&mut state, 0);
+        ppu.execute(&mut state, 0, 0);
         loop {
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut state, 0, 0);
             duration += 1;
             if let PpuStep::OamScan { dots_count: 1, .. } = ppu.step {
                 break;
@@ -516,19 +516,14 @@ mod tests {
     #[test]
     fn frame_duration() {
         let mut ppu = Ppu::default();
-        let mut ly_handler = LyHandler::default();
         let mut state = State::default();
-        state.lcd_control.insert(LcdControl::LCD_PPU_ENABLE);
+        ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
         loop {
-            if duration % 4 == 0 {
-                ly_handler.execute(&mut state, 0);
-            }
-
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut state, 0, 0);
             duration += 1;
             if let PpuStep::VerticalBlankScanline {
-                dots_count: VERTICAL_BLANK_SCANLINE_DURATION,
+                dots_count: VERTICAL_BLANK_DURATION,
                 ..
             } = ppu.step
             {

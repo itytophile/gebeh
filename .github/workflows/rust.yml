@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install ALSA development packages
+      - name: Install packages
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - name: Clippy
         run: cargo clippy --workspace --all-targets
@@ -24,6 +24,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Install RGBDS
+        run: |
+          curl -L -o rgbds-linux-x86_64.tar.xz https://github.com/gbdev/rgbds/releases/latest/download/rgbds-linux-x86_64.tar.xz
+          mkdir rgbds
+          tar xf rgbds-linux-x86_64.tar.xz -C rgbds
+          cd rgbds
+          sudo ./install.sh
       - name: Restore cached downloads
         id: cache
         uses: actions/cache@v4
@@ -35,6 +42,9 @@ jobs:
       - name: Download test roms
         if: steps.cache.outputs.cache-hit != 'true'
         run: bash download-test-roms.sh
+      - name: Compile home-made roms
+        working-directory: gebeh-test-roms
+        run: bash build.sh
       - uses: taiki-e/install-action@nextest
       - name: Run tests
         run: cargo nextest r -p gebeh-core -p gebeh --no-fail-fast

@@ -69,13 +69,11 @@ impl WebEmulator {
             for _ in 0..cycles {
                 self.emulator.execute(self.mbc.as_mut());
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
-                    for (src, dst) in scanline.iter().zip(
-                        current_frame[usize::from(self.emulator.state.ly) * usize::from(WIDTH)..]
-                            .iter_mut(),
-                    ) {
-                        *dst = *src as u8;
-                    }
-                    if self.emulator.state.ly == HEIGHT - 1 {
+                    current_frame[usize::from(self.emulator.get_ppu().get_ly()) * usize::from(WIDTH) / 4
+                        ..usize::from(self.emulator.get_ppu().get_ly() + 1) * usize::from(WIDTH) / 4]
+                        .copy_from_slice(scanline.raw());
+
+                    if self.emulator.get_ppu().get_ly() == HEIGHT - 1 {
                         let this = JsValue::null();
                         if let Err(err) = on_new_frame.call0(&this) {
                             console::error_1(&err);

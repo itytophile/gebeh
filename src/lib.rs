@@ -1,6 +1,6 @@
 use std::time::{Instant, UNIX_EPOCH};
 
-use gebeh_core::{HEIGHT, WIDTH, mbc::*, ppu::Color};
+use gebeh_core::{HEIGHT, mbc::*, ppu::Scanline};
 
 #[derive(Clone)]
 pub struct InstantRtc {
@@ -63,4 +63,4 @@ impl Rtc for InstantRtc {
     }
 }
 
-pub type Frame = [Color; WIDTH as usize * HEIGHT as usize];
+pub type Frame = [Scanline; HEIGHT as usize];

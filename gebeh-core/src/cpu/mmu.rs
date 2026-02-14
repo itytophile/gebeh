@@ -1,5 +1,12 @@
 use crate::{
-    apu::Apu, cpu::Cpu, joypad::Joypad, mbc::Mbc, ppu::LcdControl, state::*, timer::Timer,
+    apu::Apu,
+    cpu::Cpu,
+    dma::Dma,
+    joypad::Joypad,
+    mbc::Mbc,
+    ppu::{LcdControl, Ppu},
+    state::*,
+    timer::Timer,
 };
 
 pub struct Peripherals<'a, M: Mbc + ?Sized> {
@@ -7,6 +14,8 @@ pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
+    pub ppu: &'a mut Ppu,
+    pub dma: &'a mut Dma,
 }
 
 impl<M: Mbc + ?Sized> Peripherals<'_, M> {
@@ -16,6 +25,8 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
             timer: self.timer,
             joypad: self.joypad,
             apu: self.apu,
+            ppu: self.ppu,
+            dma: self.dma,
         }
     }
 }
@@ -25,23 +36,25 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
+    pub ppu: &'a Ppu,
+    pub dma: &'a Dma,
 }
 
 pub trait MmuCpuExt {
     fn read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        cycles: u64,
         cpu: &Cpu,
         peripherals: PeripheralsRef<M>,
+        cycles: u64,
     ) -> u8;
     fn write<M: Mbc + ?Sized>(
         &mut self,
         index: u16,
         value: u8,
-        cycles: u64,
         cpu: &mut Cpu,
-        peripherals: Peripherals<M>,
+        peripherals: &mut Peripherals<M>,
+        cycles: u64,
     );
 }
 
@@ -49,9 +62,9 @@ impl MmuCpuExt for State {
     fn read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        cycles: u64,
         cpu: &Cpu,
         peripherals: PeripheralsRef<M>,
+        cycles: u64,
     ) -> u8 {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
@@ -59,7 +72,10 @@ impl MmuCpuExt for State {
             ..OAM => MmuExt::read(self, index, peripherals.mbc),
             OAM..NOT_USABLE => {
                 let ppu = self.lcd_status & LcdStatus::PPU_MASK;
-                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN || self.is_dma_active {
+                if ppu == LcdStatus::DRAWING
+                    || ppu == LcdStatus::OAM_SCAN
+                    || peripherals.dma.is_active()
+                {
                     0xff
                 } else {
                     self.oam[usize::from(index - OAM)]
@@ -76,18 +92,18 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => 0xff,
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
-            LCD_CONTROL => self.lcd_control.bits(),
+            LCD_CONTROL => peripherals.ppu.get_lcd_control().bits(),
             LCD_STATUS => self.lcd_status.bits() | 0b10000000,
-            SCY => self.scy,
-            SCX => self.scx,
-            LY => self.ly,
+            SCY => peripherals.ppu.get_scy(),
+            SCX => peripherals.ppu.get_scx(),
+            LY => peripherals.ppu.get_ly(),
             LYC => self.lyc,
             DMA => self.dma_register,
-            BGP => self.bgp_register,
+            BGP => peripherals.ppu.get_bgp(),
             OBP0 => self.obp0,
             OBP1 => self.obp1,
             WY => self.wy,
-            WX => self.wx,
+            WX => peripherals.ppu.get_wx(),
             0xff4c => 0xff,
             0xff4d => 0xff,
             0xff4e => 0xff,
@@ -104,11 +120,11 @@ impl MmuCpuExt for State {
         &mut self,
         index: u16,
         value: u8,
-        _: u64,
         cpu: &mut Cpu,
-        peripherals: Peripherals<M>,
+        peripherals: &mut Peripherals<M>,
+        _: u64,
     ) {
-        if self.is_dma_active && (OAM..NOT_USABLE).contains(&index) {
+        if peripherals.dma.is_active() && (OAM..NOT_USABLE).contains(&index) {
             return;
         }
 
@@ -142,22 +158,26 @@ impl MmuCpuExt for State {
             0xff08..INTERRUPT_FLAG => {}
             INTERRUPT_FLAG => self.interrupt_flag = Interruptions::from_bits_truncate(value),
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.write(index, value),
-            LCD_CONTROL => self.lcd_control = LcdControl::from_bits_truncate(value),
+            LCD_CONTROL => peripherals
+                .ppu
+                .set_lcd_control(LcdControl::from_bits_truncate(value)),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
             LCD_STATUS => self.set_interrupt_part_lcd_status(value),
-            SCY => self.scy = value,
-            SCX => self.scx = value,
+            SCY => peripherals.ppu.set_scy(value),
+            SCX => peripherals.ppu.set_scx(value),
             LY => {} // read only
             LYC => self.lyc = value,
             DMA => {
                 self.dma_register = value;
                 self.dma_request = true;
             }
-            BGP => self.bgp_register = value,
+            BGP => peripherals.ppu.set_bgp(value),
             OBP0 => self.obp0 = value,
             OBP1 => self.obp1 = value,
             WY => self.wy = value,
-            WX => self.wx = value,
+            WX => {
+                peripherals.ppu.set_wx(value);
+            }
             0xff4c => {}
             0xff4d => {}
             0xff4e => {}

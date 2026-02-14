@@ -1,4 +1,4 @@
-use crate::ppu::{Color, ColorIndex};
+use crate::ppu::color::{Color, ColorIndex};
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
 #[derive(Default, Clone)]
@@ -56,13 +56,27 @@ impl Fifos {
         self.background_pixels_count = 8;
     }
 
-    pub fn render_pixel(&self, bgp: u8, obp0: u8, obp1: u8, is_background_enabled: bool) -> Color {
-        let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
-        let sp_color_index = ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0);
+    pub fn render_pixel(
+        &self,
+        bgp: u8,
+        obp0: u8,
+        obp1: u8,
+        is_background_enabled: bool,
+        is_obj_enabled: bool,
+    ) -> Color {
+        let bg_color_index = if is_background_enabled {
+            ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0)
+        } else {
+            ColorIndex::Zero
+        };
+        let sp_color_index = if is_obj_enabled {
+            ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0)
+        } else {
+            ColorIndex::Zero
+        };
 
-        if is_background_enabled
-            && (sp_color_index == ColorIndex::Zero
-                || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero))
+        if sp_color_index == ColorIndex::Zero
+            || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero)
         {
             return bg_color_index.get_color(bgp);
         }
@@ -80,5 +94,11 @@ impl Fifos {
 
     pub fn get_shifted_count(&self) -> u8 {
         self.shifted_count
+    }
+
+    pub fn insert_window_reactivation_pixel(&mut self) {
+        self.bg0 >>= 1;
+        self.bg1 >>= 1;
+        self.background_pixels_count = 8.min(self.background_pixels_count + 1);
     }
 }

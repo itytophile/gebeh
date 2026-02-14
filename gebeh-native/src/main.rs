@@ -3,6 +3,7 @@ mod emulator_loop;
 use std::sync::{Arc, RwLock};
 
 use cpal::traits::HostTrait;
+use gebeh::Frame;
 use gebeh_core::{HEIGHT, WIDTH, joypad::JoypadInput};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
@@ -34,7 +35,7 @@ fn main() {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         let scaled_size = LogicalSize::new(WIDTH as f64 * 4.0, HEIGHT as f64 * 4.0);
         WindowBuilder::new()
-            .with_title("Emulator")
+            .with_title("gebeh")
             .with_inner_size(scaled_size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -44,7 +45,7 @@ fn main() {
     let mut pixels = get_pixels_from_window(&window, WIDTH.into(), HEIGHT.into());
 
     let joypad: Arc<RwLock<JoypadInput>> = Default::default();
-    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel(2);
+    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<Frame>(2);
 
     let shared_joypad = joypad.clone();
 
@@ -63,14 +64,14 @@ fn main() {
                 window_id,
                 ..
             } if window_id == window.id() => {
-                for (pixel, color) in pixels
-                    .frame_mut()
-                    .as_chunks_mut::<4>()
-                    .0
-                    .iter_mut()
-                    .zip(rx_frame.recv().unwrap().iter())
-                {
-                    *pixel = (*color).into();
+                for (pixel, color) in pixels.frame_mut().as_chunks_mut::<4>().0.iter_mut().zip(
+                    rx_frame
+                        .recv()
+                        .unwrap()
+                        .iter()
+                        .flat_map(|scanline| scanline.iter_colors()),
+                ) {
+                    *pixel = color.into();
                 }
 
                 pixels.render().unwrap();

@@ -6,11 +6,11 @@ use cpal::{
 };
 use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
-    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
+    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY,
     apu::Mixer,
     joypad::JoypadInput,
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
-    ppu::Color,
+    ppu::Scanline,
 };
 use gebeh_front_helper::{get_mbc, get_noise, get_title_from_rom};
 
@@ -109,7 +109,7 @@ where
     let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
     let mut error = 0;
-    let mut current_frame = [Color::Black; WIDTH as usize * HEIGHT as usize];
+    let mut current_frame = [Scanline::default(); HEIGHT as usize];
     let mut mixer = Mixer::new(sample_rate as f32, noise, short_noise);
 
     device
@@ -131,14 +131,8 @@ where
                     for _ in 0..cycles {
                         emulator.execute(mbc.as_mut());
                         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready() {
-                            for (src, dst) in scanline.iter().zip(
-                                current_frame
-                                    [usize::from(emulator.state.ly) * usize::from(WIDTH)..]
-                                    .iter_mut(),
-                            ) {
-                                *dst = *src;
-                            }
-                            if emulator.state.ly == HEIGHT - 1
+                            current_frame[usize::from(emulator.get_ppu().get_ly())] = *scanline;
+                            if emulator.get_ppu().get_ly() == HEIGHT - 1
                                 && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
                                     shared_frame.try_send(current_frame)
                             {
@@ -150,8 +144,8 @@ where
                     let sample = sample_index as f32 / sample_rate as f32;
                     let mut sampler = mixer.mix(emulator.get_apu().get_sampler(), sample);
 
-                    frame[0] = T::from_sample(sampler.sample_left());
-                    frame[1] = T::from_sample(sampler.sample_right());
+                    frame[0] = T::from_sample(sampler.sample_left() * 0.);
+                    frame[1] = T::from_sample(sampler.sample_right() * 0.);
                     // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
                     sample_index = sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
                 }

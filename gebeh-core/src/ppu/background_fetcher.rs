@@ -1,6 +1,6 @@
 use crate::{
-    ppu::{get_bg_win_tile, renderer::RenderingState},
-    state::{Scrolling, VIDEO_RAM},
+    ppu::{Scrolling, TILE_LENGTH, Tile, TileVram, renderer::RenderingState},
+    state::VIDEO_RAM,
 };
 
 #[derive(Clone, Copy, Default)]
@@ -12,19 +12,17 @@ pub enum BackgroundFetcherStep {
     WaitingForScrollRegisters,
     // no delay for him because we have the beautiful WaitingForScrollRegisters
     FetchingTileIndex {
-        scx: u8,
         scy: u8,
+        scx: u8,
     },
     FetchingTileLow {
-        one_dot_delay: bool,
         tile_index: u8,
-        scy: u8,
+        scy: Option<u8>,
     },
     FetchingTileHigh {
-        one_dot_delay: bool,
         tile_index: u8,
         tile_low: u8,
-        scy: u8,
+        scy: Option<u8>,
     },
     Ready([u8; 2]),
 }
@@ -33,7 +31,7 @@ pub enum BackgroundFetcherStep {
 #[derive(Clone, Default)]
 pub struct BackgroundFetcher {
     pub step: BackgroundFetcherStep,
-    pub x: u8, // will be used like x.max(1) - 0 thus 0 is the dummy fetch
+    pub x: u8, // will be used like x.max(1) - 1 thus 0 is the dummy fetch
 }
 
 impl BackgroundFetcher {
@@ -58,32 +56,28 @@ impl BackgroundFetcher {
         }
         self.step = match self.step {
             WaitingForScrollRegisters => FetchingTileIndex {
-                scx: scrolling.x,
                 scy: scrolling.y,
+                scx: scrolling.x,
             },
-            FetchingTileIndex { scx, scy } => {
+            FetchingTileIndex { scy, scx } => {
                 let address = tile_map_address
                     + u16::from((self.x.max(1) - 1 + scx / 8) & 0x1f)
                     + 32 * u16::from(y.wrapping_add(scy) / 8); // don't simplify 32 / 8 to 4
                 FetchingTileLow {
-                    one_dot_delay: false,
                     tile_index: vram[usize::from(address - VIDEO_RAM)],
-                    scy,
+                    scy: None,
                 }
             }
             FetchingTileLow {
-                one_dot_delay: false,
+                scy: None,
                 tile_index,
-                scy,
             } => FetchingTileLow {
-                one_dot_delay: true,
                 tile_index,
-                scy,
+                scy: Some(scrolling.y),
             },
             FetchingTileLow {
-                one_dot_delay: true,
                 tile_index,
-                scy,
+                scy: Some(scy),
             } => {
                 let tile = get_bg_win_tile(
                     vram[..0x1800].try_into().unwrap(),
@@ -91,28 +85,24 @@ impl BackgroundFetcher {
                     is_signed_addressing,
                 );
                 FetchingTileHigh {
-                    one_dot_delay: false,
                     tile_index,
                     tile_low: tile[2 * ((usize::from(y) + usize::from(scy)) % 8)],
-                    scy,
+                    scy: None,
                 }
             }
             FetchingTileHigh {
-                one_dot_delay: false,
+                scy: None,
                 tile_index,
                 tile_low,
-                scy,
             } => FetchingTileHigh {
-                one_dot_delay: true,
                 tile_index,
                 tile_low,
-                scy,
+                scy: Some(scrolling.y),
             },
             FetchingTileHigh {
-                one_dot_delay: true,
                 tile_index,
                 tile_low,
-                scy,
+                scy: Some(scy),
             } => {
                 // sprite fetcher can start fetching one cycle before the end of background fetching
                 rendering_state.is_sprite_fetching_enable = true;
@@ -130,4 +120,16 @@ impl BackgroundFetcher {
             sleeping => sleeping,
         };
     }
+}
+
+#[must_use]
+pub fn get_bg_win_tile(vram: &TileVram, index: u8, is_signed_addressing: bool) -> &Tile {
+    let base = if is_signed_addressing {
+        0x1000usize.strict_add_signed(isize::from(index.cast_signed()) * isize::from(TILE_LENGTH))
+    } else {
+        usize::from(index) * usize::from(TILE_LENGTH)
+    };
+    vram[base..base + usize::from(TILE_LENGTH)]
+        .try_into()
+        .unwrap()
 }

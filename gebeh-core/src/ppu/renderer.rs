@@ -21,11 +21,23 @@ use arrayvec::ArrayVec;
 
 use crate::{
     ppu::{
-        Color, LcdControl, ObjectAttribute, background_fetcher::BackgroundFetcher, fifos::Fifos,
+        LcdControl, ObjectAttribute, PpuState, Scrolling,
+        background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
+        fifos::Fifos,
+        scanline::ScanlineBuilder,
         sprite_fetcher::SpriteFetcher,
     },
-    state::{Scrolling, State},
+    state::State,
 };
+
+#[derive(Clone)]
+pub enum RendererStep {
+    DummyFetch,
+    AfterDummy {
+        first_pixels_to_skip: u8,
+        saved_wx: Option<u8>,
+    },
+}
 
 #[derive(Clone)]
 pub struct Renderer {
@@ -33,13 +45,12 @@ pub struct Renderer {
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
     pub objects: ArrayVec<ObjectAttribute, 10>,
-    pub scanline: ArrayVec<Color, 160>,
-    pub first_pixels_to_skip: u8,
-    wx_condition: bool,
+    pub scanline: ScanlineBuilder,
+    step: RendererStep,
 }
 
 impl Renderer {
-    pub fn new(objects: ArrayVec<ObjectAttribute, 10>, scx_at_scanline_start: u8) -> Self {
+    pub fn new(objects: ArrayVec<ObjectAttribute, 10>) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
@@ -50,54 +61,132 @@ impl Renderer {
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
-            first_pixels_to_skip: scx_at_scanline_start % 8,
-            wx_condition: false,
+            step: RendererStep::DummyFetch,
         }
     }
 
-    pub fn execute(&mut self, state: &State, dots_count: u16, window_y: &mut Option<u8>) {
+    pub fn is_sprite_on_cursor(&self) -> bool {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ..
+        } = self.step
+        else {
+            return false;
+        };
         let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
-            - i16::from(self.first_pixels_to_skip);
+            - i16::from(first_pixels_to_skip);
+        let Some(obj) = self.objects.last() else {
+            return false;
+        };
+        i16::from(obj.x) == cursor
+    }
+
+    pub(super) fn execute(
+        &mut self,
+        state: &State,
+        dots_count: u16,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState,
+        _: u64,
+    ) {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ref mut saved_wx,
+        } = self.step
+        else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &state.video_ram,
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ppu_state.ly,
+                ppu_state.is_signed_addressing(),
+            );
+
+            if let BackgroundFetcherStep::Ready(_) = self.background_pixel_fetcher.step {
+                self.step = RendererStep::AfterDummy {
+                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+                    // Citation: The scroll registers are re-read on each tile fetch, except for
+                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
+                    //
+                    // And according to mealybug, it's read after the dummy fetch
+                    first_pixels_to_skip: ppu_state.scx % 8,
+                    saved_wx: None,
+                };
+            }
+
+            return;
+        };
+        let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
+            - i16::from(first_pixels_to_skip);
 
         // yes can be triggered multiple times if wx changes during the same scanline
-        if state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-            && cursor == i16::from(state.wx + 1)
+        if ppu_state
+            .old_lcd_control
+            .contains(LcdControl::WINDOW_ENABLE)
+            && (cursor == i16::from(ppu_state.old_old_wx + 1)
+                // strange race condition showed by mealybug and my Game Boy Pocket
+                || (cursor == i16::from(ppu_state.old_old_wx + 2)
+                    && !ppu_state
+                        .old_old_lcd_control
+                        .contains(LcdControl::WINDOW_ENABLE)))
             && let Some(window_y) = window_y
-            && !self.wx_condition
+            && Some(ppu_state.old_old_wx) != *saved_wx
         {
-            self.background_pixel_fetcher = BackgroundFetcher {
-                step: Default::default(),
-                x: 1,
-            };
-            self.rendering_state.fifos.reset_background();
-            self.wx_condition = true;
-            *window_y += 1;
+            if saved_wx.is_none() {
+                self.background_pixel_fetcher = BackgroundFetcher {
+                    step: Default::default(),
+                    x: 1,
+                };
+                self.rendering_state.fifos.reset_background();
+                *window_y = window_y.wrapping_add(1);
+            } else if self.rendering_state.fifos.is_background_empty() {
+                // according to mealybug m3_wx_4_change
+                self.rendering_state
+                    .fifos
+                    .insert_window_reactivation_pixel();
+            }
+
+            *saved_wx = Some(ppu_state.old_old_wx);
+
+            // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
+            if ppu_state.old_old_wx == 0 && first_pixels_to_skip > 0 {
+                return;
+            }
         }
 
         // those systems can run "concurrently"
 
-        // will hopefully reproduce the glitch described by https://gbdev.io/pandocs/Scrolling.html#window
         if let Some(window_y) = window_y
-            && self.wx_condition
-            && state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            && saved_wx.is_some()
         {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
-                state.lcd_control.get_window_tile_map_address(),
+                ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
-                *window_y - 1,
-                !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+                window_y.wrapping_sub(1),
+                ppu_state.is_signed_addressing(),
             );
+            // according to mealybug, when the window is disabled, we have to wait for the fetch to end
+            // before disabling the window for real
+            if matches!(
+                self.background_pixel_fetcher.step,
+                // yeah it works with this step, don't know why
+                BackgroundFetcherStep::FetchingTileIndex { .. }
+            ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            {
+                *saved_wx = None;
+            }
         } else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &state.video_ram,
-                state.lcd_control.get_bg_tile_map_address(),
-                state.get_scrolling(),
-                state.ly,
-                !state.lcd_control.contains(LcdControl::BG_AND_WINDOW_TILES),
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ppu_state.ly,
+                ppu_state.is_signed_addressing(),
             );
         }
 
@@ -106,6 +195,7 @@ impl Renderer {
             &mut self.rendering_state,
             &mut self.objects,
             state,
+            ppu_state,
             dots_count,
         );
 
@@ -114,12 +204,14 @@ impl Renderer {
         }
 
         if cursor >= 8 {
-            self.scanline.push(self.rendering_state.fifos.render_pixel(
-                state.bgp_register,
-                state.obp0,
-                state.obp1,
-                state.lcd_control.contains(LcdControl::BG_AND_WINDOW_ENABLE),
-            ));
+            self.scanline
+                .push_pixel(self.rendering_state.fifos.render_pixel(
+                    ppu_state.get_effective_bgp(),
+                    state.obp0,
+                    state.obp1,
+                    ppu_state.is_background_enabled(),
+                    ppu_state.is_obj_enabled(),
+                ));
         }
 
         self.rendering_state.fifos.shift();
@@ -139,7 +231,7 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, ObjectAttribute, ObjectFlags, renderer::Renderer},
+        ppu::{LcdControl, ObjectAttribute, ObjectFlags, PpuState, renderer::Renderer},
         state::State,
     };
 
@@ -150,11 +242,12 @@ mod tests {
         state: &State,
         mut window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
+        ppu_state: &PpuState,
     ) -> u16 {
-        let mut renderer = Renderer::new(objects, state.scx);
+        let mut renderer = Renderer::new(objects);
         let mut dots = 0;
-        while renderer.scanline.len() < usize::from(WIDTH) {
-            renderer.execute(state, dots, &mut window_y);
+        while renderer.scanline.len() < WIDTH {
+            renderer.execute(state, dots, &mut window_y, ppu_state, 0);
             dots += 1;
         }
         dots
@@ -163,33 +256,56 @@ mod tests {
     #[test]
     fn normal_timing() {
         assert_eq!(
-            get_timing(&State::default(), None, Default::default()),
+            get_timing(
+                &State::default(),
+                None,
+                Default::default(),
+                &Default::default()
+            ),
             MINIMUM_TIME
         );
     }
 
     #[test]
     fn with_window() {
-        let mut state = State::default();
-        state.lcd_control.insert(LcdControl::WINDOW_ENABLE);
+        let state = State::default();
 
         // https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
         // Citation: The Window is visible (if enabled) when both coordinates are in the ranges WX=0..166, WY=0..143 respectively
         for wx in 0..167 {
-            state.wx = wx;
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
             // Citation: After the last non-window pixel is emitted, a 6-dot penalty is incurred
             assert_eq!(
-                get_timing(&state, Some(0), Default::default()),
+                get_timing(
+                    &state,
+                    Some(0),
+                    Default::default(),
+                    &PpuState {
+                        lcd_control: LcdControl::WINDOW_ENABLE,
+                        old_lcd_control: LcdControl::WINDOW_ENABLE,
+                        wx,
+                        old_wx: wx,
+                        ..Default::default()
+                    }
+                ),
                 MINIMUM_TIME + 6,
                 "Bad timing with WX = {wx}"
             );
         }
 
         // the window is not visible
-        state.wx = 167;
         assert_eq!(
-            get_timing(&state, Some(0), Default::default()),
+            get_timing(
+                &state,
+                Some(0),
+                Default::default(),
+                &PpuState {
+                    lcd_control: LcdControl::WINDOW_ENABLE,
+                    wx: 167,
+                    old_wx: 167,
+                    ..Default::default()
+                }
+            ),
             MINIMUM_TIME,
             "Bad timing with WX = 167"
         );
@@ -197,8 +313,7 @@ mod tests {
 
     #[test]
     fn with_objects() {
-        let mut state = State::default();
-        state.lcd_control.insert(LcdControl::OBJ_ENABLE);
+        let state = State::default();
         let objects = ArrayVec::from_iter([ObjectAttribute {
             flags: ObjectFlags::empty(),
             tile_index: 0,
@@ -207,19 +322,37 @@ mod tests {
         }]);
         // https://gbdev.io/pandocs/Rendering.html#obj-penalty-algorithm
         // Citation: an OBJ with an OAM X position of 0 always incurs a 11-dot penalty
-        assert_eq!(get_timing(&state, None, objects), MINIMUM_TIME + 11);
+        assert_eq!(
+            get_timing(
+                &state,
+                None,
+                objects,
+                &PpuState {
+                    lcd_control: LcdControl::OBJ_ENABLE,
+                    ..Default::default()
+                }
+            ),
+            MINIMUM_TIME + 11
+        );
     }
 
     #[test]
     fn with_scroll_x() {
-        let mut state = State::default();
+        let state = State::default();
 
         for scx in 0..=u8::MAX {
-            state.scx = scx;
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
             // Citation: At the very beginning of Mode 3, rendering is paused for SCX % 8 dots
             assert_eq!(
-                get_timing(&state, None, Default::default()),
+                get_timing(
+                    &state,
+                    None,
+                    Default::default(),
+                    &PpuState {
+                        scx,
+                        ..Default::default()
+                    }
+                ),
                 MINIMUM_TIME + u16::from(scx % 8),
                 "Failed with scx {scx}"
             );

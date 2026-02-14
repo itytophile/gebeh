@@ -1,15 +1,13 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use core::num::NonZeroU8;
-
 use crate::{
     apu::Apu,
     cpu::{Cpu, Peripherals},
     dma::Dma,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
-    ppu::{LyHandler, Ppu, Speeder},
+    ppu::Ppu,
     state::State,
     timer::Timer,
 };
@@ -28,10 +26,9 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Emulator {
-    ly_handler: LyHandler,
-    ppu: Speeder,
+    ppu: Ppu,
     dma: Dma,
     cpu: Cpu,
     pub state: State,
@@ -43,7 +40,7 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn get_ppu(&self) -> &Ppu {
-        &self.ppu.0
+        &self.ppu
     }
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
@@ -59,29 +56,21 @@ impl Emulator {
     }
 }
 
-impl Default for Emulator {
-    fn default() -> Self {
-        Self {
-            ly_handler: LyHandler::default(),
-            ppu: Speeder(Ppu::default(), NonZeroU8::new(4).unwrap()),
-            dma: Default::default(),
-            cpu: Default::default(),
-            state: Default::default(),
-            timer: Default::default(),
-            joypad: Default::default(),
-            apu: Default::default(),
-            cycles: 0,
-        }
-    }
-}
-
 impl Emulator {
     pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
-        self.dma.execute(&mut self.state, mbc, self.cycles);
-        self.ly_handler.execute(&mut self.state, self.cycles);
-        self.ppu.execute(&mut self.state, self.cycles);
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
+
+        let interrupts_from_previous_cycle = self.state.interrupt_flag;
+        for i in 0..2 {
+            self.ppu.execute(&mut self.state, self.cycles, i);
+        }
+        // I don't understand halt timings https://gekkio.fi/blog/2016/game-boy-research-status
+        let mut slowed_interrupts_in_halt_mode = None;
+        if self.cpu.is_halted {
+            slowed_interrupts_in_halt_mode = Some(self.state.interrupt_flag);
+            self.state.interrupt_flag = interrupts_from_previous_cycle;
+        }
         self.cpu.execute(
             &mut self.state,
             Peripherals {
@@ -89,9 +78,18 @@ impl Emulator {
                 timer: &mut self.timer,
                 joypad: &mut self.joypad,
                 apu: &mut self.apu,
+                ppu: &mut self.ppu,
+                dma: &mut self.dma,
             },
             self.cycles,
         );
+        if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
+            self.state.interrupt_flag = interrupt_flag;
+        }
+        for i in 2..4 {
+            self.ppu.execute(&mut self.state, self.cycles, i);
+        }
+
         if must_increment_div_apu {
             self.apu.increment_div_apu();
         }

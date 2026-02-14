@@ -1,5 +1,5 @@
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, ppu::Color};
+use gebeh_core::{Emulator, HEIGHT, ppu::color::Color};
 use gebeh_front_helper::get_mbc;
 
 #[test]
@@ -24,11 +24,11 @@ fn dmg_acid2() {
     loop {
         emulator.execute(mbc.as_mut());
         if let Some(scanline) = emulator.get_ppu().get_scanline_if_ready()
-            && previous_ly != Some(emulator.state.ly)
+            && previous_ly != Some(emulator.get_ppu().get_ly())
         {
-            previous_ly = Some(emulator.state.ly);
-            all_good &= working_split.next().unwrap().eq(scanline.iter().copied());
-            if emulator.state.ly == HEIGHT - 1 {
+            previous_ly = Some(emulator.get_ppu().get_ly());
+            all_good &= working_split.next().unwrap().eq(scanline.iter_colors());
+            if emulator.get_ppu().get_ly() == HEIGHT - 1 {
                 if all_good {
                     return;
                 }

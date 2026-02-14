@@ -1,4 +1,4 @@
-use crate::{mbc::Mbc, ppu::LcdControl};
+use crate::mbc::Mbc;
 
 pub const ROM_BANK: u16 = 0x0000;
 pub const SWITCHABLE_ROM_BANK: u16 = 0x4000;
@@ -124,52 +124,24 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
 
-// if read by the cpu the same cycle they are written, then the cpu will read the old value.
-// The delayed value will be read the next cycle.
-// Be careful, delayed state can be written over the same cycle by the CPU thus it will never be read.
-#[derive(Clone, Default)]
-pub struct Delayed {
-    // according to some mooneye tests, interrupts from PPU are delayed by one M-cycle
-    pub interrupt_flag: Interruptions,
-    // according to some mooneye tests and a comment in SameBoy PPU implementation, STAT mode is delayed by one M-cycle
-    // https://github.com/LIJI32/SameBoy/blob/858f0034650fc91778f2cf9adaf801ce77d2fe68/Core/display.c#L1530
-    pub ppu_mode: LcdStatus,
-}
-
 #[derive(Clone)]
 pub struct State {
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
     pub dma_request: bool,
-    pub is_dma_active: bool,
-    pub bgp_register: u8,
     pub obp0: u8,
     pub obp1: u8,
     pub interrupt_flag: Interruptions,
     pub sound_panning: u8,
     pub audio_master_control: u8,
-    pub scy: u8,
-    pub scx: u8,
-    pub lcd_control: LcdControl,
+
     pub lcd_status: LcdStatus,
-    pub ly: u8,
     pub lyc: u8,
     pub sb: u8,
     pub sc: SerialControl,
     pub wy: u8,
-    pub wx: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
-    pub delayed: Delayed,
-    // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct Scrolling {
-    // 0 < x < 256
-    pub x: u8,
-    // 0 < y < 256
-    pub y: u8,
 }
 
 impl Default for State {
@@ -179,26 +151,18 @@ impl Default for State {
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,
-            is_dma_active: false,
-            bgp_register: 0,
             obp0: 0,
             obp1: 0,
             interrupt_flag: Interruptions::empty(),
             sound_panning: 0,
             audio_master_control: 0,
-            scx: 0,
-            scy: 0,
-            lcd_control: LcdControl::empty(),
-            ly: 0,
+
             lyc: 0,
             sb: 0,
             sc: SerialControl::empty(),
             wy: 0,
-            wx: 0,
             lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
-            // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
-            delayed: Default::default(),
         }
     }
 }
@@ -208,23 +172,12 @@ impl State {
         self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
             | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
     }
-    fn set_ppu_mode(&mut self, mode: LcdStatus) {
+    pub fn set_ppu_mode(&mut self, mode: LcdStatus, _: u64) {
         assert!(matches!(
             mode,
             LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
         ));
         self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
-    }
-    pub fn apply_delayed(&mut self) {
-        self.set_ppu_mode(self.delayed.ppu_mode);
-        self.interrupt_flag |= self.delayed.interrupt_flag;
-        self.delayed.interrupt_flag = Interruptions::empty();
-    }
-    pub fn get_scrolling(&self) -> Scrolling {
-        Scrolling {
-            x: self.scx,
-            y: self.scy,
-        }
     }
 }
 
