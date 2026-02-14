@@ -21,7 +21,7 @@ Pronounced gebeh.
 - [Nitty Gritty Gameboy Cycle Timing](http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt) - To know exactly what the PPU is doing during Mode 3 (Drawing). I still can't explain the difference between the "classic" 172 dots duration and the 173.5 (or 174 dots in the current implementation) duration described by the document.
 - [Trying to understand Sprite FIFO behavior in the PPU (Reddit)](https://www.reddit.com/r/EmuDev/comments/s6cpis/gameboy_trying_to_understand_sprite_fifo_behavior/) - About sprite fetching timing and FIFOs.
 - https://www.reddit.com/r/EmuDev/comments/6h2asw/stat_register_and_stat_interrupt_delay_in_dmgcgb/
-- https://iceboy.a-singer.de/doc/dmg_cpu_b_sch.pdf
+- https://github.com/msinger/dmg-schematics
 ### Test roms
 
 - [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)
