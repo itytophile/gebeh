@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev rgbds
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - name: Clippy
         run: cargo clippy --workspace --all-targets
   tests:
@@ -24,6 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install -y rgbds
       - name: Restore cached downloads
         id: cache
         uses: actions/cache@v4
