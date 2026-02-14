@@ -415,7 +415,9 @@ impl Ppu {
 
         let stat_mode_irq = match &self.step {
             PpuStep::OamScan { dots_count, .. } => {
-                state.lcd_status.contains(LcdStatus::OAM_INT)
+                // < 4 according to dmg schematics
+                *dots_count < 4
+                    && state.lcd_status.contains(LcdStatus::OAM_INT)
                     && (self.state.ly != 0 || *dots_count >= 2)
                     && !disable_oam
             }
