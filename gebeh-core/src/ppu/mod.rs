@@ -59,6 +59,7 @@ pub struct Ppu {
     stat_irq: bool,
     state: PpuState,
     is_turning_on: bool,
+    previous_lyc: u8,
 }
 
 #[derive(Clone, Default)]
@@ -386,8 +387,9 @@ impl Ppu {
                 };
             }
             PpuStep::VerticalBlankScanline { dots_count, .. } => {
-                if *dots_count == VERTICAL_BLANK_DURATION {
+                if *dots_count == VERTICAL_BLANK_DURATION - SCANLINE_DURATION + 7 {
                     self.state.ly = 0;
+                } else if *dots_count == VERTICAL_BLANK_DURATION {
                     self.step = PpuStep::OamScan {
                         window_y: Default::default(),
                         dots_count: 0,
@@ -426,8 +428,14 @@ impl Ppu {
             }
             _ => false,
         };
-        let stat_irq = stat_mode_irq
-            || (state.lcd_status.contains(LcdStatus::LYC_INT) && self.state.ly == state.lyc);
+
+        let lyc = state.lcd_status.contains(LcdStatus::LYC_INT) && self.state.ly == state.lyc;
+
+        let old_lyc = self.previous_lyc & 0x08 != 0;
+        self.previous_lyc <<= 1;
+        self.previous_lyc |= lyc as u8;
+
+        let stat_irq = stat_mode_irq || old_lyc;
 
         if stat_irq == self.stat_irq {
             return;
