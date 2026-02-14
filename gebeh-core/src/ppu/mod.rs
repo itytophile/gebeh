@@ -429,7 +429,7 @@ impl Ppu {
 
         let lyc = state.lcd_status.contains(LcdStatus::LYC_INT) && self.state.ly == state.lyc;
 
-        let old_lyc = self.previous_lyc & 0x08 != 0;
+        let old_lyc = self.previous_lyc & 0x04 != 0;
         self.previous_lyc <<= 1;
         self.previous_lyc |= lyc as u8;
 

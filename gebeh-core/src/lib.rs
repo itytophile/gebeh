@@ -61,8 +61,14 @@ impl Emulator {
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
+        let prout = self.state.interrupt_flag;
         for i in 0..2 {
             self.ppu.execute(&mut self.state, self.cycles, i);
+        }
+        let mut mdr = None;
+        if self.cpu.is_halted {
+            mdr = Some(self.state.interrupt_flag);
+            self.state.interrupt_flag = prout;
         }
         self.cpu.execute(
             &mut self.state,
@@ -76,6 +82,9 @@ impl Emulator {
             },
             self.cycles,
         );
+        if let Some(mdr) = mdr {
+            self.state.interrupt_flag = mdr;
+        }
         for i in 2..4 {
             self.ppu.execute(&mut self.state, self.cycles, i);
         }
