@@ -1,4 +1,8 @@
-use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer};
+use gebeh_core::{
+    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
+    apu::Mixer,
+    state::{Interruptions, SerialControl, State},
+};
 use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, js_sys};
@@ -69,6 +73,7 @@ impl WebEmulator {
 
             for _ in 0..cycles {
                 self.emulator.execute(self.mbc.as_mut());
+                execute_serial(&mut self.emulator.state);
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
                         [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
@@ -146,5 +151,19 @@ impl Save {
 
     pub fn get_game_title(&self) -> String {
         self.game_title.clone()
+    }
+}
+
+fn execute_serial(state: &mut State) {
+    if state
+        .sc
+        .contains(SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT)
+    {
+        // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
+        // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
+        // This means a master will start to receive $FF bytes.
+        state.sb = 0xff;
+        state.sc.remove(SerialControl::TRANSFER_ENABLE);
+        state.interrupt_flag.insert(Interruptions::SERIAL);
     }
 }
