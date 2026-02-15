@@ -16,6 +16,7 @@ pub struct WebEmulator {
     error: u32,
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
+    current_frame: [u8; WIDTH as usize * HEIGHT as usize],
 }
 
 #[wasm_bindgen]
@@ -42,6 +43,7 @@ impl WebEmulator {
             sample_index: 0,
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
+            current_frame: [0; _],
         })
     }
 
@@ -52,7 +54,6 @@ impl WebEmulator {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-        current_frame: &mut [u8],
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -69,13 +70,15 @@ impl WebEmulator {
             for _ in 0..cycles {
                 self.emulator.execute(self.mbc.as_mut());
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
-                    current_frame[usize::from(self.emulator.get_ppu().get_ly()) * usize::from(WIDTH) / 4
-                        ..usize::from(self.emulator.get_ppu().get_ly() + 1) * usize::from(WIDTH) / 4]
-                        .copy_from_slice(scanline.raw());
+                    self.current_frame.as_chunks_mut::<40>().0
+                        [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
 
                     if self.emulator.get_ppu().get_ly() == HEIGHT - 1 {
                         let this = JsValue::null();
-                        if let Err(err) = on_new_frame.call0(&this) {
+                        if let Err(err) = on_new_frame.call1(
+                            &this,
+                            &js_sys::Uint8Array::new_from_slice(&self.current_frame),
+                        ) {
                             console::error_1(&err);
                         }
                     }

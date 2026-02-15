@@ -4,8 +4,6 @@ import {
   AUDIO_PROCESSOR_NAME,
   FromMainMessage,
   FromNodeMessage,
-  GB_HEIGHT,
-  GB_WIDTH,
 } from "./common.js";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
@@ -42,7 +40,6 @@ class WasmProcessor
   implements AudioWorkletProcessorImpl
 {
   emulator?: WebEmulator;
-  currentFrame = new Uint8Array(new ArrayBuffer((GB_WIDTH * GB_HEIGHT) / 4)); // 2 bits color
   poor_mans_time = 0;
   isMessagesEnabled = true;
 
@@ -141,16 +138,18 @@ class WasmProcessor
       left,
       right,
       sampleRate,
-      () => {
+      (frame: Uint8Array) => {
         if (!this.isMessagesEnabled) {
           return;
         }
-        this.port.postMessage({
-          type: "frame",
-          buffer: this.currentFrame,
-        } satisfies FromNodeMessage);
+        this.port.postMessage(
+          {
+            type: "frame",
+            buffer: frame,
+          } satisfies FromNodeMessage,
+          [frame.buffer],
+        );
       },
-      this.currentFrame,
     );
 
     // https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletProcessor/process
