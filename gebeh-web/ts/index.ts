@@ -155,7 +155,7 @@ function getTitleFromRom(rom: Uint8Array): string {
   return decoder.decode(title.slice(0, endZeroPos));
 }
 
-const ws = new WebSocket("http://localhost:8080");
+const ws = new WebSocket("http://localhost:8080?room=coucou");
 ws.addEventListener("message", (message) => {
   console.log(message.data);
 });

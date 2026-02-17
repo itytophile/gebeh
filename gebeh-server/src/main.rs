@@ -5,6 +5,7 @@ use futures_util::TryFutureExt;
 use http_body_util::Empty;
 use hyper::Request;
 use hyper::Response;
+use hyper::StatusCode;
 use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -28,9 +29,34 @@ async fn handle_client(fut: upgrade::UpgradeFut) -> Result<(), WebSocketError> {
 
     Ok(())
 }
+
+fn prout(req: &Request<Incoming>) -> Result<String, &'static str> {
+    let Some((_, room)) = req
+        .uri()
+        .query()
+        .and_then(|q| url::form_urlencoded::parse(q.as_bytes()).find(|(key, _)| key == "room"))
+    else {
+        return Err("No room query parameter");
+    };
+    Ok(room.to_string())
+}
+
 async fn server_upgrade(
     mut req: Request<Incoming>,
 ) -> Result<Response<Empty<Bytes>>, WebSocketError> {
+    let room = match prout(&req) {
+        Ok(room) => room,
+        Err(err) => {
+            tracing::warn!("{err}");
+            return Ok(Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Empty::new())
+                .unwrap());
+        }
+    };
+
+    tracing::info!("Room: {room}");
+
     let (response, fut) = upgrade::upgrade(&mut req)?;
 
     tokio::task::spawn(async move {
