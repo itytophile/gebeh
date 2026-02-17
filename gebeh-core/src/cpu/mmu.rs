@@ -82,8 +82,14 @@ impl MmuCpuExt for State {
                 }
             }
             JOYPAD => peripherals.joypad.get_register(),
-            SB => self.sb,
-            SC => self.sc.bits() | 0b01111110,
+            SB => {
+                log::info!("Reading sb {}", self.sb);
+                self.sb
+            }
+            SC => {
+                log::info!("Reading sc {:?}", self.sc);
+                self.sc.bits() | 0b01111110
+            }
             0xff03 => 0xff,
             DIV => peripherals.timer.get_div(),
             TIMER_COUNTER => peripherals.timer.get_tima(),
@@ -146,8 +152,14 @@ impl MmuCpuExt for State {
             }
             NOT_USABLE..JOYPAD => {}
             JOYPAD => peripherals.joypad.set_register(value),
-            SB => self.sb = value,
-            SC => self.sc = SerialControl::from_bits_truncate(value),
+            SB => {
+                log::info!("Writing to sb 0x{value:02x}");
+                self.sb = value
+            }
+            SC => {
+                log::info!("Writing to sc {:?}", SerialControl::from_bits_truncate(value));
+                self.sc = SerialControl::from_bits_truncate(value)
+            }
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00

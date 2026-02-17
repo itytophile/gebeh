@@ -4,3 +4,4 @@ dist/
 downloads/
 *.gb
 *.o
+*.pem
