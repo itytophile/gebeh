@@ -1,15 +1,23 @@
 use std::borrow::Cow;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use color_eyre::eyre::ContextCompat;
+use fastwebsockets::CloseCode;
+use fastwebsockets::FragmentCollector;
 use fastwebsockets::Frame;
 use fastwebsockets::OpCode;
 use fastwebsockets::WebSocketError;
+use fastwebsockets::WebSocketRead;
 use fastwebsockets::upgrade;
 use fastwebsockets::upgrade::UpgradeFut;
 use futures_util::FutureExt;
+use futures_util::Stream;
+use futures_util::StreamExt;
 use futures_util::TryFutureExt;
 use futures_util::future;
+use futures_util::future::BoxFuture;
+use futures_util::stream;
 use http_body_util::Empty;
 use hyper::Request;
 use hyper::Response;
@@ -18,6 +26,7 @@ use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::Service;
+use tokio::io::AsyncRead;
 use tokio::net::TcpListener;
 use tracing_subscriber::fmt::format::FmtSpan;
 
@@ -122,39 +131,32 @@ async fn host(
     fut: UpgradeFut,
     mut broadcast_rx: tokio::sync::broadcast::Receiver<Arc<Guest>>,
 ) -> color_eyre::Result<()> {
-    let (host_rx, mut host_tx) = fut.await?.split(tokio::io::split);
-    let mut host_rx = fastwebsockets::FragmentCollectorRead::new(host_rx);
+    let mut host = fut.await?;
+    // it seems there are problems with auto messages
+    // https://github.com/denoland/fastwebsockets/issues/87
+    host.set_auto_close(false);
+    host.set_auto_pong(false);
+    let (mut host_rx, mut host_tx) = host.split(tokio::io::split);
 
-    let mut unreachable_fn = |_| {
-        unreachable!();
-    };
+    let mut host_messages = std::pin::pin!(bounded_msg_stream(host_rx));
 
-    let mut read_frame_fut = host_rx
-        .read_frame::<future::Ready<_>, _>(&mut unreachable_fn)
-        .boxed()
-        .fuse();
-
-    loop {
+    let guest: UpgradeFut = loop {
         futures_util::select! {
-            frame = read_frame_fut => {
-                let frame = frame?;
+            frame = host_messages.next().fuse() => {
+                let frame = frame.unwrap()?;
 
-                match frame.opcode {
-                    OpCode::Close => break,
-                    OpCode::Ping => host_tx.write_frame(Frame::pong(frame.payload)).await?,
+                match frame {
+                    BoundedMsg::Close => {
+                        host_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])).await?;
+                    },
+                    BoundedMsg::Ping(payload) => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&payload))).await?,
                     _ => {}
                 }
-
-                drop(read_frame_fut);
-                read_frame_fut = host_rx
-                    .read_frame::<_, WebSocketError>(&mut unreachable_fn)
-                    .boxed().fuse();
             },
             lol = broadcast_rx.recv().fuse() => {
                 match lol {
                     Ok(guest) if room == guest.room => {
-                            // if err then collision in room names
-                            let guest = guest.fut.try_lock().ok().and_then(|mut guard|guard.take()).context("Room name collision")?;
+                            break guest.fut.try_lock().ok().and_then(|mut guard|guard.take()).context("Room name collision")?;
                     },
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => return Err(color_eyre::Report::new(tokio::sync::broadcast::error::RecvError::Closed)),
                     // if it's lagging it's strange but whatever there is a timeout
@@ -162,7 +164,54 @@ async fn host(
                 }
             }
         };
-    }
+    };
 
-    Ok(())
+    drop(broadcast_rx);
+    drop(room);
+
+    let mut guest = guest.await?;
+    guest.set_auto_close(false);
+    guest.set_auto_pong(false);
+    let (guest_rx, mut guest_tx) = guest.split(tokio::io::split);
+
+    let mut guest_messages = std::pin::pin!(bounded_msg_stream(guest_rx));
+
+    loop {
+        futures_util::select! {
+            frame = host_messages.next().fuse() => {
+                let frame = frame.unwrap()?;
+            }
+            frame = guest_messages.next().fuse() => {
+                let frame = frame.unwrap()?;
+            }
+        }
+    }
+}
+
+enum BoundedMsg {
+    Close,
+    Binary(),
+    Ping([u8; 4]),
+    None,
+}
+
+// Unfold::next is cancel safe. Isn't it beautiful
+fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
+    read: WebSocketRead<T>,
+) -> impl Stream<Item = Result<BoundedMsg, WebSocketError>> {
+    stream::unfold(read, |mut read| async {
+        let mut send_fn = |_| {
+            unreachable!();
+        };
+        let res = read
+            .read_frame::<future::Ready<_>, WebSocketError>(&mut send_fn)
+            .await;
+        let res = res.map(|frame| match frame.opcode {
+            OpCode::Binary => todo!(),
+            OpCode::Close => BoundedMsg::Close,
+            OpCode::Ping => BoundedMsg::Ping(frame.payload.deref().try_into().unwrap()),
+            _ => BoundedMsg::None,
+        });
+        Some((res, read))
+    })
 }
