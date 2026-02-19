@@ -6,6 +6,7 @@ use color_eyre::eyre::ContextCompat;
 use fastwebsockets::CloseCode;
 use fastwebsockets::Frame;
 use fastwebsockets::OpCode;
+use fastwebsockets::WebSocket;
 use fastwebsockets::WebSocketError;
 use fastwebsockets::WebSocketRead;
 use fastwebsockets::WebSocketWrite;
@@ -128,6 +129,14 @@ struct Guest {
     fut: std::sync::Mutex<Option<UpgradeFut>>,
 }
 
+fn configure_ws<T>(ws: &mut WebSocket<T>) {
+    // it seems there are problems with auto messages
+    // https://github.com/denoland/fastwebsockets/issues/87
+    ws.set_auto_close(false);
+    ws.set_auto_pong(false);
+    ws.set_max_message_size(64);
+}
+
 #[instrument(fields(room))]
 async fn host(
     room: String,
@@ -135,10 +144,8 @@ async fn host(
     mut broadcast_rx: tokio::sync::broadcast::Receiver<Arc<Guest>>,
 ) -> color_eyre::Result<()> {
     let mut host = fut.await?;
-    // it seems there are problems with auto messages
-    // https://github.com/denoland/fastwebsockets/issues/87
-    host.set_auto_close(false);
-    host.set_auto_pong(false);
+    configure_ws(&mut host);
+
     let (host_rx, mut host_tx) = host.split(tokio::io::split);
 
     let mut host_messages = std::pin::pin!(bounded_msg_stream(host_rx));
@@ -162,8 +169,8 @@ async fn host(
     drop(room);
 
     let mut guest = guest.await?;
-    guest.set_auto_close(false);
-    guest.set_auto_pong(false);
+    configure_ws(&mut guest);
+
     let (guest_rx, mut guest_tx) = guest.split(tokio::io::split);
 
     let mut guest_messages = std::pin::pin!(bounded_msg_stream(guest_rx));
