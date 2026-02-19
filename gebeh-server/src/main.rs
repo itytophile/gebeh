@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use arrayvec::ArrayVec;
 use color_eyre::eyre::ContextCompat;
 use fastwebsockets::CloseCode;
 use fastwebsockets::FragmentCollector;
@@ -136,7 +137,7 @@ async fn host(
     // https://github.com/denoland/fastwebsockets/issues/87
     host.set_auto_close(false);
     host.set_auto_pong(false);
-    let (mut host_rx, mut host_tx) = host.split(tokio::io::split);
+    let (host_rx, mut host_tx) = host.split(tokio::io::split);
 
     let mut host_messages = std::pin::pin!(bounded_msg_stream(host_rx));
 
@@ -145,11 +146,11 @@ async fn host(
             frame = host_messages.next().fuse() => {
                 let frame = frame.unwrap()?;
 
-                match frame {
-                    BoundedMsg::Close => {
+                match frame.opcode {
+                    BoundedOpcode::Close => {
                         host_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])).await?;
                     },
-                    BoundedMsg::Ping(payload) => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&payload))).await?,
+                    BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
                     _ => {}
                 }
             },
@@ -188,17 +189,10 @@ async fn host(
     }
 }
 
-enum BoundedMsg {
-    Close,
-    Binary(),
-    Ping([u8; 4]),
-    None,
-}
-
 // Unfold::next is cancel safe. Isn't it beautiful
 fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
     read: WebSocketRead<T>,
-) -> impl Stream<Item = Result<BoundedMsg, WebSocketError>> {
+) -> impl Stream<Item = color_eyre::Result<BoundedFrame>> {
     stream::unfold(read, |mut read| async {
         let mut send_fn = |_| {
             unreachable!();
@@ -206,12 +200,89 @@ fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
         let res = read
             .read_frame::<future::Ready<_>, WebSocketError>(&mut send_fn)
             .await;
-        let res = res.map(|frame| match frame.opcode {
-            OpCode::Binary => todo!(),
-            OpCode::Close => BoundedMsg::Close,
-            OpCode::Ping => BoundedMsg::Ping(frame.payload.deref().try_into().unwrap()),
-            _ => BoundedMsg::None,
+        let res = res.map_err(color_eyre::Report::new).and_then(|frame| {
+            let mut payload = ArrayVec::new();
+            payload.try_extend_from_slice(&frame.payload)?;
+            Ok(BoundedFrame {
+                fin: frame.fin,
+                opcode: match frame.opcode {
+                    OpCode::Continuation => BoundedOpcode::Continuation,
+                    OpCode::Text => return Err(color_eyre::Report::msg("No text")),
+                    OpCode::Binary => BoundedOpcode::Binary,
+                    OpCode::Close => BoundedOpcode::Close,
+                    OpCode::Ping => BoundedOpcode::Ping,
+                    OpCode::Pong => BoundedOpcode::Pong,
+                },
+                payload,
+            })
         });
         Some((res, read))
     })
+}
+
+#[derive(Clone, Copy)]
+pub enum BoundedOpcode {
+    Continuation = 0x0,
+    Binary = 0x2,
+    Close = 0x8,
+    Ping = 0x9,
+    Pong = 0xA,
+}
+
+pub struct BoundedFrame {
+    pub fin: bool,
+    pub opcode: BoundedOpcode,
+    pub payload: ArrayVec<u8, 4>,
+}
+
+pub struct BoundedFragment {
+    opcode: BoundedOpcode,
+    payload: ArrayVec<u8, 4>,
+}
+
+struct BoundedFragments {
+    fragments: Option<BoundedFragment>,
+}
+
+impl BoundedFragments {
+    pub fn accumulate(&mut self, frame: BoundedFrame) -> color_eyre::Result<Option<BoundedFrame>> {
+        match frame.opcode {
+            BoundedOpcode::Binary => {
+                if !frame.fin {
+                    self.fragments = Some(BoundedFragment {
+                        payload: frame.payload,
+                        opcode: frame.opcode,
+                    });
+                    return Ok(None);
+                }
+
+                if self.fragments.is_some() {
+                    return Err(WebSocketError::InvalidFragment.into());
+                }
+
+                return Ok(Some(frame));
+            }
+            BoundedOpcode::Continuation => match self.fragments.as_mut() {
+                None => {
+                    return Err(WebSocketError::InvalidContinuationFrame.into());
+                }
+                Some(BoundedFragment { opcode, payload }) => {
+                    payload.try_extend_from_slice(&frame.payload)?;
+                    if frame.fin {
+                        let payload = payload.take();
+                        let opcode = *opcode;
+                        self.fragments = None;
+                        return Ok(Some(BoundedFrame {
+                            fin: true,
+                            opcode,
+                            payload,
+                        }));
+                    }
+                }
+            },
+            _ => return Ok(Some(frame)),
+        }
+
+        Ok(None)
+    }
 }

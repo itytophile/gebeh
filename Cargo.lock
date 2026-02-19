@@ -936,6 +936,7 @@ dependencies = [
 name = "gebeh-server"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "color-eyre",
  "fastwebsockets",
  "futures-util",
