@@ -193,31 +193,36 @@ async fn host(
 fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
     read: WebSocketRead<T>,
 ) -> impl Stream<Item = color_eyre::Result<BoundedFrame>> {
-    stream::unfold(read, |mut read| async {
-        let mut send_fn = |_| {
-            unreachable!();
-        };
-        let res = read
-            .read_frame::<future::Ready<_>, WebSocketError>(&mut send_fn)
-            .await;
-        let res = res.map_err(color_eyre::Report::new).and_then(|frame| {
-            let mut payload = ArrayVec::new();
-            payload.try_extend_from_slice(&frame.payload)?;
-            Ok(BoundedFrame {
-                fin: frame.fin,
-                opcode: match frame.opcode {
-                    OpCode::Continuation => BoundedOpcode::Continuation,
-                    OpCode::Text => return Err(color_eyre::Report::msg("No text")),
-                    OpCode::Binary => BoundedOpcode::Binary,
-                    OpCode::Close => BoundedOpcode::Close,
-                    OpCode::Ping => BoundedOpcode::Ping,
-                    OpCode::Pong => BoundedOpcode::Pong,
-                },
-                payload,
-            })
-        });
-        Some((res, read))
-    })
+    stream::try_unfold(
+        (read, BoundedFragments::default()),
+        |(mut read, mut fragments)| async {
+            let mut send_fn = |_| {
+                unreachable!();
+            };
+
+            loop {
+                let frame = read
+                    .read_frame::<future::Ready<_>, WebSocketError>(&mut send_fn)
+                    .await?;
+                let mut payload = ArrayVec::new();
+                payload.try_extend_from_slice(&frame.payload)?;
+                if let Some(frame) = fragments.accumulate(BoundedFrame {
+                    fin: frame.fin,
+                    opcode: match frame.opcode {
+                        OpCode::Continuation => BoundedOpcode::Continuation,
+                        OpCode::Text => return Err(color_eyre::Report::msg("No text")),
+                        OpCode::Binary => BoundedOpcode::Binary,
+                        OpCode::Close => BoundedOpcode::Close,
+                        OpCode::Ping => BoundedOpcode::Ping,
+                        OpCode::Pong => BoundedOpcode::Pong,
+                    },
+                    payload,
+                })? {
+                    return Ok(Some((frame, (read, fragments))));
+                }
+            }
+        },
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -240,6 +245,7 @@ pub struct BoundedFragment {
     payload: ArrayVec<u8, 4>,
 }
 
+#[derive(Default)]
 struct BoundedFragments {
     fragments: Option<BoundedFragment>,
 }
