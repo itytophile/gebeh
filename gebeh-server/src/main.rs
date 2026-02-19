@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrayvec::ArrayVec;
 use color_eyre::eyre::ContextCompat;
@@ -137,6 +138,9 @@ fn configure_ws<T>(ws: &mut WebSocket<T>) {
     ws.set_max_message_size(64);
 }
 
+const TIMEOUT_GUEST_WAIT: Duration = Duration::from_mins(1);
+const TIMEOUT_MSG: Duration = Duration::from_secs(10);
+
 #[instrument(fields(room))]
 async fn host(
     room: String,
@@ -150,18 +154,22 @@ async fn host(
 
     let mut host_messages = std::pin::pin!(bounded_msg_stream(host_rx));
 
-    let guest: UpgradeFut = loop {
-        futures_util::select! {
-            frame = host_messages.next().fuse() => {
-                handle_frame_before_guest(frame.unwrap()?, &mut host_tx).await?;
-            },
-            guest = broadcast_rx.recv().fuse() => {
-                if let Some(guest) = handle_guest_broadcast(&room, guest).await? {
-                    break guest;
+    let wait_guest_task = async {
+        loop {
+            futures_util::select! {
+                frame = host_messages.next().fuse() => {
+                    handle_frame_before_guest(frame.unwrap()?, &mut host_tx).await?;
+                },
+                guest = broadcast_rx.recv().fuse() => {
+                    if let Some(guest) = handle_guest_broadcast(&room, guest).await? {
+                        return Result::<_, color_eyre::Report>::Ok(guest);
+                    }
                 }
-            }
-        };
+            };
+        }
     };
+
+    let guest = tokio::time::timeout(TIMEOUT_GUEST_WAIT, wait_guest_task).await??;
 
     tracing::info!("Guest is connected!");
 
@@ -176,17 +184,36 @@ async fn host(
     let mut guest_messages = std::pin::pin!(bounded_msg_stream(guest_rx));
 
     // empty message to tell the host that the guest is connected
-    host_tx
-        .write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[])))
-        .await?;
+    tokio::time::timeout(
+        TIMEOUT_MSG,
+        host_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[]))),
+    )
+    .await??;
+
+    // have to make the futures outside select to not cancel the timeout
+    let mut host_message_timeout = tokio::time::timeout(TIMEOUT_MSG, host_messages.next())
+        .boxed()
+        .fuse();
+
+    let mut guest_message_timeout = tokio::time::timeout(TIMEOUT_MSG, guest_messages.next())
+        .boxed()
+        .fuse();
 
     loop {
         futures_util::select! {
-            frame = host_messages.next().fuse() => {
-                handle_frame(frame.unwrap()?, &mut host_tx, &mut guest_tx).await?;
+            frame = host_message_timeout => {
+                handle_frame(frame?.unwrap()?, &mut host_tx, &mut guest_tx).await?;
+                drop(host_message_timeout);
+                host_message_timeout = tokio::time::timeout(TIMEOUT_MSG, host_messages.next())
+                    .boxed()
+                    .fuse();
             }
-            frame = guest_messages.next().fuse() => {
-                handle_frame(frame.unwrap()?, &mut guest_tx, &mut host_tx).await?;
+            frame = guest_message_timeout => {
+                handle_frame(frame?.unwrap()?, &mut guest_tx, &mut host_tx).await?;
+                drop(guest_message_timeout);
+                guest_message_timeout = tokio::time::timeout(TIMEOUT_MSG, guest_messages.next())
+                    .boxed()
+                    .fuse();
             }
         }
     }
@@ -248,28 +275,32 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
 ) -> color_eyre::Result<()> {
     match frame.opcode {
         BoundedOpcode::Close => {
-            future::try_join(
+            let close_task = future::try_join(
                 current_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])),
                 other_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])),
-            )
-            .await?;
+            );
+            tokio::time::timeout(TIMEOUT_MSG, close_task).await??;
             return Err(color_eyre::Report::msg("Host connection closed"));
         }
         BoundedOpcode::Ping => {
-            current_tx
-                .write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
+            tokio::time::timeout(
+                TIMEOUT_MSG,
+                current_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
                     &frame.payload,
-                )))
-                .await?
+                ))),
+            )
+            .await??
         }
         BoundedOpcode::Binary => {
-            other_tx
-                .write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[frame
+            tokio::time::timeout(
+                TIMEOUT_MSG,
+                other_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[frame
                     .payload
                     .first()
                     .copied()
-                    .context(color_eyre::Report::msg("Invalid message from host"))?])))
-                .await?
+                    .context(color_eyre::Report::msg("Invalid message from host"))?]))),
+            )
+            .await??
         }
         _ => {}
     }
