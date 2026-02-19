@@ -13,7 +13,6 @@ hyper = { version = "1.8.1", features = ["server"] }
 hyper-util = "0.1.20"
 names = "0.14.0"
 tokio = { version = "1.49.0", features = ["net", "rt"] }
-tokio-stream = { version = "0.1.18", features = ["net"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 url = "2.5.8"

@@ -1,15 +1,14 @@
 use std::borrow::Cow;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use arrayvec::ArrayVec;
 use color_eyre::eyre::ContextCompat;
 use fastwebsockets::CloseCode;
-use fastwebsockets::FragmentCollector;
 use fastwebsockets::Frame;
 use fastwebsockets::OpCode;
 use fastwebsockets::WebSocketError;
 use fastwebsockets::WebSocketRead;
+use fastwebsockets::WebSocketWrite;
 use fastwebsockets::upgrade;
 use fastwebsockets::upgrade::UpgradeFut;
 use futures_util::FutureExt;
@@ -17,7 +16,6 @@ use futures_util::Stream;
 use futures_util::StreamExt;
 use futures_util::TryFutureExt;
 use futures_util::future;
-use futures_util::future::BoxFuture;
 use futures_util::stream;
 use http_body_util::Empty;
 use hyper::Request;
@@ -28,6 +26,7 @@ use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::Service;
 use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
 use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -157,8 +156,8 @@ async fn host(
                     _ => {}
                 }
             },
-            lol = broadcast_rx.recv().fuse() => {
-                match lol {
+            guest = broadcast_rx.recv().fuse() => {
+                match guest {
                     Ok(guest) if room == guest.room => {
                             break guest.fut.try_lock().ok().and_then(|mut guard|guard.take()).context("Room name collision")?;
                     },
@@ -182,34 +181,57 @@ async fn host(
 
     let mut guest_messages = std::pin::pin!(bounded_msg_stream(guest_rx));
 
+    // empty message to tell the host that the guest is connected
+    host_tx
+        .write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[])))
+        .await?;
+
     loop {
         futures_util::select! {
             frame = host_messages.next().fuse() => {
-                let frame = frame.unwrap()?;
-
-                match frame.opcode {
-                    BoundedOpcode::Close => {
-                        future::try_join(host_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])), guest_tx.write_frame(Frame::close(CloseCode::Away.into(), &[]))).await?;
-                        return Err(color_eyre::Report::msg("Host connection closed"));
-                    },
-                    BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
-                    _ => {}
-                }
+                handle_frame(frame.unwrap()?, &mut host_tx, &mut guest_tx).await?;
             }
             frame = guest_messages.next().fuse() => {
-                let frame = frame.unwrap()?;
-
-                match frame.opcode {
-                    BoundedOpcode::Close => {
-                        future::try_join(host_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])), guest_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[]))).await?;
-                        return Err(color_eyre::Report::msg("Guest connection closed"));
-                    },
-                    BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
-                    _ => {}
-                }
+                handle_frame(frame.unwrap()?, &mut guest_tx, &mut host_tx).await?;
             }
         }
     }
+}
+
+async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
+    frame: BoundedFrame,
+    current_tx: &mut WebSocketWrite<T>,
+    other_tx: &mut WebSocketWrite<U>,
+) -> color_eyre::Result<()> {
+    match frame.opcode {
+        BoundedOpcode::Close => {
+            future::try_join(
+                current_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])),
+                other_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])),
+            )
+            .await?;
+            return Err(color_eyre::Report::msg("Host connection closed"));
+        }
+        BoundedOpcode::Ping => {
+            current_tx
+                .write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
+                    &frame.payload,
+                )))
+                .await?
+        }
+        BoundedOpcode::Binary => {
+            other_tx
+                .write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[frame
+                    .payload
+                    .first()
+                    .copied()
+                    .context(color_eyre::Report::msg("Invalid message from host"))?])))
+                .await?
+        }
+        _ => {}
+    }
+
+    Ok(())
 }
 
 // Unfold::next is cancel safe. Isn't it beautiful
