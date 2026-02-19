@@ -29,6 +29,7 @@ use hyper::server::conn::http1;
 use hyper::service::Service;
 use tokio::io::AsyncRead;
 use tokio::net::TcpListener;
+use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
 
 fn get_room(req: &Request<Incoming>) -> Option<Cow<'_, str>> {
@@ -127,6 +128,7 @@ struct Guest {
     fut: std::sync::Mutex<Option<UpgradeFut>>,
 }
 
+#[instrument(fields(room))]
 async fn host(
     room: String,
     fut: UpgradeFut,
@@ -168,6 +170,8 @@ async fn host(
         };
     };
 
+    tracing::info!("Guest is connected!");
+
     drop(broadcast_rx);
     drop(room);
 
@@ -194,7 +198,7 @@ async fn host(
             }
             frame = guest_messages.next().fuse() => {
                 let frame = frame.unwrap()?;
-                
+
                 match frame.opcode {
                     BoundedOpcode::Close => {
                         future::try_join(host_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])), guest_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[]))).await?;
