@@ -139,7 +139,7 @@ fn configure_ws<T>(ws: &mut WebSocket<T>) {
 }
 
 const TIMEOUT_GUEST_WAIT: Duration = Duration::from_mins(1);
-const TIMEOUT_MSG: Duration = Duration::from_secs(10);
+const TIMEOUT_WS: Duration = Duration::from_secs(10);
 
 #[instrument(fields(room))]
 async fn host(
@@ -147,7 +147,7 @@ async fn host(
     fut: UpgradeFut,
     mut broadcast_rx: tokio::sync::broadcast::Receiver<Arc<Guest>>,
 ) -> color_eyre::Result<()> {
-    let mut host = fut.await?;
+    let mut host = tokio::time::timeout(TIMEOUT_WS, fut).await??;
     configure_ws(&mut host);
 
     let (host_rx, mut host_tx) = host.split(tokio::io::split);
@@ -161,7 +161,7 @@ async fn host(
                     handle_frame_before_guest(frame.unwrap()?, &mut host_tx).await?;
                 },
                 guest = broadcast_rx.recv().fuse() => {
-                    if let Some(guest) = handle_guest_broadcast(&room, guest).await? {
+                    if let Some(guest) = handle_guest_broadcast(&room, guest)? {
                         return Result::<_, color_eyre::Report>::Ok(guest);
                     }
                 }
@@ -176,7 +176,7 @@ async fn host(
     drop(broadcast_rx);
     drop(room);
 
-    let mut guest = guest.await?;
+    let mut guest = tokio::time::timeout(TIMEOUT_GUEST_WAIT, guest).await??;
     configure_ws(&mut guest);
 
     let (guest_rx, mut guest_tx) = guest.split(tokio::io::split);
@@ -185,17 +185,17 @@ async fn host(
 
     // empty message to tell the host that the guest is connected
     tokio::time::timeout(
-        TIMEOUT_MSG,
+        TIMEOUT_WS,
         host_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[]))),
     )
     .await??;
 
     // have to make the futures outside select to not cancel the timeout
-    let mut host_message_timeout = tokio::time::timeout(TIMEOUT_MSG, host_messages.next())
+    let mut host_message_timeout = tokio::time::timeout(TIMEOUT_WS, host_messages.next())
         .boxed()
         .fuse();
 
-    let mut guest_message_timeout = tokio::time::timeout(TIMEOUT_MSG, guest_messages.next())
+    let mut guest_message_timeout = tokio::time::timeout(TIMEOUT_WS, guest_messages.next())
         .boxed()
         .fuse();
 
@@ -204,14 +204,14 @@ async fn host(
             frame = host_message_timeout => {
                 handle_frame(frame?.unwrap()?, &mut host_tx, &mut guest_tx).await?;
                 drop(host_message_timeout);
-                host_message_timeout = tokio::time::timeout(TIMEOUT_MSG, host_messages.next())
+                host_message_timeout = tokio::time::timeout(TIMEOUT_WS, host_messages.next())
                     .boxed()
                     .fuse();
             }
             frame = guest_message_timeout => {
                 handle_frame(frame?.unwrap()?, &mut guest_tx, &mut host_tx).await?;
                 drop(guest_message_timeout);
-                guest_message_timeout = tokio::time::timeout(TIMEOUT_MSG, guest_messages.next())
+                guest_message_timeout = tokio::time::timeout(TIMEOUT_WS, guest_messages.next())
                     .boxed()
                     .fuse();
             }
@@ -241,7 +241,7 @@ async fn handle_frame_before_guest<T: Unpin + AsyncWrite>(
     Ok(())
 }
 
-async fn handle_guest_broadcast(
+fn handle_guest_broadcast(
     room: &str,
     res: Result<Arc<Guest>, RecvError>,
 ) -> color_eyre::Result<Option<UpgradeFut>> {
@@ -279,12 +279,12 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
                 current_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])),
                 other_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])),
             );
-            tokio::time::timeout(TIMEOUT_MSG, close_task).await??;
+            tokio::time::timeout(TIMEOUT_WS, close_task).await??;
             return Err(color_eyre::Report::msg("Host connection closed"));
         }
         BoundedOpcode::Ping => {
             tokio::time::timeout(
-                TIMEOUT_MSG,
+                TIMEOUT_WS,
                 current_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
                     &frame.payload,
                 ))),
@@ -293,7 +293,7 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
         }
         BoundedOpcode::Binary => {
             tokio::time::timeout(
-                TIMEOUT_MSG,
+                TIMEOUT_WS,
                 other_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[frame
                     .payload
                     .first()
