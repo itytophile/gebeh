@@ -50,6 +50,7 @@ fn main() -> color_eyre::Result<()> {
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_io()
+        .enable_time()
         .build()
         .unwrap();
 
@@ -114,8 +115,8 @@ impl Service<Request<Incoming>> for Svc {
             let rx = self.broadcast.subscribe();
             let room = self.possible_room_name.clone();
             tokio::task::spawn(async move {
-                if let Err(e) = host(room, fut, rx).await {
-                    eprintln!("Error in websocket connection: {}", e);
+                if let Err(err) = host(&room, fut, rx).await {
+                    tracing::warn!("Error in room {room}: {err}");
                 }
             });
         }
@@ -141,9 +142,9 @@ fn configure_ws<T>(ws: &mut WebSocket<T>) {
 const TIMEOUT_GUEST_WAIT: Duration = Duration::from_mins(1);
 const TIMEOUT_WS: Duration = Duration::from_secs(10);
 
-#[instrument(fields(room))]
+#[instrument(skip(fut, broadcast_rx))]
 async fn host(
-    room: String,
+    room: &str,
     fut: UpgradeFut,
     mut broadcast_rx: tokio::sync::broadcast::Receiver<Arc<Guest>>,
 ) -> color_eyre::Result<()> {
@@ -161,7 +162,7 @@ async fn host(
                     handle_frame_before_guest(frame.unwrap()?, &mut host_tx).await?;
                 },
                 guest = broadcast_rx.recv().fuse() => {
-                    if let Some(guest) = handle_guest_broadcast(&room, guest)? {
+                    if let Some(guest) = handle_guest_broadcast(room, guest)? {
                         return Result::<_, color_eyre::Report>::Ok(guest);
                     }
                 }
@@ -174,7 +175,6 @@ async fn host(
     tracing::info!("Guest is connected!");
 
     drop(broadcast_rx);
-    drop(room);
 
     let mut guest = tokio::time::timeout(TIMEOUT_GUEST_WAIT, guest).await??;
     configure_ws(&mut guest);
