@@ -28,6 +28,7 @@ use hyper::service::Service;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
 
@@ -145,25 +146,11 @@ async fn host(
     let guest: UpgradeFut = loop {
         futures_util::select! {
             frame = host_messages.next().fuse() => {
-                let frame = frame.unwrap()?;
-
-                match frame.opcode {
-                    BoundedOpcode::Close => {
-                        host_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])).await?;
-                        return Err(color_eyre::Report::msg("Host connection closed"));
-                    },
-                    BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
-                    _ => {}
-                }
+                handle_frame_before_guest(frame.unwrap()?, &mut host_tx).await?;
             },
             guest = broadcast_rx.recv().fuse() => {
-                match guest {
-                    Ok(guest) if room == guest.room => {
-                            break guest.fut.try_lock().ok().and_then(|mut guard|guard.take()).context("Room name collision")?;
-                    },
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return Err(color_eyre::Report::new(tokio::sync::broadcast::error::RecvError::Closed)),
-                    // if it's lagging it's strange but whatever there is a timeout
-                    _ => {}
+                if let Some(guest) = handle_guest_broadcast(&room, guest).await? {
+                    break guest;
                 }
             }
         };
@@ -196,6 +183,55 @@ async fn host(
             }
         }
     }
+}
+
+async fn handle_frame_before_guest<T: Unpin + AsyncWrite>(
+    frame: BoundedFrame,
+    tx: &mut WebSocketWrite<T>,
+) -> color_eyre::Result<()> {
+    match frame.opcode {
+        BoundedOpcode::Close => {
+            tx.write_frame(Frame::close(CloseCode::Normal.into(), &[]))
+                .await?;
+            return Err(color_eyre::Report::msg("Host connection closed"));
+        }
+        BoundedOpcode::Ping => {
+            tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
+                &frame.payload,
+            )))
+            .await?
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+async fn handle_guest_broadcast(
+    room: &str,
+    res: Result<Arc<Guest>, RecvError>,
+) -> color_eyre::Result<Option<UpgradeFut>> {
+    match res {
+        Ok(guest) if room == guest.room => {
+            return Ok(Some(
+                guest
+                    .fut
+                    .try_lock()
+                    .ok()
+                    .and_then(|mut guard| guard.take())
+                    .context("Room name collision")?,
+            ));
+        }
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+            return Err(color_eyre::Report::new(
+                tokio::sync::broadcast::error::RecvError::Closed,
+            ));
+        }
+        // if it's lagging it's strange but whatever there is a timeout
+        _ => {}
+    }
+
+    Ok(None)
 }
 
 async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
