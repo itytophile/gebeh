@@ -149,6 +149,7 @@ async fn host(
                 match frame.opcode {
                     BoundedOpcode::Close => {
                         host_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])).await?;
+                        return Err(color_eyre::Report::msg("Host connection closed"));
                     },
                     BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
                     _ => {}
@@ -181,9 +182,27 @@ async fn host(
         futures_util::select! {
             frame = host_messages.next().fuse() => {
                 let frame = frame.unwrap()?;
+
+                match frame.opcode {
+                    BoundedOpcode::Close => {
+                        future::try_join(host_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])), guest_tx.write_frame(Frame::close(CloseCode::Away.into(), &[]))).await?;
+                        return Err(color_eyre::Report::msg("Host connection closed"));
+                    },
+                    BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
+                    _ => {}
+                }
             }
             frame = guest_messages.next().fuse() => {
                 let frame = frame.unwrap()?;
+                
+                match frame.opcode {
+                    BoundedOpcode::Close => {
+                        future::try_join(host_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])), guest_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[]))).await?;
+                        return Err(color_eyre::Report::msg("Guest connection closed"));
+                    },
+                    BoundedOpcode::Ping => host_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(&frame.payload))).await?,
+                    _ => {}
+                }
             }
         }
     }
