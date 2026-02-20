@@ -142,6 +142,7 @@ fn configure_ws<T>(ws: &mut WebSocket<T>) {
 
 const TIMEOUT_GUEST_WAIT: Duration = Duration::from_mins(1);
 const TIMEOUT_WS: Duration = Duration::from_secs(10);
+const PING_PERIOD: Duration = Duration::from_secs(2);
 
 #[instrument(skip(fut, broadcast_rx))]
 async fn host(
@@ -162,9 +163,14 @@ async fn host(
     )
     .await??;
 
+    let mut interval = tokio::time::interval(PING_PERIOD);
+
     let wait_guest_task = async {
         loop {
             futures_util::select! {
+                _ = interval.tick().fuse() => {
+                    handle_tick_single(&mut host_tx).await?;
+                }
                 frame = host_messages.next().fuse() => {
                     handle_frame_before_guest(frame.unwrap()?, &mut host_tx).await?;
                 },
@@ -208,6 +214,9 @@ async fn host(
 
     loop {
         futures_util::select! {
+            _ = interval.tick().fuse() => {
+                handle_tick(&mut host_tx, &mut guest_tx).await?;
+            }
             frame = host_message_timeout => {
                 handle_frame(frame?.unwrap()?, &mut host_tx, &mut guest_tx).await?;
                 drop(host_message_timeout);
@@ -224,6 +233,34 @@ async fn host(
             }
         }
     }
+}
+
+async fn handle_tick_single<T: Unpin + AsyncWrite>(
+    tx0: &mut WebSocketWrite<T>,
+) -> color_eyre::Result<()> {
+    tokio::time::timeout(
+        TIMEOUT_WS,
+        tx0.write_frame(Frame::new(true, OpCode::Ping, None, Payload::Borrowed(&[]))),
+    )
+    .await??;
+
+    Ok(())
+}
+
+async fn handle_tick<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
+    tx0: &mut WebSocketWrite<T>,
+    tx1: &mut WebSocketWrite<U>,
+) -> color_eyre::Result<()> {
+    tokio::time::timeout(
+        TIMEOUT_WS,
+        future::try_join(
+            tx0.write_frame(Frame::new(true, OpCode::Ping, None, Payload::Borrowed(&[]))),
+            tx1.write_frame(Frame::new(true, OpCode::Ping, None, Payload::Borrowed(&[]))),
+        ),
+    )
+    .await??;
+
+    Ok(())
 }
 
 async fn handle_frame_before_guest<T: Unpin + AsyncWrite>(
