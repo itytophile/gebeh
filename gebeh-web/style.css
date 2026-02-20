@@ -69,6 +69,11 @@ canvas {
   flex-wrap: wrap;
 }
 
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+}
+
 .hidden {
     display: none;
 }
