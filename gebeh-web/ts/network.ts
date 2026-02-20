@@ -22,6 +22,12 @@ if (!(roomDiv instanceof HTMLDivElement)) {
   throw new TypeError("roomDiv is not a div");
 }
 
+const CLOSE_MESSAGE = "Room closed 🍗🍗";
+
+function getReadyRoomMessage(room: string) {
+  return `${room} 🐣🐔`;
+}
+
 createRoomButton.addEventListener("click", () => {
   const ws = new WebSocket("http://localhost:8080");
   ws.addEventListener("open", () => {
@@ -46,7 +52,7 @@ createRoomButton.addEventListener("click", () => {
         break;
       }
       case "waitGuest": {
-        roomDiv.textContent = `${state.room} 🐣🐔`;
+        roomDiv.textContent = getReadyRoomMessage(state.room);
         state = { type: "done" };
         break;
       }
@@ -54,20 +60,21 @@ createRoomButton.addEventListener("click", () => {
     console.log(message.data);
   });
   ws.addEventListener("close", () => {
-    console.log("c'est closed");
+    roomDiv.textContent = CLOSE_MESSAGE;
   });
 });
 
 joinRoomButton.addEventListener("click", () => {
-  const ws = new WebSocket(`http://localhost:8080?room=${roomInput.value}`);
+  const room = roomInput.value.trim();
+  const ws = new WebSocket(`http://localhost:8080?room=${room}`);
   ws.addEventListener("open", () => {
-    roomDiv.textContent = `${roomInput.value} 🐣🐔`;
+    roomDiv.textContent = getReadyRoomMessage(room);
     console.log("guest!");
   });
   ws.addEventListener("message", (message) => {
     console.log(message.data);
   });
   ws.addEventListener("close", () => {
-    console.log("c'est closed");
+    roomDiv.textContent = CLOSE_MESSAGE;
   });
 });
