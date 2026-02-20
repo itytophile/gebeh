@@ -10,6 +10,7 @@ import {
 } from "./common.js";
 import { addInputs } from "./keyboard.js";
 import { getSave, writeSave } from "./saves.js";
+import "./network.js";
 
 const toolbar = document.getElementById("toolbar");
 
@@ -163,10 +164,3 @@ function getTitleFromRom(rom: Uint8Array): string {
   return decoder.decode(title.slice(0, endZeroPos));
 }
 
-const ws = new WebSocket("http://localhost:8080");
-ws.addEventListener("message", (message) => {
-  console.log(message.data);
-});
-ws.addEventListener("close", () => {
-  console.log("c'est closed");
-});

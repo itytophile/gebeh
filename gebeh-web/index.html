@@ -10,8 +10,13 @@
   <body>
     <div class="content">
       <div class="screen">
-        <div id="toolbar" class="toolbar">
+        <div id="toolbar" class="flex-row">
           <input type="file" id="rom-input" />
+          <div class="flex-row">
+            <input type="text" placeholder="Room to join" id="roomInput" />
+            <button id="joinRoomBtn">Join room</button>
+          </div>
+          <button id="createRoomBtn">Create room</button>
         </div>
         <canvas id="canvas" tabindex="1" width="160" height="144"></canvas>
       </div>
