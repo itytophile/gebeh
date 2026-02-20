@@ -11,6 +11,12 @@ import {
 import { addInputs } from "./keyboard.js";
 import { getSave, writeSave } from "./saves.js";
 
+const toolbar = document.getElementById("toolbar");
+
+if (!(toolbar instanceof HTMLDivElement)) {
+  throw new TypeError("toolbar is not a div");
+}
+
 const romInput = document.getElementById("rom-input");
 
 if (!(romInput instanceof HTMLInputElement)) {
@@ -26,6 +32,8 @@ romInput.addEventListener("change", async () => {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const node = await getAudioWorkletNode();
+
+  toolbar.classList.add("hidden");
 
   if (isNodeReady) {
     const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
