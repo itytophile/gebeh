@@ -110,6 +110,13 @@ class WasmProcessor
             this.isMessagesEnabled = true;
             break;
           }
+          case "serial": {
+            if (!this.emulator) {
+              throw new Error("Emulator not ready for serial");
+            }
+            this.emulator.set_serial_byte(data.byte);
+            break;
+          }
         }
       },
     );
@@ -148,6 +155,15 @@ class WasmProcessor
             buffer: frame,
           } satisfies FromNodeMessage,
           [frame.buffer],
+        );
+      },
+      (serial_byte: number) => {
+        this.port.postMessage(
+          {
+            type: "serial",
+            byte: serial_byte,
+          } satisfies FromNodeMessage,
+          [],
         );
       },
     );

@@ -175,10 +175,8 @@ impl SerialNetwork {
             // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
             // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
             // This means a master will start to receive $FF bytes.
-            if let Err(err) = on_serial.call1(
-                &JsValue::null(),
-                &js_sys::Uint8Array::new_from_slice(&[state.sb]),
-            ) {
+            if let Err(err) = on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+            {
                 console::error_1(&err);
             }
             if let Some(byte) = self.queue.take() {
