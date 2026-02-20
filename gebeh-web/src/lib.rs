@@ -21,6 +21,7 @@ pub struct WebEmulator {
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
+    serial_network: SerialNetwork,
 }
 
 #[wasm_bindgen]
@@ -48,6 +49,7 @@ impl WebEmulator {
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
+            serial_network: Default::default(),
         })
     }
 
@@ -58,6 +60,7 @@ impl WebEmulator {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
+        on_serial: &js_sys::Function,
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -73,19 +76,19 @@ impl WebEmulator {
 
             for _ in 0..cycles {
                 self.emulator.execute(self.mbc.as_mut());
-                execute_serial(&mut self.emulator.state);
+                self.serial_network
+                    .execute(&mut self.emulator.state, on_serial);
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
                         [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
 
-                    if self.emulator.get_ppu().get_ly() == HEIGHT - 1 {
-                        let this = JsValue::null();
-                        if let Err(err) = on_new_frame.call1(
-                            &this,
+                    if self.emulator.get_ppu().get_ly() == HEIGHT - 1
+                        && let Err(err) = on_new_frame.call1(
+                            &JsValue::null(),
                             &js_sys::Uint8Array::new_from_slice(&self.current_frame),
-                        ) {
-                            console::error_1(&err);
-                        }
+                        )
+                    {
+                        console::error_1(&err);
                     }
                 }
             }
@@ -135,6 +138,11 @@ impl WebEmulator {
     pub fn set_up(&mut self, value: bool) {
         self.emulator.get_joypad_mut().up = value;
     }
+
+    pub fn set_serial_byte(&mut self, value: u8) {
+        self.serial_network
+            .set_serial_byte(&mut self.emulator.state, value);
+    }
 }
 
 #[wasm_bindgen]
@@ -154,16 +162,45 @@ impl Save {
     }
 }
 
-fn execute_serial(state: &mut State) {
-    if state
-        .sc
-        .contains(SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT)
-    {
-        // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
-        // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
-        // This means a master will start to receive $FF bytes.
-        state.sb = 0xff;
-        state.sc.remove(SerialControl::TRANSFER_ENABLE);
-        state.interrupt_flag.insert(Interruptions::SERIAL);
+#[derive(Default)]
+struct SerialNetwork {
+    is_sending: bool,
+    queue: Option<u8>,
+}
+
+impl SerialNetwork {
+    fn execute(&mut self, state: &mut State, on_serial: &js_sys::Function) {
+        if !self.is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            self.is_sending = true;
+            // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
+            // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
+            // This means a master will start to receive $FF bytes.
+            if let Err(err) = on_serial.call1(
+                &JsValue::null(),
+                &js_sys::Uint8Array::new_from_slice(&[state.sb]),
+            ) {
+                console::error_1(&err);
+            }
+            if let Some(byte) = self.queue.take() {
+                self.set_serial_byte(state, byte);
+            }
+            // state.sb = 0xff;
+            // state.sc.remove(SerialControl::TRANSFER_ENABLE);
+            // state.interrupt_flag.insert(Interruptions::SERIAL);
+        }
+    }
+    fn set_serial_byte(&mut self, state: &mut State, byte: u8) {
+        if self.is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            state.sc.remove(SerialControl::TRANSFER_ENABLE);
+            state.interrupt_flag.insert(Interruptions::SERIAL);
+
+            state.sb = byte;
+            self.is_sending = false;
+        } else {
+            if self.queue.is_some() {
+                console::error_1(&JsValue::from_str("Received a byte with queue full"));
+            }
+            self.queue = Some(byte);
+        }
     }
 }
