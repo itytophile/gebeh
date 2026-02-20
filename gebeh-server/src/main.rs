@@ -7,6 +7,7 @@ use color_eyre::eyre::ContextCompat;
 use fastwebsockets::CloseCode;
 use fastwebsockets::Frame;
 use fastwebsockets::OpCode;
+use fastwebsockets::Payload;
 use fastwebsockets::WebSocket;
 use fastwebsockets::WebSocketError;
 use fastwebsockets::WebSocketRead;
@@ -154,6 +155,12 @@ async fn host(
     let (host_rx, mut host_tx) = host.split(tokio::io::split);
 
     let mut host_messages = std::pin::pin!(bounded_msg_stream(host_rx));
+
+    tokio::time::timeout(
+        TIMEOUT_WS,
+        host_tx.write_frame(Frame::text(Payload::Borrowed(room.as_bytes()))),
+    )
+    .await??;
 
     let wait_guest_task = async {
         loop {
