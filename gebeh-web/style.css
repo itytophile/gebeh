@@ -70,10 +70,10 @@ canvas {
 }
 
 .toolbar {
-    display: flex;
-    justify-content: space-between;
+  display: flex;
+  justify-content: space-between;
 }
 
 .hidden {
-    display: none;
+  display: none;
 }

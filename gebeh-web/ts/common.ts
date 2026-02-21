@@ -31,6 +31,7 @@ export type FromMainMessage =
   | { type: "disableMessages" }
   | { type: "enableMessages" }
   | { type: "serialConnected" }
+  | { type: "serialDisconnected" }
   | {
       type: "serial";
       byte: number;

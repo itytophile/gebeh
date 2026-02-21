@@ -165,4 +165,3 @@ function getTitleFromRom(rom: Uint8Array): string {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   return decoder.decode(title.slice(0, endZeroPos));
 }
-
