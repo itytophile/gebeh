@@ -143,6 +143,17 @@ impl WebEmulator {
         self.serial_network
             .set_serial_byte(&mut self.emulator.state, value);
     }
+
+    pub fn set_is_serial_connected(&mut self, value: bool) {
+        if value {
+            self.serial_network = SerialNetwork::Connected {
+                is_sending: false,
+                queue: None,
+            };
+        } else {
+            self.serial_network = SerialNetwork::WaitConnection
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -163,42 +174,68 @@ impl Save {
 }
 
 #[derive(Default)]
-struct SerialNetwork {
-    is_sending: bool,
-    queue: Option<u8>,
+enum SerialNetwork {
+    #[default]
+    WaitConnection,
+    Connected {
+        is_sending: bool,
+        queue: Option<u8>,
+    },
 }
 
 impl SerialNetwork {
     fn execute(&mut self, state: &mut State, on_serial: &js_sys::Function) {
-        if !self.is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-            self.is_sending = true;
-            // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
-            // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
-            // This means a master will start to receive $FF bytes.
-            if let Err(err) = on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
-            {
-                console::error_1(&err);
+        match self {
+            SerialNetwork::WaitConnection => {
+                if state
+                    .sc
+                    .contains(SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT)
+                {
+                    // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
+                    // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
+                    // This means a master will start to receive $FF bytes.
+                    state.sb = 0xff;
+                    state.sc.remove(SerialControl::TRANSFER_ENABLE);
+                    state.interrupt_flag.insert(Interruptions::SERIAL);
+                    if let Err(err) =
+                        on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+                    {
+                        console::error_1(&err);
+                    }
+                }
             }
-            if let Some(byte) = self.queue.take() {
-                self.set_serial_byte(state, byte);
+            SerialNetwork::Connected { is_sending, queue } => {
+                if !*is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+                    *is_sending = true;
+
+                    if let Err(err) =
+                        on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+                    {
+                        console::error_1(&err);
+                    }
+                    if let Some(byte) = queue.take() {
+                        self.set_serial_byte(state, byte);
+                    }
+                }
             }
-            // state.sb = 0xff;
-            // state.sc.remove(SerialControl::TRANSFER_ENABLE);
-            // state.interrupt_flag.insert(Interruptions::SERIAL);
         }
     }
     fn set_serial_byte(&mut self, state: &mut State, byte: u8) {
-        if self.is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+        let Self::Connected { is_sending, queue } = self else {
+            panic!("Call set_is_serial_connected before setting the serial byte");
+        };
+
+        if *is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
             state.sc.remove(SerialControl::TRANSFER_ENABLE);
             state.interrupt_flag.insert(Interruptions::SERIAL);
 
             state.sb = byte;
-            self.is_sending = false;
+            *is_sending = false;
         } else {
-            if self.queue.is_some() {
+            if queue.is_some() {
                 console::error_1(&JsValue::from_str("Received a byte with queue full"));
             }
-            self.queue = Some(byte);
+            *queue = Some(byte);
         }
     }
 }

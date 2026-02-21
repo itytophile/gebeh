@@ -1,4 +1,4 @@
-import { FromNodeMessage } from "./common";
+import { FromMainMessage, FromNodeMessage } from "./common";
 
 const roomInput = document.getElementById("roomInput");
 
@@ -66,6 +66,9 @@ export const addNetwork = (port: MessagePort) => {
         case "waitGuest": {
           roomDiv.textContent = getReadyRoomMessage(state.room);
           state = { type: "done" };
+          port.postMessage({
+            type: "serialConnected",
+          } satisfies FromMainMessage);
           break;
         }
         case "done": {
@@ -75,7 +78,7 @@ export const addNetwork = (port: MessagePort) => {
           port.postMessage({
             type: "serial",
             byte: new DataView(message.data).getUint8(0),
-          } satisfies FromNodeMessage);
+          } satisfies FromMainMessage);
           break;
         }
       }
@@ -92,6 +95,7 @@ export const addNetwork = (port: MessagePort) => {
     ws.addEventListener("open", () => {
       roomDiv.textContent = getReadyRoomMessage(room);
       console.log("guest!");
+      port.postMessage({ type: "serialConnected" } satisfies FromMainMessage);
       port.addEventListener(
         "message",
         ({ data }: MessageEvent<FromNodeMessage>) => {

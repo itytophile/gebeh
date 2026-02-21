@@ -110,6 +110,13 @@ class WasmProcessor
             this.isMessagesEnabled = true;
             break;
           }
+          case "serialConnected": {
+            if (!this.emulator) {
+              throw new Error("Emulator not ready for serial");
+            }
+            this.emulator.set_is_serial_connected(true);
+            break
+          }
           case "serial": {
             if (!this.emulator) {
               throw new Error("Emulator not ready for serial");
