@@ -139,9 +139,9 @@ impl WebEmulator {
         self.emulator.get_joypad_mut().up = value;
     }
 
-    pub fn set_serial_byte(&mut self, value: u8) {
+    pub fn set_serial_byte(&mut self, value: u8, on_serial: &js_sys::Function) {
         self.serial_network
-            .set_serial_byte(&mut self.emulator.state, value);
+            .set_serial_byte(&mut self.emulator.state, value, on_serial);
     }
 
     pub fn set_is_serial_connected(&mut self, value: bool) {
@@ -205,30 +205,40 @@ impl SerialNetwork {
                 }
             }
             SerialNetwork::Connected { is_sending, queue } => {
-                if !*is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-                    *is_sending = true;
+                if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+                    if state.sc.contains(SerialControl::CLOCK_SELECT) {
+                        if !*is_sending {
+                            *is_sending = true;
 
-                    if let Err(err) =
-                        on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
-                    {
-                        console::error_1(&err);
-                    }
-                    if let Some(byte) = queue.take() {
-                        self.set_serial_byte(state, byte);
+                            if let Err(err) = on_serial
+                                .call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+                            {
+                                console::error_1(&err);
+                            }
+                        }
+                    } else if let Some(byte) = queue.take() {
+                        self.set_serial_byte(state, byte, on_serial);
                     }
                 }
             }
         }
     }
-    fn set_serial_byte(&mut self, state: &mut State, byte: u8) {
+    fn set_serial_byte(&mut self, state: &mut State, byte: u8, on_serial: &js_sys::Function) {
         let Self::Connected { is_sending, queue } = self else {
             panic!("Call set_is_serial_connected before setting the serial byte");
         };
 
-        if *is_sending && state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+        if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            // if slave then send response to master
+            if !state.sc.contains(SerialControl::CLOCK_SELECT)
+                && let Err(err) =
+                    on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+            {
+                console::error_1(&err);
+            }
+
             state.sc.remove(SerialControl::TRANSFER_ENABLE);
             state.interrupt_flag.insert(Interruptions::SERIAL);
-
             state.sb = byte;
             *is_sending = false;
         } else {

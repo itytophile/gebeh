@@ -115,13 +115,21 @@ class WasmProcessor
               throw new Error("Emulator not ready for serial");
             }
             this.emulator.set_is_serial_connected(true);
-            break
+            break;
           }
           case "serial": {
             if (!this.emulator) {
               throw new Error("Emulator not ready for serial");
             }
-            this.emulator.set_serial_byte(data.byte);
+            this.emulator.set_serial_byte(data.byte, (serial_byte: number) => {
+              this.port.postMessage(
+                {
+                  type: "serial",
+                  byte: serial_byte,
+                } satisfies FromNodeMessage,
+                [],
+              );
+            });
             break;
           }
         }
