@@ -1,5 +1,11 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Duration;
 
 use arrayvec::ArrayVec;
@@ -27,10 +33,13 @@ use hyper::StatusCode;
 use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
+use hyper::server::conn::http2;
 use hyper::service::Service;
+use hyper_util::rt::TokioIo;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
+use tokio::net::TcpStream;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -55,32 +64,45 @@ fn main() -> color_eyre::Result<()> {
         .build()
         .unwrap();
 
-    rt.block_on(async {
+    let local = tokio::task::LocalSet::new();
+    local.block_on(&rt, async {
         let listener = TcpListener::bind("0.0.0.0:8080").await?;
         tracing::info!("Listening on 0.0.0.0:8080");
-        let mut names = names::Generator::default();
+        let names: Rc<RefCell<names::Generator>> = Default::default();
         let tx = tokio::sync::broadcast::channel(16).0;
         loop {
             let (stream, _) = listener.accept().await?;
-            tokio::spawn(
+            tokio::task::spawn_local(
                 http1::Builder::new()
                     .serve_connection(
                         hyper_util::rt::TokioIo::new(stream),
                         Svc {
                             broadcast: tx.clone(),
-                            possible_room_name: names.next().unwrap(),
+                            names: names.clone(),
                         },
-                    )
-                    .with_upgrades()
+                    ).with_upgrades()
                     .inspect_err(|err| println!("An error occurred: {err:?}")),
             );
         }
     })
 }
 
+#[derive(Clone, Copy, Debug)]
+struct LocalExec;
+
+impl<F> hyper::rt::Executor<F> for LocalExec
+where
+    F: std::future::Future + 'static, // not requiring `Send`
+{
+    fn execute(&self, fut: F) {
+        // This will spawn into the currently running `LocalSet`.
+        tokio::task::spawn_local(fut);
+    }
+}
+
 #[derive(Clone)]
 struct Svc {
-    possible_room_name: String,
+    names: Rc<RefCell<names::Generator<'static>>>,
     // don't want to use a HashMap to avoid cleanup after disconnection
     broadcast: tokio::sync::broadcast::Sender<Arc<Guest>>,
 }
@@ -114,7 +136,7 @@ impl Service<Request<Incoming>> for Svc {
             }
         } else {
             let rx = self.broadcast.subscribe();
-            let room = self.possible_room_name.clone();
+            let room = self.names.borrow_mut().next().unwrap();
             tokio::task::spawn(async move {
                 if let Err(err) = host(&room, fut, rx).await {
                     tracing::warn!("Error in room {room}: {err}");
