@@ -1,11 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::marker::PhantomData;
-use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 
 use arrayvec::ArrayVec;
@@ -18,7 +14,6 @@ use fastwebsockets::WebSocket;
 use fastwebsockets::WebSocketError;
 use fastwebsockets::WebSocketRead;
 use fastwebsockets::WebSocketWrite;
-use fastwebsockets::upgrade;
 use fastwebsockets::upgrade::UpgradeFut;
 use futures_util::FutureExt;
 use futures_util::Stream;
@@ -26,25 +21,21 @@ use futures_util::StreamExt;
 use futures_util::TryFutureExt;
 use futures_util::future;
 use futures_util::stream;
-use http_body_util::Empty;
 use hyper::Request;
-use hyper::Response;
-use hyper::StatusCode;
-use hyper::body::Bytes;
-use hyper::body::Incoming;
 use hyper::server::conn::http1;
-use hyper::server::conn::http2;
-use hyper::service::Service;
-use hyper_util::rt::TokioIo;
+use hyper_util::service::TowerToHyperService;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
-use tokio::net::TcpStream;
 use tokio::sync::broadcast::error::RecvError;
+use tower::ServiceBuilder;
+use tower_http::compression::CompressionLayer;
 use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
 
-fn get_room(req: &Request<Incoming>) -> Option<Cow<'_, str>> {
+mod service;
+
+fn get_room<T>(req: &Request<T>) -> Option<Cow<'_, str>> {
     let (_, room) = req
         .uri()
         .query()
@@ -64,88 +55,33 @@ fn main() -> color_eyre::Result<()> {
         .build()
         .unwrap();
 
+    let names: Rc<RefCell<names::Generator>> = Default::default();
+    let tx = tokio::sync::broadcast::channel(16).0;
+
+    let service = ServiceBuilder::new()
+        .layer(CompressionLayer::new())
+        .service(tower::service_fn(move |req| {
+            let tx = tx.clone();
+            let names = names.clone();
+            service::upgrade(req, tx, names)
+        }));
+
+    let service = TowerToHyperService::new(service);
+
     let local = tokio::task::LocalSet::new();
     local.block_on(&rt, async {
         let listener = TcpListener::bind("0.0.0.0:8080").await?;
         tracing::info!("Listening on 0.0.0.0:8080");
-        let names: Rc<RefCell<names::Generator>> = Default::default();
-        let tx = tokio::sync::broadcast::channel(16).0;
         loop {
             let (stream, _) = listener.accept().await?;
             tokio::task::spawn_local(
                 http1::Builder::new()
-                    .serve_connection(
-                        hyper_util::rt::TokioIo::new(stream),
-                        Svc {
-                            broadcast: tx.clone(),
-                            names: names.clone(),
-                        },
-                    ).with_upgrades()
+                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                    .with_upgrades()
                     .inspect_err(|err| println!("An error occurred: {err:?}")),
             );
         }
     })
-}
-
-#[derive(Clone, Copy, Debug)]
-struct LocalExec;
-
-impl<F> hyper::rt::Executor<F> for LocalExec
-where
-    F: std::future::Future + 'static, // not requiring `Send`
-{
-    fn execute(&self, fut: F) {
-        // This will spawn into the currently running `LocalSet`.
-        tokio::task::spawn_local(fut);
-    }
-}
-
-#[derive(Clone)]
-struct Svc {
-    names: Rc<RefCell<names::Generator<'static>>>,
-    // don't want to use a HashMap to avoid cleanup after disconnection
-    broadcast: tokio::sync::broadcast::Sender<Arc<Guest>>,
-}
-
-impl Service<Request<Incoming>> for Svc {
-    type Response = Response<Empty<Bytes>>;
-    type Error = WebSocketError;
-    type Future = future::Ready<Result<Self::Response, Self::Error>>;
-
-    fn call(&self, mut req: Request<Incoming>) -> Self::Future {
-        let (response, fut) = match upgrade::upgrade(&mut req) {
-            Ok(a) => a,
-            Err(err) => return future::err(err),
-        };
-
-        if let Some(room) = get_room(&req) {
-            if self
-                .broadcast
-                .send(Arc::new(Guest {
-                    fut: std::sync::Mutex::new(Some(fut)),
-                    room: room.to_string(),
-                }))
-                .is_err()
-            {
-                return future::ok(
-                    Response::builder()
-                        .status(StatusCode::NOT_FOUND)
-                        .body(Empty::new())
-                        .unwrap(),
-                );
-            }
-        } else {
-            let rx = self.broadcast.subscribe();
-            let room = self.names.borrow_mut().next().unwrap();
-            tokio::task::spawn(async move {
-                if let Err(err) = host(&room, fut, rx).await {
-                    tracing::warn!("Error in room {room}: {err}");
-                }
-            });
-        }
-
-        future::ok(response)
-    }
 }
 
 struct Guest {
