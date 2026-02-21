@@ -4,19 +4,17 @@
   "version": "0.1.0",
   "scripts": {
     "build": "rimraf dist pkg && wasm-pack build . --target web && tsc",
-    "start": "npm run build && serve",
     "test": "cargo test && wasm-pack test --headless",
     "routine": "tsc --noEmit && prettier . --write && eslint ."
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@wasm-tool/wasm-pack-plugin": "^1",
-    "eslint": "^9.39.2",
+    "eslint": "^9.0.0",
     "eslint-plugin-unicorn": "^62.0.0",
     "prettier": "^3.7.4",
     "rimraf": "^6",
-    "serve": "^14.2.5",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.52.0"
+    "typescript": "<5.9.0",
+    "typescript-eslint": "^8.36.0"
   }
 }

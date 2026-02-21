@@ -1,4 +1,4 @@
-use std::{cell::RefCell, error::Error, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use fastwebsockets::upgrade;
 use futures_util::future;
@@ -45,23 +45,21 @@ pub fn upgrade<T>(
     future::ok(response)
 }
 
-pub async fn route<T, U>(
-    req: Request<T>,
+pub async fn route<Req, Err, Res1, Res2>(
+    req: Request<Req>,
     route: &'static str,
-    mut service: impl tower::Service<
-        Request<T>,
-        Response = U,
-        Error = impl Error + Send + Sync + 'static,
-    >,
-    mut fallback: impl tower::Service<
-        Request<T>,
-        Response = U,
-        Error = impl Error + Send + Sync + 'static,
-    >,
-) -> color_eyre::Result<U> {
+    mut service: impl tower::Service<Request<Req>, Response = Response<Res1>, Error = Err>,
+    mut fallback: impl tower::Service<Request<Req>, Response = Response<Res2>, Error = Err>,
+) -> Result<Response<http_body_util::Either<Res1, Res2>>, Err> {
     if req.uri().path() == route {
-        service.call(req).await.map_err(color_eyre::Report::new)
+        service
+            .call(req)
+            .await
+            .map(|res| res.map(http_body_util::Either::Left))
     } else {
-        fallback.call(req).await.map_err(color_eyre::Report::new)
+        fallback
+            .call(req)
+            .await
+            .map(|res| res.map(http_body_util::Either::Right))
     }
 }
