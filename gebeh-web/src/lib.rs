@@ -217,6 +217,7 @@ impl SerialNetwork {
                             }
                         }
                     } else if let Some(byte) = queue.take() {
+                        *is_sending = false;
                         self.set_serial_byte(state, byte, on_serial);
                     }
                 }

@@ -32,7 +32,7 @@ function getReadyRoomMessage(room: string) {
 
 export const addNetwork = (port: MessagePort) => {
   createRoomButton.addEventListener("click", () => {
-    const ws = new WebSocket("http://localhost:8080");
+    const ws = new WebSocket(`http://${globalThis.location.hostname}:8080`);
     ws.binaryType = "arraybuffer";
     ws.addEventListener("open", () => {
       console.log("host!");
@@ -90,7 +90,7 @@ export const addNetwork = (port: MessagePort) => {
 
   joinRoomButton.addEventListener("click", () => {
     const room = roomInput.value.trim();
-    const ws = new WebSocket(`http://localhost:8080?room=${room}`);
+    const ws = new WebSocket(`http://${globalThis.location.hostname}:8080?room=${room}`);
     ws.binaryType = "arraybuffer";
     ws.addEventListener("open", () => {
       roomDiv.textContent = getReadyRoomMessage(room);
