@@ -25,10 +25,12 @@ use hyper::Request;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper_util::service::TowerToHyperService;
+use rustls::pki_types::PrivateKeyDer;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast::error::RecvError;
+use tokio_rustls::TlsAcceptor;
 use tower::ServiceBuilder;
 use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
@@ -45,6 +47,21 @@ fn get_room<T>(req: &Request<T>) -> Option<Cow<'_, str>> {
         .query()
         .and_then(|q| url::form_urlencoded::parse(q.as_bytes()).find(|(key, _)| key == "room"))?;
     Some(room)
+}
+
+fn tls_acceptor(mut cert: &[u8], mut key: &[u8]) -> color_eyre::Result<TlsAcceptor> {
+    let key = rustls_pemfile::pkcs8_private_keys(&mut key)
+        .map(|key| key.unwrap())
+        .next()
+        .unwrap();
+    let certs = rustls_pemfile::certs(&mut cert)
+        .map(|cert| cert.unwrap())
+        .collect();
+
+    let config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, PrivateKeyDer::Pkcs8(key))?;
+    Ok(TlsAcceptor::from(Arc::new(config)))
 }
 
 fn main() -> color_eyre::Result<()> {
@@ -68,10 +85,14 @@ fn main() -> color_eyre::Result<()> {
         service::upgrade(req, tx, names)
     });
 
-    let assets_path = &*std::env::args()
+    let mut args = std::env::args();
+
+    let assets_path = &*args
         .nth(1)
         .context("Pease provide assets dir path in arguments")?
         .leak();
+    let cert_path = args.next();
+    let key_path = args.next();
 
     let service = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
@@ -91,18 +112,44 @@ fn main() -> color_eyre::Result<()> {
 
     let service = TowerToHyperService::new(service);
 
+    let acceptor = if let (Some(cert), Some(key)) = (cert_path, key_path) {
+        Some(tls_acceptor(&std::fs::read(cert)?, &std::fs::read(key)?)?)
+    } else {
+        tracing::warn!("TLS disabled");
+        None
+    };
+
     let local = tokio::task::LocalSet::new();
     local.block_on(&rt, async {
         let listener = TcpListener::bind("0.0.0.0:8080").await?;
         tracing::info!("Listening on 0.0.0.0:8080");
-        loop {
-            let (stream, _) = listener.accept().await?;
-            tokio::task::spawn_local(
-                http1::Builder::new()
-                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
-                    .with_upgrades()
-                    .inspect_err(|err| println!("An error occurred: {err:?}")),
-            );
+        if let Some(acceptor) = acceptor {
+            loop {
+                let (stream, _) = listener.accept().await?;
+                let stream = match acceptor.accept(stream).await {
+                    Ok(stream) => stream,
+                    Err(err) => {
+                        tracing::warn!("TLS accept failed: {err}");
+                        continue;
+                    }
+                };
+                tokio::task::spawn_local(
+                    http1::Builder::new()
+                        .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                        .with_upgrades()
+                        .inspect_err(|err| tracing::warn!("Connection closed: {err:?}")),
+                );
+            }
+        } else {
+            loop {
+                let (stream, _) = listener.accept().await?;
+                tokio::task::spawn_local(
+                    http1::Builder::new()
+                        .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                        .with_upgrades()
+                        .inspect_err(|err| println!("An error occurred: {err:?}")),
+                );
+            }
         }
     })
 }
