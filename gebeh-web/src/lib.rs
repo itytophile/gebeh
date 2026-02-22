@@ -142,17 +142,14 @@ impl WebEmulator {
         self.emulator.get_joypad_mut().up = value;
     }
 
-    pub fn set_serial_msg(&mut self, msg: &[u8], on_serial: &js_sys::Function) {
+    pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
         self.serial_network
-            .set_serial_msg(&mut self.emulator.state, msg, on_serial);
+            .set_serial_msg(&mut self.emulator.state, msg)
     }
 
     pub fn set_is_serial_connected(&mut self, value: bool) {
         if value {
-            self.serial_network = SerialNetwork::Connected {
-                is_sending: false,
-                queue: None,
-            };
+            self.serial_network = SerialNetwork::Connected { is_sending: false };
         } else {
             self.serial_network = SerialNetwork::WaitConnection
         }
@@ -182,7 +179,6 @@ enum SerialNetwork {
     WaitConnection,
     Connected {
         is_sending: bool,
-        queue: Option<[u8; 2]>,
     },
 }
 
@@ -200,95 +196,96 @@ impl SerialNetwork {
                     state.sb = 0xff;
                     state.sc.remove(SerialControl::TRANSFER_ENABLE);
                     state.interrupt_flag.insert(Interruptions::SERIAL);
-                    if let Err(err) =
-                        on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
-                    {
-                        console::error_1(&err);
-                    }
                 }
             }
-            SerialNetwork::Connected { is_sending, queue } => {
+            SerialNetwork::Connected { is_sending } => {
                 if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
                     if state.sc.contains(SerialControl::CLOCK_SELECT) {
                         if !*is_sending {
                             *is_sending = true;
 
-                            if let Err(err) = on_serial
-                                .call1(&JsValue::null(), &serialize_serial_msg(true, state.sb))
-                            {
+                            if let Err(err) = on_serial.call1(
+                                &JsValue::null(),
+                                &SerialMessage {
+                                    is_master: true,
+                                    byte: state.sb,
+                                }
+                                .into(),
+                            ) {
                                 console::error_1(&err);
                             }
                         }
-                    } else if let Some(msg) = queue.take() {
+                    } else {
                         *is_sending = false;
-                        self.set_serial_msg(state, &msg, on_serial);
                     }
                 }
             }
         }
     }
-    fn set_serial_msg(
-        &mut self,
-        state: &mut State,
-        raw_serial_msg: &[u8],
-        on_serial: &js_sys::Function,
-    ) {
-        let Self::Connected { is_sending, queue } = self else {
+    fn set_serial_msg(&mut self, state: &mut State, msg: SerialMessage) -> Option<SerialMessage> {
+        let Self::Connected { is_sending } = self else {
             panic!("Call set_is_serial_connected before setting the serial byte");
         };
 
-        if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-            let Some((is_master, byte)) = deserialize_serial_msg(raw_serial_msg) else {
-                console::error_1(&JsValue::from_str(&format!("Can't parse serial msg: {raw_serial_msg:?}")));
-                return;
-            };
-            // a master shouldn't receive a byte from another master
-            // a slave shouldn't receive a byte from another slave
-            if is_master == state.sc.contains(SerialControl::CLOCK_SELECT) {
-                console::error_1(&JsValue::from_str("Nop"));
-                return;
-            }
+        let (msg_to_send, is_accepting_byte) = match (
+            state.sc.contains(SerialControl::TRANSFER_ENABLE),
+            state.sc.contains(SerialControl::CLOCK_SELECT),
+            msg.is_master,
+        ) {
+            (false, _, true) | (_, true, true) => (
+                Some(SerialMessage {
+                    is_master: false,
+                    byte: 0xff,
+                }),
+                false,
+            ),
+            (true, false, true) => (
+                Some(SerialMessage {
+                    is_master: false,
+                    byte: state.sb,
+                }),
+                true,
+            ),
+            (true, true, false) => (None, true),
+            (true, false, false) | (false, _, false) => (None, false),
+        };
 
-            // if slave then send response to master
-            if !state.sc.contains(SerialControl::CLOCK_SELECT)
-                && let Err(err) =
-                    on_serial.call1(&JsValue::null(), &serialize_serial_msg(false, state.sb))
-            {
-                console::error_1(&err);
-            }
-
+        if is_accepting_byte {
             state.sc.remove(SerialControl::TRANSFER_ENABLE);
             state.interrupt_flag.insert(Interruptions::SERIAL);
-            state.sb = byte;
-            *is_sending = false;
-        } else {
-            if queue.is_some() {
-                console::error_1(&JsValue::from_str("Received a byte with queue full"));
-            }
-            let Ok(raw) = raw_serial_msg.try_into() else {
-                console::error_1(&JsValue::from_str("Can't parse serial msg"));
-                return;
-            };
-            *queue = Some(raw);
+            state.sb = msg.byte;
         }
+
+        *is_sending = false;
+
+        msg_to_send
     }
 }
 
-fn serialize_serial_msg(is_master: bool, byte: u8) -> js_sys::Uint8Array {
-    js_sys::Uint8Array::new_from_slice(&[is_master as u8, byte])
+#[wasm_bindgen]
+pub struct SerialMessage {
+    is_master: bool,
+    byte: u8,
 }
 
-fn deserialize_serial_msg(raw: &[u8]) -> Option<(bool, u8)> {
-    if raw.len() != 2 {
-        return None;
+#[wasm_bindgen]
+impl SerialMessage {
+    pub fn deserialize(buffer: &[u8]) -> Option<Self> {
+        if buffer.len() != 2 {
+            return None;
+        }
+
+        Some(Self {
+            is_master: match buffer[0] {
+                0 => false,
+                1 => true,
+                _ => return None,
+            },
+            byte: buffer[1],
+        })
     }
 
-    Some((
-        match raw[0] {
-            0 => false,
-            1 => true,
-            _ => return None,
-        },
-        raw[1],
-    ))
+    pub fn serialize(&self) -> Box<[u8]> {
+        [self.is_master as u8, self.byte].into()
+    }
 }
