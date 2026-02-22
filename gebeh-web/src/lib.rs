@@ -81,6 +81,9 @@ impl WebEmulator {
                 self.emulator.execute(self.mbc.as_mut());
                 self.serial_network
                     .execute(&mut self.emulator.state, on_serial);
+                if self.serial_network.should_block_emulation() {
+                    return;
+                }
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
                         [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
@@ -149,7 +152,7 @@ impl WebEmulator {
 
     pub fn set_is_serial_connected(&mut self, value: bool) {
         if value {
-            self.serial_network = SerialNetwork::Connected { is_sending: false };
+            self.serial_network = SerialNetwork::Connected { is_sending: 0 };
         } else {
             self.serial_network = SerialNetwork::WaitConnection
         }
@@ -178,7 +181,7 @@ enum SerialNetwork {
     #[default]
     WaitConnection,
     Connected {
-        is_sending: bool,
+        is_sending: u8,
     },
 }
 
@@ -201,8 +204,8 @@ impl SerialNetwork {
             SerialNetwork::Connected { is_sending } => {
                 if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
                     if state.sc.contains(SerialControl::CLOCK_SELECT) {
-                        if !*is_sending {
-                            *is_sending = true;
+                        if *is_sending == 0 {
+                            *is_sending = 1;
 
                             if let Err(err) = on_serial.call1(
                                 &JsValue::null(),
@@ -214,9 +217,11 @@ impl SerialNetwork {
                             ) {
                                 console::error_1(&err);
                             }
+                        } else if *is_sending < 8 {
+                            *is_sending += 1;
                         }
                     } else {
-                        *is_sending = false;
+                        *is_sending = 0;
                     }
                 }
             }
@@ -256,9 +261,12 @@ impl SerialNetwork {
             state.sb = msg.byte;
         }
 
-        *is_sending = false;
+        *is_sending = 0;
 
         msg_to_send
+    }
+    fn should_block_emulation(&self) -> bool {
+        std::matches!(self, Self::Connected { is_sending: 8 })
     }
 }
 
