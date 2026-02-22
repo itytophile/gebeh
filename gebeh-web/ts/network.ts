@@ -42,7 +42,7 @@ export const addNetwork = (port: MessagePort) => {
         "message",
         ({ data }: MessageEvent<FromNodeMessage>) => {
           if (data.type === "serial") {
-            ws.send(new Uint8Array([data.byte]));
+            ws.send(data.buffer);
           }
         },
       );
@@ -77,10 +77,13 @@ export const addNetwork = (port: MessagePort) => {
           if (!(message.data instanceof ArrayBuffer)) {
             throw new TypeError("Only binary messages are accepted");
           }
-          port.postMessage({
-            type: "serial",
-            byte: new DataView(message.data).getUint8(0),
-          } satisfies FromMainMessage);
+          port.postMessage(
+            {
+              type: "serial",
+              buffer: new Uint8Array(message.data),
+            } satisfies FromMainMessage,
+            [message.data],
+          );
           break;
         }
       }
@@ -107,7 +110,7 @@ export const addNetwork = (port: MessagePort) => {
         "message",
         ({ data }: MessageEvent<FromNodeMessage>) => {
           if (data.type === "serial") {
-            ws.send(new Uint8Array([data.byte]));
+            ws.send(new Uint8Array(data.buffer));
           }
         },
       );
@@ -119,7 +122,7 @@ export const addNetwork = (port: MessagePort) => {
       }
       port.postMessage({
         type: "serial",
-        byte: new DataView(message.data).getUint8(0),
+        buffer: new Uint8Array(message.data),
       } satisfies FromNodeMessage);
     });
     ws.addEventListener("close", () => {

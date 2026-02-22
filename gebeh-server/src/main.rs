@@ -366,11 +366,9 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
         BoundedOpcode::Binary => {
             tokio::time::timeout(
                 TIMEOUT_WS,
-                other_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(&[frame
-                    .payload
-                    .first()
-                    .copied()
-                    .context(color_eyre::Report::msg("Invalid message from host"))?]))),
+                other_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(
+                    &frame.payload,
+                ))),
             )
             .await??
         }

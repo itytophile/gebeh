@@ -5,7 +5,10 @@ use gebeh_core::{
 };
 use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
-use web_sys::{console, js_sys};
+use web_sys::{
+    console,
+    js_sys::{self},
+};
 
 use crate::rtc::NullRtc;
 
@@ -139,9 +142,9 @@ impl WebEmulator {
         self.emulator.get_joypad_mut().up = value;
     }
 
-    pub fn set_serial_byte(&mut self, value: u8, on_serial: &js_sys::Function) {
+    pub fn set_serial_msg(&mut self, msg: &[u8], on_serial: &js_sys::Function) {
         self.serial_network
-            .set_serial_byte(&mut self.emulator.state, value, on_serial);
+            .set_serial_msg(&mut self.emulator.state, msg, on_serial);
     }
 
     pub fn set_is_serial_connected(&mut self, value: bool) {
@@ -179,7 +182,7 @@ enum SerialNetwork {
     WaitConnection,
     Connected {
         is_sending: bool,
-        queue: Option<u8>,
+        queue: Option<[u8; 2]>,
     },
 }
 
@@ -211,29 +214,45 @@ impl SerialNetwork {
                             *is_sending = true;
 
                             if let Err(err) = on_serial
-                                .call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+                                .call1(&JsValue::null(), &serialize_serial_msg(true, state.sb))
                             {
                                 console::error_1(&err);
                             }
                         }
-                    } else if let Some(byte) = queue.take() {
+                    } else if let Some(msg) = queue.take() {
                         *is_sending = false;
-                        self.set_serial_byte(state, byte, on_serial);
+                        self.set_serial_msg(state, &msg, on_serial);
                     }
                 }
             }
         }
     }
-    fn set_serial_byte(&mut self, state: &mut State, byte: u8, on_serial: &js_sys::Function) {
+    fn set_serial_msg(
+        &mut self,
+        state: &mut State,
+        raw_serial_msg: &[u8],
+        on_serial: &js_sys::Function,
+    ) {
         let Self::Connected { is_sending, queue } = self else {
             panic!("Call set_is_serial_connected before setting the serial byte");
         };
 
         if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            let Some((is_master, byte)) = deserialize_serial_msg(raw_serial_msg) else {
+                console::error_1(&JsValue::from_str(&format!("Can't parse serial msg: {raw_serial_msg:?}")));
+                return;
+            };
+            // a master shouldn't receive a byte from another master
+            // a slave shouldn't receive a byte from another slave
+            if is_master == state.sc.contains(SerialControl::CLOCK_SELECT) {
+                console::error_1(&JsValue::from_str("Nop"));
+                return;
+            }
+
             // if slave then send response to master
             if !state.sc.contains(SerialControl::CLOCK_SELECT)
                 && let Err(err) =
-                    on_serial.call1(&JsValue::null(), &JsValue::from_f64(state.sb as f64))
+                    on_serial.call1(&JsValue::null(), &serialize_serial_msg(false, state.sb))
             {
                 console::error_1(&err);
             }
@@ -246,7 +265,30 @@ impl SerialNetwork {
             if queue.is_some() {
                 console::error_1(&JsValue::from_str("Received a byte with queue full"));
             }
-            *queue = Some(byte);
+            let Ok(raw) = raw_serial_msg.try_into() else {
+                console::error_1(&JsValue::from_str("Can't parse serial msg"));
+                return;
+            };
+            *queue = Some(raw);
         }
     }
+}
+
+fn serialize_serial_msg(is_master: bool, byte: u8) -> js_sys::Uint8Array {
+    js_sys::Uint8Array::new_from_slice(&[is_master as u8, byte])
+}
+
+fn deserialize_serial_msg(raw: &[u8]) -> Option<(bool, u8)> {
+    if raw.len() != 2 {
+        return None;
+    }
+
+    Some((
+        match raw[0] {
+            0 => false,
+            1 => true,
+            _ => return None,
+        },
+        raw[1],
+    ))
 }
