@@ -202,27 +202,27 @@ impl SerialNetwork {
                 }
             }
             SerialNetwork::Connected { is_sending } => {
-                if state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-                    if state.sc.contains(SerialControl::CLOCK_SELECT) {
-                        if *is_sending == 0 {
-                            *is_sending = 1;
+                if state.sc.contains(SerialControl::TRANSFER_ENABLE)
+                    && state.sc.contains(SerialControl::CLOCK_SELECT)
+                {
+                    if *is_sending == 0 {
+                        *is_sending = 1;
 
-                            if let Err(err) = on_serial.call1(
-                                &JsValue::null(),
-                                &SerialMessage {
-                                    is_master: true,
-                                    byte: state.sb,
-                                }
-                                .into(),
-                            ) {
-                                console::error_1(&err);
+                        if let Err(err) = on_serial.call1(
+                            &JsValue::null(),
+                            &SerialMessage {
+                                is_master: true,
+                                byte: state.sb,
                             }
-                        } else if *is_sending < 8 {
-                            *is_sending += 1;
+                            .into(),
+                        ) {
+                            console::error_1(&err);
                         }
-                    } else {
-                        *is_sending = 0;
+                    } else if *is_sending < 8 {
+                        *is_sending += 1;
                     }
+                } else {
+                    *is_sending = 0;
                 }
             }
         }
