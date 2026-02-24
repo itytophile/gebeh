@@ -297,3 +297,159 @@ impl SerialMessage {
         [self.is_master as u8, self.byte].into()
     }
 }
+
+// système de rollback
+// -> mode full synchro avant tout
+// -> on échantillone pendant x temps
+// suite à l'échantillonage on déduit différents modes
+// -> Il ne se passe rien: full synchro car le master ne fait pas de transfert donc rapide
+// -> le master fait du polling: on passe en mode prédiction
+// -> le master envoie des données complexes: full synchro
+//
+// Comment détecter le polling ?
+// -> le master et le slave renvoie la même chose tout le temps avec rythme "constant"
+// Comment sortir du mode prédiction ?
+// -> le master envoie quelque chose de différent
+// -> le master active le transfert avec un rythme différent
+// -> le slave envoie quelque chose de différent
+// -> le slave active le transfert avec un rythme différent
+// Comment synchroniser en cas de mauvaise prédiction ?
+// -> Le slave et le master prennent des snapshot tous les x transferts
+// -> le master et le slave s'accorde sur la snapshot valide la plus tard.
+// Comment détecter un rythme différent ?
+// -> en vrai ce n'est peut-être pas nécessaire
+
+#[derive(Clone, Copy)]
+enum ProutMaster {
+    Init,
+    Exchanging(u8),
+}
+
+impl ProutMaster {
+    fn set_slave_byte(&mut self) {
+        if !matches!(self, ProutMaster::Exchanging(_)) {
+            panic!()
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ProutSlave;
+
+impl ProutSlave {
+    fn set_master_byte(&mut self) -> u8 {
+        todo!()
+    }
+}
+
+trait SerialExecutor {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State);
+}
+
+#[derive(Clone, Copy)]
+enum SerialState {
+    NoTransfer,
+    Master(ProutMaster),
+    Slave(ProutSlave),
+}
+
+impl SerialState {
+    fn is_blocking_execution(&self) -> bool {
+        std::matches!(self, Self::Master(ProutMaster::Exchanging(8)))
+    }
+}
+
+impl SerialState {
+    fn refresh(&mut self, state: &mut State) {
+        if !state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            *self = Self::NoTransfer;
+            return;
+        }
+
+        if state.sc.contains(SerialControl::CLOCK_SELECT)
+            && !std::matches!(self, SerialState::Master(_))
+        {
+            *self = Self::Master(ProutMaster::Init);
+            return;
+        }
+
+        if !state.sc.contains(SerialControl::CLOCK_SELECT)
+            && !std::matches!(self, SerialState::Slave(_))
+        {
+            *self = Self::Slave(ProutSlave)
+        }
+    }
+
+    fn get_msg(&mut self, state: &State) -> Option<SerialMessage> {
+        if let SerialState::Master(ProutMaster::Init) = self {
+            *self = SerialState::Master(ProutMaster::Exchanging(0));
+            return Some(SerialMessage {
+                is_master: true,
+                byte: state.sb,
+            });
+        }
+        None
+    }
+
+    fn accept_byte(&mut self, byte: u8, state: &mut State) {
+        state.sc.remove(SerialControl::TRANSFER_ENABLE);
+        state.interrupt_flag.insert(Interruptions::SERIAL);
+        state.sb = byte;
+        *self = SerialState::NoTransfer;
+    }
+
+    fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) {
+        if std::matches!(self, Self::Master(_)) {
+            self.accept_byte(byte, state);
+        }
+    }
+
+    // When receiving a message from a master, always send a response even if we are a master
+    #[must_use]
+    fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
+        if std::matches!(self, Self::Slave(_)) {
+            let response = state.sb;
+            self.accept_byte(byte, state);
+            response
+        } else {
+            0xff
+        }
+    }
+}
+
+struct SynchroSerial {
+    on_serial: js_sys::Function,
+}
+
+impl SerialExecutor for SynchroSerial {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State) {
+        serial_state.refresh(state);
+        if let Some(msg) = serial_state.get_msg(state)
+            && let Err(err) = self.on_serial.call1(&JsValue::null(), &msg.into())
+        {
+            console::error_1(&err);
+        }
+        if let SerialState::Master(ProutMaster::Exchanging(delay)) = serial_state
+            && *delay < 8
+        {
+            *delay += 1;
+        }
+    }
+}
+
+enum SerialMode {
+    Disconnected,
+    SynchroSerial(SynchroSerial),
+}
+
+impl SerialMode {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State) {
+        match self {
+            Self::Disconnected => {
+                serial_state.refresh(state);
+                serial_state.set_msg_from_slave(0xff, state);
+            }
+            Self::SynchroSerial(synchro) => synchro.execute(serial_state, state),
+        }
+    }
+}
