@@ -114,14 +114,23 @@ class WasmProcessor
             if (!this.emulator) {
               throw new Error("Emulator not ready for serial");
             }
-            this.emulator.set_is_serial_connected(true);
+            this.emulator.set_is_serial_connected((message: SerialMessage) => {
+              const buffer = message.serialize();
+              this.port.postMessage(
+                {
+                  type: "serial",
+                  buffer,
+                } satisfies FromNodeMessage,
+                [buffer.buffer],
+              );
+            });
             break;
           }
           case "serialDisconnected": {
             if (!this.emulator) {
               throw new Error("Emulator not ready for serial");
             }
-            this.emulator.set_is_serial_connected(false);
+            this.emulator.set_is_serial_connected();
             break;
           }
           case "serial": {
@@ -183,16 +192,6 @@ class WasmProcessor
             buffer: frame,
           } satisfies FromNodeMessage,
           [frame.buffer],
-        );
-      },
-      (message: SerialMessage) => {
-        const buffer = message.serialize();
-        this.port.postMessage(
-          {
-            type: "serial",
-            buffer,
-          } satisfies FromNodeMessage,
-          [buffer.buffer],
         );
       },
     );

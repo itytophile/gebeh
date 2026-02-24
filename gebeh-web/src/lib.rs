@@ -24,7 +24,8 @@ pub struct WebEmulator {
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
-    serial_network: SerialNetwork,
+    serial_state: SerialState,
+    serial_mode: SerialMode,
 }
 
 #[wasm_bindgen]
@@ -52,7 +53,8 @@ impl WebEmulator {
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
-            serial_network: Default::default(),
+            serial_state: SerialState::NoTransfer,
+            serial_mode: SerialMode::Disconnected,
         })
     }
 
@@ -63,7 +65,6 @@ impl WebEmulator {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-        on_serial: &js_sys::Function,
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -78,10 +79,13 @@ impl WebEmulator {
             }
 
             for _ in 0..cycles {
+                if self.serial_state.is_blocking_execution() {
+                    return;
+                }
                 self.emulator.execute(self.mbc.as_mut());
-                self.serial_network
-                    .execute(&mut self.emulator.state, on_serial);
-                if self.serial_network.should_block_emulation() {
+                self.serial_mode
+                    .execute(&mut self.serial_state, &mut self.emulator.state);
+                if self.serial_state.is_blocking_execution() {
                     return;
                 }
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
@@ -146,15 +150,25 @@ impl WebEmulator {
     }
 
     pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
-        self.serial_network
-            .set_serial_msg(&mut self.emulator.state, msg)
+        if msg.is_master {
+            Some(SerialMessage {
+                byte: self
+                    .serial_state
+                    .set_msg_from_master(msg.byte, &mut self.emulator.state),
+                is_master: false,
+            })
+        } else {
+            self.serial_state
+                .set_msg_from_slave(msg.byte, &mut self.emulator.state);
+            None
+        }
     }
 
-    pub fn set_is_serial_connected(&mut self, value: bool) {
-        if value {
-            self.serial_network = SerialNetwork::Connected { is_sending: 0 };
+    pub fn set_is_serial_connected(&mut self, on_serial: Option<js_sys::Function>) {
+        if let Some(on_serial) = on_serial {
+            self.serial_mode = SerialMode::SynchroSerial(SynchroSerial { on_serial })
         } else {
-            self.serial_network = SerialNetwork::WaitConnection
+            self.serial_mode = SerialMode::Disconnected;
         }
     }
 }
@@ -173,100 +187,6 @@ impl Save {
 
     pub fn get_game_title(&self) -> String {
         self.game_title.clone()
-    }
-}
-
-#[derive(Default)]
-enum SerialNetwork {
-    #[default]
-    WaitConnection,
-    Connected {
-        is_sending: u8,
-    },
-}
-
-impl SerialNetwork {
-    fn execute(&mut self, state: &mut State, on_serial: &js_sys::Function) {
-        match self {
-            SerialNetwork::WaitConnection => {
-                if state
-                    .sc
-                    .contains(SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT)
-                {
-                    // https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#disconnects
-                    // Citation: On a disconnected link cable, the input bit on a master will start to read 1.
-                    // This means a master will start to receive $FF bytes.
-                    state.sb = 0xff;
-                    state.sc.remove(SerialControl::TRANSFER_ENABLE);
-                    state.interrupt_flag.insert(Interruptions::SERIAL);
-                }
-            }
-            SerialNetwork::Connected { is_sending } => {
-                if state.sc.contains(SerialControl::TRANSFER_ENABLE)
-                    && state.sc.contains(SerialControl::CLOCK_SELECT)
-                {
-                    if *is_sending == 0 {
-                        *is_sending = 1;
-
-                        if let Err(err) = on_serial.call1(
-                            &JsValue::null(),
-                            &SerialMessage {
-                                is_master: true,
-                                byte: state.sb,
-                            }
-                            .into(),
-                        ) {
-                            console::error_1(&err);
-                        }
-                    } else if *is_sending < 8 {
-                        *is_sending += 1;
-                    }
-                } else {
-                    *is_sending = 0;
-                }
-            }
-        }
-    }
-    fn set_serial_msg(&mut self, state: &mut State, msg: SerialMessage) -> Option<SerialMessage> {
-        let Self::Connected { is_sending } = self else {
-            panic!("Call set_is_serial_connected before setting the serial byte");
-        };
-
-        let (msg_to_send, is_accepting_byte) = match (
-            state.sc.contains(SerialControl::TRANSFER_ENABLE),
-            state.sc.contains(SerialControl::CLOCK_SELECT),
-            msg.is_master,
-        ) {
-            (false, _, true) | (_, true, true) => (
-                Some(SerialMessage {
-                    is_master: false,
-                    byte: 0xff,
-                }),
-                false,
-            ),
-            (true, false, true) => (
-                Some(SerialMessage {
-                    is_master: false,
-                    byte: state.sb,
-                }),
-                true,
-            ),
-            (true, true, false) => (None, true),
-            (true, false, false) | (false, _, false) => (None, false),
-        };
-
-        if is_accepting_byte {
-            state.sc.remove(SerialControl::TRANSFER_ENABLE);
-            state.interrupt_flag.insert(Interruptions::SERIAL);
-            state.sb = msg.byte;
-        }
-
-        *is_sending = 0;
-
-        msg_to_send
-    }
-    fn should_block_emulation(&self) -> bool {
-        std::matches!(self, Self::Connected { is_sending: 8 })
     }
 }
 
@@ -325,22 +245,8 @@ enum ProutMaster {
     Exchanging(u8),
 }
 
-impl ProutMaster {
-    fn set_slave_byte(&mut self) {
-        if !matches!(self, ProutMaster::Exchanging(_)) {
-            panic!()
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 struct ProutSlave;
-
-impl ProutSlave {
-    fn set_master_byte(&mut self) -> u8 {
-        todo!()
-    }
-}
 
 trait SerialExecutor {
     fn execute(&mut self, serial_state: &mut SerialState, state: &mut State);
