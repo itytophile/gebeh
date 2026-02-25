@@ -261,7 +261,8 @@ enum SerialState {
 
 impl SerialState {
     fn is_blocking_execution(&self) -> bool {
-        std::matches!(self, Self::Master(ProutMaster::Exchanging(8)))
+        // std::matches!(self, Self::Master(ProutMaster::Exchanging(8)))
+        false
     }
 }
 
