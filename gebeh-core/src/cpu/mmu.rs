@@ -66,12 +66,18 @@ impl MmuCpuExt for State {
         peripherals: PeripheralsRef<M>,
         cycles: u64,
     ) -> u8 {
+        if (VIDEO_RAM..EXTERNAL_RAM).contains(&index)
+            && peripherals.ppu.get_ppu_mode() == LcdStatus::DRAWING
+        {
+            return 0xff;
+        }
+
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
             ..OAM => MmuExt::read(self, index, peripherals.mbc),
             OAM..NOT_USABLE => {
-                let ppu = self.lcd_status & LcdStatus::PPU_MASK;
+                let ppu = peripherals.ppu.get_ppu_mode();
                 if ppu == LcdStatus::DRAWING
                     || ppu == LcdStatus::OAM_SCAN
                     || peripherals.dma.is_active()
@@ -99,11 +105,11 @@ impl MmuCpuExt for State {
             INTERRUPT_FLAG => self.interrupt_flag.bits() | 0b11100000,
             CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
             LCD_CONTROL => peripherals.ppu.get_lcd_control().bits(),
-            LCD_STATUS => self.lcd_status.bits() | 0b10000000,
+            LCD_STATUS => peripherals.ppu.get_lcd_status().bits() | 0b10000000,
             SCY => peripherals.ppu.get_scy(),
             SCX => peripherals.ppu.get_scx(),
             LY => peripherals.ppu.get_ly(),
-            LYC => self.lyc,
+            LYC => peripherals.ppu.lyc,
             DMA => self.dma_register,
             BGP => peripherals.ppu.get_bgp(),
             OBP0 => self.obp0,
@@ -137,7 +143,7 @@ impl MmuCpuExt for State {
         match index {
             0..VIDEO_RAM => peripherals.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => {
-                if (self.lcd_status & LcdStatus::PPU_MASK) != LcdStatus::DRAWING {
+                if peripherals.ppu.get_ppu_mode() != LcdStatus::DRAWING {
                     self.video_ram[usize::from(index - VIDEO_RAM)] = value
                 }
             }
@@ -145,7 +151,7 @@ impl MmuCpuExt for State {
             WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => self.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
-                let ppu = self.lcd_status & LcdStatus::PPU_MASK;
+                let ppu = peripherals.ppu.get_ppu_mode();
                 if ppu != LcdStatus::DRAWING && ppu != LcdStatus::OAM_SCAN {
                     self.oam[usize::from(index - OAM)] = value
                 }
@@ -174,11 +180,11 @@ impl MmuCpuExt for State {
                 .ppu
                 .set_lcd_control(LcdControl::from_bits_truncate(value)),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
-            LCD_STATUS => self.set_interrupt_part_lcd_status(value),
+            LCD_STATUS => peripherals.ppu.set_interrupt_part_lcd_status(value),
             SCY => peripherals.ppu.set_scy(value),
             SCX => peripherals.ppu.set_scx(value),
             LY => {} // read only
-            LYC => self.lyc = value,
+            LYC => peripherals.ppu.lyc = value,
             DMA => {
                 self.dma_register = value;
                 self.dma_request = true;
