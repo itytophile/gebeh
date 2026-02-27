@@ -76,25 +76,8 @@ impl Default for Cpu {
     }
 }
 
-pub fn set_h_add(arg1: u8, arg2: u8) -> bool {
-    let lo1 = arg1 & 0x0F;
-    let lo2 = arg2 & 0x0F;
-
-    ((lo1 + lo2) & (0x10)) == 0x10
-}
-
-pub fn set_h_add_with_carry(arg1: u8, arg2: u8, carry: bool) -> bool {
-    let lo1 = arg1 & 0x0F;
-    let lo2 = arg2 & 0x0F;
-
-    ((lo1 + lo2 + carry as u8) & (0x10)) == 0x10
-}
-
-pub fn set_h_sub(arg1: u8, arg2: u8) -> bool {
-    let lo1 = arg1 & 0x0F;
-    let lo2 = arg2 & 0x0F;
-
-    (lo1.wrapping_sub(lo2) & (0x10)) == 0x10
+fn is_half_carry(a: u8, b: u8, result: u8) -> bool {
+    (a ^ b ^ result) & 0x10 != 0
 }
 
 bitflags::bitflags! {
@@ -375,7 +358,7 @@ impl Cpu {
                 let flags = &mut self.f;
                 flags.set(Flags::Z, decremented == 0);
                 flags.insert(Flags::N);
-                flags.set(Flags::H, set_h_sub(r, 1));
+                flags.set(Flags::H, is_half_carry(r, 1, decremented));
             }
             NoRead(DecHl) => {
                 let r = self.lsb;
@@ -390,7 +373,7 @@ impl Cpu {
                 let flags = &mut self.f;
                 flags.set(Flags::Z, decremented == 0);
                 flags.insert(Flags::N);
-                flags.set(Flags::H, set_h_sub(r, 1));
+                flags.set(Flags::H, is_half_carry(r, 1, decremented));
             }
             NoRead(LoadToCachedAddressFromA) => {
                 state.write(
@@ -408,7 +391,7 @@ impl Cpu {
                 let flags = &mut self.f;
                 flags.set(Flags::Z, result == 0);
                 flags.insert(Flags::N);
-                flags.set(Flags::H, set_h_sub(a, r));
+                flags.set(Flags::H, is_half_carry(a, r, result));
                 flags.set(Flags::C, carry);
                 self.a = result;
             }
@@ -419,7 +402,7 @@ impl Cpu {
                 let flags = &mut self.f;
                 flags.set(Flags::Z, result == 0);
                 flags.remove(Flags::N);
-                flags.set(Flags::H, set_h_add(a, register_value));
+                flags.set(Flags::H, is_half_carry(a, register_value, result));
                 flags.set(Flags::C, carry);
                 self.a = result;
             }
@@ -500,7 +483,7 @@ impl Cpu {
                 let flags = &mut self.f;
                 // no z
                 flags.remove(Flags::N);
-                flags.set(Flags::H, set_h_add(l, register_value));
+                flags.set(Flags::H, is_half_carry(l, register_value, result));
                 flags.set(Flags::C, carry);
                 self.l = result;
             }
@@ -513,10 +496,7 @@ impl Cpu {
                 carry |= carry1;
                 // no z
                 flags.remove(Flags::N);
-                flags.set(
-                    Flags::H,
-                    set_h_add_with_carry(h, register_value, flags.contains(Flags::C)),
-                );
+                flags.set(Flags::H, is_half_carry(h, register_value, result));
                 flags.set(Flags::C, carry);
                 self.h = result;
             }
@@ -552,7 +532,7 @@ impl Cpu {
                 self.l = result;
                 let flags = &mut self.f;
                 flags.remove(Flags::Z | Flags::N);
-                flags.set(Flags::H, set_h_add(sp_lsb, self.lsb));
+                flags.set(Flags::H, is_half_carry(sp_lsb, self.lsb, result));
                 flags.set(Flags::C, carry);
             }
             NoRead(LoadHlFromAdjustedStackPointerSecond) => {
@@ -568,7 +548,7 @@ impl Cpu {
                 let flags = &mut self.f;
                 flags.set(Flags::Z, result == 0);
                 flags.insert(Flags::N);
-                flags.set(Flags::H, set_h_sub(a, value));
+                flags.set(Flags::H, is_half_carry(a, value, result));
                 flags.set(Flags::C, carry);
             }
             NoRead(LdSpHl) => self.sp = self.get_16bit_register(Register16Bit::HL),
@@ -602,10 +582,10 @@ impl Cpu {
             }
             NoRead(AddSpE) => {
                 let [_, sp_lsb] = self.sp.to_be_bytes();
-                let (_, carry) = sp_lsb.overflowing_add(self.lsb);
+                let (result, carry) = sp_lsb.overflowing_add(self.lsb);
                 let flags = &mut self.f;
                 flags.remove(Flags::Z | Flags::N);
-                flags.set(Flags::H, set_h_add(sp_lsb, self.lsb));
+                flags.set(Flags::H, is_half_carry(sp_lsb, self.lsb, result));
                 flags.set(Flags::C, carry);
                 self.sp = self
                     .sp
@@ -826,7 +806,7 @@ impl Cpu {
         let flags = &mut self.f;
         flags.set(Flags::Z, incremented == 0);
         flags.remove(Flags::N);
-        flags.set(Flags::H, set_h_add(value, 1));
+        flags.set(Flags::H, is_half_carry(value, 1, incremented));
         incremented
     }
 
