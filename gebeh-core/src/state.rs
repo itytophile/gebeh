@@ -136,8 +136,6 @@ pub struct State {
     pub sound_panning: u8,
     pub audio_master_control: u8,
 
-    pub lcd_status: LcdStatus,
-    pub lyc: u8,
     pub sb: u8,
     pub sc: SerialControl,
     pub wy: u8,
@@ -157,27 +155,11 @@ impl Default for State {
             sound_panning: 0,
             audio_master_control: 0,
 
-            lyc: 0,
             sb: 0,
             sc: SerialControl::empty(),
             wy: 0,
-            lcd_status: LcdStatus::empty(),
             oam: [0; (NOT_USABLE - OAM) as usize],
         }
-    }
-}
-
-impl State {
-    pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
-        self.lcd_status = (self.lcd_status & LcdStatus::READONLY_MASK)
-            | (LcdStatus::from_bits_truncate(value) & !LcdStatus::READONLY_MASK)
-    }
-    pub fn set_ppu_mode(&mut self, mode: LcdStatus, _: u64) {
-        assert!(matches!(
-            mode,
-            LcdStatus::VBLANK | LcdStatus::HBLANK | LcdStatus::DRAWING | LcdStatus::OAM_SCAN
-        ));
-        self.lcd_status = (self.lcd_status & !LcdStatus::PPU_MASK) | (mode & LcdStatus::PPU_MASK);
     }
 }
 
@@ -189,13 +171,7 @@ impl MmuExt for State {
     fn read<M: Mbc + ?Sized>(&self, index: u16, mbc: &M) -> u8 {
         match index {
             0..VIDEO_RAM => mbc.read(index),
-            VIDEO_RAM..EXTERNAL_RAM => {
-                if (self.lcd_status & LcdStatus::PPU_MASK) == LcdStatus::DRAWING {
-                    0xff
-                } else {
-                    self.video_ram[usize::from(index - VIDEO_RAM)]
-                }
-            }
+            VIDEO_RAM..EXTERNAL_RAM => self.video_ram[usize::from(index - VIDEO_RAM)],
             EXTERNAL_RAM..WORK_RAM => mbc.read(index),
             WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)],
             // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu

@@ -39,18 +39,6 @@ pub enum PpuStep {
     }, // <= 456
 }
 
-impl PpuStep {
-    fn get_ppu_mode(&self) -> LcdStatus {
-        use PpuStep::*;
-        match self {
-            OamScan { .. } => LcdStatus::OAM_SCAN,
-            Drawing { .. } => LcdStatus::DRAWING,
-            HorizontalBlank { .. } => LcdStatus::HBLANK,
-            VerticalBlankScanline { .. } => LcdStatus::VBLANK,
-        }
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct Ppu {
     pub step: PpuStep,
@@ -58,6 +46,8 @@ pub struct Ppu {
     state: PpuState,
     is_turning_on: bool,
     previous_lyc: u8,
+    interrupt_part_lcd_status: LcdStatus,
+    pub lyc: u8,
 }
 
 #[derive(Clone, Default)]
@@ -240,6 +230,32 @@ impl From<[u8; 4]> for ObjectAttribute {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
+        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(value)
+    }
+
+    pub fn get_lcd_status(&self) -> LcdStatus {
+        let mut status =
+            (self.interrupt_part_lcd_status & !LcdStatus::READONLY_MASK) | self.get_ppu_mode();
+        status.set(LcdStatus::LYC_EQUAL_TO_LY, self.state.ly == self.lyc);
+        status
+    }
+
+    pub fn get_ppu_mode(&self) -> LcdStatus {
+        if !self.is_ppu_enabled() {
+            // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
+            // Citation: Reports 0 instead when the PPU is disabled.
+            return LcdStatus::HBLANK;
+        }
+
+        use PpuStep::*;
+        match self.step {
+            OamScan { .. } => LcdStatus::OAM_SCAN,
+            Drawing { .. } => LcdStatus::DRAWING,
+            HorizontalBlank { .. } => LcdStatus::HBLANK,
+            VerticalBlankScanline { .. } => LcdStatus::VBLANK,
+        }
+    }
     pub fn is_ppu_enabled(&self) -> bool {
         self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) && !self.is_turning_on
     }
@@ -409,20 +425,27 @@ impl Ppu {
             PpuStep::OamScan { dots_count, .. } => {
                 // < 4 according to dmg schematics
                 *dots_count < 4
-                    && state.lcd_status.contains(LcdStatus::OAM_INT)
+                    && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
                     && (self.state.ly != 0 || *dots_count >= 2)
             }
             PpuStep::HorizontalBlank {
                 dots_count: 1.., ..
-            } => state.lcd_status.contains(LcdStatus::HBLANK_INT),
+            } => self
+                .interrupt_part_lcd_status
+                .contains(LcdStatus::HBLANK_INT),
             PpuStep::VerticalBlankScanline { dots_count } => {
-                *dots_count > 2 && state.lcd_status.contains(LcdStatus::VBLANK_INT)
-                    || *dots_count == 0 && state.lcd_status.contains(LcdStatus::OAM_INT)
+                *dots_count > 2
+                    && self
+                        .interrupt_part_lcd_status
+                        .contains(LcdStatus::VBLANK_INT)
+                    || *dots_count == 0
+                        && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
             }
             _ => false,
         };
 
-        let lyc = state.lcd_status.contains(LcdStatus::LYC_INT) && self.state.ly == state.lyc;
+        let lyc = self.interrupt_part_lcd_status.contains(LcdStatus::LYC_INT)
+            && self.state.ly == self.lyc;
 
         let old_lyc = self.previous_lyc & 0x04 != 0;
         self.previous_lyc <<= 1;
@@ -450,12 +473,6 @@ impl Ppu {
         }
         self.switch_from_finished_mode(state, cycles);
         self.fire_interrupts(state, cycles);
-
-        state.set_ppu_mode(self.step.get_ppu_mode(), cycles);
-
-        state
-            .lcd_status
-            .set(LcdStatus::LYC_EQUAL_TO_LY, state.lyc == self.state.ly);
 
         match &mut self.step {
             PpuStep::OamScan {
