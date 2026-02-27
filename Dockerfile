@@ -23,11 +23,11 @@ WORKDIR /app
 
 COPY . .
 
-RUN cargo build --release -p gebeh-server
+RUN cargo build --profile server -p gebeh-server
 
 FROM scratch
 
-COPY --from=back /app/target/x86_64-unknown-linux-musl/release/gebeh-server .
+COPY --from=back /app/target/x86_64-unknown-linux-musl/server/gebeh-server .
 COPY --from=front /app/gebeh-web/page /page
 
 CMD [ "/gebeh-server", "page" ]
