@@ -22,13 +22,16 @@ use futures_util::TryFutureExt;
 use futures_util::future;
 use futures_util::stream;
 use hyper::Request;
+use hyper::body::Body;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
+use hyper::service::HttpService;
 use hyper_util::service::TowerToHyperService;
 use rustls::pki_types::PrivateKeyDer;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
+use tokio::signal::unix::SignalKind;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_rustls::TlsAcceptor;
 use tower::ServiceBuilder;
@@ -121,37 +124,63 @@ fn main() -> color_eyre::Result<()> {
 
     let local = tokio::task::LocalSet::new();
     local.block_on(&rt, async {
+        let mut terminate_sig = tokio::signal::unix::signal(SignalKind::terminate())?;
+        let mut interrupt_sig = tokio::signal::unix::signal(SignalKind::interrupt())?;
         let listener = TcpListener::bind("0.0.0.0:8080").await?;
         tracing::info!("Listening on 0.0.0.0:8080");
-        if let Some(acceptor) = acceptor {
-            loop {
-                let (stream, _) = listener.accept().await?;
-                let stream = match acceptor.accept(stream).await {
-                    Ok(stream) => stream,
-                    Err(err) => {
-                        tracing::warn!("TLS accept failed: {err}");
-                        continue;
-                    }
-                };
-                tokio::task::spawn_local(
-                    http1::Builder::new()
-                        .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
-                        .with_upgrades()
-                        .inspect_err(|err| tracing::warn!("Connection closed: {err:?}")),
-                );
-            }
-        } else {
-            loop {
-                let (stream, _) = listener.accept().await?;
-                tokio::task::spawn_local(
-                    http1::Builder::new()
-                        .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
-                        .with_upgrades()
-                        .inspect_err(|err| println!("An error occurred: {err:?}")),
-                );
-            }
+        futures_util::select! {
+            res = handle_connections(service, acceptor, listener).fuse() => res,
+            _ = terminate_sig.recv().fuse() => {
+                tracing::warn!("Terminated");
+                Ok(())
+            },
+            _ = interrupt_sig.recv().fuse() => {
+                tracing::warn!("Interrupted");
+                Ok(())
+            },
         }
     })
+}
+
+async fn handle_connections<S>(
+    service: S,
+    acceptor: Option<TlsAcceptor>,
+    listener: TcpListener,
+) -> Result<(), color_eyre::eyre::Error>
+where
+    S: HttpService<Incoming> + std::clone::Clone + 'static,
+    S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    S::ResBody: 'static,
+    <S::ResBody as Body>::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
+    if let Some(acceptor) = acceptor {
+        loop {
+            let (stream, _) = listener.accept().await?;
+            let stream = match acceptor.accept(stream).await {
+                Ok(stream) => stream,
+                Err(err) => {
+                    tracing::warn!("TLS accept failed: {err}");
+                    continue;
+                }
+            };
+            tokio::task::spawn_local(
+                http1::Builder::new()
+                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                    .with_upgrades()
+                    .inspect_err(|err| tracing::warn!("Connection closed: {err:?}")),
+            );
+        }
+    } else {
+        loop {
+            let (stream, _) = listener.accept().await?;
+            tokio::task::spawn_local(
+                http1::Builder::new()
+                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                    .with_upgrades()
+                    .inspect_err(|err| println!("An error occurred: {err:?}")),
+            );
+        }
+    }
 }
 
 struct Guest {
