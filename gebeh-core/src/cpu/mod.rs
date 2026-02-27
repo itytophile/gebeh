@@ -757,21 +757,19 @@ impl Cpu {
         self.a = sum as u8;
     }
 
-    fn sbc(&mut self, second: u8) {
-        let first = self.a as u32;
-        let second = second as u32;
-        let flags = &mut self.f;
-        let carry = flags.contains(Flags::C) as u32;
+    fn sbc(&mut self, x: u8) {
+        let carry = self.f.contains(Flags::C) as u8;
+        let res = self.a.wrapping_sub(x).wrapping_sub(carry);
 
-        let result = first.wrapping_sub(second).wrapping_sub(carry);
-        let result_b = result as u8;
+        self.f.insert(Flags::N);
+        self.f.set(Flags::Z, res == 0);
+        self.f.set(Flags::H, is_half_carry(self.a, x, res));
+        self.f.set(
+            Flags::C,
+            u16::from(self.a) < (u16::from(x) + u16::from(carry)),
+        );
 
-        flags.insert(Flags::N);
-        flags.set(Flags::Z, result_b == 0);
-        flags.set(Flags::H, (first ^ second ^ result) & 0x10 == 0x10);
-        flags.set(Flags::C, (result & 0x100) == 0x100);
-
-        self.a = result_b;
+        self.a = res;
     }
 
     fn sla(&mut self, value: u8) -> u8 {
