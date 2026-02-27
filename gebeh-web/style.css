@@ -63,7 +63,17 @@ canvas {
   user-select: none;
 }
 
+.flex-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;
+}
+
+.hidden {
+  display: none;
 }

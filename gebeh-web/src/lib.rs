@@ -1,7 +1,14 @@
-use gebeh_core::{Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer};
+use gebeh_core::{
+    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
+    apu::Mixer,
+    state::{Interruptions, SerialControl, State},
+};
 use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
-use web_sys::{console, js_sys};
+use web_sys::{
+    console,
+    js_sys::{self},
+};
 
 use crate::rtc::NullRtc;
 
@@ -17,6 +24,8 @@ pub struct WebEmulator {
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
+    serial_state: SerialState,
+    serial_mode: SerialMode,
 }
 
 #[wasm_bindgen]
@@ -44,6 +53,8 @@ impl WebEmulator {
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
+            serial_state: SerialState::NoTransfer,
+            serial_mode: SerialMode::Disconnected,
         })
     }
 
@@ -68,19 +79,26 @@ impl WebEmulator {
             }
 
             for _ in 0..cycles {
+                if self.serial_state.is_blocking_execution() {
+                    return;
+                }
                 self.emulator.execute(self.mbc.as_mut());
+                self.serial_mode
+                    .execute(&mut self.serial_state, &mut self.emulator.state);
+                if self.serial_state.is_blocking_execution() {
+                    return;
+                }
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
                         [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
 
-                    if self.emulator.get_ppu().get_ly() == HEIGHT - 1 {
-                        let this = JsValue::null();
-                        if let Err(err) = on_new_frame.call1(
-                            &this,
+                    if self.emulator.get_ppu().get_ly() == HEIGHT - 1
+                        && let Err(err) = on_new_frame.call1(
+                            &JsValue::null(),
                             &js_sys::Uint8Array::new_from_slice(&self.current_frame),
-                        ) {
-                            console::error_1(&err);
-                        }
+                        )
+                    {
+                        console::error_1(&err);
                     }
                 }
             }
@@ -130,6 +148,29 @@ impl WebEmulator {
     pub fn set_up(&mut self, value: bool) {
         self.emulator.get_joypad_mut().up = value;
     }
+
+    pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
+        if msg.is_master {
+            Some(SerialMessage {
+                byte: self
+                    .serial_state
+                    .set_msg_from_master(msg.byte, &mut self.emulator.state),
+                is_master: false,
+            })
+        } else {
+            self.serial_state
+                .set_msg_from_slave(msg.byte, &mut self.emulator.state);
+            None
+        }
+    }
+
+    pub fn set_is_serial_connected(&mut self, on_serial: Option<js_sys::Function>) {
+        if let Some(on_serial) = on_serial {
+            self.serial_mode = SerialMode::SynchroSerial(SynchroSerial { on_serial })
+        } else {
+            self.serial_mode = SerialMode::Disconnected;
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -146,5 +187,176 @@ impl Save {
 
     pub fn get_game_title(&self) -> String {
         self.game_title.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct SerialMessage {
+    is_master: bool,
+    byte: u8,
+}
+
+#[wasm_bindgen]
+impl SerialMessage {
+    pub fn deserialize(buffer: &[u8]) -> Option<Self> {
+        if buffer.len() != 2 {
+            return None;
+        }
+
+        Some(Self {
+            is_master: match buffer[0] {
+                0 => false,
+                1 => true,
+                _ => return None,
+            },
+            byte: buffer[1],
+        })
+    }
+
+    pub fn serialize(&self) -> Box<[u8]> {
+        [self.is_master as u8, self.byte].into()
+    }
+}
+
+// système de rollback
+// -> mode full synchro avant tout
+// -> on échantillone pendant x temps
+// suite à l'échantillonage on déduit différents modes
+// -> Il ne se passe rien: full synchro car le master ne fait pas de transfert donc rapide
+// -> le master fait du polling: on passe en mode prédiction
+// -> le master envoie des données complexes: full synchro
+//
+// Comment détecter le polling ?
+// -> le master et le slave renvoie la même chose tout le temps avec rythme "constant"
+// Comment sortir du mode prédiction ?
+// -> le master envoie quelque chose de différent
+// -> le master active le transfert avec un rythme différent
+// -> le slave envoie quelque chose de différent
+// -> le slave active le transfert avec un rythme différent
+// Comment synchroniser en cas de mauvaise prédiction ?
+// -> Le slave et le master prennent des snapshot tous les x transferts
+// -> le master et le slave s'accorde sur la snapshot valide la plus tard.
+// Comment détecter un rythme différent ?
+// -> en vrai ce n'est peut-être pas nécessaire
+
+#[derive(Clone, Copy)]
+enum ProutMaster {
+    Init,
+    Exchanging(u8),
+}
+
+#[derive(Clone, Copy)]
+struct ProutSlave;
+
+trait SerialExecutor {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State);
+}
+
+#[derive(Clone, Copy)]
+enum SerialState {
+    NoTransfer,
+    Master(ProutMaster),
+    Slave(ProutSlave),
+}
+
+impl SerialState {
+    fn is_blocking_execution(&self) -> bool {
+        // std::matches!(self, Self::Master(ProutMaster::Exchanging(8)))
+        false
+    }
+}
+
+impl SerialState {
+    fn refresh(&mut self, state: &mut State) {
+        if !state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            *self = Self::NoTransfer;
+            return;
+        }
+
+        if state.sc.contains(SerialControl::CLOCK_SELECT)
+            && !std::matches!(self, SerialState::Master(_))
+        {
+            *self = Self::Master(ProutMaster::Init);
+            return;
+        }
+
+        if !state.sc.contains(SerialControl::CLOCK_SELECT)
+            && !std::matches!(self, SerialState::Slave(_))
+        {
+            *self = Self::Slave(ProutSlave)
+        }
+    }
+
+    fn get_msg(&mut self, state: &State) -> Option<SerialMessage> {
+        if let SerialState::Master(ProutMaster::Init) = self {
+            *self = SerialState::Master(ProutMaster::Exchanging(0));
+            return Some(SerialMessage {
+                is_master: true,
+                byte: state.sb,
+            });
+        }
+        None
+    }
+
+    fn accept_byte(&mut self, byte: u8, state: &mut State) {
+        state.sc.remove(SerialControl::TRANSFER_ENABLE);
+        state.interrupt_flag.insert(Interruptions::SERIAL);
+        state.sb = byte;
+        *self = SerialState::NoTransfer;
+    }
+
+    fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) {
+        if std::matches!(self, Self::Master(_)) {
+            self.accept_byte(byte, state);
+        }
+    }
+
+    // When receiving a message from a master, always send a response even if we are a master
+    #[must_use]
+    fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
+        if std::matches!(self, Self::Slave(_)) {
+            let response = state.sb;
+            self.accept_byte(byte, state);
+            response
+        } else {
+            0xff
+        }
+    }
+}
+
+struct SynchroSerial {
+    on_serial: js_sys::Function,
+}
+
+impl SerialExecutor for SynchroSerial {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State) {
+        serial_state.refresh(state);
+        if let Some(msg) = serial_state.get_msg(state)
+            && let Err(err) = self.on_serial.call1(&JsValue::null(), &msg.into())
+        {
+            console::error_1(&err);
+        }
+        if let SerialState::Master(ProutMaster::Exchanging(delay)) = serial_state
+            && *delay < 8
+        {
+            *delay += 1;
+        }
+    }
+}
+
+enum SerialMode {
+    Disconnected,
+    SynchroSerial(SynchroSerial),
+}
+
+impl SerialMode {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State) {
+        match self {
+            Self::Disconnected => {
+                serial_state.refresh(state);
+                serial_state.set_msg_from_slave(0xff, state);
+            }
+            Self::SynchroSerial(synchro) => synchro.execute(serial_state, state),
+        }
     }
 }

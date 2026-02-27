@@ -9,7 +9,14 @@ import {
   GB_WIDTH,
 } from "./common.js";
 import { addInputs } from "./keyboard.js";
+import { addNetwork } from "./network.js";
 import { getSave, writeSave } from "./saves.js";
+
+const toolbar = document.getElementById("toolbar");
+
+if (!(toolbar instanceof HTMLDivElement)) {
+  throw new TypeError("toolbar is not a div");
+}
 
 const romInput = document.getElementById("rom-input");
 
@@ -26,6 +33,8 @@ romInput.addEventListener("change", async () => {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const node = await getAudioWorkletNode();
+
+  // toolbar.classList.add("hidden");
 
   if (isNodeReady) {
     const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
@@ -73,6 +82,8 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   });
   const { port } = node;
   addInputs(canvas, port);
+  console.log("wouf");
+  addNetwork(port);
   addButtons(port);
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
   port.addEventListener(

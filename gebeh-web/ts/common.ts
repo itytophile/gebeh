@@ -5,7 +5,8 @@ export type FromNodeMessage =
     }
   | { type: "wasm" }
   | { type: "frame"; buffer: Uint8Array }
-  | { type: "save"; buffer: Uint8Array; title: string };
+  | { type: "save"; buffer: Uint8Array; title: string }
+  | { type: "serial"; buffer: Uint8Array };
 export type GebehButton =
   | "a"
   | "b"
@@ -28,6 +29,12 @@ export type FromMainMessage =
       button: GebehButton;
     }
   | { type: "disableMessages" }
-  | { type: "enableMessages" };
+  | { type: "enableMessages" }
+  | { type: "serialConnected" }
+  | { type: "serialDisconnected" }
+  | {
+      type: "serial";
+      buffer: Uint8Array;
+    };
 export const GB_WIDTH = 160;
 export const GB_HEIGHT = 144;

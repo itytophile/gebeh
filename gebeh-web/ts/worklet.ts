@@ -1,5 +1,5 @@
 import "../polyfill/TextEncoder.js";
-import { initSync, WebEmulator } from "../pkg/gebeh_web.js";
+import { initSync, SerialMessage, WebEmulator } from "../pkg/gebeh_web.js";
 import {
   AUDIO_PROCESSOR_NAME,
   FromMainMessage,
@@ -108,6 +108,50 @@ class WasmProcessor
           }
           case "enableMessages": {
             this.isMessagesEnabled = true;
+            break;
+          }
+          case "serialConnected": {
+            if (!this.emulator) {
+              throw new Error("Emulator not ready for serial");
+            }
+            this.emulator.set_is_serial_connected((message: SerialMessage) => {
+              const buffer = message.serialize();
+              this.port.postMessage(
+                {
+                  type: "serial",
+                  buffer,
+                } satisfies FromNodeMessage,
+                [buffer.buffer],
+              );
+            });
+            break;
+          }
+          case "serialDisconnected": {
+            if (!this.emulator) {
+              throw new Error("Emulator not ready for serial");
+            }
+            this.emulator.set_is_serial_connected();
+            break;
+          }
+          case "serial": {
+            if (!this.emulator) {
+              throw new Error("Emulator not ready for serial");
+            }
+            const parsed = SerialMessage.deserialize(data.buffer);
+            if (!parsed) {
+              throw new Error("Can't parse message: " + data.buffer.toString());
+            }
+            const messageToSend = this.emulator.set_serial_msg(parsed);
+            if (messageToSend) {
+              const buffer = messageToSend.serialize();
+              this.port.postMessage(
+                {
+                  type: "serial",
+                  buffer,
+                } satisfies FromNodeMessage,
+                [buffer.buffer],
+              );
+            }
             break;
           }
         }
