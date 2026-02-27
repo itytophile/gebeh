@@ -489,14 +489,13 @@ impl Cpu {
             }
             NoRead(AddHlSecond(register)) => {
                 let r = self.get_8bit_register(register);
-                let sum = u16::from(self.h) + u16::from(r) + (self.f.contains(Flags::C) as u16);
-                let result = sum as u8;
+                let sum = u16::from(self.h) + u16::from(r) + self.f.contains(Flags::C) as u16;
 
                 // no z
                 self.f.remove(Flags::N);
-                self.f.set(Flags::H, is_half_carry(self.h, r, result));
+                self.f.set(Flags::H, is_half_carry(self.h, r, sum as u8));
                 self.f.set(Flags::C, sum > 0xff);
-                self.h = result;
+                self.h = sum as u8;
             }
             NoRead(ConditionalReturn(Condition { flag, not })) => {
                 if self.get_flag(flag) != not {
@@ -747,21 +746,15 @@ impl Cpu {
         }
     }
 
-    fn adc(&mut self, second: u8) {
-        let first = self.a as u32;
-        let second = second as u32;
-        let flags = &mut self.f;
-        let carry = flags.contains(Flags::C) as u32;
+    fn adc(&mut self, x: u8) {
+        let sum = u16::from(self.a) + u16::from(x) + self.f.contains(Flags::C) as u16;
 
-        let result = first.wrapping_add(second).wrapping_add(carry);
-        let result_b = result as u8;
+        self.f.remove(Flags::N);
+        self.f.set(Flags::Z, sum as u8 == 0);
+        self.f.set(Flags::H, is_half_carry(self.a, x, sum as u8));
+        self.f.set(Flags::C, sum > 0xff);
 
-        flags.remove(Flags::N);
-        flags.set(Flags::Z, result_b == 0);
-        flags.set(Flags::H, (first ^ second ^ result) & 0x10 == 0x10);
-        flags.set(Flags::C, (result & 0x100) == 0x100);
-
-        self.a = result_b;
+        self.a = sum as u8;
     }
 
     fn sbc(&mut self, second: u8) {
