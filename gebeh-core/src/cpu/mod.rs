@@ -488,16 +488,14 @@ impl Cpu {
                 self.l = result;
             }
             NoRead(AddHlSecond(register)) => {
-                let h = self.h;
-                let register_value = self.get_8bit_register(register);
-                let (result, mut carry) = h.overflowing_add(register_value);
-                let flags = &mut self.f;
-                let (result, carry1) = result.overflowing_add(flags.contains(Flags::C) as u8);
-                carry |= carry1;
+                let r = self.get_8bit_register(register);
+                let sum = u16::from(self.h) + u16::from(r) + (self.f.contains(Flags::C) as u16);
+                let result = sum as u8;
+
                 // no z
-                flags.remove(Flags::N);
-                flags.set(Flags::H, is_half_carry(h, register_value, result));
-                flags.set(Flags::C, carry);
+                self.f.remove(Flags::N);
+                self.f.set(Flags::H, is_half_carry(self.h, r, result));
+                self.f.set(Flags::C, sum > 0xff);
                 self.h = result;
             }
             NoRead(ConditionalReturn(Condition { flag, not })) => {
