@@ -25,5 +25,5 @@
     "noUncheckedSideEffectImports": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["prout"]
+  "include": ["tsx"]
 }
