@@ -12,9 +12,7 @@ import { CreatedRoom, JoinedRoom } from "./room";
 function App() {
   const [node, setNode] = useState<AudioWorkletNode>();
   const [room, setRoom] = useState<
-    | { type: "input"; value: string }
-    | { type: "created" }
-    | { type: "joined"; name: string }
+    { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
   >({ type: "input", value: "" });
 
   return (
@@ -61,12 +59,8 @@ function App() {
               </button>
             </div>
           )}
-          {room.type === "joined" && node?.port && (
-            <JoinedRoom port={node.port} room={room.name} />
-          )}
-          {room.type === "created" && node?.port && (
-            <CreatedRoom port={node.port} />
-          )}
+          {room.type === "joined" && node?.port && <JoinedRoom port={node.port} room={room.name} />}
+          {room.type === "created" && node?.port && <CreatedRoom port={node.port} />}
         </div>
         {node?.port && <Canvas port={node.port} />}
       </div>
@@ -75,12 +69,7 @@ function App() {
           <div className="buttons-dpads-row">
             <Dpad port={node.port} />
             <div className="buttons">
-              <Button
-                style={{ marginTop: "50%" }}
-                src={buttonB}
-                button="b"
-                port={node.port}
-              />
+              <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={node.port} />
               <Button src={buttonA} button="a" port={node.port} />
             </div>
           </div>

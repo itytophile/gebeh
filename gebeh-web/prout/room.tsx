@@ -11,9 +11,7 @@ export function CreatedRoom({ port }: { port: MessagePort }) {
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    const ws = new WebSocket(
-      `${globalThis.location.protocol}//${globalThis.location.host}/ws`,
-    );
+    const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
     ws.binaryType = "arraybuffer";
     const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
       if (data.type === "serial") {
@@ -25,10 +23,7 @@ export function CreatedRoom({ port }: { port: MessagePort }) {
       port.addEventListener("message", portListener);
     });
 
-    let state:
-      | { type: "waitName" }
-      | { type: "waitGuest"; room: string }
-      | { type: "done" } = {
+    let state: { type: "waitName" } | { type: "waitGuest"; room: string } | { type: "done" } = {
       type: "waitName",
     };
 
@@ -81,13 +76,7 @@ export function CreatedRoom({ port }: { port: MessagePort }) {
   return status;
 }
 
-export function JoinedRoom({
-  room,
-  port,
-}: {
-  room: string;
-  port: MessagePort;
-}) {
+export function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
   const [status, setStatus] = useState("");
   useEffect(() => {
     const ws = new WebSocket(

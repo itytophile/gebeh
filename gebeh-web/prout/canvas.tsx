@@ -76,29 +76,26 @@ const initCanvas = (canvas: HTMLCanvasElement, port: MessagePort) => {
 
   addInputs(canvas, port);
 
-  port.addEventListener(
-    "message",
-    ({ data }: MessageEvent<FromNodeMessage>) => {
-      switch (data.type) {
-        case "frame": {
-          const imageData = context.getImageData(0, 0, GB_WIDTH, GB_HEIGHT);
-          for (const [index, byte] of new Uint8Array(data.buffer).entries()) {
-            for (let index_2bits = 0; index_2bits < 4; ++index_2bits) {
-              const gray = (((byte >> (6 - 2 * index_2bits)) & 0b11) * 255) / 3;
-              const index_color = (index * 4 + index_2bits) * 4;
-              const data = imageData.data;
-              data[index_color] = gray;
-              data[index_color + 1] = gray;
-              data[index_color + 2] = gray;
-              data[index_color + 3] = 255;
-            }
+  port.addEventListener("message", ({ data }: MessageEvent<FromNodeMessage>) => {
+    switch (data.type) {
+      case "frame": {
+        const imageData = context.getImageData(0, 0, GB_WIDTH, GB_HEIGHT);
+        for (const [index, byte] of new Uint8Array(data.buffer).entries()) {
+          for (let index_2bits = 0; index_2bits < 4; ++index_2bits) {
+            const gray = (((byte >> (6 - 2 * index_2bits)) & 0b11) * 255) / 3;
+            const index_color = (index * 4 + index_2bits) * 4;
+            const data = imageData.data;
+            data[index_color] = gray;
+            data[index_color + 1] = gray;
+            data[index_color + 2] = gray;
+            data[index_color + 3] = 255;
           }
-          context.putImageData(imageData, 0, 0);
-          break;
         }
+        context.putImageData(imageData, 0, 0);
+        break;
       }
-    },
-  );
+    }
+  });
 };
 
 function Canvas({ port }: { port: MessagePort }) {
