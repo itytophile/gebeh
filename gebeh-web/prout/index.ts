@@ -12,6 +12,7 @@ import { addInputs } from "./keyboard";
 // import { addNetwork } from "./network";
 import { getSave, writeSave } from "./saves";
 import workletURL from "./worklet.ts?worker&url";
+import wasm from "../pkg/gebeh_web_bg.wasm?url";
 
 // const toolbar = document.getElementById("toolbar");
 
@@ -127,7 +128,7 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
         case "wasm": {
           console.log("Sending wasm");
           // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-          void fetch("pkg/gebeh_web_bg.wasm")
+          void fetch(wasm)
             .then((response) => response.bytes())
             .then((bytes) => {
               port.postMessage(

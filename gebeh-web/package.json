@@ -3,7 +3,8 @@
   "name": "gebeh-web",
   "version": "0.1.0",
   "scripts": {
-    "build": "rimraf dist pkg && wasm-pack build --profile web . --target web && tsc",
+    "dev": "vite",
+    "build": "tsc -b && rimraf pkg && wasm-pack build --profile web . --target web && vite build",
     "test": "cargo test && wasm-pack test --headless",
     "routine": "tsc --noEmit && prettier . --write && eslint ."
   },
