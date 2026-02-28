@@ -1,16 +1,17 @@
 // try to not import wasm functions here (let's have some fun)
 
-import { addButtons } from "./buttons.js";
+import { addButtons } from "./buttons";
 import {
   AUDIO_PROCESSOR_NAME,
-  FromMainMessage,
-  FromNodeMessage,
+  type FromMainMessage,
+  type FromNodeMessage,
   GB_HEIGHT,
   GB_WIDTH,
-} from "./common.js";
-import { addInputs } from "./keyboard.js";
-import { addNetwork } from "./network.js";
-import { getSave, writeSave } from "./saves.js";
+} from "./common.ts";
+import { addInputs } from "./keyboard";
+import { addNetwork } from "./network";
+import { getSave, writeSave } from "./saves";
+import workletURL from "./worklet.ts?worker&url";
 
 const toolbar = document.getElementById("toolbar");
 
@@ -76,13 +77,12 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
     return node;
   }
   const audioContext = new AudioContext();
-  await audioContext.audioWorklet.addModule("dist/worklet.js");
+  await audioContext.audioWorklet.addModule(workletURL);
   node = new AudioWorkletNode(audioContext, AUDIO_PROCESSOR_NAME, {
     outputChannelCount: [2],
   });
   const { port } = node;
   addInputs(canvas, port);
-  console.log("wouf");
   addNetwork(port);
   addButtons(port);
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html

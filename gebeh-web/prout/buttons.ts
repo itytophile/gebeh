@@ -1,4 +1,4 @@
-import { FromMainMessage } from "./common";
+import type { FromMainMessage } from "./common";
 
 for (const element of document.querySelectorAll(".interactive")) {
   element.addEventListener("contextmenu", (event) => {

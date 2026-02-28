@@ -1,10 +1,10 @@
-import "../polyfill/TextEncoder.js";
-import { initSync, SerialMessage, WebEmulator } from "../pkg/gebeh_web.js";
+import "../polyfill/TextEncoder";
+import { initSync, SerialMessage, WebEmulator } from "../pkg/gebeh_web";
 import {
   AUDIO_PROCESSOR_NAME,
-  FromMainMessage,
-  FromNodeMessage,
-} from "./common.js";
+  type FromMainMessage,
+  type FromNodeMessage,
+} from "./common";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
 // I copied the declarations because doing something clean with multiple tsconfig files or whatever is too difficult

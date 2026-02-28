@@ -1,4 +1,4 @@
-import { FromMainMessage, GebehButton } from "./common";
+import type { FromMainMessage, GebehButton } from "./common";
 
 export function addInputs(canvas: HTMLCanvasElement, port: MessagePort) {
   canvas.addEventListener("keydown", (event) => {

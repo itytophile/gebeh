@@ -1,4 +1,4 @@
-import { FromMainMessage, FromNodeMessage } from "./common";
+import type { FromMainMessage, FromNodeMessage } from "./common";
 
 const roomInput = document.getElementById("roomInput");
 

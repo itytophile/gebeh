@@ -1,29 +1,31 @@
-// @ts-check
-
 import eslint from "@eslint/js";
 import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 import eslintPluginUnicorn from "eslint-plugin-unicorn";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
+import reactPlugin from "eslint-plugin-react";
 
 export default defineConfig(
   {
-    ignores: [
-      "./pkg/*",
-      "./static/*",
-      "./src/*",
-      "./dist/*",
-      "./eslint.config.mjs",
-      "./polyfill/*",
-    ],
+    ignores: ["./pkg/*", "./static/*", "./src/*", "./dist/*", "./polyfill/*"],
   },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
   eslintPluginUnicorn.configs.recommended,
+  reactHooks.configs.flat["recommended-latest"],
+  reactRefresh.configs.vite,
+  reactPlugin.configs.flat.recommended,
   {
     languageOptions: {
       parserOptions: {
         projectService: true,
+      },
+    },
+    settings: {
+      react: {
+        version: "detect",
       },
     },
     rules: {
@@ -49,6 +51,7 @@ export default defineConfig(
       "unicorn/no-nested-ternary": "off",
       "unicorn/prefer-query-selector": "off",
       "unicorn/numeric-separators-style": "off",
+      "react/react-in-jsx-scope": "off",
     },
   },
 );
