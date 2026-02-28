@@ -3,6 +3,10 @@ import { onLoadFile } from ".";
 import "../style.css";
 import Canvas from "./canvas";
 import type { FromMainMessage, FromNodeMessage } from "./common";
+import buttonA from "../assets/buttonA.svg";
+import buttonB from "../assets/buttonB.svg";
+import dpad from "../assets/dpad.svg";
+import startSelect from "../assets/startSelect.svg";
 
 function App() {
   const [node, setNode] = useState<AudioWorkletNode>();
@@ -66,20 +70,20 @@ function App() {
         {node?.port && <Canvas port={node.port} />}
       </div>
       <div className="buttons-dpads-row">
-        <img className="interactive" src="assets/dpad.svg" />
+        <img className="interactive" src={dpad} />
         <div className="buttons">
           <img
             className="interactive"
             style={{ marginTop: "50%" }}
-            src="assets/buttonB.svg"
+            src={buttonB}
           />
-          <img className="interactive" src="assets/buttonA.svg" />
+          <img className="interactive" src={buttonA} />
         </div>
       </div>
       <div className="center">
         <div className="start-select-buttons">
-          <img className="interactive" src="assets/startSelect.svg" />
-          <img className="interactive" src="assets/startSelect.svg" />
+          <img className="interactive" src={startSelect} />
+          <img className="interactive" src={startSelect} />
         </div>
       </div>
     </div>
