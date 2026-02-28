@@ -1,6 +1,17 @@
+import { useEffect, useRef } from "react";
+import { initCanvas, onLoadFile } from ".";
 import "../style.css";
 
 function App() {
+  const canvas = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!canvas.current) {
+      throw new TypeError("No canvas");
+    }
+    initCanvas(canvas.current);
+  }, []);
+
   return (
     <div className="content">
       <div className="screen">
@@ -10,8 +21,11 @@ function App() {
             id="rom-input"
             onChange={(event) => {
               const file = event.target.files?.item(0);
-              if (!file) {
-                return;
+              const context = canvas.current?.getContext("2d");
+              if (file && context) {
+                void onLoadFile(file, context);
+              } else {
+                console.error("Can't load file");
               }
             }}
           />
@@ -23,7 +37,13 @@ function App() {
             <button id="createRoomBtn">Create room</button>
           </div>
         </div>
-        <canvas id="canvas" tabIndex={1} width="160" height="144"></canvas>
+        <canvas
+          ref={canvas}
+          id="canvas"
+          tabIndex={1}
+          width="160"
+          height="144"
+        ></canvas>
       </div>
       <div className="buttons-dpads-row">
         <img className="interactive" src="assets/dpad.svg" id="dpad" />

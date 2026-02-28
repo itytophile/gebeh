@@ -8,34 +8,26 @@ import {
   GB_HEIGHT,
   GB_WIDTH,
 } from "./common.ts";
-import { addInputs } from "./keyboard";
-import { addNetwork } from "./network";
+// import { addInputs } from "./keyboard";
+// import { addNetwork } from "./network";
 import { getSave, writeSave } from "./saves";
 import workletURL from "./worklet.ts?worker&url";
 
-const toolbar = document.getElementById("toolbar");
+// const toolbar = document.getElementById("toolbar");
 
-if (!(toolbar instanceof HTMLDivElement)) {
-  throw new TypeError("toolbar is not a div");
-}
+// if (!(toolbar instanceof HTMLDivElement)) {
+//   throw new TypeError("toolbar is not a div");
+// }
 
-const romInput = document.getElementById("rom-input");
+// const romInput = document.getElementById("rom-input");
 
-if (!(romInput instanceof HTMLInputElement)) {
-  throw new TypeError("rom-input is not an input");
-}
+// if (!(romInput instanceof HTMLInputElement)) {
+//   throw new TypeError("rom-input is not an input");
+// }
 
-romInput.addEventListener("change", async () => {
-  const file = romInput.files?.item(0);
-
-  if (!file) {
-    return;
-  }
-
+export const onLoadFile = async (file: File, context: CanvasRenderingContext2D) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const node = await getAudioWorkletNode();
-
-  // toolbar.classList.add("hidden");
+  const node = await getAudioWorkletNode(context);
 
   if (isNodeReady) {
     const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
@@ -50,29 +42,25 @@ romInput.addEventListener("change", async () => {
   } else {
     notReadyRom = bytes;
   }
-});
+}
 
 let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
 let notReadyRom: Uint8Array | undefined;
 
-const canvas = document.getElementById("canvas");
-
-if (!(canvas instanceof HTMLCanvasElement)) {
-  throw new TypeError("Not Canvas");
+export const initCanvas = (canvas: HTMLCanvasElement) => {
+  const context = canvas.getContext("2d");
+  
+  if (!context) {
+    throw new Error("Canvas context is null");
+  }
+  
+  const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
+  imageData.data.fill(0xaa);
+  context.putImageData(imageData, 0, 0);
 }
 
-const context = canvas.getContext("2d");
-
-if (!context) {
-  throw new Error("Canvas context is null");
-}
-
-const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
-imageData.data.fill(0xaa);
-context.putImageData(imageData, 0, 0);
-
-const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
+const getAudioWorkletNode = async (context: CanvasRenderingContext2D): Promise<AudioWorkletNode> => {
   if (node) {
     return node;
   }
@@ -82,8 +70,8 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
     outputChannelCount: [2],
   });
   const { port } = node;
-  addInputs(canvas, port);
-  addNetwork(port);
+  // addInputs(canvas, port);
+  // addNetwork(port);
   addButtons(port);
   // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
   port.addEventListener(
@@ -122,11 +110,12 @@ const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
           break;
         }
         case "frame": {
+          const imageData = context.getImageData(0, 0, GB_WIDTH, GB_HEIGHT);
           for (const [index, byte] of new Uint8Array(data.buffer).entries()) {
             for (let index_2bits = 0; index_2bits < 4; ++index_2bits) {
               const gray = (((byte >> (6 - 2 * index_2bits)) & 0b11) * 255) / 3;
               const index_color = (index * 4 + index_2bits) * 4;
-              const data = imageData.data;
+              const data =  imageData.data;
               data[index_color] = gray;
               data[index_color + 1] = gray;
               data[index_color + 2] = gray;
