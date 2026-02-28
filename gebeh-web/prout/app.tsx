@@ -7,10 +7,9 @@ import startSelect from "../assets/startSelect.svg";
 import Button from "./button";
 import Dpad from "./dpad";
 import { CreatedRoom, JoinedRoom } from "./room";
-import { AUDIO_PROCESSOR_NAME, type FromMainMessage, type FromNodeMessage } from "./common.ts";
-import { getSave, writeSave } from "./saves";
-import workletURL from "./worklet.ts?worker&url";
-import wasm from "../pkg/gebeh_web_bg.wasm?url";
+import { type FromMainMessage } from "./common.ts";
+import { getSave } from "./saves";
+import initNode from "./init-node.ts";
 
 function getTitleFromRom(rom: Uint8Array): string {
   const title = rom.slice(0x134, 0x143);
@@ -24,70 +23,13 @@ function getTitleFromRom(rom: Uint8Array): string {
   return decoder.decode(title.slice(0, endZeroPos));
 }
 
-const onLoadFile = async (file: File, port: MessagePort) => {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-
-  const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
-  port.postMessage(
-    {
-      type: "rom",
-      bytes,
-      save,
-    } satisfies FromMainMessage,
-    save ? [bytes.buffer, save.buffer] : [bytes.buffer],
-  );
-};
-
 function App() {
   const [node, setNode] = useState<AudioWorkletNode>();
   if (!node) {
     return (
       <button
         onClick={async () => {
-          const audioContext = new AudioContext();
-          await audioContext.audioWorklet.addModule(workletURL);
-          const node = new AudioWorkletNode(audioContext, AUDIO_PROCESSOR_NAME, {
-            outputChannelCount: [2],
-          });
-          const { port } = node;
-          // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-          port.addEventListener("message", async ({ data }: MessageEvent<FromNodeMessage>) => {
-            switch (data.type) {
-              case "ready": {
-                // ready
-                setNode(node);
-                break;
-              }
-              case "wasm": {
-                console.log("Sending wasm");
-                // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-                void fetch(wasm)
-                  .then((response) => response.bytes())
-                  .then((bytes) => {
-                    port.postMessage({ type: "wasm", bytes } satisfies FromMainMessage, [
-                      bytes.buffer,
-                    ]);
-                  });
-                break;
-              }
-              case "save": {
-                await writeSave(data.title, data.buffer);
-              }
-            }
-          });
-          document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState == "visible") {
-              port.postMessage({
-                type: "enableMessages",
-              } satisfies FromMainMessage);
-            } else {
-              port.postMessage({
-                type: "disableMessages",
-              } satisfies FromMainMessage);
-            }
-          });
-          port.start();
-          node.connect(audioContext.destination);
+          setNode(await initNode());
         }}
       >
         Turn on
@@ -111,7 +53,17 @@ function AppInner({ port }: { port: MessagePort }) {
             onChange={async (event) => {
               const file = event.target.files?.item(0);
               if (file) {
-                await onLoadFile(file, port);
+                const bytes = new Uint8Array(await file.arrayBuffer());
+
+                const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
+                port.postMessage(
+                  {
+                    type: "rom",
+                    bytes,
+                    save,
+                  } satisfies FromMainMessage,
+                  save ? [bytes.buffer, save.buffer] : [bytes.buffer],
+                );
               } else {
                 console.error("Can't load file");
               }
