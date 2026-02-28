@@ -12,69 +12,6 @@ import { getSave, writeSave } from "./saves";
 import workletURL from "./worklet.ts?worker&url";
 import wasm from "../pkg/gebeh_web_bg.wasm?url";
 
-let node: AudioWorkletNode | undefined;
-let isNodeReady = false;
-let notReadyRom: Uint8Array | undefined;
-
-const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
-  if (node) {
-    return node;
-  }
-
-  const audioContext = new AudioContext();
-  await audioContext.audioWorklet.addModule(workletURL);
-  node = new AudioWorkletNode(audioContext, AUDIO_PROCESSOR_NAME, {
-    outputChannelCount: [2],
-  });
-  const { port } = node;
-  // addNetwork(port);
-  // addButtons(port);
-  // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-  port.addEventListener("message", async ({ data }: MessageEvent<FromNodeMessage>) => {
-    switch (data.type) {
-      case "ready": {
-        // ready
-        isNodeReady = true;
-        if (notReadyRom) {
-          const save = await getSave(getTitleFromRom(new Uint8Array(notReadyRom)));
-          port.postMessage(
-            {
-              type: "rom",
-              bytes: notReadyRom,
-              save,
-            } satisfies FromMainMessage,
-            save ? [notReadyRom.buffer, save.buffer] : [notReadyRom.buffer],
-          );
-        }
-        break;
-      }
-      case "wasm": {
-        console.log("Sending wasm");
-        // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
-        void fetch(wasm)
-          .then((response) => response.bytes())
-          .then((bytes) => {
-            port.postMessage({ type: "wasm", bytes } satisfies FromMainMessage, [bytes.buffer]);
-          });
-        break;
-      }
-      case "save": {
-        await writeSave(data.title, data.buffer);
-      }
-    }
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState == "visible") {
-      port.postMessage({ type: "enableMessages" } satisfies FromMainMessage);
-    } else {
-      port.postMessage({ type: "disableMessages" } satisfies FromMainMessage);
-    }
-  });
-  port.start();
-  node.connect(audioContext.destination);
-  return node;
-};
-
 function getTitleFromRom(rom: Uint8Array): string {
   const title = rom.slice(0x134, 0x143);
 
@@ -87,29 +24,80 @@ function getTitleFromRom(rom: Uint8Array): string {
   return decoder.decode(title.slice(0, endZeroPos));
 }
 
-const onLoadFile = async (file: File): Promise<AudioWorkletNode> => {
+const onLoadFile = async (file: File, port: MessagePort) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const node = await getAudioWorkletNode();
 
-  if (isNodeReady) {
-    const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
-    node.port.postMessage(
-      {
-        type: "rom",
-        bytes,
-        save,
-      } satisfies FromMainMessage,
-      save ? [bytes.buffer, save.buffer] : [bytes.buffer],
-    );
-  } else {
-    notReadyRom = bytes;
-  }
-
-  return node;
+  const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
+  port.postMessage(
+    {
+      type: "rom",
+      bytes,
+      save,
+    } satisfies FromMainMessage,
+    save ? [bytes.buffer, save.buffer] : [bytes.buffer],
+  );
 };
 
 function App() {
   const [node, setNode] = useState<AudioWorkletNode>();
+  if (!node) {
+    return (
+      <button
+        onClick={async () => {
+          const audioContext = new AudioContext();
+          await audioContext.audioWorklet.addModule(workletURL);
+          const node = new AudioWorkletNode(audioContext, AUDIO_PROCESSOR_NAME, {
+            outputChannelCount: [2],
+          });
+          const { port } = node;
+          // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
+          port.addEventListener("message", async ({ data }: MessageEvent<FromNodeMessage>) => {
+            switch (data.type) {
+              case "ready": {
+                // ready
+                setNode(node);
+                break;
+              }
+              case "wasm": {
+                console.log("Sending wasm");
+                // https://github.com/wasm-bindgen/wasm-bindgen/blob/9ffc52c8d29f006cadf669dcfce6b6f74d308194/examples/synchronous-instantiation/index.html
+                void fetch(wasm)
+                  .then((response) => response.bytes())
+                  .then((bytes) => {
+                    port.postMessage({ type: "wasm", bytes } satisfies FromMainMessage, [
+                      bytes.buffer,
+                    ]);
+                  });
+                break;
+              }
+              case "save": {
+                await writeSave(data.title, data.buffer);
+              }
+            }
+          });
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState == "visible") {
+              port.postMessage({
+                type: "enableMessages",
+              } satisfies FromMainMessage);
+            } else {
+              port.postMessage({
+                type: "disableMessages",
+              } satisfies FromMainMessage);
+            }
+          });
+          port.start();
+          node.connect(audioContext.destination);
+        }}
+      >
+        Turn on
+      </button>
+    );
+  }
+  return <AppInner port={node.port} />;
+}
+
+function AppInner({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
     { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
   >({ type: "input", value: "" });
@@ -123,8 +111,7 @@ function App() {
             onChange={async (event) => {
               const file = event.target.files?.item(0);
               if (file) {
-                const node = await onLoadFile(file);
-                setNode(node);
+                await onLoadFile(file, port);
               } else {
                 console.error("Can't load file");
               }
@@ -158,28 +145,24 @@ function App() {
               </button>
             </div>
           )}
-          {room.type === "joined" && node?.port && <JoinedRoom port={node.port} room={room.name} />}
-          {room.type === "created" && node?.port && <CreatedRoom port={node.port} />}
+          {room.type === "joined" && <JoinedRoom port={port} room={room.name} />}
+          {room.type === "created" && <CreatedRoom port={port} />}
         </div>
-        {node?.port && <Canvas port={node.port} />}
+        {<Canvas port={port} />}
       </div>
-      {node?.port && (
-        <>
-          <div className="buttons-dpads-row">
-            <Dpad port={node.port} />
-            <div className="buttons">
-              <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={node.port} />
-              <Button src={buttonA} button="a" port={node.port} />
-            </div>
-          </div>
-          <div className="center">
-            <div className="start-select-buttons">
-              <Button src={startSelect} button="select" port={node.port} />
-              <Button src={startSelect} button="start" port={node.port} />
-            </div>
-          </div>
-        </>
-      )}
+      <div className="buttons-dpads-row">
+        <Dpad port={port} />
+        <div className="buttons">
+          <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={port} />
+          <Button src={buttonA} button="a" port={port} />
+        </div>
+      </div>
+      <div className="center">
+        <div className="start-select-buttons">
+          <Button src={startSelect} button="select" port={port} />
+          <Button src={startSelect} button="start" port={port} />
+        </div>
+      </div>
     </div>
   );
 }
