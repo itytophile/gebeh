@@ -5,10 +5,7 @@ import {
   AUDIO_PROCESSOR_NAME,
   type FromMainMessage,
   type FromNodeMessage,
-  GB_HEIGHT,
-  GB_WIDTH,
 } from "./common.ts";
-import { addInputs } from "./keyboard";
 // import { addNetwork } from "./network";
 import { getSave, writeSave } from "./saves";
 import workletURL from "./worklet.ts?worker&url";
@@ -50,44 +47,6 @@ export const onLoadFile = async (file: File): Promise<AudioWorkletNode> => {
 let node: AudioWorkletNode | undefined;
 let isNodeReady = false;
 let notReadyRom: Uint8Array | undefined;
-
-export const initCanvas = (canvas: HTMLCanvasElement, port: MessagePort) => {
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error("Canvas context is null");
-  }
-
-  const imageData = context.createImageData(GB_WIDTH, GB_HEIGHT);
-  imageData.data.fill(0xaa);
-  context.putImageData(imageData, 0, 0);
-
-  addInputs(canvas, port);
-
-  port.addEventListener(
-    "message",
-    ({ data }: MessageEvent<FromNodeMessage>) => {
-      switch (data.type) {
-        case "frame": {
-          const imageData = context.getImageData(0, 0, GB_WIDTH, GB_HEIGHT);
-          for (const [index, byte] of new Uint8Array(data.buffer).entries()) {
-            for (let index_2bits = 0; index_2bits < 4; ++index_2bits) {
-              const gray = (((byte >> (6 - 2 * index_2bits)) & 0b11) * 255) / 3;
-              const index_color = (index * 4 + index_2bits) * 4;
-              const data = imageData.data;
-              data[index_color] = gray;
-              data[index_color + 1] = gray;
-              data[index_color + 2] = gray;
-              data[index_color + 3] = 255;
-            }
-          }
-          context.putImageData(imageData, 0, 0);
-          break;
-        }
-      }
-    },
-  );
-};
 
 const getAudioWorkletNode = async (): Promise<AudioWorkletNode> => {
   if (node) {

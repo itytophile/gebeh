@@ -81,7 +81,13 @@ export function CreatedRoom({ port }: { port: MessagePort }) {
   return status;
 }
 
-export function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
+export function JoinedRoom({
+  room,
+  port,
+}: {
+  room: string;
+  port: MessagePort;
+}) {
   const [status, setStatus] = useState("");
   useEffect(() => {
     const ws = new WebSocket(

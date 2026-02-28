@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc -b && rimraf pkg && wasm-pack build --profile web . --target web && vite build",
     "test": "cargo test && wasm-pack test --headless",
-    "routine": "tsc --noEmit && prettier . --write && eslint .",
+    "routine": "tsc --noEmit && prettier . --write && eslint . && knip",
     "knip": "knip"
   },
   "dependencies": {
