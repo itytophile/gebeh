@@ -52,6 +52,9 @@ function Dpad({ port }: { port: MessagePort }) {
     <img
       className={style.interactive}
       src={dpad}
+      onContextMenu={(event) => {
+        event.preventDefault();
+      }}
       onPointerDown={(event: React.PointerEvent<HTMLImageElement>) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);

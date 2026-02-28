@@ -18,6 +18,9 @@ function Button({
       className={style.interactive}
       style={styleProperty}
       src={src}
+      onContextMenu={(event) => {
+        event.preventDefault();
+      }}
       onPointerDown={(event) => {
         event.preventDefault();
         port.postMessage({
