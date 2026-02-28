@@ -52,6 +52,7 @@ export default defineConfig(
       "unicorn/prefer-query-selector": "off",
       "unicorn/numeric-separators-style": "off",
       "react/react-in-jsx-scope": "off",
+      "react/self-closing-comp": "warn",
     },
   },
 );

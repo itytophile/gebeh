@@ -1,73 +1,52 @@
-import { useEffect, useRef } from "react";
-import { initCanvas, onLoadFile } from ".";
+import { useState } from "react";
+import { onLoadFile } from ".";
 import "../style.css";
+import Canvas from "./canvas";
 
 function App() {
-  const canvas = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    if (!canvas.current) {
-      throw new TypeError("No canvas");
-    }
-    initCanvas(canvas.current);
-  }, []);
+  const [node, setNode] = useState<AudioWorkletNode>();
 
   return (
     <div className="content">
       <div className="screen">
-        <div id="toolbar" className="toolbar">
+        <div className="toolbar">
           <input
             type="file"
-            id="rom-input"
-            onChange={(event) => {
+            onChange={async (event) => {
               const file = event.target.files?.item(0);
-              if (file && canvas.current) {
-                void onLoadFile(file, canvas.current);
+              if (file) {
+                const node = await onLoadFile(file);
+                setNode(node);
               } else {
                 console.error("Can't load file");
               }
             }}
           />
-          <div className="flex-row" id="room">
+          <div className="flex-row">
             <div className="flex-row">
-              <input type="text" placeholder="Room to join" id="roomInput" />
-              <button id="joinRoomBtn">Join room</button>
+              <input type="text" placeholder="Room to join" />
+              <button>Join room</button>
             </div>
-            <button id="createRoomBtn">Create room</button>
+            <button>Create room</button>
           </div>
         </div>
-        <canvas
-          ref={canvas}
-          id="canvas"
-          tabIndex={1}
-          width="160"
-          height="144"
-        ></canvas>
+        {node?.port && <Canvas port={node.port} />}
       </div>
       <div className="buttons-dpads-row">
-        <img className="interactive" src="assets/dpad.svg" id="dpad" />
+        <img className="interactive" src="assets/dpad.svg" />
         <div className="buttons">
           <img
             className="interactive"
             style={{ marginTop: "50%" }}
             src="assets/buttonB.svg"
-            id="buttonB"
           />
-          <img className="interactive" src="assets/buttonA.svg" id="buttonA" />
+          <img className="interactive" src="assets/buttonA.svg" />
         </div>
       </div>
       <div className="center">
         <div className="start-select-buttons">
-          <img
-            className="interactive"
-            src="assets/startSelect.svg"
-            id="buttonSelect"
-          />
-          <img
-            className="interactive"
-            src="assets/startSelect.svg"
-            id="buttonStart"
-          />
+          <img className="interactive" src="assets/startSelect.svg" />
+          <img className="interactive" src="assets/startSelect.svg" />
         </div>
       </div>
     </div>
