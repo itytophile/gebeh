@@ -6,7 +6,7 @@ import buttonB from "../assets/buttonB.svg";
 import startSelect from "../assets/startSelect.svg";
 import Button from "./button";
 import Dpad from "./dpad";
-import { CreatedRoom, JoinedRoom } from "./room";
+import Room from "./room";
 import { type FromMainMessage } from "./common.ts";
 import { getSave } from "./saves";
 import initNode from "./init-node.ts";
@@ -40,10 +40,6 @@ function App() {
 }
 
 function AppInner({ port }: { port: MessagePort }) {
-  const [room, setRoom] = useState<
-    { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
-  >({ type: "input", value: "" });
-
   return (
     <div className="content">
       <div className="screen">
@@ -69,36 +65,7 @@ function AppInner({ port }: { port: MessagePort }) {
               }
             }}
           />
-          {room.type === "input" && (
-            <div className="flex-row">
-              <div className="flex-row">
-                <input
-                  type="text"
-                  placeholder="Room to join"
-                  value={room.value}
-                  onChange={(event) => {
-                    setRoom({ type: "input", value: event.target.value });
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    setRoom({ type: "joined", name: room.value });
-                  }}
-                >
-                  Join room
-                </button>
-              </div>
-              <button
-                onClick={() => {
-                  setRoom({ type: "created" });
-                }}
-              >
-                Create room
-              </button>
-            </div>
-          )}
-          {room.type === "joined" && <JoinedRoom port={port} room={room.name} />}
-          {room.type === "created" && <CreatedRoom port={port} />}
+          <Room port={port} />
         </div>
         {<Canvas port={port} />}
       </div>

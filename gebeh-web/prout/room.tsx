@@ -1,13 +1,56 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
 
+function Room({ port }: { port: MessagePort }) {
+  const [room, setRoom] = useState<
+    { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
+  >({ type: "input", value: "" });
+
+  if (room.type === "input") {
+    return (
+      <div className="flex-row">
+        <div className="flex-row">
+          <input
+            type="text"
+            placeholder="Room to join"
+            value={room.value}
+            onChange={(event) => {
+              setRoom({ type: "input", value: event.target.value });
+            }}
+          />
+          <button
+            onClick={() => {
+              setRoom({ type: "joined", name: room.value });
+            }}
+          >
+            Join room
+          </button>
+        </div>
+        <button
+          onClick={() => {
+            setRoom({ type: "created" });
+          }}
+        >
+          Create room
+        </button>
+      </div>
+    );
+  }
+
+  if (room.type === "created") {
+    return <CreatedRoom port={port} />;
+  }
+
+  return <JoinedRoom port={port} room={room.name} />;
+}
+
 const CLOSE_MESSAGE = "Room closed 🍗🍗";
 
 function getReadyRoomMessage(room: string) {
   return `${room} 🐣🐔`;
 }
 
-export function CreatedRoom({ port }: { port: MessagePort }) {
+function CreatedRoom({ port }: { port: MessagePort }) {
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -76,7 +119,7 @@ export function CreatedRoom({ port }: { port: MessagePort }) {
   return status;
 }
 
-export function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
+function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
   const [status, setStatus] = useState("");
   useEffect(() => {
     const ws = new WebSocket(
@@ -118,3 +161,5 @@ export function JoinedRoom({ room, port }: { room: string; port: MessagePort }) 
   }, [port, room]);
   return status;
 }
+
+export default Room;
