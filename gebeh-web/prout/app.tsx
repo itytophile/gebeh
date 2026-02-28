@@ -21,9 +21,8 @@ function App() {
             id="rom-input"
             onChange={(event) => {
               const file = event.target.files?.item(0);
-              const context = canvas.current?.getContext("2d");
-              if (file && context) {
-                void onLoadFile(file, context);
+              if (file && canvas.current) {
+                void onLoadFile(file, canvas.current);
               } else {
                 console.error("Can't load file");
               }
