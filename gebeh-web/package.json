@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc -b && rimraf pkg && wasm-pack build --profile web . --target web && vite build",
     "test": "cargo test && wasm-pack test --headless",
-    "routine": "tsc --noEmit && prettier . --write && eslint ."
+    "routine": "tsc --noEmit && prettier . --write && eslint .",
+    "knip": "knip"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -14,18 +15,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.11.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "@wasm-tool/wasm-pack-plugin": "^1",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.3",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "eslint-plugin-unicorn": "^62.0.0",
-    "globals": "^16.5.0",
+    "knip": "^5.85.0",
     "prettier": "^3.7.4",
     "rimraf": "^6",
     "typescript": "<5.9.0",

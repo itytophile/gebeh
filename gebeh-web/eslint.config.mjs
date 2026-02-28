@@ -17,6 +17,7 @@ export default defineConfig(
   reactHooks.configs.flat["recommended-latest"],
   reactRefresh.configs.vite,
   reactPlugin.configs.flat.recommended,
+  reactPlugin.configs.flat["jsx-runtime"],
   {
     languageOptions: {
       parserOptions: {
@@ -51,7 +52,6 @@ export default defineConfig(
       "unicorn/no-nested-ternary": "off",
       "unicorn/prefer-query-selector": "off",
       "unicorn/numeric-separators-style": "off",
-      "react/react-in-jsx-scope": "off",
       "react/self-closing-comp": "warn",
     },
   },
