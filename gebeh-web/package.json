@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc -b && rimraf pkg && wasm-pack build --profile web . --target web && vite build",
     "test": "cargo test && wasm-pack test --headless",
-    "routine": "tsc --noEmit && oxfmt . --write && oxlint . && knip",
+    "routine": "tsc --noEmit && oxfmt . && oxlint . && knip",
+    "check": "tsc --noEmit && oxfmt . --check && oxlint . && knip",
     "knip": "knip"
   },
   "dependencies": {
