@@ -1,5 +1,5 @@
 import { useState } from "react";
-import "../style.css";
+import style from "../style.module.css";
 import Canvas from "./canvas";
 import buttonA from "../assets/buttonA.svg";
 import buttonB from "../assets/buttonB.svg";
@@ -28,23 +28,23 @@ function App() {
 
 function Initialized({ port }: { port: MessagePort }) {
   return (
-    <div className="content">
-      <div className="screen">
-        <div className="toolbar">
+    <div className={style.content}>
+      <div className={style.screen}>
+        <div className={style.toolbar}>
           <RomInput port={port} />
           <Room port={port} />
         </div>
         <Canvas port={port} />
       </div>
-      <div className="buttons-dpads-row">
+      <div className={style.buttonsDpadsRow}>
         <Dpad port={port} />
-        <div className="buttons">
+        <div className={style.buttons}>
           <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={port} />
           <Button src={buttonA} button="a" port={port} />
         </div>
       </div>
-      <div className="center">
-        <div className="start-select-buttons">
+      <div className={style.center}>
+        <div className={style.startSelectButtons}>
           <Button src={startSelect} button="select" port={port} />
           <Button src={startSelect} button="start" port={port} />
         </div>

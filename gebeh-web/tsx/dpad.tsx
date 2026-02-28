@@ -1,9 +1,9 @@
 import { useRef } from "react";
 import type { FromMainMessage } from "./common";
 import dpad from "../assets/dpad.svg";
+import style from "../style.module.css";
 
 function Dpad({ port }: { port: MessagePort }) {
-  const isPointerDown = useRef(false);
   const dpadState = useRef({
     left: false,
     right: false,
@@ -11,78 +11,59 @@ function Dpad({ port }: { port: MessagePort }) {
     down: false,
   });
 
-  function applyDpadState(newDpadState: {
-    left: boolean;
-    right: boolean;
-    up: boolean;
-    down: boolean;
-  }) {
-    for (const [before, now, button] of [
-      [dpadState.current.left, newDpadState.left, "left"],
-      [dpadState.current.right, newDpadState.right, "right"],
-      [dpadState.current.up, newDpadState.up, "up"],
-      [dpadState.current.down, newDpadState.down, "down"],
-    ] as const) {
-      if (before === now) {
-        continue;
+  const applyDpadState = (nextState: typeof dpadState.current) => {
+    for (const key of ["left", "right", "up", "down"] as const) {
+      const before = dpadState.current[key];
+      const now = nextState[key];
+
+      if (before !== now) {
+        port.postMessage({
+          type: "input",
+          event: now ? "down" : "up",
+          button: key,
+        } satisfies FromMainMessage);
       }
-      port.postMessage({
-        type: "input",
-        event: now ? "down" : "up",
-        button,
-      } satisfies FromMainMessage);
     }
 
-    dpadState.current = newDpadState;
-  }
+    dpadState.current = nextState;
+  };
 
-  function cancelPointer(event: React.PointerEvent<HTMLImageElement>) {
-    isPointerDown.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    applyDpadState({ down: false, left: false, right: false, up: false });
-  }
-
-  function handlePress(event: React.PointerEvent<HTMLImageElement>) {
-    if (!isPointerDown.current) {
-      return;
-    }
-
+  const updateButtonsFromEvent = (event: React.PointerEvent<HTMLImageElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-
-    const inside =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-
-    if (!inside) {
-      cancelPointer(event);
-      return;
-    }
 
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
 
-    applyDpadState({
+    const newState = {
       left: x < 1 / 3,
       right: x > 2 / 3,
       up: y < 1 / 3,
       down: y > 2 / 3,
-    });
-  }
+    };
+
+    applyDpadState(newState);
+  };
+
+  const handlePointerUpOrLeave = () => {
+    applyDpadState({ left: false, right: false, up: false, down: false });
+  };
 
   return (
     <img
-      className="interactive"
+      className={style.interactive}
       src={dpad}
-      onPointerDown={(event) => {
-        isPointerDown.current = true;
+      onPointerDown={(event: React.PointerEvent<HTMLImageElement>) => {
         event.preventDefault();
-        // to be able to move the finger while pressing and change buttons
         event.currentTarget.setPointerCapture(event.pointerId);
-
-        handlePress(event);
+        updateButtonsFromEvent(event);
       }}
+      onPointerMove={(event: React.PointerEvent<HTMLImageElement>) => {
+        if (event.buttons > 0) {
+          updateButtonsFromEvent(event);
+        }
+      }}
+      onPointerUp={handlePointerUpOrLeave}
+      onPointerCancel={handlePointerUpOrLeave}
     />
   );
 }

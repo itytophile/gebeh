@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
+import style from "../style.module.css";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -8,8 +9,8 @@ function Room({ port }: { port: MessagePort }) {
 
   if (room.type === "input") {
     return (
-      <div className="flex-row">
-        <div className="flex-row">
+      <div className={style.flexRow}>
+        <div className={style.flexRow}>
           <input
             type="text"
             placeholder="Room to join"

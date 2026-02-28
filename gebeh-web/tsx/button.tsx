@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
 import type { GebehButton, FromMainMessage } from "./common";
+import style from "../style.module.css";
 
 function Button({
   src,
   port,
   button,
-  style,
+  style: styleProperty,
 }: {
   src: string;
   port: MessagePort;
@@ -14,8 +15,8 @@ function Button({
 }) {
   return (
     <img
-      className="interactive"
-      style={style}
+      className={style.interactive}
+      style={styleProperty}
       src={src}
       onPointerDown={(event) => {
         event.preventDefault();

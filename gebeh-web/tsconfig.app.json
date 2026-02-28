@@ -25,5 +25,5 @@
     "noUncheckedSideEffectImports": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["tsx"]
+  "include": ["tsx", "style.module.css.d.ts"]
 }
