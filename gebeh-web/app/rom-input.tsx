@@ -40,7 +40,7 @@ function RomInput({ port, onLoad }: { port: MessagePort; onLoad?: () => void }) 
   };
   return (
     <div className="field">
-      <div className={"file" + (fileName ? " has-name" : "")}>
+      <div className={"file is-success" + (fileName ? " has-name" : "")}>
         <label className="file-label">
           <input className="file-input" type="file" onChange={onFileChange} />
           <span className="file-cta">

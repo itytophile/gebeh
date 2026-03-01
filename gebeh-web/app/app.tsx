@@ -21,21 +21,27 @@ function App() {
   >();
   if (node === undefined) {
     return (
-      <button
-        className={style.startButton}
-        onClick={() => {
-          setNode({ type: "loading" });
-          void initNode().then((value) => {
-            setNode({ type: "ready", value });
-          });
-        }}
-      >
-        🥚
-      </button>
+      <div className={style.center}>
+        <button
+          className={style.startButton}
+          onClick={() => {
+            setNode({ type: "loading" });
+            void initNode().then((value) => {
+              setNode({ type: "ready", value });
+            });
+          }}
+        >
+          🥚
+        </button>
+      </div>
     );
   }
   if (node.type === "loading") {
-    return <button className={style.startButton}>🐣</button>;
+    return (
+      <div className={style.center}>
+        <button className={style.startButton}>🐣</button>
+      </div>
+    );
   }
   return <Initialized port={node.value.port} />;
 }
@@ -61,7 +67,7 @@ function Game({
   setPage: (page: Page) => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div className={style.center}>
       <div className={style.content} style={{ display: isHidden ? "none" : undefined }}>
         <div className={style.screen}>
           <Canvas port={port} />
