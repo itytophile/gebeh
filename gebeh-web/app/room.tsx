@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
+import Button from "./bulma/button";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -10,14 +11,13 @@ function Room({ port }: { port: MessagePort }) {
     return (
       <>
         <div className="field">
-          <button
-            className="button is-success"
+          <Button
             onClick={() => {
               setRoom({ type: "created" });
             }}
-          >
-            Create room
-          </button>
+            label="Create room"
+            color="is-success"
+          />
         </div>
         <div className="field has-addons">
           <div className="control">
@@ -36,14 +36,13 @@ function Room({ port }: { port: MessagePort }) {
             />
           </div>
           <div className="control">
-            <button
-              className="button is-info"
+            <Button
+              label="Join room"
+              color="is-info"
               onClick={() => {
                 setRoom({ type: "joined", name: room.value });
               }}
-            >
-              Join room
-            </button>
+            />
           </div>
         </div>
       </>
@@ -129,27 +128,25 @@ function CreatedRoom({ port }: { port: MessagePort }) {
   }, [port]);
 
   if (status.type === "loading") {
-    return <button className="button">Loading...</button>;
+    return <Button label="Loading..." />;
   }
 
   if (status.type === "closed") {
-    return <button className="button">Room closed 🍗🍗</button>;
+    return <Button label="Room closed 🍗🍗" />;
   }
 
   if (status.type === "waiting") {
     return (
-      <button
-        className="button"
+      <Button
+        label={`${status.room} 🥚🐔`}
         onClick={() => {
           void navigator.clipboard.writeText(status.room);
         }}
-      >
-        {status.room} 🥚🐔
-      </button>
+      />
     );
   }
 
-  return <button className="button">Connected 🐣🐔</button>;
+  return <Button label="Connected 🐣🐔" />;
 }
 
 function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
@@ -194,14 +191,14 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
   }, [port, room]);
 
   if (status === "loading") {
-    return <button className="button">Loading...</button>;
+    return <Button label="Loading..." />;
   }
 
   if (status === "closed") {
-    return <button className="button">Room closed 🍗🍗</button>;
+    return <Button label="Room closed 🍗🍗" />;
   }
 
-  return <button className="button">Connected 🐣🐔</button>;
+  return <Button label="Connected 🐣🐔" />;
 }
 
 export default Room;

@@ -4,14 +4,14 @@ import Canvas from "./canvas";
 import buttonA from "./assets/buttonA.svg";
 import buttonB from "./assets/buttonB.svg";
 import startSelect from "./assets/startSelect.svg";
-import Button from "./button";
+import GamepadButton from "./gamepad-button.tsx";
 import Dpad from "./dpad";
 import Room from "./room";
 import initNode from "./init-node.ts";
 import RomInput from "./rom-input.tsx";
 import "./bulma.scss";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload } from "@fortawesome/free-solid-svg-icons";
+import Button from "./bulma/button.tsx";
 
 type Page = "game" | "settings";
 
@@ -85,14 +85,14 @@ function Game({
         <div className={style.buttonsDpadsRow}>
           <Dpad port={port} />
           <div className={style.buttons}>
-            <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={port} />
-            <Button src={buttonA} button="a" port={port} />
+            <GamepadButton style={{ marginTop: "50%" }} src={buttonB} button="b" port={port} />
+            <GamepadButton src={buttonA} button="a" port={port} />
           </div>
         </div>
         <div className={style.center}>
           <div className={style.startSelectButtons}>
-            <Button src={startSelect} button="select" port={port} />
-            <Button src={startSelect} button="start" port={port} />
+            <GamepadButton src={startSelect} button="select" port={port} />
+            <GamepadButton src={startSelect} button="start" port={port} />
           </div>
         </div>
       </div>
@@ -130,12 +130,7 @@ function Settings({
           }}
         />
         <div className="field">
-          <button className="button">
-            <span className="icon">
-              <FontAwesomeIcon icon={faDownload} />
-            </span>
-            <span>Download save</span>
-          </button>
+          <Button icon={faDownload} label="Download save" />
         </div>
         <h1 className="title">Online Multiplayer</h1>
         <Room port={port} />
