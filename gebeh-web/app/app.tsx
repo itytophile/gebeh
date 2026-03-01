@@ -1,15 +1,15 @@
 import { useState } from "react";
-import style from "../style.module.css";
+import style from "./style.module.css";
 import Canvas from "./canvas";
-import buttonA from "../assets/buttonA.svg";
-import buttonB from "../assets/buttonB.svg";
-import startSelect from "../assets/startSelect.svg";
+import buttonA from "./assets/buttonA.svg";
+import buttonB from "./assets/buttonB.svg";
+import startSelect from "./assets/startSelect.svg";
 import Button from "./button";
 import Dpad from "./dpad";
 import Room from "./room";
 import initNode from "./init-node.ts";
 import RomInput from "./rom-input.tsx";
-import "../bulma.scss";
+import "./bulma.scss";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload } from "@fortawesome/free-solid-svg-icons";
 
@@ -61,39 +61,36 @@ function Game({
   setPage: (page: Page) => void;
 }) {
   return (
-  <div
-  style={{display: "flex", flexDirection: "column", alignItems: "center", width: "100%"}}
-  >
-    <div className={style.content} style={{ display: isHidden ? "none" : undefined }}>
-      <div className={style.screen}>
-        <Canvas port={port} />
-      </div>
-      <div className={style.center}>
-        <button
-          className={style.settingsButton}
-          onClick={() => {
-            setPage("settings");
-          }}
-        >
-          ⚙️
-        </button>
-      </div>
-      <div className={style.buttonsDpadsRow}>
-        <Dpad port={port} />
-        <div className={style.buttons}>
-          <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={port} />
-          <Button src={buttonA} button="a" port={port} />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+      <div className={style.content} style={{ display: isHidden ? "none" : undefined }}>
+        <div className={style.screen}>
+          <Canvas port={port} />
         </div>
-      </div>
-      <div className={style.center}>
-        <div className={style.startSelectButtons}>
-          <Button src={startSelect} button="select" port={port} />
-          <Button src={startSelect} button="start" port={port} />
+        <div className={style.center}>
+          <button
+            className={style.settingsButton}
+            onClick={() => {
+              setPage("settings");
+            }}
+          >
+            ⚙️
+          </button>
+        </div>
+        <div className={style.buttonsDpadsRow}>
+          <Dpad port={port} />
+          <div className={style.buttons}>
+            <Button style={{ marginTop: "50%" }} src={buttonB} button="b" port={port} />
+            <Button src={buttonA} button="a" port={port} />
+          </div>
+        </div>
+        <div className={style.center}>
+          <div className={style.startSelectButtons}>
+            <Button src={startSelect} button="select" port={port} />
+            <Button src={startSelect} button="start" port={port} />
+          </div>
         </div>
       </div>
     </div>
-  </div>
-    
   );
 }
 

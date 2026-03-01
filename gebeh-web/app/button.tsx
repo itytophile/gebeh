@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { GebehButton, FromMainMessage } from "./common";
-import style from "../style.module.css";
+import style from "./style.module.css";
 
 function Button({
   src,
