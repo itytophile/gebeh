@@ -137,6 +137,7 @@ function Settings({
             <span>Download save</span>
           </button>
         </div>
+        <h1 className="title">Online Multiplayer</h1>
         <Room port={port} />
       </div>
     </section>
