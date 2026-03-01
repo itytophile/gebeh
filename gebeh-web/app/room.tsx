@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
 import Button from "./bulma/button";
+import { faRocket } from "@fortawesome/free-solid-svg-icons";
+import { faPlug } from "@fortawesome/free-solid-svg-icons/faPlug";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -17,6 +19,7 @@ function Room({ port }: { port: MessagePort }) {
             }}
             label="Create room"
             color="is-success"
+            icon={faRocket}
           />
         </div>
         <div className="field has-addons">
@@ -42,6 +45,7 @@ function Room({ port }: { port: MessagePort }) {
               onClick={() => {
                 setRoom({ type: "joined", name: room.value });
               }}
+              icon={faPlug}
             />
           </div>
         </div>

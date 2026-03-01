@@ -12,6 +12,9 @@ import RomInput from "./rom-input.tsx";
 import "./bulma.scss";
 import { faDownload } from "@fortawesome/free-solid-svg-icons";
 import Button from "./bulma/button.tsx";
+import { faXmark } from "@fortawesome/free-solid-svg-icons/faXmark";
+import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
+import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
 
 type Page = "game" | "settings";
 
@@ -113,14 +116,13 @@ function Settings({
     <section className="section" style={{ display: isHidden ? "none" : undefined }}>
       <div className="container">
         <div className="field">
-          <button
-            className="button"
+          <Button
             onClick={() => {
               setPage("game");
             }}
-          >
-            Close settings
-          </button>
+            label="Close settings"
+            icon={faArrowLeft}
+          />
         </div>
         <h1 className="title">Game</h1>
         <RomInput
@@ -129,8 +131,15 @@ function Settings({
             setPage("game");
           }}
         />
+        <h1 className="title">Save</h1>
         <div className="field">
           <Button icon={faDownload} label="Download save" />
+        </div>
+        <div className="field">
+          <Button icon={faUpload} label="Load save" />
+        </div>
+        <div className="field">
+          <Button icon={faXmark} label="Clear save" />
         </div>
         <h1 className="title">Online Multiplayer</h1>
         <Room port={port} />
