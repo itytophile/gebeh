@@ -26,7 +26,6 @@ canvas {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12%;
   margin-bottom: 12%;
   padding-left: 5%;
   padding-right: 5%;
@@ -76,4 +75,16 @@ canvas {
 
 .hidden {
   display: none;
+}
+
+.startButton {
+  font-size: 10rem;
+  padding: 1rem;
+  margin: 1rem;
+}
+
+.settingsButton {
+  font-size: 3rem;
+  padding: 1rem;
+  margin: 1rem;
 }

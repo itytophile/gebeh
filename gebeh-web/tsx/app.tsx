@@ -11,19 +11,28 @@ import initNode from "./init-node.ts";
 import RomInput from "./rom-input.tsx";
 
 function App() {
-  const [node, setNode] = useState<AudioWorkletNode>();
-  if (!node) {
+  const [node, setNode] = useState<
+    { type: "ready"; value: AudioWorkletNode } | { type: "loading" }
+  >();
+  if (node === undefined) {
     return (
       <button
-        onClick={async () => {
-          setNode(await initNode());
+        className={style.startButton}
+        onClick={() => {
+          setNode({ type: "loading" });
+          void initNode().then((value) => {
+            setNode({ type: "ready", value });
+          });
         }}
       >
-        Turn on
+        🥚
       </button>
     );
   }
-  return <Initialized port={node.port} />;
+  if (node.type === "loading") {
+    return <button className={style.startButton}>🐣</button>;
+  }
+  return <Initialized port={node.value.port} />;
 }
 
 function Initialized({ port }: { port: MessagePort }) {
@@ -35,6 +44,9 @@ function Initialized({ port }: { port: MessagePort }) {
           <Room port={port} />
         </div>
         <Canvas port={port} />
+      </div>
+      <div className={style.center}>
+        <button className={style.settingsButton}>⚙️</button>
       </div>
       <div className={style.buttonsDpadsRow}>
         <Dpad port={port} />
