@@ -2,3 +2,7 @@ target/
 downloads/
 .git/
 Dockerfile
+*/*/dist/
+*/*/node_modules/
+*/*/pkg/
+.dockerignore

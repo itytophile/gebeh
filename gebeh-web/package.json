@@ -1,20 +1,41 @@
 {
-  "author": "You <you@example.com>",
   "name": "gebeh-web",
   "version": "0.1.0",
+  "author": "You <you@example.com>",
   "scripts": {
-    "build": "rimraf dist pkg && wasm-pack build --profile web . --target web && tsc",
+    "dev": "vite",
+    "build": "tsc -b && rimraf pkg && wasm-pack build --profile web . --target web && vite build",
     "test": "cargo test && wasm-pack test --headless",
-    "routine": "tsc --noEmit && prettier . --write && eslint ."
+    "routine": "tsc --noEmit && oxfmt . && oxlint . && knip",
+    "check": "tsc --noEmit && oxfmt . --check && oxlint . && knip",
+    "knip": "knip"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@wasm-tool/wasm-pack-plugin": "^1",
-    "eslint": "^9.0.0",
+    "@types/node": "^24.11.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "^9.7",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
     "eslint-plugin-unicorn": "^62.0.0",
-    "prettier": "^3.7.4",
+    "knip": "^5.85.0",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0",
     "rimraf": "^6",
     "typescript": "<5.9.0",
-    "typescript-eslint": "^8.36.0"
+    "typescript-eslint": "^8.48.0",
+    "vite": "^8.0.0-beta.13",
+    "vite-plugin-typed-css-modules": "^0.5.3"
+  },
+  "overrides": {
+    "vite": "^8.0.0-beta.13"
   }
 }

@@ -1,54 +1,16 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <title>gebeh</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="icon" type="image/x-icon" href="./assets/gebeh.png" />
-    <link href="./style.css" rel="stylesheet" />
   </head>
   <body>
-    <div class="content">
-      <div class="screen">
-        <div id="toolbar" class="toolbar">
-          <input type="file" id="rom-input" />
-          <div class="flex-row" id="room">
-            <div class="flex-row">
-              <input type="text" placeholder="Room to join" id="roomInput" />
-              <button id="joinRoomBtn">Join room</button>
-            </div>
-            <button id="createRoomBtn">Create room</button>
-          </div>
-        </div>
-        <canvas id="canvas" tabindex="1" width="160" height="144"></canvas>
-      </div>
-      <div class="buttons-dpads-row">
-        <img class="interactive" src="assets/dpad.svg" id="dpad" />
-        <div class="buttons">
-          <img
-            class="interactive"
-            style="margin-top: 50%"
-            src="assets/buttonB.svg"
-            id="buttonB"
-          />
-          <img class="interactive" src="assets/buttonA.svg" id="buttonA" />
-        </div>
-      </div>
-      <div class="center">
-        <div class="start-select-buttons">
-          <img
-            class="interactive"
-            src="assets/startSelect.svg"
-            id="buttonSelect"
-          />
-          <img
-            class="interactive"
-            src="assets/startSelect.svg"
-            id="buttonStart"
-          />
-        </div>
-      </div>
-    </div>
-    <script type="module" src="dist/index.js"></script>
+    <div
+      id="root"
+      style="display: flex; flex-direction: column; align-items: center; width: 100%"
+    ></div>
+    <script type="module" src="/tsx/main.tsx"></script>
   </body>
 </html>

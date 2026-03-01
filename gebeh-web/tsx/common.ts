@@ -7,15 +7,7 @@ export type FromNodeMessage =
   | { type: "frame"; buffer: Uint8Array }
   | { type: "save"; buffer: Uint8Array; title: string }
   | { type: "serial"; buffer: Uint8Array };
-export type GebehButton =
-  | "a"
-  | "b"
-  | "start"
-  | "select"
-  | "left"
-  | "right"
-  | "up"
-  | "down";
+export type GebehButton = "a" | "b" | "start" | "select" | "left" | "right" | "up" | "down";
 export type FromMainMessage =
   | {
       type: "rom";

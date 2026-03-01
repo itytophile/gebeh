@@ -1,20 +1,4 @@
 {
-  "compilerOptions": {
-    "noImplicitAny": true,
-    "allowJs": true,
-    "checkJs": false,
-    "sourceMap": true,
-    "module": "esnext",
-    "target": "esnext",
-    "jsx": "react",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "outDir": "./dist"
-  },
-  "include": ["ts"],
-  "exclude": ["polyfill"]
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
 }

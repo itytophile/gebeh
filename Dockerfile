@@ -14,8 +14,7 @@ COPY . .
 
 WORKDIR /app/gebeh-web
 
-RUN . "$HOME/.cargo/env" && npm ci && npm run build &&\
-    mkdir page && cp -R assets/ dist/ pkg/ polyfill/ index.html style.css manifest.json page/
+RUN . "$HOME/.cargo/env" && npm ci && npm run build
 
 FROM docker.io/clux/muslrust:stable AS back
 
@@ -28,6 +27,6 @@ RUN cargo build --profile server -p gebeh-server
 FROM scratch
 
 COPY --from=back /app/target/x86_64-unknown-linux-musl/server/gebeh-server .
-COPY --from=front /app/gebeh-web/page /page
+COPY --from=front /app/gebeh-web/dist /dist
 
-CMD [ "/gebeh-server", "page" ]
+CMD [ "/gebeh-server", "dist" ]
