@@ -17,7 +17,7 @@ import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
 import Select from "./bulma/select.tsx";
 import { useQuery } from "@tanstack/react-query";
-import { getKeys } from "./saves.ts";
+import { getKeys, getSave } from "./saves.ts";
 
 type Page = "game" | "settings";
 
@@ -154,7 +154,21 @@ function Settings({
         </div>
 
         <div className="field">
-          <Button icon={faDownload} label="Download save" />
+          <Button
+            icon={faDownload}
+            label="Download save"
+            onClick={
+              selectedSave
+                ? async () => {
+                    const save = await getSave(selectedSave);
+                    if (save) {
+                      downloadFile(save, selectedSave);
+                    }
+                  }
+                : undefined
+            }
+            disabled={!selectedSave}
+          />
         </div>
         <div className="field">
           <Button icon={faUpload} label="Load save" />
@@ -170,3 +184,15 @@ function Settings({
 }
 
 export default App;
+
+function downloadFile(bytes: Uint8Array<ArrayBuffer>, fileName: string) {
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileName}.bin`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

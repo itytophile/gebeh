@@ -14,13 +14,14 @@ function Select<T>({
 }) {
   return (
     <div className="select">
-      <select
-        value={selected}
-        onClick={() => {
-          onClick();
-        }}
-      >
-        <option>Choose a save</option>
+      <select value={selected}>
+        <option
+          onClick={() => {
+            onClick();
+          }}
+        >
+          Choose a save
+        </option>
         {options.map((option) => (
           <option
             key={option.label}

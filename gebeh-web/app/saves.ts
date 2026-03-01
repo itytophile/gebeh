@@ -35,7 +35,7 @@ export async function getKeys(): Promise<IDBValidKey[]> {
   return request.result;
 }
 
-export async function getSave(title: string): Promise<Uint8Array | undefined> {
+export async function getSave(title: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
   const database = await DATABASE;
   const request = database
     .transaction(OBJECT_STORE_NAME, "readonly")
@@ -44,8 +44,12 @@ export async function getSave(title: string): Promise<Uint8Array | undefined> {
   await waitRequest(request);
   const result: unknown = request.result;
 
-  if (result === undefined || result instanceof Uint8Array) {
-    return result;
+  if (result === undefined) {
+    return undefined;
+  }
+
+  if (result instanceof Uint8Array && result.buffer instanceof ArrayBuffer) {
+    return new Uint8Array(result.buffer);
   }
 
   throw new Error("Unknown object from db for title " + title);
