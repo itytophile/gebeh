@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { FromMainMessage } from "./common";
-import dpad from "../assets/dpad.svg";
-import style from "../style.module.css";
+import dpad from "./assets/dpad.svg";
+import style from "./style.module.css";
 
 function Dpad({ port }: { port: MessagePort }) {
   const dpadState = useRef({

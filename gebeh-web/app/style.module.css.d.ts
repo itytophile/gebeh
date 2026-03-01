@@ -7,6 +7,8 @@ declare const styles: {
   readonly hidden: string;
   readonly interactive: string;
   readonly screen: string;
+  readonly settingsButton: string;
+  readonly startButton: string;
   readonly startSelectButtons: string;
   readonly toolbar: string;
 };

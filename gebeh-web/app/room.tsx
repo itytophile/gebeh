@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
-import style from "../style.module.css";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -9,32 +8,40 @@ function Room({ port }: { port: MessagePort }) {
 
   if (room.type === "input") {
     return (
-      <div className={style.flexRow}>
-        <div className={style.flexRow}>
-          <input
-            type="text"
-            placeholder="Room to join"
-            value={room.value}
-            onChange={(event) => {
-              setRoom({ type: "input", value: event.target.value });
-            }}
-          />
+      <>
+        <div className="field">
           <button
+            className="button is-success"
             onClick={() => {
-              setRoom({ type: "joined", name: room.value });
+              setRoom({ type: "created" });
             }}
           >
-            Join room
+            Create room
           </button>
         </div>
-        <button
-          onClick={() => {
-            setRoom({ type: "created" });
-          }}
-        >
-          Create room
-        </button>
-      </div>
+        <div className="field has-addons">
+          <div className="control">
+            <input
+              className="input"
+              type="text"
+              placeholder="Room to join"
+              onChange={(event) => {
+                setRoom({ type: "input", value: event.target.value });
+              }}
+            />
+          </div>
+          <div className="control">
+            <button
+              className="button is-info"
+              onClick={() => {
+                setRoom({ type: "joined", name: room.value });
+              }}
+            >
+              Join room
+            </button>
+          </div>
+        </div>
+      </>
     );
   }
 
@@ -45,14 +52,13 @@ function Room({ port }: { port: MessagePort }) {
   return <JoinedRoom port={port} room={room.name} />;
 }
 
-const CLOSE_MESSAGE = "Room closed 🍗🍗";
-
-function getReadyRoomMessage(room: string) {
-  return `${room} 🐣🐔`;
-}
-
 function CreatedRoom({ port }: { port: MessagePort }) {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<
+    | { type: "loading" }
+    | { type: "closed" }
+    | { type: "ready"; room: string }
+    | { type: "waiting"; room: string }
+  >({ type: "loading" });
 
   useEffect(() => {
     const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
@@ -77,12 +83,12 @@ function CreatedRoom({ port }: { port: MessagePort }) {
           if (typeof message.data !== "string") {
             throw new TypeError("First message must be the room name");
           }
-          setStatus(`${message.data} 🥚🐔`);
+          setStatus({ type: "waiting", room: message.data });
           state = { type: "waitGuest", room: message.data };
           break;
         }
         case "waitGuest": {
-          setStatus(getReadyRoomMessage(state.room));
+          setStatus({ type: "ready", room: state.room });
           state = { type: "done" };
           port.postMessage({
             type: "serialConnected",
@@ -105,7 +111,7 @@ function CreatedRoom({ port }: { port: MessagePort }) {
       }
     });
     ws.addEventListener("close", () => {
-      setStatus(CLOSE_MESSAGE);
+      setStatus({ type: "closed" });
       port.postMessage({
         type: "serialDisconnected",
       } satisfies FromMainMessage);
@@ -117,11 +123,32 @@ function CreatedRoom({ port }: { port: MessagePort }) {
     };
   }, [port]);
 
-  return status;
+  if (status.type === "loading") {
+    return <button className="button">Loading...</button>;
+  }
+
+  if (status.type === "closed") {
+    return <button className="button">Room closed 🍗🍗</button>;
+  }
+
+  if (status.type === "waiting") {
+    return (
+      <button
+        className="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(status.room);
+        }}
+      >
+        {status.room} 🥚🐔
+      </button>
+    );
+  }
+
+  return <button className="button">Connected 🐣🐔</button>;
 }
 
 function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
   useEffect(() => {
     const ws = new WebSocket(
       `${globalThis.location.protocol}//${globalThis.location.host}/ws?room=${room}`,
@@ -133,7 +160,7 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
       }
     };
     ws.addEventListener("open", () => {
-      setStatus(getReadyRoomMessage(room));
+      setStatus("ready");
       console.log("guest!");
       port.postMessage({ type: "serialConnected" } satisfies FromMainMessage);
       port.addEventListener("message", portListener);
@@ -149,7 +176,7 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
       } satisfies FromNodeMessage);
     });
     ws.addEventListener("close", () => {
-      setStatus(CLOSE_MESSAGE);
+      setStatus("closed");
       port.postMessage({
         type: "serialDisconnected",
       } satisfies FromMainMessage);
@@ -160,7 +187,16 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
       port.removeEventListener("message", portListener);
     };
   }, [port, room]);
-  return status;
+
+  if (status === "loading") {
+    return <button className="button">Loading...</button>;
+  }
+
+  if (status === "closed") {
+    return <button className="button">Room closed 🍗🍗</button>;
+  }
+
+  return <button className="button">Connected 🐣🐔</button>;
 }
 
 export default Room;
