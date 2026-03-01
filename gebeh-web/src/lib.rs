@@ -14,8 +14,7 @@ use crate::rtc::NullRtc;
 
 mod rtc;
 
-#[wasm_bindgen]
-pub struct WebEmulator {
+struct WebEmulatorInner {
     emulator: Emulator,
     sample_index: u32,
     mbc: Box<dyn CloneMbc<'static>>,
@@ -25,11 +24,16 @@ pub struct WebEmulator {
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
     serial_state: SerialState,
-    serial_mode: SerialMode,
 }
 
 #[wasm_bindgen]
-impl WebEmulator {
+#[derive(Default)]
+pub struct WebEmulator {
+    inner: Option<WebEmulatorInner>,
+    serial_mode: SerialMode,
+}
+
+impl WebEmulatorInner {
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
         let Some((cartridge_type, mut mbc)) = get_mbc::<_, NullRtc>(rom) else {
@@ -54,7 +58,6 @@ impl WebEmulator {
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
             serial_state: SerialState::NoTransfer,
-            serial_mode: SerialMode::Disconnected,
         })
     }
 
@@ -65,6 +68,7 @@ impl WebEmulator {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
+        serial_mode: &mut SerialMode,
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -83,8 +87,7 @@ impl WebEmulator {
                     return;
                 }
                 self.emulator.execute(self.mbc.as_mut());
-                self.serial_mode
-                    .execute(&mut self.serial_state, &mut self.emulator.state);
+                serial_mode.execute(&mut self.serial_state, &mut self.emulator.state);
                 if self.serial_state.is_blocking_execution() {
                     return;
                 }
@@ -124,31 +127,6 @@ impl WebEmulator {
         })
     }
 
-    pub fn set_a(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().a = value;
-    }
-    pub fn set_b(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().b = value;
-    }
-    pub fn set_start(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().start = value;
-    }
-    pub fn set_select(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().select = value;
-    }
-    pub fn set_left(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().left = value;
-    }
-    pub fn set_right(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().right = value;
-    }
-    pub fn set_down(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().down = value;
-    }
-    pub fn set_up(&mut self, value: bool) {
-        self.emulator.get_joypad_mut().up = value;
-    }
-
     pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
         if msg.is_master {
             Some(SerialMessage {
@@ -160,6 +138,95 @@ impl WebEmulator {
         } else {
             self.serial_state
                 .set_msg_from_slave(msg.byte, &mut self.emulator.state);
+            None
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl WebEmulator {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn init_emulator(&mut self, rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) {
+        self.inner = WebEmulatorInner::new(rom, save, sample_rate)
+    }
+
+    // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
+    pub fn drive_and_sample(
+        &mut self,
+        left: &mut [f32],
+        right: &mut [f32],
+        sample_rate: u32,
+        on_new_frame: &js_sys::Function,
+    ) {
+        if let Some(inner) = &mut self.inner {
+            inner.drive_and_sample(
+                left,
+                right,
+                sample_rate,
+                on_new_frame,
+                &mut self.serial_mode,
+            );
+        }
+    }
+
+    pub fn get_save(&self) -> Option<Save> {
+        self.inner.as_ref().and_then(WebEmulatorInner::get_save)
+    }
+
+    pub fn set_a(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().a = value;
+        }
+    }
+    pub fn set_b(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().b = value;
+        }
+    }
+    pub fn set_start(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().start = value;
+        }
+    }
+    pub fn set_select(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().select = value;
+        }
+    }
+    pub fn set_left(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().left = value;
+        }
+    }
+    pub fn set_right(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().right = value;
+        }
+    }
+    pub fn set_down(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().down = value;
+        }
+    }
+    pub fn set_up(&mut self, value: bool) {
+        if let Some(inner) = &mut self.inner {
+            inner.emulator.get_joypad_mut().up = value;
+        }
+    }
+
+    pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
+        if let Some(inner) = &mut self.inner {
+            inner.set_serial_msg(msg)
+        } else if msg.is_master {
+            Some(SerialMessage {
+                byte: 0xff,
+                is_master: false,
+            })
+        } else {
             None
         }
     }
@@ -344,7 +411,9 @@ impl SerialExecutor for SynchroSerial {
     }
 }
 
+#[derive(Default)]
 enum SerialMode {
+    #[default]
     Disconnected,
     SynchroSerial(SynchroSerial),
 }

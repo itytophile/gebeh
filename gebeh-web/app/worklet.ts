@@ -38,7 +38,7 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
     this.port.addEventListener("message", ({ data }: MessageEvent<FromMainMessage>) => {
       switch (data.type) {
         case "rom": {
-          this.emulator = WebEmulator.new(
+          this.emulator?.init_emulator(
             new Uint8Array(data.bytes),
             data.save ? new Uint8Array(data.save) : undefined,
             sampleRate,
@@ -48,6 +48,7 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
         case "wasm": {
           console.log("Initializing wasm");
           initSync({ module: data.bytes });
+          this.emulator = new WebEmulator();
           this.port.postMessage({ type: "ready" } satisfies FromNodeMessage);
           console.log("Ready!");
           break;
