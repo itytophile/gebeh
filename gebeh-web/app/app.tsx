@@ -15,6 +15,9 @@ import Button from "./bulma/button.tsx";
 import { faXmark } from "@fortawesome/free-solid-svg-icons/faXmark";
 import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
+import Select from "./bulma/select.tsx";
+import { useQuery } from "@tanstack/react-query";
+import { getKeys } from "./saves.ts";
 
 type Page = "game" | "settings";
 
@@ -112,6 +115,12 @@ function Settings({
   isHidden: boolean;
   setPage: (page: Page) => void;
 }) {
+  const databaseKeysQuery = useQuery({
+    queryKey: ["dbKeys", isHidden],
+    queryFn: () => getKeys(),
+  });
+  const [selectedSave, setSelectedSave] = useState<string>();
+
   return (
     <section className="section" style={{ display: isHidden ? "none" : undefined }}>
       <div className="container">
@@ -132,6 +141,18 @@ function Settings({
           }}
         />
         <h1 className="title">Save</h1>
+        <div className="field">
+          <Select
+            options={(databaseKeysQuery.data ?? [])
+              .filter((key) => typeof key === "string")
+              .map((key) => ({ label: key, value: key }))}
+            onClick={(option) => {
+              setSelectedSave(option?.value);
+            }}
+            selected={selectedSave}
+          />
+        </div>
+
         <div className="field">
           <Button icon={faDownload} label="Download save" />
         </div>

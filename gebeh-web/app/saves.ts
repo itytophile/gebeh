@@ -1,12 +1,6 @@
-let database: IDBDatabase | undefined;
-
 const OBJECT_STORE_NAME = "saves";
 
-async function getDatabase(): Promise<IDBDatabase> {
-  if (database) {
-    return database;
-  }
-
+const DATABASE = new Promise<IDBDatabase>((resolve) => {
   const request = indexedDB.open("gebeh", 1);
   request.onupgradeneeded = () => {
     const database = request.result;
@@ -17,13 +11,13 @@ async function getDatabase(): Promise<IDBDatabase> {
 
     database.createObjectStore(OBJECT_STORE_NAME);
   };
-  await waitRequest(request);
-  database = request.result;
-  return database;
-}
+  void waitRequest(request).then(() => {
+    resolve(request.result);
+  });
+});
 
 export async function writeSave(title: string, buffer: Uint8Array) {
-  const database = await getDatabase();
+  const database = await DATABASE;
   const request = database
     .transaction(OBJECT_STORE_NAME, "readwrite")
     .objectStore(OBJECT_STORE_NAME)
@@ -31,8 +25,18 @@ export async function writeSave(title: string, buffer: Uint8Array) {
   await waitRequest(request);
 }
 
+export async function getKeys(): Promise<IDBValidKey[]> {
+  const database = await DATABASE;
+  const request = database
+    .transaction(OBJECT_STORE_NAME, "readonly")
+    .objectStore(OBJECT_STORE_NAME)
+    .getAllKeys();
+  await waitRequest(request);
+  return request.result;
+}
+
 export async function getSave(title: string): Promise<Uint8Array | undefined> {
-  const database = await getDatabase();
+  const database = await DATABASE;
   const request = database
     .transaction(OBJECT_STORE_NAME, "readonly")
     .objectStore(OBJECT_STORE_NAME)
