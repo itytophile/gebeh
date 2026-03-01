@@ -9,6 +9,11 @@ import Dpad from "./dpad";
 import Room from "./room";
 import initNode from "./init-node.ts";
 import RomInput from "./rom-input.tsx";
+import "../bulma.scss";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faDownload } from "@fortawesome/free-solid-svg-icons";
+
+type Page = "game" | "settings";
 
 function App() {
   const [node, setNode] = useState<
@@ -36,17 +41,42 @@ function App() {
 }
 
 function Initialized({ port }: { port: MessagePort }) {
+  const [page, setPage] = useState<Page>("settings");
+
   return (
-    <div className={style.content}>
+    <>
+      <Settings port={port} isHidden={page !== "settings"} setPage={setPage} />
+      <Game port={port} isHidden={page !== "game"} setPage={setPage} />
+    </>
+  );
+}
+
+function Game({
+  port,
+  isHidden,
+  setPage,
+}: {
+  port: MessagePort;
+  isHidden: boolean;
+  setPage: (page: Page) => void;
+}) {
+  return (
+  <div
+  style={{display: "flex", flexDirection: "column", alignItems: "center", width: "100%"}}
+  >
+    <div className={style.content} style={{ display: isHidden ? "none" : undefined }}>
       <div className={style.screen}>
-        <div className={style.toolbar}>
-          <RomInput port={port} />
-          <Room port={port} />
-        </div>
         <Canvas port={port} />
       </div>
       <div className={style.center}>
-        <button className={style.settingsButton}>⚙️</button>
+        <button
+          className={style.settingsButton}
+          onClick={() => {
+            setPage("settings");
+          }}
+        >
+          ⚙️
+        </button>
       </div>
       <div className={style.buttonsDpadsRow}>
         <Dpad port={port} />
@@ -62,6 +92,51 @@ function Initialized({ port }: { port: MessagePort }) {
         </div>
       </div>
     </div>
+  </div>
+    
+  );
+}
+
+function Settings({
+  port,
+  isHidden,
+  setPage,
+}: {
+  port: MessagePort;
+  isHidden: boolean;
+  setPage: (page: Page) => void;
+}) {
+  return (
+    <section className="section" style={{ display: isHidden ? "none" : undefined }}>
+      <div className="container">
+        <div className="field">
+          <button
+            className="button"
+            onClick={() => {
+              setPage("game");
+            }}
+          >
+            Close settings
+          </button>
+        </div>
+        <h1 className="title">Game</h1>
+        <RomInput
+          port={port}
+          onLoad={() => {
+            setPage("game");
+          }}
+        />
+        <div className="field">
+          <button className="button">
+            <span className="icon">
+              <FontAwesomeIcon icon={faDownload} />
+            </span>
+            <span>Download save</span>
+          </button>
+        </div>
+        <Room port={port} />
+      </div>
+    </section>
   );
 }
 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
-import style from "../style.module.css";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -9,32 +8,41 @@ function Room({ port }: { port: MessagePort }) {
 
   if (room.type === "input") {
     return (
-      <div className={style.flexRow}>
-        <div className={style.flexRow}>
-          <input
-            type="text"
-            placeholder="Room to join"
-            value={room.value}
-            onChange={(event) => {
-              setRoom({ type: "input", value: event.target.value });
-            }}
-          />
+      <>
+        <h1 className="title">Online Multiplayer</h1>
+        <div className="field">
           <button
+            className="button is-success"
             onClick={() => {
-              setRoom({ type: "joined", name: room.value });
+              setRoom({ type: "created" });
             }}
           >
-            Join room
+            Create room
           </button>
         </div>
-        <button
-          onClick={() => {
-            setRoom({ type: "created" });
-          }}
-        >
-          Create room
-        </button>
-      </div>
+        <div className="field has-addons">
+          <div className="control">
+            <input
+              className="input"
+              type="text"
+              placeholder="Room to join"
+              onChange={(event) => {
+                setRoom({ type: "input", value: event.target.value });
+              }}
+            />
+          </div>
+          <div className="control">
+            <button
+              className="button is-info"
+              onClick={() => {
+                setRoom({ type: "joined", name: room.value });
+              }}
+            >
+              Join room
+            </button>
+          </div>
+        </div>
+      </>
     );
   }
 

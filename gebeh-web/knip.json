@@ -2,5 +2,7 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "tags": ["-lintignore"],
   "ignoreBinaries": ["wasm-pack"],
-  "ignoreFiles": ["polyfill/*", "style.module.css.d.ts"]
+  "ignoreFiles": ["polyfill/*", "style.module.css.d.ts"],
+  "ignoreDependencies": ["bulma"],
+  "ignoreUnresolved": ["./bulma/bulma"]
 }
