@@ -16,4 +16,4 @@ jobs:
         run: curl https://drager.github.io/wasm-pack/installer/init.sh -sSf | bash
       - name: Check
         run: npm ci && npm run check
-        working-directory: gebeh-test-roms
+        working-directory: gebeh-web
