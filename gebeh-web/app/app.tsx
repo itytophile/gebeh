@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import style from "./style.module.css";
 import Canvas from "./canvas";
 import buttonA from "./assets/buttonA.svg";
@@ -10,13 +10,9 @@ import Room from "./room";
 import initNode from "./init-node.ts";
 import RomInput from "./rom-input.tsx";
 import "./bulma.scss";
-import { faDownload } from "@fortawesome/free-solid-svg-icons";
 import Button from "./bulma/button.tsx";
-import { faXmark } from "@fortawesome/free-solid-svg-icons/faXmark";
-import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
-import Select from "./bulma/select.tsx";
-import { getKeys, getSave } from "./saves.ts";
+import SaveSettings from "./save-settings.tsx";
 
 type Page = "game" | "settings";
 
@@ -143,64 +139,4 @@ function Settings({
   );
 }
 
-function SaveSettings() {
-  const [databaseKeys, setDatabaseKeys] = useState<IDBValidKey[]>();
-
-  useEffect(() => {
-    void getKeys().then(setDatabaseKeys);
-  }, []);
-
-  const [selectedSave, setSelectedSave] = useState<string>();
-  return (
-    <>
-      <div className="field">
-        <Select
-          options={(databaseKeys ?? [])
-            .filter((key) => typeof key === "string")
-            .map((key) => ({ label: key, value: key }))}
-          onClick={(option) => {
-            setSelectedSave(option?.value);
-          }}
-          selected={selectedSave}
-        />
-      </div>
-
-      <div className="field">
-        <Button
-          icon={faDownload}
-          label="Download save"
-          onClick={
-            selectedSave
-              ? async () => {
-                  const save = await getSave(selectedSave);
-                  if (save) {
-                    downloadFile(save, selectedSave);
-                  }
-                }
-              : undefined
-          }
-          disabled={!selectedSave}
-        />
-      </div>
-      <div className="field">
-        <Button icon={faUpload} label="Load save" />
-      </div>
-      <div className="field">
-        <Button icon={faXmark} label="Clear save" />
-      </div>
-    </>
-  );
-}
-
 export default App;
-
-function downloadFile(bytes: Uint8Array<ArrayBuffer>, fileName: string) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${fileName}.bin`;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
