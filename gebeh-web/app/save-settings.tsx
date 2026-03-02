@@ -1,16 +1,15 @@
-import { faDownload, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faDownload, faXmark, faUpload } from "@fortawesome/free-solid-svg-icons";
 import { useState, useEffect } from "react";
 import Button from "./bulma/button";
 import Select from "./bulma/select";
 import { deleteSave, getKeys, getSave, writeSave } from "./saves";
 import FileInput from "./bulma/file-input";
-import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 import { Modal, ModalBody, ModalFooter } from "./bulma/modal";
 
 function SaveSettings() {
   const [databaseKeys, setDatabaseKeys] = useState<IDBValidKey[]>();
   const [selectedSave, setSelectedSave] = useState<string>();
-  const [resolveConfirm, setResolveConfirm] = useState<(confirm: boolean) => void>();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   useEffect(() => {
     void getKeys().then(setDatabaseKeys);
@@ -20,10 +19,26 @@ function SaveSettings() {
     ? async (event) => {
         const file = event.currentTarget.files?.item(0);
         if (file) {
-          await writeSave(selectedSave, await file.bytes());
+          await writeSave(selectedSave, new Uint8Array(await file.arrayBuffer()));
         }
       }
     : undefined;
+
+  const handleDownload = selectedSave
+    ? async () => {
+        const save = await getSave(selectedSave);
+        if (save) {
+          downloadFile(save, selectedSave);
+        }
+      }
+    : undefined;
+
+  const handleDeleteConfirm = async () => {
+    if (selectedSave) {
+      await deleteSave(selectedSave);
+    }
+    setIsConfirmOpen(false);
+  };
 
   return (
     <>
@@ -43,16 +58,7 @@ function SaveSettings() {
         <Button
           icon={faDownload}
           label="Download save"
-          onClick={
-            selectedSave
-              ? async () => {
-                  const save = await getSave(selectedSave);
-                  if (save) {
-                    downloadFile(save, selectedSave);
-                  }
-                }
-              : undefined
-          }
+          onClick={handleDownload}
           disabled={!selectedSave}
         />
       </div>
@@ -67,51 +73,28 @@ function SaveSettings() {
         <Button
           icon={faXmark}
           label="Clear save"
-          onClick={
-            selectedSave
-              ? async () => {
-                  // cursed but who cares, trying things
-                  const confirm = await new Promise<boolean>((resolve) => {
-                    setResolveConfirm(resolve);
-                  });
-                console.log({ confirm });
-                  if (confirm) {
-                    console.log("on est ionb");
-                    await deleteSave(selectedSave);
-                  } else {
-                    console.log("canceled lol");
-                  }
-                }
-              : undefined
-          }
+          onClick={() => {
+            setIsConfirmOpen(true);
+          }}
           disabled={!selectedSave}
         />
       </div>
-      {resolveConfirm && (
-        <Modal isActive>
-          <ModalBody>Are you sure?</ModalBody>
-          <ModalFooter>
-            <div className="buttons">
-              <Button
-                label="Cancel"
-                color="is-primary"
-                onClick={() => {
-                  resolveConfirm(false);
-                  setResolveConfirm(undefined);
-                }}
-              />
-              <Button
-                label="Confirm"
-                color="is-danger"
-                onClick={() => {
-                  resolveConfirm(true);
-                  setResolveConfirm(undefined);
-                }}
-              />
-            </div>
-          </ModalFooter>
-        </Modal>
-      )}
+
+      <Modal isActive={isConfirmOpen}>
+        <ModalBody>Are you sure?</ModalBody>
+        <ModalFooter>
+          <div className="buttons">
+            <Button
+              label="Cancel"
+              color="is-primary"
+              onClick={() => {
+                setIsConfirmOpen(false);
+              }}
+            />
+            <Button label="Confirm" color="is-danger" onClick={handleDeleteConfirm} />
+          </div>
+        </ModalFooter>
+      </Modal>
     </>
   );
 }
