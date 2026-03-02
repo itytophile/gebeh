@@ -19,7 +19,6 @@ function SaveSettings() {
         const file = event.currentTarget.files?.item(0);
         if (file) {
           await writeSave(selectedSave, await file.bytes());
-          setIsSaveLoaded(true);
         }
       }
     : undefined;
