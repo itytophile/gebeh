@@ -15,5 +15,5 @@ jobs:
       - name: Install wasm-pack
         run: curl https://drager.github.io/wasm-pack/installer/init.sh -sSf | bash
       - name: Check
-        run: npm ci && npm run check
+        run: npm ci && npm run wasm && npm run check
         working-directory: gebeh-web

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { GebehButton, FromMainMessage } from "./common";
 import style from "./style.module.css";
 
-function Button({
+function GamepadButton({
   src,
   port,
   button,
@@ -40,4 +40,4 @@ function Button({
   );
 }
 
-export default Button;
+export default GamepadButton;

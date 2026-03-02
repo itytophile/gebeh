@@ -4,10 +4,11 @@
   "author": "You <you@example.com>",
   "scripts": {
     "dev": "vite",
+    "wasm": "wasm-pack build --profile web . --target web",
     "build": "rimraf pkg && wasm-pack build --profile web . --target web && tsc -b && vite build",
     "test": "cargo test && wasm-pack test --headless",
-    "routine": "tsc --noEmit && oxfmt . && oxlint . && knip",
-    "check": "tsc --noEmit && oxfmt . --check && oxlint . && knip",
+    "routine": "tsc -b --noEmit && oxfmt . && oxlint . && knip",
+    "check": "tsc -b --noEmit && oxfmt . --check && oxlint . && knip",
     "knip": "knip"
   },
   "dependencies": {
