@@ -1,8 +1,7 @@
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { FromMainMessage } from "./common";
 import { getSave } from "./saves";
-import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 import { useState } from "react";
+import FileInput from "./bulma/file-input";
 
 function getTitleFromRom(rom: Uint8Array): string {
   const title = rom.slice(0x134, 0x143);
@@ -40,18 +39,7 @@ function RomInput({ port, onLoad }: { port: MessagePort; onLoad?: () => void }) 
   };
   return (
     <div className="field">
-      <div className={"file is-success" + (fileName ? " has-name" : "")}>
-        <label className="file-label">
-          <input className="file-input" type="file" onChange={onFileChange} />
-          <span className="file-cta">
-            <span className="file-icon">
-              <FontAwesomeIcon icon={faUpload} />
-            </span>
-            <span className="file-label">Load ROM</span>
-          </span>
-          {fileName && <span className="file-name">{fileName}</span>}
-        </label>
-      </div>
+      <FileInput label="Load ROM" fileName={fileName} onChange={onFileChange} color="is-success" />
     </div>
   );
 }

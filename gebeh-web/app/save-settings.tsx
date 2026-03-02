@@ -1,17 +1,29 @@
-import { faDownload, faUpload, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faDownload, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useState, useEffect } from "react";
 import Button from "./bulma/button";
 import Select from "./bulma/select";
-import { getKeys, getSave } from "./saves";
+import { getKeys, getSave, writeSave } from "./saves";
+import FileInput from "./bulma/file-input";
+import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 
 function SaveSettings() {
   const [databaseKeys, setDatabaseKeys] = useState<IDBValidKey[]>();
+  const [selectedSave, setSelectedSave] = useState<string>();
 
   useEffect(() => {
     void getKeys().then(setDatabaseKeys);
   }, []);
 
-  const [selectedSave, setSelectedSave] = useState<string>();
+  const handleFileLoad: React.ChangeEventHandler<HTMLInputElement> | undefined = selectedSave
+    ? async (event) => {
+        const file = event.currentTarget.files?.item(0);
+        if (file) {
+          await writeSave(selectedSave, await file.bytes());
+          setIsSaveLoaded(true);
+        }
+      }
+    : undefined;
+
   return (
     <>
       <div className="field">
@@ -44,7 +56,11 @@ function SaveSettings() {
         />
       </div>
       <div className="field">
-        <Button icon={faUpload} label="Load save" />
+        {handleFileLoad ? (
+          <FileInput label="Load save" onChange={handleFileLoad} />
+        ) : (
+          <Button label="Load save" icon={faUpload} disabled />
+        )}
       </div>
       <div className="field">
         <Button icon={faXmark} label="Clear save" />
