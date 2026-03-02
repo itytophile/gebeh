@@ -4,6 +4,7 @@
   "author": "You <you@example.com>",
   "scripts": {
     "dev": "vite",
+    "wasm": "wasm-pack build --profile web . --target web",
     "build": "rimraf pkg && wasm-pack build --profile web . --target web && tsc -b && vite build",
     "test": "cargo test && wasm-pack test --headless",
     "routine": "tsc -b --noEmit && oxfmt . && oxlint . && knip",
