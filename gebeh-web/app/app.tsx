@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import style from "./style.module.css";
 import Canvas from "./canvas";
 import buttonA from "./assets/buttonA.svg";
@@ -16,7 +16,6 @@ import { faXmark } from "@fortawesome/free-solid-svg-icons/faXmark";
 import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
 import Select from "./bulma/select.tsx";
-import { useQuery } from "@tanstack/react-query";
 import { getKeys, getSave } from "./saves.ts";
 
 type Page = "game" | "settings";
@@ -115,12 +114,6 @@ function Settings({
   isHidden: boolean;
   setPage: (page: Page) => void;
 }) {
-  const databaseKeysQuery = useQuery({
-    queryKey: ["dbKeys", isHidden],
-    queryFn: () => getKeys(),
-  });
-  const [selectedSave, setSelectedSave] = useState<string>();
-
   return (
     <section className="section" style={{ display: isHidden ? "none" : undefined }}>
       <div className="container">
@@ -141,41 +134,8 @@ function Settings({
           }}
         />
         <h1 className="title">Save</h1>
-        <div className="field">
-          <Select
-            options={(databaseKeysQuery.data ?? [])
-              .filter((key) => typeof key === "string")
-              .map((key) => ({ label: key, value: key }))}
-            onClick={(option) => {
-              setSelectedSave(option?.value);
-            }}
-            selected={selectedSave}
-          />
-        </div>
-
-        <div className="field">
-          <Button
-            icon={faDownload}
-            label="Download save"
-            onClick={
-              selectedSave
-                ? async () => {
-                    const save = await getSave(selectedSave);
-                    if (save) {
-                      downloadFile(save, selectedSave);
-                    }
-                  }
-                : undefined
-            }
-            disabled={!selectedSave}
-          />
-        </div>
-        <div className="field">
-          <Button icon={faUpload} label="Load save" />
-        </div>
-        <div className="field">
-          <Button icon={faXmark} label="Clear save" />
-        </div>
+        {/* to trash the component when hidden and refresh the internal state when mounted */}
+        {!isHidden && <SaveSettings />}
         <h1 className="title">Online Multiplayer</h1>
         <Room port={port} />
       </div>
@@ -183,11 +143,59 @@ function Settings({
   );
 }
 
+function SaveSettings() {
+  const [databaseKeys, setDatabaseKeys] = useState<IDBValidKey[]>();
+
+  useEffect(() => {
+    void getKeys().then(setDatabaseKeys);
+  }, []);
+
+  const [selectedSave, setSelectedSave] = useState<string>();
+  return (
+    <>
+      <div className="field">
+        <Select
+          options={(databaseKeys ?? [])
+            .filter((key) => typeof key === "string")
+            .map((key) => ({ label: key, value: key }))}
+          onClick={(option) => {
+            setSelectedSave(option?.value);
+          }}
+          selected={selectedSave}
+        />
+      </div>
+
+      <div className="field">
+        <Button
+          icon={faDownload}
+          label="Download save"
+          onClick={
+            selectedSave
+              ? async () => {
+                  const save = await getSave(selectedSave);
+                  if (save) {
+                    downloadFile(save, selectedSave);
+                  }
+                }
+              : undefined
+          }
+          disabled={!selectedSave}
+        />
+      </div>
+      <div className="field">
+        <Button icon={faUpload} label="Load save" />
+      </div>
+      <div className="field">
+        <Button icon={faXmark} label="Clear save" />
+      </div>
+    </>
+  );
+}
+
 export default App;
 
 function downloadFile(bytes: Uint8Array<ArrayBuffer>, fileName: string) {
-  const blob = new Blob([bytes], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = `${fileName}.bin`;
