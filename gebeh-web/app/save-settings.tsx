@@ -2,13 +2,15 @@ import { faDownload, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useState, useEffect } from "react";
 import Button from "./bulma/button";
 import Select from "./bulma/select";
-import { getKeys, getSave, writeSave } from "./saves";
+import { deleteSave, getKeys, getSave, writeSave } from "./saves";
 import FileInput from "./bulma/file-input";
 import { faUpload } from "@fortawesome/free-solid-svg-icons/faUpload";
+import { Modal, ModalBody, ModalFooter } from "./bulma/modal";
 
 function SaveSettings() {
   const [databaseKeys, setDatabaseKeys] = useState<IDBValidKey[]>();
   const [selectedSave, setSelectedSave] = useState<string>();
+  const [resolveConfirm, setResolveConfirm] = useState<(confirm: boolean) => void>();
 
   useEffect(() => {
     void getKeys().then(setDatabaseKeys);
@@ -62,8 +64,54 @@ function SaveSettings() {
         )}
       </div>
       <div className="field">
-        <Button icon={faXmark} label="Clear save" />
+        <Button
+          icon={faXmark}
+          label="Clear save"
+          onClick={
+            selectedSave
+              ? async () => {
+                  // cursed but who cares, trying things
+                  const confirm = await new Promise<boolean>((resolve) => {
+                    setResolveConfirm(resolve);
+                  });
+                console.log({ confirm });
+                  if (confirm) {
+                    console.log("on est ionb");
+                    await deleteSave(selectedSave);
+                  } else {
+                    console.log("canceled lol");
+                  }
+                }
+              : undefined
+          }
+          disabled={!selectedSave}
+        />
       </div>
+      {resolveConfirm && (
+        <Modal isActive>
+          <ModalBody>Are you sure?</ModalBody>
+          <ModalFooter>
+            <div className="buttons">
+              <Button
+                label="Cancel"
+                color="is-primary"
+                onClick={() => {
+                  resolveConfirm(false);
+                  setResolveConfirm(undefined);
+                }}
+              />
+              <Button
+                label="Confirm"
+                color="is-danger"
+                onClick={() => {
+                  resolveConfirm(true);
+                  setResolveConfirm(undefined);
+                }}
+              />
+            </div>
+          </ModalFooter>
+        </Modal>
+      )}
     </>
   );
 }

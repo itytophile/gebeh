@@ -25,6 +25,15 @@ export async function writeSave(title: string, buffer: Uint8Array) {
   await waitRequest(request);
 }
 
+export async function deleteSave(title: string) {
+  const database = await DATABASE;
+  const request = database
+    .transaction(OBJECT_STORE_NAME, "readwrite")
+    .objectStore(OBJECT_STORE_NAME)
+    .delete(title);
+  await waitRequest(request);
+}
+
 export async function getKeys(): Promise<IDBValidKey[]> {
   const database = await DATABASE;
   const request = database

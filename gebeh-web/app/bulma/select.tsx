@@ -3,6 +3,8 @@ interface Option<T> {
   value: T;
 }
 
+const WHY = "WHY LOL";
+
 function Select<T>({
   options,
   selected,
@@ -14,8 +16,9 @@ function Select<T>({
 }) {
   return (
     <div className="select">
-      <select value={selected}>
+      <select value={selected ?? WHY}>
         <option
+          value={WHY}
           onClick={() => {
             onClick();
           }}
