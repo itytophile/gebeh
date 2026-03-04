@@ -1,10 +1,13 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 use arrayvec::ArrayVec;
+use color_eyre::eyre::Context;
 use color_eyre::eyre::ContextCompat;
 use fastwebsockets::CloseCode;
 use fastwebsockets::Frame;
@@ -67,6 +70,10 @@ fn tls_acceptor(mut cert: &[u8], mut key: &[u8]) -> color_eyre::Result<TlsAccept
     Ok(TlsAcceptor::from(Arc::new(config)))
 }
 
+fn get_env(key: &str) -> color_eyre::Result<String> {
+    std::env::var(key).context(color_eyre::Report::msg(format!("Missing {key} env")))
+}
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     tracing_subscriber::fmt()
@@ -88,14 +95,13 @@ fn main() -> color_eyre::Result<()> {
         service::upgrade(req, tx, names)
     });
 
-    let mut args = std::env::args();
-
-    let assets_path = &*args
-        .nth(1)
-        .context("Pease provide assets dir path in arguments")?
-        .leak();
-    let cert_path = args.next();
-    let key_path = args.next();
+    let assets_path = &*get_env("GEBEH_ASSETS")?.leak();
+    let cert_path = get_env("GEBEH_TLS_CERT");
+    let key_path = get_env("GEBEH_TLS_KEY");
+    let port: u16 = get_env("GEBEH_PORT")?
+        .trim()
+        .parse()
+        .context("Can't parse provided port")?;
 
     let service = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
@@ -115,10 +121,10 @@ fn main() -> color_eyre::Result<()> {
 
     let service = TowerToHyperService::new(service);
 
-    let acceptor = if let (Some(cert), Some(key)) = (cert_path, key_path) {
+    let acceptor = if let (Ok(cert), Ok(key)) = (cert_path, key_path) {
         Some(tls_acceptor(&std::fs::read(cert)?, &std::fs::read(key)?)?)
     } else {
-        tracing::warn!("TLS disabled");
+        tracing::warn!("TLS disabled, provide the GEBEH_TLS_CERT and GEBEH_TLS_KEY envs.");
         None
     };
 
@@ -126,8 +132,8 @@ fn main() -> color_eyre::Result<()> {
     local.block_on(&rt, async {
         let mut terminate_sig = tokio::signal::unix::signal(SignalKind::terminate())?;
         let mut interrupt_sig = tokio::signal::unix::signal(SignalKind::interrupt())?;
-        let listener = TcpListener::bind("0.0.0.0:8080").await?;
-        tracing::info!("Listening on 0.0.0.0:8080");
+        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
+        tracing::info!("Listening on {}", listener.local_addr()?);
         futures_util::select! {
             res = handle_connections(service, acceptor, listener).fuse() => res,
             _ = terminate_sig.recv().fuse() => {
