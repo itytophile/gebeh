@@ -29,4 +29,7 @@ FROM scratch
 COPY --from=back /app/target/x86_64-unknown-linux-musl/server/gebeh-server .
 COPY --from=front /app/gebeh-web/dist /dist
 
-CMD [ "/gebeh-server", "dist" ]
+ENV GEBEH_ASSETS=/dist
+ENV GEBEH_PORT=8080
+
+CMD [ "/gebeh-server" ]
