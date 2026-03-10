@@ -458,15 +458,17 @@ pub enum BoundedOpcode {
     Pong = 0xA,
 }
 
+const FRAME_MAX_SIZE: usize = 32;
+
 pub struct BoundedFrame {
     pub fin: bool,
     pub opcode: BoundedOpcode,
-    pub payload: ArrayVec<u8, 4>,
+    pub payload: ArrayVec<u8, FRAME_MAX_SIZE>,
 }
 
 pub struct BoundedFragment {
     opcode: BoundedOpcode,
-    payload: ArrayVec<u8, 4>,
+    payload: ArrayVec<u8, FRAME_MAX_SIZE>,
 }
 
 #[derive(Default)]
