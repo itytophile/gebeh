@@ -18,6 +18,7 @@ gebeh-core = { path = "../gebeh-core" }
 gebeh-front-helper = { path = "../gebeh-front-helper" }
 web-time = "1.1.0"
 wee_alloc = "0.4.5"
+rkyv = "0.8.15"
 
 [dependencies.web-sys]
 version = "0.3"

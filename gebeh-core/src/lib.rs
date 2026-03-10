@@ -54,6 +54,9 @@ impl Emulator {
     pub fn get_timer(&self) -> &Timer {
         &self.timer
     }
+    pub fn get_cycles(&self) -> u64 {
+        self.cycles
+    }
 }
 
 impl Emulator {

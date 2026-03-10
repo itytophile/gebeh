@@ -4,6 +4,7 @@ use gebeh_core::{
     state::{Interruptions, SerialControl, State},
 };
 use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
+use rkyv::{Archive, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
@@ -87,7 +88,8 @@ impl WebEmulatorInner {
                     return;
                 }
                 self.emulator.execute(self.mbc.as_mut());
-                serial_mode.execute(&mut self.serial_state, &mut self.emulator.state);
+                let cycles = self.emulator.get_cycles();
+                serial_mode.execute(&mut self.serial_state, &mut self.emulator.state, cycles);
                 if self.serial_state.is_blocking_execution() {
                     return;
                 }
@@ -128,12 +130,12 @@ impl WebEmulatorInner {
     }
 
     pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
-        if msg.is_master {
+        if msg.master_cycles.is_some() {
             Some(SerialMessage {
                 byte: self
                     .serial_state
                     .set_msg_from_master(msg.byte, &mut self.emulator.state),
-                is_master: false,
+                master_cycles: None,
             })
         } else {
             self.serial_state
@@ -221,10 +223,10 @@ impl WebEmulator {
     pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
         if let Some(inner) = &mut self.inner {
             inner.set_serial_msg(msg)
-        } else if msg.is_master {
+        } else if msg.master_cycles.is_some() {
             Some(SerialMessage {
                 byte: 0xff,
-                is_master: false,
+                master_cycles: None,
             })
         } else {
             None
@@ -258,30 +260,23 @@ impl Save {
 }
 
 #[wasm_bindgen]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct SerialMessage {
-    is_master: bool,
+    master_cycles: Option<u64>,
     byte: u8,
 }
 
 #[wasm_bindgen]
 impl SerialMessage {
     pub fn deserialize(buffer: &[u8]) -> Option<Self> {
-        if buffer.len() != 2 {
-            return None;
-        }
-
-        Some(Self {
-            is_master: match buffer[0] {
-                0 => false,
-                1 => true,
-                _ => return None,
-            },
-            byte: buffer[1],
-        })
+        let archived = rkyv::access::<ArchivedSerialMessage, rkyv::rancor::Error>(buffer).ok()?;
+        rkyv::deserialize::<_, rkyv::rancor::Error>(archived).ok()
     }
 
     pub fn serialize(&self) -> Box<[u8]> {
-        [self.is_master as u8, self.byte].into()
+        rkyv::to_bytes::<rkyv::rancor::Error>(self)
+            .unwrap()
+            .into_boxed_slice()
     }
 }
 
@@ -314,10 +309,6 @@ enum ProutMaster {
 
 #[derive(Clone, Copy)]
 struct ProutSlave;
-
-trait SerialExecutor {
-    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State);
-}
 
 #[derive(Clone, Copy)]
 enum SerialState {
@@ -354,11 +345,11 @@ impl SerialState {
         }
     }
 
-    fn get_msg(&mut self, state: &State) -> Option<SerialMessage> {
+    fn get_msg(&mut self, state: &State, clock: u64) -> Option<SerialMessage> {
         if let SerialState::Master(ProutMaster::Init) = self {
             *self = SerialState::Master(ProutMaster::Exchanging(0));
             return Some(SerialMessage {
-                is_master: true,
+                master_cycles: Some(clock),
                 byte: state.sb,
             });
         }
@@ -395,10 +386,10 @@ struct SynchroSerial {
     on_serial: js_sys::Function,
 }
 
-impl SerialExecutor for SynchroSerial {
-    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State) {
+impl SynchroSerial {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State, clock: u64) {
         serial_state.refresh(state);
-        if let Some(msg) = serial_state.get_msg(state)
+        if let Some(msg) = serial_state.get_msg(state, clock)
             && let Err(err) = self.on_serial.call1(&JsValue::null(), &msg.into())
         {
             console::error_1(&err);
@@ -419,13 +410,13 @@ enum SerialMode {
 }
 
 impl SerialMode {
-    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State) {
+    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State, clock: u64) {
         match self {
             Self::Disconnected => {
                 serial_state.refresh(state);
                 serial_state.set_msg_from_slave(0xff, state);
             }
-            Self::SynchroSerial(synchro) => synchro.execute(serial_state, state),
+            Self::SynchroSerial(synchro) => synchro.execute(serial_state, state, clock),
         }
     }
 }
