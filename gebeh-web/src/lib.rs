@@ -301,14 +301,21 @@ impl SerialMessage {
 // Comment détecter un rythme différent ?
 // -> en vrai ce n'est peut-être pas nécessaire
 
+// https://gbdev.io/pandocs/Specifications.html
+// https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#internal-clock
+// 4194304 / 4 (system clock) / 8192 (serial clock) * 8 (one bit per clock)
+const EXCHANGE_DELAY: u16 = 1024;
+
 #[derive(Clone, Copy)]
 enum ProutMaster {
     Init,
-    Exchanging(u8),
+    Exchanging(u16),
 }
 
 #[derive(Clone, Copy)]
-struct ProutSlave;
+struct ProutSlave {
+    master_cycles: Option<u64>,
+}
 
 #[derive(Clone, Copy)]
 enum SerialState {
@@ -319,8 +326,13 @@ enum SerialState {
 
 impl SerialState {
     fn is_blocking_execution(&self) -> bool {
-        // std::matches!(self, Self::Master(ProutMaster::Exchanging(8)))
-        false
+        if let Self::Master(ProutMaster::Exchanging(count)) = self
+            && *count >= EXCHANGE_DELAY
+        {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -341,7 +353,9 @@ impl SerialState {
         if !state.sc.contains(SerialControl::CLOCK_SELECT)
             && !std::matches!(self, SerialState::Slave(_))
         {
-            *self = Self::Slave(ProutSlave)
+            *self = Self::Slave(ProutSlave {
+                master_cycles: None,
+            })
         }
     }
 
@@ -394,10 +408,8 @@ impl SynchroSerial {
         {
             console::error_1(&err);
         }
-        if let SerialState::Master(ProutMaster::Exchanging(delay)) = serial_state
-            && *delay < 8
-        {
-            *delay += 1;
+        if let SerialState::Master(ProutMaster::Exchanging(delay)) = serial_state {
+            *delay = delay.saturating_add(1);
         }
     }
 }
