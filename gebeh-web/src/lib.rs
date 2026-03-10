@@ -58,7 +58,9 @@ impl WebEmulatorInner {
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
-            serial_state: SerialState::NoTransfer,
+            serial_state: SerialState::Slave {
+                state: ProutSlave { snapshot: None },
+            },
         })
     }
 
@@ -326,9 +328,9 @@ struct Snapshot {
 }
 
 enum SerialState {
-    NoTransfer,
+    MasterNoTransfer,
     Master(ProutMaster),
-    Slave(ProutSlave),
+    Slave { state: ProutSlave },
 }
 
 impl SerialState {
@@ -344,9 +346,11 @@ impl SerialState {
 }
 
 impl SerialState {
-    fn refresh(&mut self, state: &mut State) {
-        if !state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-            *self = Self::NoTransfer;
+    fn refresh(&mut self, state: &State) {
+        if !state.sc.contains(SerialControl::TRANSFER_ENABLE)
+            && state.sc.contains(SerialControl::CLOCK_SELECT)
+        {
+            *self = Self::MasterNoTransfer;
             return;
         }
 
@@ -358,9 +362,11 @@ impl SerialState {
         }
 
         if !state.sc.contains(SerialControl::CLOCK_SELECT)
-            && !std::matches!(self, SerialState::Slave(_))
+            && !std::matches!(self, SerialState::Slave { .. })
         {
-            *self = Self::Slave(ProutSlave { snapshot: None })
+            *self = Self::Slave {
+                state: ProutSlave { snapshot: None },
+            }
         }
     }
 
@@ -379,7 +385,7 @@ impl SerialState {
         state.sc.remove(SerialControl::TRANSFER_ENABLE);
         state.interrupt_flag.insert(Interruptions::SERIAL);
         state.sb = byte;
-        *self = SerialState::NoTransfer;
+        self.refresh(state);
     }
 
     fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) {
@@ -397,35 +403,54 @@ impl SerialState {
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
     ) -> u8 {
-        if let Self::Slave(ProutSlave { snapshot }) = self {
-            if let Some(snapshot) = snapshot.take()
-                && cycles >= snapshot.master_cycles
-                && cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
-            {
-                // TODO ça ne va pas, ça écrase les actions du joueur
-                *emulator = *snapshot.emulator;
-                *mbc = snapshot.mbc;
-                for _ in 0..(cycles - snapshot.master_cycles) {
-                    emulator.execute(mbc.as_mut());
-                }
-            }
+        let Self::Slave {
+            state: ProutSlave { snapshot },
+        } = self
+        else {
+            return 0xff;
+        };
 
+        let mut response = 0xff;
+
+        if let Some(snapshot) = snapshot.take()
+            && cycles >= snapshot.master_cycles
+            && cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
+        {
+            // TODO ça ne va pas, ça écrase les actions du joueur
+            *emulator = *snapshot.emulator;
+            *mbc = snapshot.mbc;
+            console::log_1(&JsValue::from_str(&format!(
+                "Rollback {} cycles ({} ms)",
+                cycles - snapshot.master_cycles,
+                (cycles - snapshot.master_cycles) * 1000 * 4 / 4194304
+            )));
+            for _ in 0..(cycles - snapshot.master_cycles) {
+                emulator.execute(mbc.as_mut());
+            }
+        }
+
+        if emulator.state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            response = emulator.state.sb;
+            self.accept_byte(byte, &mut emulator.state);
+        }
+
+        if let Self::Slave {
+            state: ProutSlave { snapshot },
+        } = self
+        {
             *snapshot = Some(Snapshot {
                 master_cycles: cycles,
                 emulator: Box::new(emulator.clone()),
                 mbc: mbc.clone_boxed(),
             });
-            let response = emulator.state.sb;
-            self.accept_byte(byte, &mut emulator.state);
-            response
-        } else {
-            0xff
         }
+
+        response
     }
 }
 
-// 20 ms
-const ROLLBACK_TRESHOLD: u64 = 4194304 / 4 / 50;
+// 200 ms
+const ROLLBACK_TRESHOLD: u64 = 4194304 / 4 / 5;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,
