@@ -2,6 +2,8 @@ use std::{collections::HashSet, ops::Deref};
 
 use gebeh_core::mbc::{CartridgeType, Mbc, Mbc1, Mbc3, Mbc5, Rtc};
 
+pub type EasyMbc = Box<dyn CloneMbc<'static>>;
+
 pub trait CloneMbc<'a>: Mbc {
     fn clone_boxed(&self) -> Box<dyn CloneMbc<'a> + 'a>;
 }

@@ -3,7 +3,7 @@ use gebeh_core::{
     apu::Mixer,
     state::{Interruptions, SerialControl, State},
 };
-use gebeh_front_helper::{CloneMbc, get_mbc, get_noise, get_title_from_rom};
+use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
 use rkyv::{Archive, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{
@@ -18,7 +18,7 @@ mod rtc;
 struct WebEmulatorInner {
     emulator: Emulator,
     sample_index: u32,
-    mbc: Box<dyn CloneMbc<'static>>,
+    mbc: EasyMbc,
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
     is_save_enabled: bool,
@@ -130,11 +130,14 @@ impl WebEmulatorInner {
     }
 
     pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
-        if msg.master_cycles.is_some() {
+        if let Some(cycles) = msg.master_cycles {
             Some(SerialMessage {
-                byte: self
-                    .serial_state
-                    .set_msg_from_master(msg.byte, &mut self.emulator.state),
+                byte: self.serial_state.set_msg_from_master(
+                    msg.byte,
+                    cycles,
+                    &mut self.emulator,
+                    &mut self.mbc,
+                ),
                 master_cycles: None,
             })
         } else {
@@ -312,12 +315,16 @@ enum ProutMaster {
     Exchanging(u16),
 }
 
-#[derive(Clone, Copy)]
 struct ProutSlave {
-    master_cycles: Option<u64>,
+    snapshot: Option<Snapshot>,
 }
 
-#[derive(Clone, Copy)]
+struct Snapshot {
+    master_cycles: u64,
+    emulator: Box<Emulator>, // boxed because large
+    mbc: EasyMbc,
+}
+
 enum SerialState {
     NoTransfer,
     Master(ProutMaster),
@@ -353,9 +360,7 @@ impl SerialState {
         if !state.sc.contains(SerialControl::CLOCK_SELECT)
             && !std::matches!(self, SerialState::Slave(_))
         {
-            *self = Self::Slave(ProutSlave {
-                master_cycles: None,
-            })
+            *self = Self::Slave(ProutSlave { snapshot: None })
         }
     }
 
@@ -385,16 +390,42 @@ impl SerialState {
 
     // When receiving a message from a master, always send a response even if we are a master
     #[must_use]
-    fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
-        if std::matches!(self, Self::Slave(_)) {
-            let response = state.sb;
-            self.accept_byte(byte, state);
+    fn set_msg_from_master(
+        &mut self,
+        byte: u8,
+        cycles: u64,
+        emulator: &mut Emulator,
+        mbc: &mut EasyMbc,
+    ) -> u8 {
+        if let Self::Slave(ProutSlave { snapshot }) = self {
+            if let Some(snapshot) = snapshot.take()
+                && cycles >= snapshot.master_cycles
+                && cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
+            {
+                // TODO ça ne va pas, ça écrase les actions du joueur
+                *emulator = *snapshot.emulator;
+                *mbc = snapshot.mbc;
+                for _ in 0..(cycles - snapshot.master_cycles) {
+                    emulator.execute(mbc.as_mut());
+                }
+            }
+
+            *snapshot = Some(Snapshot {
+                master_cycles: cycles,
+                emulator: Box::new(emulator.clone()),
+                mbc: mbc.clone_boxed(),
+            });
+            let response = emulator.state.sb;
+            self.accept_byte(byte, &mut emulator.state);
             response
         } else {
             0xff
         }
     }
 }
+
+// 20 ms
+const ROLLBACK_TRESHOLD: u64 = 4194304 / 4 / 50;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,
