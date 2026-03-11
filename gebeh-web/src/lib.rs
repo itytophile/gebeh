@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{iter, rc::Rc};
 
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
@@ -40,7 +40,9 @@ impl WebEmulatorInner {
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
         // rc to easily clone the mbc for the rollback netcode
-        let Some((cartridge_type, mut mbc)) = get_mbc::<Rc<[u8]>, NullRtc>(Rc::from(rom.into_boxed_slice())) else {
+        let Some((cartridge_type, mut mbc)) =
+            get_mbc::<Rc<[u8]>, NullRtc>(Rc::from(rom.into_boxed_slice()))
+        else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return None;
         };
@@ -97,6 +99,21 @@ impl WebEmulatorInner {
                 serial_mode.execute(&mut self.serial_state, &mut self.emulator.state, cycles);
                 if self.serial_state.is_blocking_execution() {
                     return;
+                }
+                if let SerialState::Slave {
+                    state:
+                        ProutSlave {
+                            snapshot: Some(snapshot),
+                        },
+                } = &mut self.serial_state
+                    && snapshot.emulator.get_cycles() < cycles
+                    && cycles - snapshot.emulator.get_cycles() < ROLLBACK_TRESHOLD
+                    && (cycles - snapshot.emulator.get_cycles()).is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+                {
+                    console::log_1(&JsValue::from_str("snap"));
+                    snapshot
+                        .snapshots
+                        .push((self.emulator.clone(), self.mbc.clone_boxed()));
                 }
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
@@ -328,6 +345,7 @@ struct Snapshot {
     master_cycles: u64,
     emulator: Box<Emulator>, // boxed because large
     mbc: EasyMbc,
+    snapshots: Vec<(Emulator, EasyMbc)>,
 }
 
 enum SerialState {
@@ -402,7 +420,7 @@ impl SerialState {
     fn set_msg_from_master(
         &mut self,
         byte: u8,
-        cycles: u64,
+        master_cycles: u64,
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
     ) -> u8 {
@@ -416,18 +434,29 @@ impl SerialState {
         let mut response = 0xff;
 
         if let Some(snapshot) = snapshot.take()
-            && cycles >= snapshot.master_cycles
-            && cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
+            && master_cycles >= snapshot.master_cycles
+            && master_cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
         {
-            // TODO ça ne va pas, ça écrase les actions du joueur
-            *emulator = *snapshot.emulator;
-            *mbc = snapshot.mbc;
+            let (index, (snap_emulator, snap_mbc)) = iter::once((*snapshot.emulator, snapshot.mbc))
+                .chain(snapshot.snapshots)
+                .enumerate()
+                .filter(|(index, _)| {
+                    u64::try_from(*index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD
+                        < (master_cycles - snapshot.master_cycles)
+                })
+                .last()
+                .unwrap();
+
+            *emulator = snap_emulator;
+            *mbc = snap_mbc;
+            let offset = u64::try_from(index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD;
             console::log_1(&JsValue::from_str(&format!(
-                "Rollback {} cycles ({} ms)",
-                cycles - snapshot.master_cycles,
-                (cycles - snapshot.master_cycles) * 1000 * 4 / 4194304
+                "Rollback {} cycles ({} ms) with offset {}",
+                master_cycles - snapshot.master_cycles - offset,
+                (master_cycles - snapshot.master_cycles - offset) * 1000 * 4 / 4194304,
+                offset
             )));
-            for _ in 0..(cycles - snapshot.master_cycles) {
+            for _ in 0..(master_cycles - snapshot.master_cycles - offset) {
                 emulator.execute(mbc.as_mut());
             }
         }
@@ -442,9 +471,10 @@ impl SerialState {
         } = self
         {
             *snapshot = Some(Snapshot {
-                master_cycles: cycles,
+                master_cycles,
                 emulator: Box::new(emulator.clone()),
                 mbc: mbc.clone_boxed(),
+                snapshots: Default::default(),
             });
         }
 
