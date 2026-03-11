@@ -108,7 +108,8 @@ impl WebEmulatorInner {
                 } = &mut self.serial_state
                     && snapshot.emulator.get_cycles() < cycles
                     && cycles - snapshot.emulator.get_cycles() < ROLLBACK_TRESHOLD
-                    && (cycles - snapshot.emulator.get_cycles()).is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+                    && (cycles - snapshot.emulator.get_cycles())
+                        .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
                 {
                     console::log_1(&JsValue::from_str("snap"));
                     snapshot
@@ -437,16 +438,18 @@ impl SerialState {
             && master_cycles >= snapshot.master_cycles
             && master_cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
         {
-            let (index, (snap_emulator, snap_mbc)) = iter::once((*snapshot.emulator, snapshot.mbc))
-                .chain(snapshot.snapshots)
-                .enumerate()
-                .filter(|(index, _)| {
-                    u64::try_from(*index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD
-                        < (master_cycles - snapshot.master_cycles)
-                })
-                .last()
-                .unwrap();
+            let (index, (mut snap_emulator, snap_mbc)) =
+                iter::once((*snapshot.emulator, snapshot.mbc))
+                    .chain(snapshot.snapshots)
+                    .enumerate()
+                    .filter(|(index, _)| {
+                        u64::try_from(*index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD
+                            < (master_cycles - snapshot.master_cycles)
+                    })
+                    .last()
+                    .unwrap();
 
+            *snap_emulator.get_joypad_mut() = *emulator.get_joypad_mut();
             *emulator = snap_emulator;
             *mbc = snap_mbc;
             let offset = u64::try_from(index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD;
