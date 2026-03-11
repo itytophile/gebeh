@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     apu::Mixer,
@@ -37,7 +39,8 @@ pub struct WebEmulator {
 impl WebEmulatorInner {
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
-        let Some((cartridge_type, mut mbc)) = get_mbc::<_, NullRtc>(rom) else {
+        // rc to easily clone the mbc for the rollback netcode
+        let Some((cartridge_type, mut mbc)) = get_mbc::<Rc<[u8]>, NullRtc>(Rc::from(rom.into_boxed_slice())) else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return None;
         };
@@ -451,6 +454,7 @@ impl SerialState {
 
 // 200 ms
 const ROLLBACK_TRESHOLD: u64 = 4194304 / 4 / 5;
+const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / 20;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,

@@ -12,7 +12,7 @@ use gebeh_core::{
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::Scanline,
 };
-use gebeh_front_helper::{get_mbc, get_noise, get_title_from_rom};
+use gebeh_front_helper::{get_mbc_send, get_noise, get_title_from_rom};
 
 pub fn spawn_emulator(
     device: &cpal::Device,
@@ -90,7 +90,7 @@ where
     println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     // don't forget to use arc or you will clone the rom for each save state
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
+    let (_, mut mbc) = get_mbc_send::<_, InstantRtc>(Arc::from(rom.into_boxed_slice())).unwrap();
     let mut emulator = Emulator::default();
 
     let config = StreamConfig {
