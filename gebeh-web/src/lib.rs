@@ -154,13 +154,42 @@ impl WebEmulatorInner {
         &mut self,
         msg: &ArchivedSerialMessage,
         serial_mode: &mut SerialMode,
-    ) -> Option<SerialMessage> {
+    ) -> Option<MessageFromSlave> {
         let SerialMode::SynchroSerial(synchro_serial) = serial_mode else {
-            panic!();
+            panic!("no serial set despite receiving a message");
         };
 
         match msg {
-            ArchivedSerialMessage::FromMaster(_) => todo!(),
+            ArchivedSerialMessage::FromMaster(msg) => {
+                // cas normal
+                let response = self
+                    .serial_state
+                    .set_msg_from_master2(msg.first_message.0, &mut self.emulator);
+                let mut previous_cycle = msg.first_message.1.to_native();
+                if response != msg.prediction {
+                    return Some(MessageFromSlave {
+                        correction: response,
+                        clock: previous_cycle,
+                    });
+                }
+                for message in msg.messages.iter() {
+                    for _ in previous_cycle..message.1.to_native() {
+                        self.emulator.execute(self.mbc.as_mut());
+                    }
+                    let response = self
+                        .serial_state
+                        .set_msg_from_master2(message.0, &mut self.emulator);
+                    previous_cycle = message.1.to_native();
+                    if response != msg.prediction {
+                        return Some(MessageFromSlave {
+                            correction: response,
+                            clock: previous_cycle,
+                        });
+                    }
+                }
+
+                todo!()
+            }
             ArchivedSerialMessage::FromSlave(msg) => {
                 let (emulator, mbc) = core::mem::take(&mut synchro_serial.previous_batch_snapshots)
                     .into_iter()
@@ -257,7 +286,7 @@ impl WebEmulator {
         if let Some(inner) = &mut self.inner {
             inner
                 .set_serial_msg(msg, &mut self.serial_mode)
-                .map(|msg| msg.serialize())
+                .map(|msg| SerialMessage::FromSlave(msg).serialize())
         } else if let ArchivedSerialMessage::FromMaster(msg) = msg
             && msg.prediction != 0xff
         {
@@ -518,6 +547,23 @@ impl SerialState {
         }
 
         response
+    }
+
+    fn set_msg_from_master2(&mut self, byte: u8, emulator: &mut Emulator) -> u8 {
+        let Self::Slave {
+            state: ProutSlave { .. },
+        } = self
+        else {
+            return 0xff;
+        };
+
+        if emulator.state.sc.contains(SerialControl::TRANSFER_ENABLE) {
+            let sb = emulator.state.sb;
+            self.accept_byte(byte, &mut emulator.state);
+            sb
+        } else {
+            0xff
+        }
     }
 }
 
