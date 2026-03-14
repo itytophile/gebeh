@@ -90,7 +90,7 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
-            for _ in 0..cycles {                
+            for _ in 0..cycles {
                 self.emulator.execute(self.mbc.as_mut());
                 let cycles = self.emulator.get_cycles();
                 serial_mode.execute(
@@ -263,6 +263,7 @@ impl WebEmulator {
                     messages: Default::default(),
                     session: false,
                 },
+                previous_batch_snapshots: Default::default()
             })
         } else {
             self.serial_mode = SerialMode::Disconnected;
@@ -508,6 +509,7 @@ const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / 20;
 struct SynchroSerial {
     on_serial: js_sys::Function,
     current_message: MessageFromMasterAcc,
+    previous_batch_snapshots: Vec<(Emulator, EasyMbc)>,
 }
 
 impl SynchroSerial {
@@ -527,19 +529,29 @@ impl SynchroSerial {
                 .messages
                 .push((byte, emulator.clone(), mbc.clone_boxed()));
         }
-        if let Some((first_byte, first_snap, _)) = self.current_message.messages.first()
+        if let Some((_, first_snap, _)) = self.current_message.messages.first()
             && emulator.get_cycles() - first_snap.get_cycles() > ROLLBACK_TRESHOLD
         {
+            self.previous_batch_snapshots.clear();
+            let mut messages = core::mem::take(&mut self.current_message.messages).into_iter();
+            let (first_byte, first_snap, first_mbc) = messages.next().unwrap();
+            let first_cycle = first_snap.get_cycles();
+
+            self.previous_batch_snapshots.push((first_snap, first_mbc));
+
+            let mut messages_to_send = Vec::new();
+            for (byte, emulator, mbc) in messages {
+                messages_to_send.push((byte, emulator.get_cycles()));
+                self.previous_batch_snapshots.push((emulator, mbc));
+            }
+
             let msg_to_send = MessageFromMaster {
-                first_message: (*first_byte, first_snap.get_cycles()),
-                messages: core::mem::take(&mut self.current_message.messages)
-                    .into_iter()
-                    .skip(1)
-                    .map(|(byte, snap, _)| (byte, snap.get_cycles()))
-                    .collect(),
+                first_message: (first_byte, first_cycle),
+                messages: messages_to_send,
                 prediction: self.current_message.prediction,
                 session: self.current_message.session,
             };
+
             if let Err(err) = self.on_serial.call1(
                 &JsValue::null(),
                 &SerialMessage::FromMaster(msg_to_send).serialize().into(),
