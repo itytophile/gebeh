@@ -150,11 +150,28 @@ impl WebEmulatorInner {
         })
     }
 
-    pub fn set_serial_msg(&mut self, msg: &ArchivedSerialMessage) -> Option<SerialMessage> {
+    pub fn set_serial_msg(
+        &mut self,
+        msg: &ArchivedSerialMessage,
+        serial_mode: &mut SerialMode,
+    ) -> Option<SerialMessage> {
+        let SerialMode::SynchroSerial(synchro_serial) = serial_mode else {
+            panic!();
+        };
+
         match msg {
             ArchivedSerialMessage::FromMaster(_) => todo!(),
             ArchivedSerialMessage::FromSlave(msg) => {
-                todo!()
+                let (emulator, mbc) = core::mem::take(&mut synchro_serial.previous_batch_snapshots)
+                    .into_iter()
+                    .find(|(emulator, _)| emulator.get_cycles() == msg.clock)
+                    .expect("desync too big");
+                self.emulator = emulator;
+                self.mbc = mbc;
+                synchro_serial.current_message.session = !synchro_serial.current_message.session;
+                synchro_serial.current_message.messages.clear();
+                synchro_serial.current_message.prediction = msg.correction;
+                None
             }
         }
     }
@@ -238,7 +255,9 @@ impl WebEmulator {
     pub fn set_serial_msg(&mut self, msg: &[u8]) -> Option<Box<[u8]>> {
         let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            inner.set_serial_msg(msg).map(|msg| msg.serialize())
+            inner
+                .set_serial_msg(msg, &mut self.serial_mode)
+                .map(|msg| msg.serialize())
         } else if let ArchivedSerialMessage::FromMaster(msg) = msg
             && msg.prediction != 0xff
         {
@@ -263,7 +282,7 @@ impl WebEmulator {
                     messages: Default::default(),
                     session: false,
                 },
-                previous_batch_snapshots: Default::default()
+                previous_batch_snapshots: Default::default(),
             })
         } else {
             self.serial_mode = SerialMode::Disconnected;
