@@ -6,7 +6,7 @@ use gebeh_core::{
     state::{Interruptions, SerialControl, State},
 };
 use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, Serialize, option::ArchivedOption};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
@@ -152,12 +152,12 @@ impl WebEmulatorInner {
         })
     }
 
-    pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
-        if let Some(cycles) = msg.master_cycles {
+    pub fn set_serial_msg(&mut self, msg: &ArchivedSerialMessage) -> Option<SerialMessage> {
+        if let ArchivedOption::Some(cycles) = msg.master_cycles {
             Some(SerialMessage {
                 byte: self.serial_state.set_msg_from_master(
                     msg.byte,
-                    cycles,
+                    cycles.to_native(),
                     &mut self.emulator,
                     &mut self.mbc,
                 ),
@@ -246,14 +246,18 @@ impl WebEmulator {
         }
     }
 
-    pub fn set_serial_msg(&mut self, msg: SerialMessage) -> Option<SerialMessage> {
+    pub fn set_serial_msg(&mut self, msg: &[u8]) -> Option<Box<[u8]>> {
+        let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            inner.set_serial_msg(msg)
+            inner.set_serial_msg(msg).map(|msg| msg.serialize())
         } else if msg.master_cycles.is_some() {
-            Some(SerialMessage {
-                byte: 0xff,
-                master_cycles: None,
-            })
+            Some(
+                SerialMessage {
+                    byte: 0xff,
+                    master_cycles: None,
+                }
+                .serialize(),
+            )
         } else {
             None
         }
@@ -285,18 +289,15 @@ impl Save {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Archive, Deserialize, Serialize)]
+#[derive(Archive, Serialize)]
 pub struct SerialMessage {
     master_cycles: Option<u64>,
     byte: u8,
 }
 
-#[wasm_bindgen]
 impl SerialMessage {
-    pub fn deserialize(buffer: &[u8]) -> Option<Self> {
-        let archived = rkyv::access::<ArchivedSerialMessage, rkyv::rancor::Error>(buffer).ok()?;
-        rkyv::deserialize::<_, rkyv::rancor::Error>(archived).ok()
+    pub fn deserialize(buffer: &[u8]) -> &ArchivedSerialMessage {
+        rkyv::access::<ArchivedSerialMessage, rkyv::rancor::Error>(buffer).unwrap()
     }
 
     pub fn serialize(&self) -> Box<[u8]> {
@@ -497,7 +498,9 @@ impl SynchroSerial {
     fn execute(&mut self, serial_state: &mut SerialState, state: &mut State, clock: u64) {
         serial_state.refresh(state);
         if let Some(msg) = serial_state.get_msg(state, clock)
-            && let Err(err) = self.on_serial.call1(&JsValue::null(), &msg.into())
+            && let Err(err) = self
+                .on_serial
+                .call1(&JsValue::null(), &msg.serialize().into())
         {
             console::error_1(&err);
         }

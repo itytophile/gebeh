@@ -1,5 +1,5 @@
 import "../polyfill/TextEncoder";
-import { initSync, SerialMessage, WebEmulator } from "../pkg/gebeh_web";
+import { initSync, WebEmulator } from "../pkg/gebeh_web";
 import { AUDIO_PROCESSOR_NAME, type FromMainMessage, type FromNodeMessage } from "./common";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
@@ -103,14 +103,13 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           if (!this.emulator) {
             throw new Error("Emulator not ready for serial");
           }
-          this.emulator.set_is_serial_connected((message: SerialMessage) => {
-            const buffer = message.serialize();
+          this.emulator.set_is_serial_connected((message: Uint8Array) => {
             this.port.postMessage(
               {
                 type: "serial",
-                buffer,
+                buffer: message,
               } satisfies FromNodeMessage,
-              [buffer.buffer],
+              [message.buffer],
             );
           });
           break;
@@ -126,19 +125,14 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           if (!this.emulator) {
             throw new Error("Emulator not ready for serial");
           }
-          const parsed = SerialMessage.deserialize(data.buffer);
-          if (!parsed) {
-            throw new Error("Can't parse message: " + data.buffer.toString());
-          }
-          const messageToSend = this.emulator.set_serial_msg(parsed);
+          const messageToSend = this.emulator.set_serial_msg(data.buffer);
           if (messageToSend) {
-            const buffer = messageToSend.serialize();
             this.port.postMessage(
               {
                 type: "serial",
-                buffer,
+                buffer: messageToSend,
               } satisfies FromNodeMessage,
-              [buffer.buffer],
+              [messageToSend.buffer],
             );
           }
           break;
