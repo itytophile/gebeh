@@ -6,7 +6,7 @@ use gebeh_core::{
     state::{Interruptions, SerialControl, State},
 };
 use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
-use rkyv::{Archive, Serialize, option::ArchivedOption};
+use rkyv::{Archive, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
@@ -153,20 +153,9 @@ impl WebEmulatorInner {
     }
 
     pub fn set_serial_msg(&mut self, msg: &ArchivedSerialMessage) -> Option<SerialMessage> {
-        if let ArchivedOption::Some(cycles) = msg.master_cycles {
-            Some(SerialMessage {
-                byte: self.serial_state.set_msg_from_master(
-                    msg.byte,
-                    cycles.to_native(),
-                    &mut self.emulator,
-                    &mut self.mbc,
-                ),
-                master_cycles: None,
-            })
-        } else {
-            self.serial_state
-                .set_msg_from_slave(msg.byte, &mut self.emulator.state);
-            None
+        match msg {
+            ArchivedSerialMessage::FromMaster(_) => todo!(),
+            ArchivedSerialMessage::FromSlave(_) => todo!(),
         }
     }
 }
@@ -250,12 +239,14 @@ impl WebEmulator {
         let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
             inner.set_serial_msg(msg).map(|msg| msg.serialize())
-        } else if msg.master_cycles.is_some() {
+        } else if let ArchivedSerialMessage::FromMaster(msg) = msg
+            && msg.prediction != 0xff
+        {
             Some(
-                SerialMessage {
-                    byte: 0xff,
-                    master_cycles: None,
-                }
+                SerialMessage::FromSlave(MessageFromSlave {
+                    correction: 0xff,
+                    clock: msg.first_message.1.to_native(),
+                })
                 .serialize(),
             )
         } else {
@@ -265,7 +256,14 @@ impl WebEmulator {
 
     pub fn set_is_serial_connected(&mut self, on_serial: Option<js_sys::Function>) {
         if let Some(on_serial) = on_serial {
-            self.serial_mode = SerialMode::SynchroSerial(SynchroSerial { on_serial })
+            self.serial_mode = SerialMode::SynchroSerial(SynchroSerial {
+                on_serial,
+                current_message: MessageFromMasterAcc {
+                    prediction: 0xff,
+                    messages: Default::default(),
+                    session: false,
+                },
+            })
         } else {
             self.serial_mode = SerialMode::Disconnected;
         }
@@ -289,9 +287,16 @@ impl Save {
     }
 }
 
+struct MessageFromMasterAcc {
+    prediction: u8,
+    messages: Vec<(u8, u64)>,
+    session: bool,
+}
+
 #[derive(Archive, Serialize)]
 pub struct MessageFromMaster {
     prediction: u8,
+    first_message: (u8, u64),
     messages: Vec<(u8, u64)>,
     session: bool,
 }
@@ -299,13 +304,13 @@ pub struct MessageFromMaster {
 #[derive(Archive, Serialize)]
 pub struct MessageFromSlave {
     correction: u8,
-    clock: u64
+    clock: u64,
 }
 
 #[derive(Archive, Serialize)]
 enum SerialMessage {
     FromMaster(MessageFromMaster),
-    FromSlave(MessageFromSlave)
+    FromSlave(MessageFromSlave),
 }
 
 impl SerialMessage {
@@ -371,13 +376,14 @@ enum SerialState {
 
 impl SerialState {
     fn is_blocking_execution(&self) -> bool {
-        if let Self::Master(ProutMaster::Exchanging(count)) = self
-            && *count >= EXCHANGE_DELAY
-        {
-            true
-        } else {
-            false
-        }
+        // if let Self::Master(ProutMaster::Exchanging(count)) = self
+        //     && *count >= EXCHANGE_DELAY
+        // {
+        //     true
+        // } else {
+        //     false
+        // }
+        false
     }
 }
 
@@ -406,13 +412,10 @@ impl SerialState {
         }
     }
 
-    fn get_msg(&mut self, state: &State, clock: u64) -> Option<SerialMessage> {
+    fn get_serial_byte(&mut self, state: &State) -> Option<u8> {
         if let SerialState::Master(ProutMaster::Init) = self {
             *self = SerialState::Master(ProutMaster::Exchanging(0));
-            return Some(SerialMessage {
-                master_cycles: Some(clock),
-                byte: state.sb,
-            });
+            return Some(state.sb);
         }
         None
     }
@@ -505,17 +508,34 @@ const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / 20;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,
+    current_message: MessageFromMasterAcc,
 }
 
 impl SynchroSerial {
     fn execute(&mut self, serial_state: &mut SerialState, state: &mut State, clock: u64) {
         serial_state.refresh(state);
-        if let Some(msg) = serial_state.get_msg(state, clock)
-            && let Err(err) = self
-                .on_serial
-                .call1(&JsValue::null(), &msg.serialize().into())
+        if let Some(byte) = serial_state.get_serial_byte(state) {
+            self.current_message.messages.push((byte, clock));
+        }
+        if let Some(&(first_byte, first_clock)) = self.current_message.messages.first()
+            && clock - first_clock > ROLLBACK_TRESHOLD
         {
-            console::error_1(&err);
+            let msg_to_send = MessageFromMaster {
+                first_message: (first_byte, first_clock),
+                messages: self.current_message.messages[1..].to_vec(),
+                prediction: self.current_message.prediction,
+                session: self.current_message.session,
+            };
+            self.current_message = MessageFromMasterAcc {
+                messages: Default::default(),
+                ..self.current_message
+            };
+            if let Err(err) = self.on_serial.call1(
+                &JsValue::null(),
+                &SerialMessage::FromMaster(msg_to_send).serialize().into(),
+            ) {
+                console::error_1(&err);
+            }
         }
         if let SerialState::Master(ProutMaster::Exchanging(delay)) = serial_state {
             *delay = delay.saturating_add(1);
