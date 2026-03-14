@@ -90,10 +90,7 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
-            for _ in 0..cycles {
-                if self.serial_state.is_blocking_execution() {
-                    return;
-                }
+            for _ in 0..cycles {                
                 self.emulator.execute(self.mbc.as_mut());
                 let cycles = self.emulator.get_cycles();
                 serial_mode.execute(
@@ -101,9 +98,6 @@ impl WebEmulatorInner {
                     &mut self.emulator,
                     self.mbc.as_ref(),
                 );
-                if self.serial_state.is_blocking_execution() {
-                    return;
-                }
                 if let SerialState::Slave {
                     state:
                         ProutSlave {
@@ -159,7 +153,9 @@ impl WebEmulatorInner {
     pub fn set_serial_msg(&mut self, msg: &ArchivedSerialMessage) -> Option<SerialMessage> {
         match msg {
             ArchivedSerialMessage::FromMaster(_) => todo!(),
-            ArchivedSerialMessage::FromSlave(_) => todo!(),
+            ArchivedSerialMessage::FromSlave(msg) => {
+                todo!()
+            }
         }
     }
 }
@@ -379,15 +375,14 @@ enum SerialState {
 }
 
 impl SerialState {
-    fn is_blocking_execution(&self) -> bool {
-        // if let Self::Master(ProutMaster::Exchanging(count)) = self
-        //     && *count >= EXCHANGE_DELAY
-        // {
-        //     true
-        // } else {
-        //     false
-        // }
-        false
+    fn needs_message(&self) -> bool {
+        if let Self::Master(ProutMaster::Exchanging(count)) = self
+            && *count >= EXCHANGE_DELAY
+        {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -523,6 +518,10 @@ impl SynchroSerial {
         mbc: &dyn CloneMbc<'static>,
     ) {
         serial_state.refresh(&emulator.state);
+        // doesn't happen at the same time as get_serial_byte
+        if serial_state.needs_message() {
+            serial_state.set_msg_from_slave(self.current_message.prediction, &mut emulator.state);
+        }
         if let Some(byte) = serial_state.get_serial_byte(&emulator.state) {
             self.current_message
                 .messages
