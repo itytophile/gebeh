@@ -290,9 +290,22 @@ impl Save {
 }
 
 #[derive(Archive, Serialize)]
-pub struct SerialMessage {
-    master_cycles: Option<u64>,
-    byte: u8,
+pub struct MessageFromMaster {
+    prediction: u8,
+    messages: Vec<(u8, u64)>,
+    session: bool,
+}
+
+#[derive(Archive, Serialize)]
+pub struct MessageFromSlave {
+    correction: u8,
+    clock: u64
+}
+
+#[derive(Archive, Serialize)]
+enum SerialMessage {
+    FromMaster(MessageFromMaster),
+    FromSlave(MessageFromSlave)
 }
 
 impl SerialMessage {
