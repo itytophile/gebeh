@@ -5,7 +5,7 @@ use gebeh_core::{
     apu::Mixer,
     state::{Interruptions, SerialControl, State},
 };
-use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
+use gebeh_front_helper::{CloneMbc, EasyMbc, get_mbc, get_noise, get_title_from_rom};
 use rkyv::{Archive, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{
@@ -96,7 +96,11 @@ impl WebEmulatorInner {
                 }
                 self.emulator.execute(self.mbc.as_mut());
                 let cycles = self.emulator.get_cycles();
-                serial_mode.execute(&mut self.serial_state, &mut self.emulator.state, cycles);
+                serial_mode.execute(
+                    &mut self.serial_state,
+                    &mut self.emulator,
+                    self.mbc.as_ref(),
+                );
                 if self.serial_state.is_blocking_execution() {
                     return;
                 }
@@ -289,7 +293,7 @@ impl Save {
 
 struct MessageFromMasterAcc {
     prediction: u8,
-    messages: Vec<(u8, u64)>,
+    messages: Vec<(u8, Emulator, EasyMbc)>,
     session: bool,
 }
 
@@ -512,23 +516,30 @@ struct SynchroSerial {
 }
 
 impl SynchroSerial {
-    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State, clock: u64) {
-        serial_state.refresh(state);
-        if let Some(byte) = serial_state.get_serial_byte(state) {
-            self.current_message.messages.push((byte, clock));
+    fn execute(
+        &mut self,
+        serial_state: &mut SerialState,
+        emulator: &mut Emulator,
+        mbc: &dyn CloneMbc<'static>,
+    ) {
+        serial_state.refresh(&emulator.state);
+        if let Some(byte) = serial_state.get_serial_byte(&emulator.state) {
+            self.current_message
+                .messages
+                .push((byte, emulator.clone(), mbc.clone_boxed()));
         }
-        if let Some(&(first_byte, first_clock)) = self.current_message.messages.first()
-            && clock - first_clock > ROLLBACK_TRESHOLD
+        if let Some((first_byte, first_snap, _)) = self.current_message.messages.first()
+            && emulator.get_cycles() - first_snap.get_cycles() > ROLLBACK_TRESHOLD
         {
             let msg_to_send = MessageFromMaster {
-                first_message: (first_byte, first_clock),
-                messages: self.current_message.messages[1..].to_vec(),
+                first_message: (*first_byte, first_snap.get_cycles()),
+                messages: core::mem::take(&mut self.current_message.messages)
+                    .into_iter()
+                    .skip(1)
+                    .map(|(byte, snap, _)| (byte, snap.get_cycles()))
+                    .collect(),
                 prediction: self.current_message.prediction,
                 session: self.current_message.session,
-            };
-            self.current_message = MessageFromMasterAcc {
-                messages: Default::default(),
-                ..self.current_message
             };
             if let Err(err) = self.on_serial.call1(
                 &JsValue::null(),
@@ -551,13 +562,18 @@ enum SerialMode {
 }
 
 impl SerialMode {
-    fn execute(&mut self, serial_state: &mut SerialState, state: &mut State, clock: u64) {
+    fn execute(
+        &mut self,
+        serial_state: &mut SerialState,
+        emulator: &mut Emulator,
+        mbc: &dyn CloneMbc<'static>,
+    ) {
         match self {
             Self::Disconnected => {
-                serial_state.refresh(state);
-                serial_state.set_msg_from_slave(0xff, state);
+                serial_state.refresh(&emulator.state);
+                serial_state.set_msg_from_slave(0xff, &mut emulator.state);
             }
-            Self::SynchroSerial(synchro) => synchro.execute(serial_state, state, clock),
+            Self::SynchroSerial(synchro) => synchro.execute(serial_state, emulator, mbc),
         }
     }
 }
