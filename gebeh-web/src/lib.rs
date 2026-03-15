@@ -515,32 +515,6 @@ impl SerialMessage {
     }
 }
 
-// système de rollback
-// -> mode full synchro avant tout
-// -> on échantillone pendant x temps
-// suite à l'échantillonage on déduit différents modes
-// -> Il ne se passe rien: full synchro car le master ne fait pas de transfert donc rapide
-// -> le master fait du polling: on passe en mode prédiction
-// -> le master envoie des données complexes: full synchro
-//
-// Comment détecter le polling ?
-// -> le master et le slave renvoie la même chose tout le temps avec rythme "constant"
-// Comment sortir du mode prédiction ?
-// -> le master envoie quelque chose de différent
-// -> le master active le transfert avec un rythme différent
-// -> le slave envoie quelque chose de différent
-// -> le slave active le transfert avec un rythme différent
-// Comment synchroniser en cas de mauvaise prédiction ?
-// -> Le slave et le master prennent des snapshot tous les x transferts
-// -> le master et le slave s'accorde sur la snapshot valide la plus tard.
-// Comment détecter un rythme différent ?
-// -> en vrai ce n'est peut-être pas nécessaire
-
-// https://gbdev.io/pandocs/Specifications.html
-// https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html#internal-clock
-// 4194304 / 4 (system clock) / 8192 (serial clock) * 8 (one bit per clock)
-const EXCHANGE_DELAY: u16 = 1024;
-
 #[derive(Clone, Copy)]
 enum ProutMaster {
     Init,
