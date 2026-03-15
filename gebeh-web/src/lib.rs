@@ -27,6 +27,7 @@ struct WebEmulatorInner {
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
     serial_state: SerialState,
+    last_master_cycle: Option<u64>,
 }
 
 #[wasm_bindgen]
@@ -66,6 +67,7 @@ impl WebEmulatorInner {
             serial_state: SerialState::Slave {
                 state: ProutSlave { snapshot: None },
             },
+            last_master_cycle: None,
         })
     }
 
@@ -150,6 +152,43 @@ impl WebEmulatorInner {
         })
     }
 
+    fn rollback_at_last_good_state(&self) {
+        todo!()
+    }
+
+    fn advance_emulator(&mut self, count: u64) {
+        for _ in 0..count {
+            self.emulator.execute(self.mbc.as_mut());
+        }
+    }
+
+    fn catch_up_before_deviation_fix(&self) {
+        todo!()
+    }
+
+    fn fix_deviation(
+        &mut self,
+        msg: &ArchivedMessageFromMaster,
+        mut last_master_cycle: u64,
+    ) -> Option<MessageFromSlave> {
+        self.rollback_at_last_good_state();
+        for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
+            self.advance_emulator(byte_at_cycle.1.to_native() - last_master_cycle);
+            let response = self
+                .serial_state
+                .set_msg_from_master2(byte_at_cycle.0, &mut self.emulator);
+            if response != msg.prediction {
+                return Some(MessageFromSlave {
+                    correction: response,
+                    clock: byte_at_cycle.1.to_native(),
+                });
+            }
+            last_master_cycle = byte_at_cycle.1.to_native();
+        }
+        self.catch_up_before_deviation_fix();
+        None
+    }
+
     pub fn set_serial_msg(
         &mut self,
         msg: &ArchivedSerialMessage,
@@ -161,34 +200,11 @@ impl WebEmulatorInner {
 
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
-                // cas normal
-                let response = self
-                    .serial_state
-                    .set_msg_from_master2(msg.first_message.0, &mut self.emulator);
-                let mut previous_cycle = msg.first_message.1.to_native();
-                if response != msg.prediction {
-                    return Some(MessageFromSlave {
-                        correction: response,
-                        clock: previous_cycle,
-                    });
-                }
-                for message in msg.messages.iter() {
-                    for _ in previous_cycle..message.1.to_native() {
-                        self.emulator.execute(self.mbc.as_mut());
-                    }
-                    let response = self
-                        .serial_state
-                        .set_msg_from_master2(message.0, &mut self.emulator);
-                    previous_cycle = message.1.to_native();
-                    if response != msg.prediction {
-                        return Some(MessageFromSlave {
-                            correction: response,
-                            clock: previous_cycle,
-                        });
-                    }
-                }
+                let Some(last_master_cycle) = self.last_master_cycle else {
+                    return self.when_first_msg_from_master(msg);
+                };
 
-                todo!()
+                self.fix_deviation(msg, last_master_cycle)
             }
             ArchivedSerialMessage::FromSlave(msg) => {
                 let (emulator, mbc) = core::mem::take(&mut synchro_serial.previous_batch_snapshots)
@@ -203,6 +219,38 @@ impl WebEmulatorInner {
                 None
             }
         }
+    }
+
+    fn when_first_msg_from_master(
+        &mut self,
+        msg: &ArchivedMessageFromMaster,
+    ) -> Option<MessageFromSlave> {
+        let response = self
+            .serial_state
+            .set_msg_from_master2(msg.first_message.0, &mut self.emulator);
+        let mut previous_cycle = msg.first_message.1.to_native();
+        if response != msg.prediction {
+            return Some(MessageFromSlave {
+                correction: response,
+                clock: previous_cycle,
+            });
+        }
+        for message in msg.messages.iter() {
+            for _ in previous_cycle..message.1.to_native() {
+                self.emulator.execute(self.mbc.as_mut());
+            }
+            let response = self
+                .serial_state
+                .set_msg_from_master2(message.0, &mut self.emulator);
+            previous_cycle = message.1.to_native();
+            if response != msg.prediction {
+                return Some(MessageFromSlave {
+                    correction: response,
+                    clock: previous_cycle,
+                });
+            }
+        }
+        None
     }
 }
 
