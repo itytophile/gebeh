@@ -27,7 +27,13 @@ struct WebEmulatorInner {
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
     serial_state: SerialState,
-    last_master_cycle: Option<u64>,
+    synchro_cycles: Option<SynchroCycles>,
+    snapshots: Vec<(Emulator, EasyMbc)>,
+}
+
+struct SynchroCycles {
+    master: u64,
+    slave: u64,
 }
 
 #[wasm_bindgen]
@@ -67,7 +73,8 @@ impl WebEmulatorInner {
             serial_state: SerialState::Slave {
                 state: ProutSlave { snapshot: None },
             },
-            last_master_cycle: None,
+            synchro_cycles: None,
+            snapshots: Default::default(),
         })
     }
 
@@ -163,18 +170,32 @@ impl WebEmulatorInner {
 
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
-                let Some(last_master_cycle) = self.last_master_cycle.as_mut() else {
+                let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
+                    let slave_cycles = self.emulator.get_cycles();
                     return advance_while_consuming_messages(
                         &mut self.serial_state,
                         &mut self.emulator,
                         self.mbc.as_mut(),
                         msg,
-                        self.last_master_cycle
-                            .insert(msg.first_message.1.to_native()),
+                        self.synchro_cycles.insert(SynchroCycles {
+                            master: msg.first_message.1.to_native(),
+                            slave: slave_cycles,
+                        }),
                     );
                 };
 
-                rollback_at_last_good_state();
+                let before_cycle =
+                    synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
+
+                let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
+                    .into_iter()
+                    .rev()
+                    .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
+                else {
+                    todo!();
+                };
+                self.emulator = emulator;
+                self.mbc = mbc;
 
                 let current_cycle = self.emulator.get_cycles();
 
@@ -183,7 +204,7 @@ impl WebEmulatorInner {
                     &mut self.emulator,
                     self.mbc.as_mut(),
                     msg,
-                    last_master_cycle,
+                    synchro_cycles,
                 ) {
                     return Some(value);
                 }
@@ -213,19 +234,15 @@ impl WebEmulatorInner {
     }
 }
 
-fn rollback_at_last_good_state() {
-    todo!()
-}
-
 fn advance_while_consuming_messages(
     serial_state: &mut SerialState,
     emulator: &mut Emulator,
     mbc: &mut dyn CloneMbc,
     msg: &ArchivedMessageFromMaster,
-    last_master_cycle: &mut u64,
+    synchro_cycles: &mut SynchroCycles,
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
-        for _ in 0..(byte_at_cycle.1.to_native() - *last_master_cycle) {
+        for _ in 0..(byte_at_cycle.1.to_native() - synchro_cycles.master) {
             emulator.execute(mbc);
         }
         let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
@@ -235,7 +252,8 @@ fn advance_while_consuming_messages(
                 clock: byte_at_cycle.1.to_native(),
             });
         }
-        *last_master_cycle = byte_at_cycle.1.to_native();
+        synchro_cycles.master = byte_at_cycle.1.to_native();
+        synchro_cycles.slave = emulator.get_cycles();
     }
     None
 }
