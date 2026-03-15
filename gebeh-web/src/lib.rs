@@ -229,7 +229,10 @@ impl WebEmulatorInner {
 
                 let current_cycle = self.emulator.get_cycles();
 
-                console_log(&format!("correction to {current_cycle} with prediction 0x{:02x}", msg.prediction));
+                console_log(&format!(
+                    "correction to {current_cycle} with prediction 0x{:02x}",
+                    msg.prediction
+                ));
 
                 if let Some(value) = advance_while_consuming_messages(
                     serial_mode,
@@ -273,10 +276,12 @@ impl WebEmulatorInner {
                 None
             }
             ArchivedSerialMessage::FromSlave(msg) => {
-                let (emulator, mbc) = core::mem::take(&mut synchro_serial.previous_batch_snapshots)
-                    .into_iter()
-                    .find(|(emulator, _)| emulator.get_cycles() == msg.clock)
-                    .expect("desync too big");
+                let (mut emulator, mbc) =
+                    core::mem::take(&mut synchro_serial.previous_batch_snapshots)
+                        .into_iter()
+                        .find(|(emulator, _)| emulator.get_cycles() == msg.clock)
+                        .expect("desync too big");
+                *emulator.get_joypad_mut() = *self.emulator.get_joypad_mut();
                 self.emulator = emulator;
                 self.mbc = mbc;
                 synchro_serial.current_message.session = !synchro_serial.current_message.session;
