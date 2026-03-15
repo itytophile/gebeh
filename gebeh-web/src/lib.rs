@@ -557,13 +557,7 @@ enum SerialState {
 
 impl SerialState {
     fn needs_message(&self) -> bool {
-        if let Self::Master(ProutMaster::Exchanging(count)) = self
-            && *count >= EXCHANGE_DELAY
-        {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::Master(ProutMaster::Exchanging(_)))
     }
 }
 
