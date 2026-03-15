@@ -174,6 +174,7 @@ impl WebEmulatorInner {
                     console_log("first batch");
                     let slave_cycles = self.emulator.get_cycles();
                     if let Some(value) = advance_while_consuming_messages(
+                        serial_mode,
                         &mut self.serial_state,
                         &mut self.emulator,
                         self.mbc.as_mut(),
@@ -228,9 +229,10 @@ impl WebEmulatorInner {
 
                 let current_cycle = self.emulator.get_cycles();
 
-                console_log(&format!("correction to {current_cycle}"));
+                console_log(&format!("correction to {current_cycle} with prediction 0x{:02x}", msg.prediction));
 
                 if let Some(value) = advance_while_consuming_messages(
+                    serial_mode,
                     &mut self.serial_state,
                     &mut self.emulator,
                     self.mbc.as_mut(),
@@ -252,11 +254,13 @@ impl WebEmulatorInner {
                     // catching up
                     for _ in 0..(current_cycle - self.emulator.get_cycles()) {
                         self.emulator.execute(self.mbc.as_mut());
-                        if self
-                            .emulator
-                            .get_cycles()
-                            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-                        {
+                        let cycles = self.emulator.get_cycles();
+                        serial_mode.execute(
+                            &mut self.serial_state,
+                            &mut self.emulator,
+                            self.mbc.as_ref(),
+                        );
+                        if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
                             add_snapshot(
                                 self.emulator.clone(),
                                 self.mbc.clone_boxed(),
@@ -293,6 +297,7 @@ fn console_log(text: &str) {
 }
 
 fn advance_while_consuming_messages(
+    serial_mode: &mut SerialMode,
     serial_state: &mut SerialState,
     emulator: &mut Emulator,
     mbc: &mut dyn CloneMbc<'static>,
@@ -303,10 +308,9 @@ fn advance_while_consuming_messages(
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
         for _ in 0..(byte_at_cycle.1.to_native() - synchro_cycles.master) {
             emulator.execute(mbc);
-            if emulator
-                .get_cycles()
-                .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-            {
+            let cycles = emulator.get_cycles();
+            serial_mode.execute(serial_state, emulator, mbc);
+            if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
                 add_snapshot(emulator.clone(), mbc.clone_boxed(), snapshots);
             }
         }
@@ -415,9 +419,10 @@ impl WebEmulator {
     pub fn set_serial_msg(&mut self, msg: &[u8]) -> Option<Box<[u8]>> {
         let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            inner
-                .set_serial_msg(msg, &mut self.serial_mode)
-                .map(|msg| SerialMessage::FromSlave(msg).serialize())
+            inner.set_serial_msg(msg, &mut self.serial_mode).map(|msg| {
+                console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
+                SerialMessage::FromSlave(msg).serialize()
+            })
         } else if let ArchivedSerialMessage::FromMaster(msg) = msg
             && msg.prediction != 0xff
         {
