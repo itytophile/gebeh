@@ -574,9 +574,11 @@ impl SerialState {
     }
 }
 
+// 1 second
+const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
 // 200 ms
-const ROLLBACK_TRESHOLD: u64 = 4194304 / 2 / 5;
-const MAX_SNAPSHOT: usize = 40;
+const BATCH_PERIOD: u64 = 4194304 / 4 / 5;
+const MAX_SNAPSHOT: usize = 20;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 
 struct SynchroSerial {
@@ -603,7 +605,7 @@ impl SynchroSerial {
                 .push((byte, emulator.clone(), mbc.clone_boxed()));
         }
         if let Some((_, first_snap, _)) = self.current_message.messages.first()
-            && emulator.get_cycles() - first_snap.get_cycles() > ROLLBACK_TRESHOLD
+            && emulator.get_cycles() - first_snap.get_cycles() > BATCH_PERIOD
         {
             self.previous_batch_snapshots.clear();
             let mut messages = core::mem::take(&mut self.current_message.messages).into_iter();

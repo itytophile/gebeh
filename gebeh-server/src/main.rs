@@ -458,7 +458,7 @@ pub enum BoundedOpcode {
     Pong = 0xA,
 }
 
-const FRAME_MAX_SIZE: usize = 512;
+const FRAME_MAX_SIZE: usize = 2048;
 
 pub struct BoundedFrame {
     pub fin: bool,
