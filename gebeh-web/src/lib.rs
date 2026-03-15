@@ -172,6 +172,7 @@ impl WebEmulatorInner {
                 }
 
                 let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
+                    console_log("first batch");
                     let slave_cycles = self.emulator.get_cycles();
                     return advance_while_consuming_messages(
                         &mut self.serial_state,
@@ -205,6 +206,8 @@ impl WebEmulatorInner {
                 };
 
                 let current_cycle = self.emulator.get_cycles();
+                
+                console_log("correction");
 
                 if let Some(value) = advance_while_consuming_messages(
                     &mut self.serial_state,
@@ -235,11 +238,19 @@ impl WebEmulatorInner {
                 self.mbc = mbc;
                 synchro_serial.current_message.session = !synchro_serial.current_message.session;
                 synchro_serial.current_message.messages.clear();
+                console_log(&format!(
+                    "Correction from slave 0x{:02x} -> 0x{:02x}",
+                    synchro_serial.current_message.prediction, msg.correction
+                ));
                 synchro_serial.current_message.prediction = msg.correction;
                 None
             }
         }
     }
+}
+
+fn console_log(text: &str) {
+    console::log_1(&JsValue::from_str(text));
 }
 
 fn advance_while_consuming_messages(
@@ -402,7 +413,7 @@ struct MessageFromMasterAcc {
     session: bool,
 }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Debug)]
 pub struct MessageFromMaster {
     prediction: u8,
     first_message: (u8, u64),
@@ -600,6 +611,8 @@ impl SynchroSerial {
                 prediction: self.current_message.prediction,
                 session: self.current_message.session,
             };
+            
+            console_log(&format!("Sending batch {msg_to_send:?}"));
 
             if let Err(err) = self.on_serial.call1(
                 &JsValue::null(),
