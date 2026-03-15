@@ -173,7 +173,7 @@ impl WebEmulatorInner {
                 let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
                     console_log("first batch");
                     let slave_cycles = self.emulator.get_cycles();
-                    return advance_while_consuming_messages(
+                    if let Some(value) = advance_while_consuming_messages(
                         &mut self.serial_state,
                         &mut self.emulator,
                         self.mbc.as_mut(),
@@ -183,8 +183,18 @@ impl WebEmulatorInner {
                             slave: slave_cycles,
                         }),
                         &mut self.snapshots,
-                    )
-                    .inspect(|_| self.session = !self.session);
+                    ) {
+                        self.session = !self.session;
+                        return Some(value);
+                    }
+
+                    add_snapshot(
+                        self.emulator.clone(),
+                        self.mbc.clone_boxed(),
+                        &mut self.snapshots,
+                    );
+
+                    return None;
                 };
 
                 let before_cycle =
@@ -226,6 +236,12 @@ impl WebEmulatorInner {
                     self.session = !self.session;
                     return Some(value);
                 }
+
+                add_snapshot(
+                    self.emulator.clone(),
+                    self.mbc.clone_boxed(),
+                    &mut self.snapshots,
+                );
 
                 if current_cycle > self.emulator.get_cycles() {
                     // catching up
