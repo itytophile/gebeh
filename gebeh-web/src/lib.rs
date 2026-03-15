@@ -183,12 +183,15 @@ impl WebEmulatorInner {
                             master: msg.first_message.1.to_native(),
                             slave: slave_cycles,
                         }),
+                        &mut self.snapshots
                     )
                     .inspect(|_| self.session = !self.session);
                 };
 
                 let before_cycle =
                     synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
+                
+                let lol: Vec<_> = self.snapshots.iter().map(|(lol, _)|lol.get_cycles()).collect();
 
                 if let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
                     .into_iter()
@@ -198,7 +201,7 @@ impl WebEmulatorInner {
                     self.emulator = emulator;
                     self.mbc = mbc;
                 } else {
-                    console::log_1(&JsValue::from_str("Rollback failed"));
+                    console_log(&format!("Rollback to {before_cycle} failed with {lol:?}"));
                     *synchro_cycles = SynchroCycles {
                         master: msg.first_message.1.to_native(),
                         slave: self.emulator.get_cycles(),
@@ -215,6 +218,7 @@ impl WebEmulatorInner {
                     self.mbc.as_mut(),
                     msg,
                     synchro_cycles,
+                    &mut self.snapshots
                 ) {
                     self.session = !self.session;
                     return Some(value);
@@ -256,13 +260,22 @@ fn console_log(text: &str) {
 fn advance_while_consuming_messages(
     serial_state: &mut SerialState,
     emulator: &mut Emulator,
-    mbc: &mut dyn CloneMbc,
+    mbc: &mut dyn CloneMbc<'static>,
     msg: &ArchivedMessageFromMaster,
     synchro_cycles: &mut SynchroCycles,
+    snapshots: &mut ArrayDeque<(Emulator, EasyMbc), MAX_SNAPSHOT>
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
         for _ in 0..(byte_at_cycle.1.to_native() - synchro_cycles.master) {
             emulator.execute(mbc);
+            if emulator.get_cycles().is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+                && let Err(arraydeque::CapacityError { element }) = 
+                    snapshots
+                    .push_back((emulator.clone(), mbc.clone_boxed()))
+            {
+                snapshots.pop_front();
+                snapshots.push_back(element).unwrap();
+            }
         }
         let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
         if response != msg.prediction {
@@ -562,8 +575,8 @@ impl SerialState {
 }
 
 // 200 ms
-const ROLLBACK_TRESHOLD: u64 = 4194304 / 4 / 5;
-const MAX_SNAPSHOT: usize = 20;
+const ROLLBACK_TRESHOLD: u64 = 4194304 / 2 / 5;
+const MAX_SNAPSHOT: usize = 40;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 
 struct SynchroSerial {
