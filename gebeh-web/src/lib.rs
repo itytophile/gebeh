@@ -29,6 +29,7 @@ struct WebEmulatorInner {
     serial_state: SerialState,
     synchro_cycles: Option<SynchroCycles>,
     snapshots: Vec<(Emulator, EasyMbc)>,
+    session: bool,
 }
 
 struct SynchroCycles {
@@ -75,6 +76,7 @@ impl WebEmulatorInner {
             },
             synchro_cycles: None,
             snapshots: Default::default(),
+            session: false,
         })
     }
 
@@ -170,6 +172,11 @@ impl WebEmulatorInner {
 
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
+                if msg.session != self.session {
+                    console::log_1(&JsValue::from_str("Bad session"));
+                    return None;
+                }
+
                 let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
                     let slave_cycles = self.emulator.get_cycles();
                     return advance_while_consuming_messages(
@@ -181,7 +188,8 @@ impl WebEmulatorInner {
                             master: msg.first_message.1.to_native(),
                             slave: slave_cycles,
                         }),
-                    );
+                    )
+                    .inspect(|_| self.session = !self.session);
                 };
 
                 let before_cycle =
@@ -211,6 +219,7 @@ impl WebEmulatorInner {
                     msg,
                     synchro_cycles,
                 ) {
+                    self.session = !self.session;
                     return Some(value);
                 }
 
