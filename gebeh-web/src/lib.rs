@@ -152,10 +152,6 @@ impl WebEmulatorInner {
         })
     }
 
-    fn catch_up_before_deviation_fix(&self) {
-        todo!()
-    }
-
     pub fn set_serial_msg(
         &mut self,
         msg: &ArchivedSerialMessage,
@@ -180,6 +176,8 @@ impl WebEmulatorInner {
 
                 rollback_at_last_good_state();
 
+                let current_cycle = self.emulator.get_cycles();
+
                 if let Some(value) = advance_while_consuming_messages(
                     &mut self.serial_state,
                     &mut self.emulator,
@@ -190,7 +188,12 @@ impl WebEmulatorInner {
                     return Some(value);
                 }
 
-                self.catch_up_before_deviation_fix();
+                if current_cycle > self.emulator.get_cycles() {
+                    // catching up
+                    for _ in 0..(current_cycle - self.emulator.get_cycles()) {
+                        self.emulator.execute(self.mbc.as_mut());
+                    }
+                }
 
                 None
             }
