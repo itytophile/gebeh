@@ -19,6 +19,8 @@ gebeh-front-helper = { path = "../gebeh-front-helper" }
 web-time = "1.1.0"
 wee_alloc = "0.4.5"
 rkyv = "0.8.15"
+arrayvec = "0.7.6"
+arraydeque = "0.5.1"
 
 [dependencies.web-sys]
 version = "0.3"

@@ -1,5 +1,6 @@
-use std::{iter, rc::Rc};
+use std::rc::Rc;
 
+use arraydeque::ArrayDeque;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     apu::Mixer,
@@ -28,7 +29,7 @@ struct WebEmulatorInner {
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
     serial_state: SerialState,
     synchro_cycles: Option<SynchroCycles>,
-    snapshots: Vec<(Emulator, EasyMbc)>,
+    snapshots: Box<ArrayDeque<(Emulator, EasyMbc), MAX_SNAPSHOT>>,
     session: bool,
 }
 
@@ -72,7 +73,7 @@ impl WebEmulatorInner {
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
             serial_state: SerialState::Slave {
-                state: ProutSlave { snapshot: None },
+                state: ProutSlave {},
             },
             synchro_cycles: None,
             snapshots: Default::default(),
@@ -109,22 +110,15 @@ impl WebEmulatorInner {
                     &mut self.emulator,
                     self.mbc.as_ref(),
                 );
-                if let SerialState::Slave {
-                    state:
-                        ProutSlave {
-                            snapshot: Some(snapshot),
-                        },
-                } = &mut self.serial_state
-                    && snapshot.emulator.get_cycles() < cycles
-                    && cycles - snapshot.emulator.get_cycles() < ROLLBACK_TRESHOLD
-                    && (cycles - snapshot.emulator.get_cycles())
-                        .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-                {
-                    console::log_1(&JsValue::from_str("snap"));
-                    snapshot
+                if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+                    && let Err(arraydeque::CapacityError { element }) = self
                         .snapshots
-                        .push((self.emulator.clone(), self.mbc.clone_boxed()));
+                        .push_back((self.emulator.clone(), self.mbc.clone_boxed()))
+                {
+                    self.snapshots.pop_front();
+                    self.snapshots.push_back(element).unwrap();
                 }
+
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
                         [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
@@ -472,16 +466,7 @@ enum ProutMaster {
     Exchanging(u16),
 }
 
-struct ProutSlave {
-    snapshot: Option<Snapshot>,
-}
-
-struct Snapshot {
-    master_cycles: u64,
-    emulator: Box<Emulator>, // boxed because large
-    mbc: EasyMbc,
-    snapshots: Vec<(Emulator, EasyMbc)>,
-}
+struct ProutSlave {}
 
 enum SerialState {
     MasterNoTransfer,
@@ -521,7 +506,7 @@ impl SerialState {
             && !std::matches!(self, SerialState::Slave { .. })
         {
             *self = Self::Slave {
-                state: ProutSlave { snapshot: None },
+                state: ProutSlave {},
             }
         }
     }
@@ -547,74 +532,6 @@ impl SerialState {
         }
     }
 
-    // When receiving a message from a master, always send a response even if we are a master
-    #[must_use]
-    fn set_msg_from_master(
-        &mut self,
-        byte: u8,
-        master_cycles: u64,
-        emulator: &mut Emulator,
-        mbc: &mut EasyMbc,
-    ) -> u8 {
-        let Self::Slave {
-            state: ProutSlave { snapshot },
-        } = self
-        else {
-            return 0xff;
-        };
-
-        let mut response = 0xff;
-
-        if let Some(snapshot) = snapshot.take()
-            && master_cycles >= snapshot.master_cycles
-            && master_cycles - snapshot.master_cycles < ROLLBACK_TRESHOLD
-        {
-            let (index, (mut snap_emulator, snap_mbc)) =
-                iter::once((*snapshot.emulator, snapshot.mbc))
-                    .chain(snapshot.snapshots)
-                    .enumerate()
-                    .filter(|(index, _)| {
-                        u64::try_from(*index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD
-                            < (master_cycles - snapshot.master_cycles)
-                    })
-                    .last()
-                    .unwrap();
-
-            *snap_emulator.get_joypad_mut() = *emulator.get_joypad_mut();
-            *emulator = snap_emulator;
-            *mbc = snap_mbc;
-            let offset = u64::try_from(index).unwrap() * ROLLBACK_SNAPSHOT_PERIOD;
-            console::log_1(&JsValue::from_str(&format!(
-                "Rollback {} cycles ({} ms) with offset {}",
-                master_cycles - snapshot.master_cycles - offset,
-                (master_cycles - snapshot.master_cycles - offset) * 1000 * 4 / 4194304,
-                offset
-            )));
-            for _ in 0..(master_cycles - snapshot.master_cycles - offset) {
-                emulator.execute(mbc.as_mut());
-            }
-        }
-
-        if emulator.state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-            response = emulator.state.sb;
-            self.accept_byte(byte, &mut emulator.state);
-        }
-
-        if let Self::Slave {
-            state: ProutSlave { snapshot },
-        } = self
-        {
-            *snapshot = Some(Snapshot {
-                master_cycles,
-                emulator: Box::new(emulator.clone()),
-                mbc: mbc.clone_boxed(),
-                snapshots: Default::default(),
-            });
-        }
-
-        response
-    }
-
     fn set_msg_from_master2(&mut self, byte: u8, emulator: &mut Emulator) -> u8 {
         let Self::Slave {
             state: ProutSlave { .. },
@@ -635,7 +552,8 @@ impl SerialState {
 
 // 200 ms
 const ROLLBACK_TRESHOLD: u64 = 4194304 / 4 / 5;
-const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / 20;
+const MAX_SNAPSHOT: usize = 20;
+const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,
