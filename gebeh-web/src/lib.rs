@@ -187,15 +187,20 @@ impl WebEmulatorInner {
                 let before_cycle =
                     synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
 
-                let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
+                if let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
                     .into_iter()
                     .rev()
                     .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
-                else {
-                    todo!();
+                {
+                    self.emulator = emulator;
+                    self.mbc = mbc;
+                } else {
+                    console::log_1(&JsValue::from_str("Rollback failed"));
+                    *synchro_cycles = SynchroCycles {
+                        master: msg.first_message.1.to_native(),
+                        slave: self.emulator.get_cycles(),
+                    };
                 };
-                self.emulator = emulator;
-                self.mbc = mbc;
 
                 let current_cycle = self.emulator.get_cycles();
 
