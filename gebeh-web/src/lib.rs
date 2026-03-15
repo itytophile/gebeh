@@ -213,6 +213,11 @@ impl WebEmulatorInner {
                 {
                     self.emulator = emulator;
                     self.mbc = mbc;
+                    add_snapshot(
+                        self.emulator.clone(),
+                        self.mbc.clone_boxed(),
+                        &mut self.snapshots,
+                    );
                 } else {
                     console_log(&format!("Rollback to {before_cycle} failed with {lol:?}"));
                     *synchro_cycles = SynchroCycles {
