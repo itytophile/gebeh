@@ -110,13 +110,12 @@ impl WebEmulatorInner {
                     &mut self.emulator,
                     self.mbc.as_ref(),
                 );
-                if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-                    && let Err(arraydeque::CapacityError { element }) = self
-                        .snapshots
-                        .push_back((self.emulator.clone(), self.mbc.clone_boxed()))
-                {
-                    self.snapshots.pop_front();
-                    self.snapshots.push_back(element).unwrap();
+                if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
+                    add_snapshot(
+                        self.emulator.clone(),
+                        self.mbc.clone_boxed(),
+                        &mut self.snapshots,
+                    );
                 }
 
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
@@ -236,12 +235,12 @@ impl WebEmulatorInner {
                             .emulator
                             .get_cycles()
                             .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-                            && let Err(arraydeque::CapacityError { element }) = self
-                                .snapshots
-                                .push_back((self.emulator.clone(), self.mbc.clone_boxed()))
                         {
-                            self.snapshots.pop_front();
-                            self.snapshots.push_back(element).unwrap();
+                            add_snapshot(
+                                self.emulator.clone(),
+                                self.mbc.clone_boxed(),
+                                &mut self.snapshots,
+                            );
                         }
                     }
                 }
@@ -286,22 +285,14 @@ fn advance_while_consuming_messages(
             if emulator
                 .get_cycles()
                 .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-                && let Err(arraydeque::CapacityError { element }) =
-                    snapshots.push_back((emulator.clone(), mbc.clone_boxed()))
             {
-                snapshots.pop_front();
-                snapshots.push_back(element).unwrap();
+                add_snapshot(emulator.clone(), mbc.clone_boxed(), snapshots);
             }
         }
         let snap = emulator.clone();
         let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
         if response != msg.prediction {
-            if let Err(arraydeque::CapacityError { element }) =
-                snapshots.push_back((snap.clone(), mbc.clone_boxed()))
-            {
-                snapshots.pop_front();
-                snapshots.push_back(element).unwrap();
-            }
+            add_snapshot(snap.clone(), mbc.clone_boxed(), snapshots);
             *emulator = snap;
             return Some(MessageFromSlave {
                 correction: response,
@@ -312,6 +303,17 @@ fn advance_while_consuming_messages(
         synchro_cycles.slave = emulator.get_cycles();
     }
     None
+}
+
+fn add_snapshot(
+    emulator: Emulator,
+    mbc: EasyMbc,
+    snapshots: &mut ArrayDeque<(Emulator, EasyMbc), 20>,
+) {
+    if let Err(arraydeque::CapacityError { element }) = snapshots.push_back((emulator, mbc)) {
+        snapshots.pop_front();
+        snapshots.push_back(element).unwrap();
+    }
 }
 
 #[wasm_bindgen]
