@@ -109,13 +109,14 @@ impl WebEmulatorInner {
             }
 
             for _ in 0..cycles {
-                execute_and_take_snapshot(
+                if let Some(snapshot) = execute_and_take_snapshot(
                     serial_mode,
                     &mut self.serial_state,
                     &mut self.emulator,
                     self.mbc.as_mut(),
-                    &mut self.snapshots,
-                );
+                ) {
+                    add_snapshot(snapshot, &mut self.snapshots);
+                }
 
                 if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
                     self.current_frame.as_chunks_mut::<40>().0
@@ -220,8 +221,7 @@ impl WebEmulatorInner {
             }
 
             add_snapshot(
-                self.emulator.clone(),
-                self.mbc.clone_boxed(),
+                (self.emulator.clone(), self.mbc.clone_boxed()),
                 &mut self.snapshots,
             );
 
@@ -245,8 +245,7 @@ impl WebEmulatorInner {
             self.emulator = emulator;
             self.mbc = mbc;
             add_snapshot(
-                self.emulator.clone(),
-                self.mbc.clone_boxed(),
+                (self.emulator.clone(), self.mbc.clone_boxed()),
                 &mut self.snapshots,
             );
         } else {
@@ -278,21 +277,21 @@ impl WebEmulatorInner {
         }
 
         add_snapshot(
-            self.emulator.clone(),
-            self.mbc.clone_boxed(),
+            (self.emulator.clone(), self.mbc.clone_boxed()),
             &mut self.snapshots,
         );
 
         if current_cycle > self.emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - self.emulator.get_cycles()) {
-                execute_and_take_snapshot(
+                if let Some(snapshot) = execute_and_take_snapshot(
                     serial_mode,
                     &mut self.serial_state,
                     &mut self.emulator,
                     self.mbc.as_mut(),
-                    &mut self.snapshots,
-                );
+                ) {
+                    add_snapshot(snapshot, &mut self.snapshots);
+                }
             }
         }
 
@@ -315,13 +314,17 @@ fn advance_while_consuming_messages(
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
         for _ in 0..byte_at_cycle.1.to_native() - synchro_cycles.master {
-            execute_and_take_snapshot(serial_mode, serial_state, emulator, mbc, snapshots);
+            if let Some(snaphost) =
+                execute_and_take_snapshot(serial_mode, serial_state, emulator, mbc)
+            {
+                add_snapshot(snaphost, snapshots);
+            }
         }
 
         let snap = emulator.clone();
         let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
         if response != msg.prediction {
-            add_snapshot(snap.clone(), mbc.clone_boxed(), snapshots);
+            add_snapshot((snap.clone(), mbc.clone_boxed()), snapshots);
             *emulator = snap;
             return Some(MessageFromSlave {
                 correction: response,
@@ -334,27 +337,25 @@ fn advance_while_consuming_messages(
     None
 }
 
+#[must_use]
 fn execute_and_take_snapshot(
     serial_mode: &mut SerialMode,
     serial_state: &mut SerialState,
     emulator: &mut Emulator,
     mbc: &mut dyn CloneMbc<'static>,
-    snapshots: &mut ArrayDeque<(Emulator, EasyMbc), 20>,
-) {
+) -> Option<Snapshot> {
     emulator.execute(mbc);
     let cycles = emulator.get_cycles();
     serial_mode.execute(serial_state, emulator, mbc);
-    if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
-        add_snapshot(emulator.clone(), mbc.clone_boxed(), snapshots);
-    }
+    cycles
+        .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+        .then(|| (emulator.clone(), mbc.clone_boxed()))
 }
 
-fn add_snapshot(
-    emulator: Emulator,
-    mbc: EasyMbc,
-    snapshots: &mut ArrayDeque<(Emulator, EasyMbc), 20>,
-) {
-    if let Err(arraydeque::CapacityError { element }) = snapshots.push_back((emulator, mbc)) {
+type Snapshot = (Emulator, EasyMbc);
+
+fn add_snapshot(snaphost: Snapshot, snapshots: &mut ArrayDeque<Snapshot, 20>) {
+    if let Err(arraydeque::CapacityError { element }) = snapshots.push_back(snaphost) {
         snapshots.pop_front();
         snapshots.push_back(element).unwrap();
     }
