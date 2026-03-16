@@ -7,15 +7,21 @@ use gebeh_core::{
     state::{Interruptions, SerialControl, State},
 };
 use gebeh_front_helper::{CloneMbc, EasyMbc, get_mbc, get_noise, get_title_from_rom};
-use rkyv::{Archive, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
     js_sys::{self},
 };
 
-use crate::rtc::NullRtc;
+use crate::{
+    message::{
+        ArchivedMessageFromMaster, ArchivedSerialMessage, MessageFromMaster, MessageFromSlave,
+        SerialMessage,
+    },
+    rtc::NullRtc,
+};
 
+mod message;
 mod rtc;
 
 struct WebEmulatorInner {
@@ -483,51 +489,6 @@ struct MessageFromMasterAcc {
     prediction: u8,
     messages: Vec<(u8, Emulator, EasyMbc)>,
     session: bool,
-}
-
-#[derive(Archive, Serialize, Debug)]
-pub struct MessageFromMaster {
-    prediction: u8,
-    first_message: (u8, u64),
-    messages: Vec<(u8, u64)>,
-    session: bool,
-}
-
-#[derive(Archive, Serialize)]
-pub struct MessageFromSlave {
-    correction: u8,
-    clock: u64,
-}
-
-#[derive(Archive, Serialize)]
-enum SerialMessage {
-    FromMaster(MessageFromMaster),
-    FromSlave(MessageFromSlave),
-}
-
-pub struct DecompressedSerialMessage {
-    buffer: Vec<u8>,
-}
-
-impl DecompressedSerialMessage {
-    fn get(&self) -> &ArchivedSerialMessage {
-        rkyv::access::<ArchivedSerialMessage, rkyv::rancor::Error>(&self.buffer).unwrap()
-    }
-}
-
-impl SerialMessage {
-    pub fn deserialize(buffer: &[u8]) -> DecompressedSerialMessage {
-        let decompressed = zstd::decode_all(buffer).unwrap();
-        DecompressedSerialMessage {
-            buffer: decompressed,
-        }
-    }
-
-    pub fn serialize(&self) -> Box<[u8]> {
-        let serialized = rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap();
-        let compressed = zstd::encode_all(&serialized[..], 0).unwrap();
-        compressed.into_boxed_slice()
-    }
 }
 
 #[derive(Clone, Copy)]
