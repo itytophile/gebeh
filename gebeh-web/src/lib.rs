@@ -214,7 +214,7 @@ impl WebEmulatorInner {
                     master: msg.first_message.1.to_native(),
                     slave: slave_cycles,
                 }),
-                &mut self.snapshots,
+                |snapshot| add_snapshot(snapshot, &mut self.snapshots),
             ) {
                 self.session = !self.session;
                 return Some(value);
@@ -270,7 +270,7 @@ impl WebEmulatorInner {
             self.mbc.as_mut(),
             msg,
             synchro_cycles,
-            &mut self.snapshots,
+            |snapshot| add_snapshot(snapshot, &mut self.snapshots),
         ) {
             self.session = !self.session;
             return Some(value);
@@ -310,17 +310,18 @@ fn advance_while_consuming_messages(
     mbc: &mut dyn CloneMbc<'static>,
     msg: &ArchivedMessageFromMaster,
     synchro_cycles: &mut SynchroCycles,
-    snapshots: &mut ArrayDeque<(Emulator, EasyMbc), MAX_SNAPSHOT>,
+    // I prefer a closure to prove that we are only emitting snapshots and not consuming
+    mut on_snapshot: impl FnMut(Snapshot),
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
         (0..byte_at_cycle.1.to_native() - synchro_cycles.master)
             .flat_map(|_| execute_and_take_snapshot(serial_mode, serial_state, emulator, mbc))
-            .for_each(|snapshot| add_snapshot(snapshot, snapshots));
+            .for_each(&mut on_snapshot);
 
         let snap = emulator.clone();
         let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
         if response != msg.prediction {
-            add_snapshot((snap.clone(), mbc.clone_boxed()), snapshots);
+            on_snapshot((snap.clone(), mbc.clone_boxed()));
             *emulator = snap;
             return Some(MessageFromSlave {
                 correction: response,
