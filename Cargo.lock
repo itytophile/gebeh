@@ -1084,6 +1084,7 @@ dependencies = [
  "web-sys",
  "web-time 1.1.0",
  "wee_alloc",
+ "zstd",
 ]
 
 [[package]]
