@@ -424,11 +424,13 @@ impl WebEmulator {
     pub fn set_serial_msg(&mut self, msg: &[u8]) -> Option<Box<[u8]>> {
         let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            inner.set_serial_msg(msg, &mut self.serial_mode).map(|msg| {
-                console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
-                SerialMessage::FromSlave(msg).serialize()
-            })
-        } else if let ArchivedSerialMessage::FromMaster(msg) = msg
+            inner
+                .set_serial_msg(msg.get(), &mut self.serial_mode)
+                .map(|msg| {
+                    console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
+                    SerialMessage::FromSlave(msg).serialize()
+                })
+        } else if let ArchivedSerialMessage::FromMaster(msg) = msg.get()
             && msg.prediction != 0xff
         {
             Some(
@@ -503,15 +505,28 @@ enum SerialMessage {
     FromSlave(MessageFromSlave),
 }
 
+pub struct DecompressedSerialMessage {
+    buffer: Vec<u8>,
+}
+
+impl DecompressedSerialMessage {
+    fn get(&self) -> &ArchivedSerialMessage {
+        rkyv::access::<ArchivedSerialMessage, rkyv::rancor::Error>(&self.buffer).unwrap()
+    }
+}
+
 impl SerialMessage {
-    pub fn deserialize(buffer: &[u8]) -> &ArchivedSerialMessage {
-        rkyv::access::<ArchivedSerialMessage, rkyv::rancor::Error>(buffer).unwrap()
+    pub fn deserialize(buffer: &[u8]) -> DecompressedSerialMessage {
+        let decompressed = zstd::decode_all(buffer).unwrap();
+        DecompressedSerialMessage {
+            buffer: decompressed,
+        }
     }
 
     pub fn serialize(&self) -> Box<[u8]> {
-        rkyv::to_bytes::<rkyv::rancor::Error>(self)
-            .unwrap()
-            .into_boxed_slice()
+        let serialized = rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap();
+        let compressed = zstd::encode_all(&serialized[..], 0).unwrap();
+        compressed.into_boxed_slice()
     }
 }
 
