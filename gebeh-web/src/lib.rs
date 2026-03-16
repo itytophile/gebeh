@@ -283,16 +283,16 @@ impl WebEmulatorInner {
 
         if current_cycle > self.emulator.get_cycles() {
             // catching up
-            for _ in 0..(current_cycle - self.emulator.get_cycles()) {
-                if let Some(snapshot) = execute_and_take_snapshot(
-                    serial_mode,
-                    &mut self.serial_state,
-                    &mut self.emulator,
-                    self.mbc.as_mut(),
-                ) {
-                    add_snapshot(snapshot, &mut self.snapshots);
-                }
-            }
+            (0..(current_cycle - self.emulator.get_cycles()))
+                .flat_map(|_| {
+                    execute_and_take_snapshot(
+                        serial_mode,
+                        &mut self.serial_state,
+                        &mut self.emulator,
+                        self.mbc.as_mut(),
+                    )
+                })
+                .for_each(|snapshot| add_snapshot(snapshot, &mut self.snapshots));
         }
 
         None
@@ -313,13 +313,9 @@ fn advance_while_consuming_messages(
     snapshots: &mut ArrayDeque<(Emulator, EasyMbc), MAX_SNAPSHOT>,
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
-        for _ in 0..byte_at_cycle.1.to_native() - synchro_cycles.master {
-            if let Some(snaphost) =
-                execute_and_take_snapshot(serial_mode, serial_state, emulator, mbc)
-            {
-                add_snapshot(snaphost, snapshots);
-            }
-        }
+        (0..byte_at_cycle.1.to_native() - synchro_cycles.master)
+            .flat_map(|_| execute_and_take_snapshot(serial_mode, serial_state, emulator, mbc))
+            .for_each(|snapshot| add_snapshot(snapshot, snapshots));
 
         let snap = emulator.clone();
         let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
