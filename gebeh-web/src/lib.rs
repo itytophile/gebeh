@@ -171,115 +171,10 @@ impl WebEmulatorInner {
 
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
-                if msg.session != self.session {
-                    console::log_1(&JsValue::from_str("Bad session"));
-                    return None;
-                }
-
-                let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
-                    console_log("first batch");
-                    let slave_cycles = self.emulator.get_cycles();
-                    if let Some(value) = advance_while_consuming_messages(
-                        serial_mode,
-                        &mut self.serial_state,
-                        &mut self.emulator,
-                        self.mbc.as_mut(),
-                        msg,
-                        self.synchro_cycles.insert(SynchroCycles {
-                            master: msg.first_message.1.to_native(),
-                            slave: slave_cycles,
-                        }),
-                        &mut self.snapshots,
-                    ) {
-                        self.session = !self.session;
-                        return Some(value);
-                    }
-
-                    add_snapshot(
-                        self.emulator.clone(),
-                        self.mbc.clone_boxed(),
-                        &mut self.snapshots,
-                    );
-
-                    return None;
-                };
-
-                let before_cycle =
-                    synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
-
-                let lol: Vec<_> = self
-                    .snapshots
-                    .iter()
-                    .map(|(lol, _)| lol.get_cycles())
-                    .collect();
-
-                if let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
-                    .into_iter()
-                    .rev()
-                    .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
-                {
-                    self.emulator = emulator;
-                    self.mbc = mbc;
-                    add_snapshot(
-                        self.emulator.clone(),
-                        self.mbc.clone_boxed(),
-                        &mut self.snapshots,
-                    );
-                } else {
-                    console_log(&format!("Rollback to {before_cycle} failed with {lol:?}"));
-                    *synchro_cycles = SynchroCycles {
-                        master: msg.first_message.1.to_native(),
-                        slave: self.emulator.get_cycles(),
-                    };
-                };
-
-                let current_cycle = self.emulator.get_cycles();
-
-                console_log(&format!(
-                    "correction to {current_cycle} with prediction 0x{:02x}",
-                    msg.prediction
-                ));
-
-                if let Some(value) = advance_while_consuming_messages(
-                    serial_mode,
-                    &mut self.serial_state,
-                    &mut self.emulator,
-                    self.mbc.as_mut(),
-                    msg,
-                    synchro_cycles,
-                    &mut self.snapshots,
-                ) {
-                    self.session = !self.session;
-                    return Some(value);
-                }
-
-                add_snapshot(
-                    self.emulator.clone(),
-                    self.mbc.clone_boxed(),
-                    &mut self.snapshots,
-                );
-
-                if current_cycle > self.emulator.get_cycles() {
-                    // catching up
-                    for _ in 0..(current_cycle - self.emulator.get_cycles()) {
-                        self.emulator.execute(self.mbc.as_mut());
-                        let cycles = self.emulator.get_cycles();
-                        serial_mode.execute(
-                            &mut self.serial_state,
-                            &mut self.emulator,
-                            self.mbc.as_ref(),
-                        );
-                        if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
-                            add_snapshot(
-                                self.emulator.clone(),
-                                self.mbc.clone_boxed(),
-                                &mut self.snapshots,
-                            );
-                        }
-                    }
-                }
-
-                None
+                let current_joypad = *self.emulator.get_joypad_mut();
+                let response = self.handle_message_from_master(serial_mode, msg);
+                *self.emulator.get_joypad_mut() = current_joypad;
+                response
             }
             ArchivedSerialMessage::FromSlave(msg) => {
                 let (mut emulator, mbc) =
@@ -300,6 +195,122 @@ impl WebEmulatorInner {
                 None
             }
         }
+    }
+
+    fn handle_message_from_master(
+        &mut self,
+        serial_mode: &mut SerialMode,
+        msg: &ArchivedMessageFromMaster,
+    ) -> Option<MessageFromSlave> {
+        if msg.session != self.session {
+            console::log_1(&JsValue::from_str("Bad session"));
+            return None;
+        }
+
+        let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
+            console_log("first batch");
+            let slave_cycles = self.emulator.get_cycles();
+            if let Some(value) = advance_while_consuming_messages(
+                serial_mode,
+                &mut self.serial_state,
+                &mut self.emulator,
+                self.mbc.as_mut(),
+                msg,
+                self.synchro_cycles.insert(SynchroCycles {
+                    master: msg.first_message.1.to_native(),
+                    slave: slave_cycles,
+                }),
+                &mut self.snapshots,
+            ) {
+                self.session = !self.session;
+                return Some(value);
+            }
+
+            add_snapshot(
+                self.emulator.clone(),
+                self.mbc.clone_boxed(),
+                &mut self.snapshots,
+            );
+
+            return None;
+        };
+
+        let before_cycle =
+            synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
+
+        let lol: Vec<_> = self
+            .snapshots
+            .iter()
+            .map(|(lol, _)| lol.get_cycles())
+            .collect();
+
+        if let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
+            .into_iter()
+            .rev()
+            .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
+        {
+            self.emulator = emulator;
+            self.mbc = mbc;
+            add_snapshot(
+                self.emulator.clone(),
+                self.mbc.clone_boxed(),
+                &mut self.snapshots,
+            );
+        } else {
+            console_log(&format!("Rollback to {before_cycle} failed with {lol:?}"));
+            *synchro_cycles = SynchroCycles {
+                master: msg.first_message.1.to_native(),
+                slave: self.emulator.get_cycles(),
+            };
+        };
+
+        let current_cycle = self.emulator.get_cycles();
+
+        console_log(&format!(
+            "correction to {current_cycle} with prediction 0x{:02x}",
+            msg.prediction
+        ));
+
+        if let Some(value) = advance_while_consuming_messages(
+            serial_mode,
+            &mut self.serial_state,
+            &mut self.emulator,
+            self.mbc.as_mut(),
+            msg,
+            synchro_cycles,
+            &mut self.snapshots,
+        ) {
+            self.session = !self.session;
+            return Some(value);
+        }
+
+        add_snapshot(
+            self.emulator.clone(),
+            self.mbc.clone_boxed(),
+            &mut self.snapshots,
+        );
+
+        if current_cycle > self.emulator.get_cycles() {
+            // catching up
+            for _ in 0..(current_cycle - self.emulator.get_cycles()) {
+                self.emulator.execute(self.mbc.as_mut());
+                let cycles = self.emulator.get_cycles();
+                serial_mode.execute(
+                    &mut self.serial_state,
+                    &mut self.emulator,
+                    self.mbc.as_ref(),
+                );
+                if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
+                    add_snapshot(
+                        self.emulator.clone(),
+                        self.mbc.clone_boxed(),
+                        &mut self.snapshots,
+                    );
+                }
+            }
+        }
+
+        None
     }
 }
 
