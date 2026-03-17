@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use arraydeque::ArrayDeque;
+use arrayvec::ArrayVec;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     apu::Mixer,
@@ -231,13 +232,14 @@ impl WebEmulatorInner {
         let before_cycle =
             synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
 
-        let lol: Vec<_> = self
-            .snapshots
+        let snapshots = core::mem::take(&mut self.snapshots);
+
+        let previous_inputs: ArrayVec<_, 20> = snapshots
             .iter()
-            .map(|(lol, _)| lol.get_cycles())
+            .map(|(emulator, _)| (emulator.get_cycles(), *emulator.get_joypad()))
             .collect();
 
-        if let Some((emulator, mbc)) = core::mem::take(&mut self.snapshots)
+        if let Some((emulator, mbc)) = snapshots
             .into_iter()
             .rev()
             .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
@@ -249,7 +251,6 @@ impl WebEmulatorInner {
                 &mut self.snapshots,
             );
         } else {
-            console_log(&format!("Rollback to {before_cycle} failed with {lol:?}"));
             *synchro_cycles = SynchroCycles {
                 master: msg.first_message.1.to_native(),
                 slave: self.emulator.get_cycles(),

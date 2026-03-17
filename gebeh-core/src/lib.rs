@@ -48,6 +48,9 @@ impl Emulator {
     pub fn get_joypad_mut(&mut self) -> &mut JoypadInput {
         &mut self.joypad.input
     }
+    pub fn get_joypad(&self) -> &JoypadInput {
+        &self.joypad.input
+    }
     pub fn get_apu(&self) -> &Apu {
         &self.apu
     }
