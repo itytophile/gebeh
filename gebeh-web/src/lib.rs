@@ -112,12 +112,13 @@ impl WebEmulatorInner {
             }
 
             for _ in 0..cycles {
-                if let Some(snapshot) = execute_and_take_snapshot(
+                let mut executable = NetworkExecutable {
                     serial_mode,
-                    &mut self.serial_state,
-                    &mut self.emulator,
-                    self.mbc.as_mut(),
-                ) {
+                    serial_state: &mut self.serial_state,
+                    emulator: &mut self.emulator,
+                    mbc: self.mbc.as_mut(),
+                };
+                if let Some(snapshot) = executable.execute_and_take_snapshot() {
                     add_snapshot(snapshot, &mut self.snapshots);
                 }
 
@@ -208,10 +209,12 @@ impl WebEmulatorInner {
             console_log("first batch");
             let slave_cycles = self.emulator.get_cycles();
             if let Some(value) = advance_while_consuming_messages(
-                serial_mode,
-                &mut self.serial_state,
-                &mut self.emulator,
-                self.mbc.as_mut(),
+                NetworkExecutable {
+                    serial_mode,
+                    serial_state: &mut self.serial_state,
+                    emulator: &mut self.emulator,
+                    mbc: self.mbc.as_mut(),
+                },
                 msg,
                 self.synchro_cycles.insert(SynchroCycles {
                     master: msg.first_message.1.to_native(),
@@ -267,10 +270,12 @@ impl WebEmulatorInner {
         ));
 
         if let Some(value) = advance_while_consuming_messages(
-            serial_mode,
-            &mut self.serial_state,
-            &mut self.emulator,
-            self.mbc.as_mut(),
+            NetworkExecutable {
+                serial_mode,
+                serial_state: &mut self.serial_state,
+                emulator: &mut self.emulator,
+                mbc: self.mbc.as_mut(),
+            },
             msg,
             synchro_cycles,
             &mut self.snapshots,
@@ -288,12 +293,13 @@ impl WebEmulatorInner {
             // catching up
             (0..(current_cycle - self.emulator.get_cycles()))
                 .flat_map(|_| {
-                    execute_and_take_snapshot(
+                    NetworkExecutable {
                         serial_mode,
-                        &mut self.serial_state,
-                        &mut self.emulator,
-                        self.mbc.as_mut(),
-                    )
+                        serial_state: &mut self.serial_state,
+                        emulator: &mut self.emulator,
+                        mbc: self.mbc.as_mut(),
+                    }
+                    .execute_and_take_snapshot()
                 })
                 .for_each(|snapshot| add_snapshot(snapshot, &mut self.snapshots));
         }
@@ -306,49 +312,55 @@ fn console_log(text: &str) {
     console::log_1(&JsValue::from_str(text));
 }
 
+struct NetworkExecutable<'a> {
+    serial_mode: &'a mut SerialMode,
+    serial_state: &'a mut SerialState,
+    emulator: &'a mut Emulator,
+    mbc: &'a mut dyn CloneMbc<'static>,
+}
+
 fn advance_while_consuming_messages(
-    serial_mode: &mut SerialMode,
-    serial_state: &mut SerialState,
-    emulator: &mut Emulator,
-    mbc: &mut dyn CloneMbc<'static>,
+    mut executable: NetworkExecutable,
     msg: &ArchivedMessageFromMaster,
     synchro_cycles: &mut SynchroCycles,
     snapshots: &mut Snapshots,
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
         (0..byte_at_cycle.1.to_native() - synchro_cycles.master)
-            .flat_map(|_| execute_and_take_snapshot(serial_mode, serial_state, emulator, mbc))
+            .flat_map(|_| executable.execute_and_take_snapshot())
             .for_each(|snapshot| add_snapshot(snapshot, snapshots));
 
-        let emulator_clone = emulator.clone();
-        let response = serial_state.set_msg_from_master2(byte_at_cycle.0, emulator);
+        let emulator_clone = executable.emulator.clone();
+        let response = executable
+            .serial_state
+            .set_msg_from_master2(byte_at_cycle.0, executable.emulator);
         if response != msg.prediction {
-            add_snapshot((emulator_clone.clone(), mbc.clone_boxed()), snapshots);
-            *emulator = emulator_clone;
+            add_snapshot(
+                (emulator_clone.clone(), executable.mbc.clone_boxed()),
+                snapshots,
+            );
+            *executable.emulator = emulator_clone;
             return Some(MessageFromSlave {
                 correction: response,
                 clock: byte_at_cycle.1.to_native(),
             });
         }
         synchro_cycles.master = byte_at_cycle.1.to_native();
-        synchro_cycles.slave = emulator.get_cycles();
+        synchro_cycles.slave = executable.emulator.get_cycles();
     }
     None
 }
 
-#[must_use]
-fn execute_and_take_snapshot(
-    serial_mode: &mut SerialMode,
-    serial_state: &mut SerialState,
-    emulator: &mut Emulator,
-    mbc: &mut dyn CloneMbc<'static>,
-) -> Option<Snapshot> {
-    emulator.execute(mbc);
-    let cycles = emulator.get_cycles();
-    serial_mode.execute(serial_state, emulator, mbc);
-    cycles
-        .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-        .then(|| (emulator.clone(), mbc.clone_boxed()))
+impl NetworkExecutable<'_> {
+    fn execute_and_take_snapshot(&mut self) -> Option<Snapshot> {
+        self.emulator.execute(self.mbc);
+        let cycles = self.emulator.get_cycles();
+        self.serial_mode
+            .execute(self.serial_state, self.emulator, self.mbc);
+        cycles
+            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+            .then(|| (self.emulator.clone(), self.mbc.clone_boxed()))
+    }
 }
 
 type Snapshot = (Emulator, EasyMbc);
