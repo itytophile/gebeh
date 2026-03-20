@@ -178,7 +178,7 @@ impl WebEmulatorInner {
                 let (mut emulator, mbc) =
                     core::mem::take(&mut synchro_serial.previous_batch_snapshots)
                         .into_iter()
-                        .find(|(emulator, _)| emulator.get_cycles() == msg.clock)
+                        .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
                         .expect("desync too big");
                 *emulator.get_joypad_mut() = *self.emulator.get_joypad_mut();
                 self.emulator = emulator;
@@ -296,15 +296,18 @@ impl WebEmulatorInner {
         msg: &ArchivedMessageFromMaster,
         serial_mode: &mut SerialMode,
     ) -> Option<MessageFromSlave> {
-        for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
-            for _ in 0..byte_at_cycle.1.to_native() - self.synchro_cycles.as_ref().unwrap().master {
+        for (byte, master_cycle) in std::iter::once(&msg.first_message)
+            .chain(msg.messages.iter())
+            .map(|a| (a.0, a.1.to_native()))
+        {
+            for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
                 self.execute_and_take_snapshot(serial_mode)
             }
 
             let emulator_clone = self.emulator.clone();
             let response = self
                 .serial_state
-                .set_msg_from_master2(byte_at_cycle.0, &mut self.emulator);
+                .set_msg_from_master2(byte, &mut self.emulator);
             if response != msg.prediction {
                 add_snapshot(
                     (emulator_clone.clone(), self.mbc.clone_boxed()),
@@ -313,11 +316,11 @@ impl WebEmulatorInner {
                 self.emulator = emulator_clone;
                 return Some(MessageFromSlave {
                     correction: response,
-                    clock: byte_at_cycle.1.to_native(),
+                    cycle: master_cycle,
                 });
             }
             self.synchro_cycles = Some(SynchroCycles {
-                master: byte_at_cycle.1.to_native(),
+                master: master_cycle,
                 slave: self.emulator.get_cycles(),
             });
         }
@@ -429,7 +432,7 @@ impl WebEmulator {
             Some(
                 SerialMessage::FromSlave(MessageFromSlave {
                     correction: 0xff,
-                    clock: msg.first_message.1.to_native(),
+                    cycle: msg.first_message.1.to_native(),
                 })
                 .serialize(),
             )
