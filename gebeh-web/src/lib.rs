@@ -114,15 +114,19 @@ impl WebEmulatorInner {
                 self.execute_and_take_snapshot(serial_mode);
                 self.handle_graphics(on_new_frame);
             }
-            let sample = self.sample_index as f32 / sample_rate as f32;
-            let mut sampler = self
-                .mixer
-                .mix(self.emulator.get_apu().get_sampler(), sample);
-            *left = sampler.sample_left();
-            *right = sampler.sample_right();
-            // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
-            self.sample_index = self.sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
+
+            (*left, *right) = self.handle_sound(sample_rate);
         }
+    }
+
+    fn handle_sound(&mut self, sample_rate: u32) -> (f32, f32) {
+        let sample = self.sample_index as f32 / sample_rate as f32;
+        let mut sampler = self
+            .mixer
+            .mix(self.emulator.get_apu().get_sampler(), sample);
+        // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
+        self.sample_index = self.sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
+        (sampler.sample_left(), sampler.sample_right())
     }
 
     fn handle_graphics(&mut self, on_new_frame: &js_sys::Function) {
