@@ -204,10 +204,7 @@ impl WebEmulatorInner {
             self.mbc.as_mut(),
         );
         if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
-            add_snapshot(
-                (self.emulator.clone(), self.mbc.clone_boxed()),
-                &mut self.snapshots,
-            )
+            self.add_snapshot()
         }
     }
 
@@ -233,10 +230,7 @@ impl WebEmulatorInner {
                 return Some(value);
             }
 
-            add_snapshot(
-                (self.emulator.clone(), self.mbc.clone_boxed()),
-                &mut self.snapshots,
-            );
+            self.add_snapshot();
 
             return None;
         };
@@ -253,10 +247,7 @@ impl WebEmulatorInner {
         {
             self.emulator = emulator;
             self.mbc = mbc;
-            add_snapshot(
-                (self.emulator.clone(), self.mbc.clone_boxed()),
-                &mut self.snapshots,
-            );
+            self.add_snapshot();
         } else {
             *synchro_cycles = SynchroCycles {
                 master: msg.first_message.1.to_native(),
@@ -276,10 +267,7 @@ impl WebEmulatorInner {
             return Some(value);
         }
 
-        add_snapshot(
-            (self.emulator.clone(), self.mbc.clone_boxed()),
-            &mut self.snapshots,
-        );
+        self.add_snapshot();
 
         if current_cycle > self.emulator.get_cycles() {
             // catching up
@@ -309,11 +297,8 @@ impl WebEmulatorInner {
                 .serial_state
                 .set_msg_from_master2(byte, &mut self.emulator);
             if response != msg.prediction {
-                add_snapshot(
-                    (emulator_clone.clone(), self.mbc.clone_boxed()),
-                    &mut self.snapshots,
-                );
                 self.emulator = emulator_clone;
+                self.add_snapshot();
                 return Some(MessageFromSlave {
                     correction: response,
                     cycle: master_cycle,
@@ -326,6 +311,16 @@ impl WebEmulatorInner {
         }
         None
     }
+
+    fn add_snapshot(&mut self) {
+        if let Err(arraydeque::CapacityError { element }) = self
+            .snapshots
+            .push_back((self.emulator.clone(), self.mbc.clone_boxed()))
+        {
+            self.snapshots.pop_front();
+            self.snapshots.push_back(element).unwrap();
+        }
+    }
 }
 
 fn console_log(text: &str) {
@@ -333,13 +328,6 @@ fn console_log(text: &str) {
 }
 
 type Snapshot = (Emulator, EasyMbc);
-
-fn add_snapshot(snapshot: Snapshot, snapshots: &mut ArrayDeque<Snapshot, 20>) {
-    if let Err(arraydeque::CapacityError { element }) = snapshots.push_back(snapshot) {
-        snapshots.pop_front();
-        snapshots.push_back(element).unwrap();
-    }
-}
 
 #[wasm_bindgen]
 impl WebEmulator {
