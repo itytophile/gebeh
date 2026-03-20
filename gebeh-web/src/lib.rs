@@ -279,6 +279,29 @@ impl WebEmulatorInner {
         None
     }
 
+    fn set_msg_from_master(&mut self, byte: u8) -> u8 {
+        let SerialState::Slave {
+            state: ProutSlave { .. },
+        } = self.serial_state
+        else {
+            return 0xff;
+        };
+
+        if self
+            .emulator
+            .state
+            .sc
+            .contains(SerialControl::TRANSFER_ENABLE)
+        {
+            let sb = self.emulator.state.sb;
+            self.serial_state
+                .accept_byte(byte, &mut self.emulator.state);
+            sb
+        } else {
+            0xff
+        }
+    }
+
     fn advance_while_consuming_messages(
         &mut self,
         msg: &ArchivedMessageFromMaster,
@@ -293,9 +316,7 @@ impl WebEmulatorInner {
             }
 
             let emulator_clone = self.emulator.clone();
-            let response = self
-                .serial_state
-                .set_msg_from_master2(byte, &mut self.emulator);
+            let response = self.set_msg_from_master(byte);
             if response != msg.prediction {
                 self.emulator = emulator_clone;
                 self.add_snapshot();
@@ -532,23 +553,6 @@ impl SerialState {
     fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) {
         if std::matches!(self, Self::Master(_)) {
             self.accept_byte(byte, state);
-        }
-    }
-
-    fn set_msg_from_master2(&mut self, byte: u8, emulator: &mut Emulator) -> u8 {
-        let Self::Slave {
-            state: ProutSlave { .. },
-        } = self
-        else {
-            return 0xff;
-        };
-
-        if emulator.state.sc.contains(SerialControl::TRANSFER_ENABLE) {
-            let sb = emulator.state.sb;
-            self.accept_byte(byte, &mut emulator.state);
-            sb
-        } else {
-            0xff
         }
     }
 }
