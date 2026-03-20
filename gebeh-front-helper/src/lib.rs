@@ -14,11 +14,7 @@ impl<'a, T: Mbc + Clone + 'a> CloneMbc<'a> for T {
     }
 }
 
-pub fn get_mbc<
-    'a,
-    T: Deref<Target = [u8]> + Clone + 'a,
-    U: Rtc + Default + Clone + 'a,
->(
+pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clone + 'a>(
     rom: T,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
