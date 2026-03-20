@@ -200,7 +200,7 @@ fn configure_ws<T>(ws: &mut WebSocket<T>) {
     // https://github.com/denoland/fastwebsockets/issues/87
     ws.set_auto_close(false);
     ws.set_auto_pong(false);
-    ws.set_max_message_size(64);
+    ws.set_max_message_size(FRAME_MAX_SIZE);
 }
 
 const TIMEOUT_GUEST_WAIT: Duration = Duration::from_mins(1);
@@ -458,15 +458,17 @@ pub enum BoundedOpcode {
     Pong = 0xA,
 }
 
+const FRAME_MAX_SIZE: usize = 4096;
+
 pub struct BoundedFrame {
     pub fin: bool,
     pub opcode: BoundedOpcode,
-    pub payload: ArrayVec<u8, 4>,
+    pub payload: ArrayVec<u8, FRAME_MAX_SIZE>,
 }
 
 pub struct BoundedFragment {
     opcode: BoundedOpcode,
-    payload: ArrayVec<u8, 4>,
+    payload: ArrayVec<u8, FRAME_MAX_SIZE>,
 }
 
 #[derive(Default)]
