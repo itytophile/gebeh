@@ -398,6 +398,7 @@ fn add_snapshot(snapshot: Snapshot, snapshots: &mut ArrayDeque<Snapshot, 20>) {
 impl WebEmulator {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         Default::default()
     }
 
