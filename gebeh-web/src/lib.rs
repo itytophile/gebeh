@@ -620,8 +620,8 @@ impl SerialState {
 
 // 1 second
 const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
-// 200 ms
-const BATCH_PERIOD: u64 = 4194304 / 4 / 5;
+// 50 ms
+const BATCH_PERIOD: u64 = 4194304 / 4 / 20;
 const MAX_SNAPSHOT: usize = 20;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 
