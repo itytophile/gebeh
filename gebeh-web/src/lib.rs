@@ -122,19 +122,7 @@ impl WebEmulatorInner {
                     add_snapshot(snapshot, &mut self.snapshots);
                 }
 
-                if let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() {
-                    self.current_frame.as_chunks_mut::<40>().0
-                        [usize::from(self.emulator.get_ppu().get_ly())] = *scanline.raw();
-
-                    if self.emulator.get_ppu().get_ly() == HEIGHT - 1
-                        && let Err(err) = on_new_frame.call1(
-                            &JsValue::null(),
-                            &js_sys::Uint8Array::new_from_slice(&self.current_frame),
-                        )
-                    {
-                        console::error_1(&err);
-                    }
-                }
+                self.handle_graphics(on_new_frame);
             }
             let sample = self.sample_index as f32 / sample_rate as f32;
             let mut sampler = self
@@ -144,6 +132,24 @@ impl WebEmulatorInner {
             *right = sampler.sample_right();
             // 2 minutes without popping (sample_index must not be huge to prevent precision errors)
             self.sample_index = self.sample_index.wrapping_add(1) % (sample_rate * 2 * 60);
+        }
+    }
+
+    fn handle_graphics(&mut self, on_new_frame: &js_sys::Function) {
+        let Some(scanline) = self.emulator.get_ppu().get_scanline_if_ready() else {
+            return;
+        };
+
+        self.current_frame.as_chunks_mut::<40>().0[usize::from(self.emulator.get_ppu().get_ly())] =
+            *scanline.raw();
+
+        if self.emulator.get_ppu().get_ly() == HEIGHT - 1
+            && let Err(err) = on_new_frame.call1(
+                &JsValue::null(),
+                &js_sys::Uint8Array::new_from_slice(&self.current_frame),
+            )
+        {
+            console::error_1(&err);
         }
     }
 
