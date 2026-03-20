@@ -315,6 +315,11 @@ impl WebEmulatorInner {
                 self.execute_and_take_snapshot(serial_mode)
             }
 
+            self.synchro_cycles = Some(SynchroCycles {
+                master: master_cycle,
+                slave: self.emulator.get_cycles(),
+            });
+
             let emulator_clone = self.emulator.clone();
             let response = self.set_msg_from_master(byte);
             if response != msg.prediction {
@@ -325,10 +330,6 @@ impl WebEmulatorInner {
                     cycle: master_cycle,
                 });
             }
-            self.synchro_cycles = Some(SynchroCycles {
-                master: master_cycle,
-                slave: self.emulator.get_cycles(),
-            });
         }
         None
     }
