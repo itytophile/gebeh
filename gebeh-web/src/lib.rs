@@ -4,7 +4,6 @@ use arraydeque::ArrayDeque;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     apu::Mixer,
-    joypad::JoypadInput,
     state::{Interruptions, SerialControl, State},
 };
 use gebeh_front_helper::{CloneMbc, EasyMbc, get_mbc, get_noise, get_title_from_rom};
@@ -227,7 +226,6 @@ impl WebEmulatorInner {
                     slave: slave_cycles,
                 }),
                 &mut self.snapshots,
-                &mut Default::default(),
             ) {
                 self.session = !self.session;
                 return Some(value);
@@ -246,21 +244,11 @@ impl WebEmulatorInner {
 
         let snapshots = core::mem::take(&mut self.snapshots);
 
-        let mut previous_inputs: ArrayDeque<_, 20> = snapshots
-            .iter()
-            .map(|(emulator, _)| (emulator.get_cycles(), *emulator.get_joypad()))
-            .collect();
-
         if let Some((emulator, mbc)) = snapshots
             .into_iter()
             .rev()
             .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
         {
-            while let Some((cycle, _)) = previous_inputs.front()
-                && *cycle <= emulator.get_cycles()
-            {
-                previous_inputs.pop_front();
-            }
             self.emulator = emulator;
             self.mbc = mbc;
             add_snapshot(
@@ -291,7 +279,6 @@ impl WebEmulatorInner {
             msg,
             synchro_cycles,
             &mut self.snapshots,
-            &mut previous_inputs,
         ) {
             self.session = !self.session;
             return Some(value);
@@ -337,25 +324,10 @@ fn advance_while_consuming_messages(
     msg: &ArchivedMessageFromMaster,
     synchro_cycles: &mut SynchroCycles,
     snapshots: &mut Snapshots,
-    inputs_to_restore: &mut ArrayDeque<(u64, JoypadInput), 20>,
 ) -> Option<MessageFromSlave> {
     for byte_at_cycle in std::iter::once(&msg.first_message).chain(msg.messages.iter()) {
         (0..byte_at_cycle.1.to_native() - synchro_cycles.master)
-            .flat_map(|_| {
-                let mut maybe_snapshot = executable.execute_and_take_snapshot();
-
-                if let Some((cycle, _)) = inputs_to_restore.front()
-                    && executable.emulator.get_cycles() == *cycle
-                {
-                    let (_, input_to_restore) = inputs_to_restore.pop_front().unwrap();
-                    if let Some((emulator, _)) = &mut maybe_snapshot {
-                        *emulator.get_joypad_mut() = input_to_restore;
-                    }
-                    *executable.emulator.get_joypad_mut() = input_to_restore;
-                }
-
-                maybe_snapshot
-            })
+            .flat_map(|_| executable.execute_and_take_snapshot())
             .for_each(|snapshot| add_snapshot(snapshot, snapshots));
 
         let emulator_clone = executable.emulator.clone();
