@@ -1,7 +1,6 @@
-use std::{collections::VecDeque, rc::Rc};
+use std::rc::Rc;
 
 use arraydeque::ArrayDeque;
-use arrayvec::ArrayVec;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     apu::Mixer,
@@ -63,6 +62,12 @@ impl WebEmulatorInner {
         if self.emulator.get_joypad() == &joypad {
             return;
         }
+
+        console_log(&format!(
+            "before {:?} after {:?}",
+            self.emulator.get_joypad(),
+            joypad
+        ));
 
         *self.emulator.get_joypad_mut() = joypad;
 
@@ -263,13 +268,6 @@ impl WebEmulatorInner {
         let restore_cycle =
             synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
 
-        let inputs_to_restore: ArrayVec<_, MAX_SNAPSHOT> = self
-            .snapshots
-            .iter()
-            .filter(|(emulator, _)| emulator.get_cycles() > restore_cycle)
-            .map(|(emulator, _)| (emulator.get_cycles(), *emulator.get_joypad()))
-            .collect();
-
         let snapshots = core::mem::take(&mut self.snapshots);
 
         if let Some((emulator, mbc)) = snapshots
@@ -290,10 +288,16 @@ impl WebEmulatorInner {
             slave: self.emulator.get_cycles(),
         });
 
-        let mut inputs_to_restore = inputs_to_restore.as_slice();
+        let inputs_history: Vec<_> = self
+            .inputs_history
+            .iter()
+            .filter(|(cycle, _)| *cycle > self.emulator.get_cycles())
+            .copied()
+            .collect();
+        let mut inputs_history = inputs_history.as_slice();
 
         let msg_from_slave =
-            self.advance_while_consuming_messages(msg, serial_mode, &mut inputs_to_restore);
+            self.advance_while_consuming_messages(msg, serial_mode, &mut inputs_history);
 
         self.add_snapshot();
 
@@ -301,11 +305,11 @@ impl WebEmulatorInner {
             // catching up
             for _ in 0..(current_cycle - self.emulator.get_cycles()) {
                 self.execute_and_take_snapshot(serial_mode);
-                if let Some((input_cycle, input)) = inputs_to_restore.first().copied()
-                    && self.emulator.get_cycles() == input_cycle
+                if let Some((cycle, input)) = inputs_history.first()
+                    && *cycle == self.emulator.get_cycles()
                 {
-                    *self.emulator.get_joypad_mut() = input;
-                    inputs_to_restore = &inputs_to_restore[1..];
+                    *self.emulator.get_joypad_mut() = *input;
+                    inputs_history = &inputs_history[1..];
                 }
             }
         }
@@ -340,8 +344,7 @@ impl WebEmulatorInner {
         &mut self,
         msg: &ArchivedMessageFromMaster,
         serial_mode: &mut SerialMode,
-        // there is maybe an off by one error with input restoration but that's not really important I think
-        inputs_to_restore: &mut &[(u64, JoypadInput)],
+        inputs_history: &mut &[(u64, JoypadInput)],
     ) -> Option<MessageFromSlave> {
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
             .chain(msg.messages.iter())
@@ -349,11 +352,11 @@ impl WebEmulatorInner {
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
                 self.execute_and_take_snapshot(serial_mode);
-                if let Some((input_cycle, input)) = inputs_to_restore.first().copied()
-                    && self.emulator.get_cycles() == input_cycle
+                if let Some((cycle, input)) = inputs_history.first()
+                    && *cycle == self.emulator.get_cycles()
                 {
-                    *self.emulator.get_joypad_mut() = input;
-                    *inputs_to_restore = &inputs_to_restore[1..];
+                    *self.emulator.get_joypad_mut() = *input;
+                    *inputs_history = &inputs_history[1..];
                 }
             }
 
@@ -635,7 +638,7 @@ const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
 const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
 const MAX_SNAPSHOT: usize = 20;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
-const INPUTS_HISTORY_SIZE: usize = 20;
+const INPUTS_HISTORY_SIZE: usize = 50;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,
