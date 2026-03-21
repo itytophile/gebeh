@@ -225,15 +225,15 @@ impl WebEmulatorInner {
                 master: msg.first_message.1.to_native(),
                 slave: slave_cycles,
             });
-            if let Some(value) = self.advance_while_consuming_messages(msg, serial_mode) {
-                self.session = !self.session;
-                return Some(value);
-            }
+
+            let msg_from_slave = self.advance_while_consuming_messages(msg, serial_mode);
 
             self.add_snapshot();
 
-            return None;
+            return msg_from_slave.inspect(|_| self.session = !self.session);
         };
+
+        let current_cycle = self.emulator.get_cycles();
 
         let before_cycle =
             synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
@@ -249,34 +249,27 @@ impl WebEmulatorInner {
             self.mbc = mbc;
             self.add_snapshot();
         } else {
-            *synchro_cycles = SynchroCycles {
-                master: msg.first_message.1.to_native(),
-                slave: self.emulator.get_cycles(),
-            };
+            panic!("big delay");
         };
 
-        let current_cycle = self.emulator.get_cycles();
+        self.synchro_cycles = Some(SynchroCycles {
+            master: self.synchro_cycles.as_ref().unwrap().master + self.emulator.get_cycles()
+                - self.synchro_cycles.as_ref().unwrap().slave,
+            slave: self.emulator.get_cycles(),
+        });
 
-        console_log(&format!(
-            "correction to {current_cycle} with prediction 0x{:02x}",
-            msg.prediction
-        ));
-
-        if let Some(value) = self.advance_while_consuming_messages(msg, serial_mode) {
-            self.session = !self.session;
-            return Some(value);
-        }
+        let msg_from_slave = self.advance_while_consuming_messages(msg, serial_mode);
 
         self.add_snapshot();
 
-        if current_cycle > self.emulator.get_cycles() {
+        if msg_from_slave.is_none() && current_cycle > self.emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - self.emulator.get_cycles()) {
                 self.execute_and_take_snapshot(serial_mode)
             }
         }
 
-        None
+        msg_from_slave.inspect(|_| self.session = !self.session)
     }
 
     fn set_msg_from_master(&mut self, byte: u8) -> u8 {
@@ -324,7 +317,6 @@ impl WebEmulatorInner {
             let response = self.set_msg_from_master(byte);
             if response != msg.prediction {
                 self.emulator = emulator_clone;
-                self.add_snapshot();
                 return Some(MessageFromSlave {
                     correction: response,
                     cycle: master_cycle,
@@ -465,6 +457,12 @@ impl WebEmulator {
         } else {
             self.serial_mode = SerialMode::Disconnected;
         }
+    }
+
+    pub fn get_cycles(&self) -> u64 {
+        self.inner
+            .as_ref()
+            .map_or(0, |inner| inner.emulator.get_cycles())
     }
 }
 
