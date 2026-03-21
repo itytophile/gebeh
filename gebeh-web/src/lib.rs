@@ -1,9 +1,11 @@
 use std::rc::Rc;
 
 use arraydeque::ArrayDeque;
+use arrayvec::ArrayVec;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
     apu::Mixer,
+    joypad::JoypadInput,
     state::{Interruptions, SerialControl, State},
 };
 use gebeh_front_helper::{CloneMbc, EasyMbc, get_mbc, get_noise, get_title_from_rom};
@@ -226,7 +228,8 @@ impl WebEmulatorInner {
                 slave: slave_cycles,
             });
 
-            let msg_from_slave = self.advance_while_consuming_messages(msg, serial_mode);
+            let msg_from_slave =
+                self.advance_while_consuming_messages(msg, serial_mode, &mut [].as_slice());
 
             self.add_snapshot();
 
@@ -235,15 +238,22 @@ impl WebEmulatorInner {
 
         let current_cycle = self.emulator.get_cycles();
 
-        let before_cycle =
+        let restore_cycle =
             synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
+
+        let inputs_to_restore: ArrayVec<_, MAX_SNAPSHOT> = self
+            .snapshots
+            .iter()
+            .filter(|(emulator, _)| emulator.get_cycles() > restore_cycle)
+            .map(|(emulator, _)| (emulator.get_cycles(), *emulator.get_joypad()))
+            .collect();
 
         let snapshots = core::mem::take(&mut self.snapshots);
 
         if let Some((emulator, mbc)) = snapshots
             .into_iter()
             .rev()
-            .find(|(emulator, _)| emulator.get_cycles() <= before_cycle)
+            .find(|(emulator, _)| emulator.get_cycles() <= restore_cycle)
         {
             self.emulator = emulator;
             self.mbc = mbc;
@@ -258,14 +268,23 @@ impl WebEmulatorInner {
             slave: self.emulator.get_cycles(),
         });
 
-        let msg_from_slave = self.advance_while_consuming_messages(msg, serial_mode);
+        let mut inputs_to_restore = inputs_to_restore.as_slice();
+
+        let msg_from_slave =
+            self.advance_while_consuming_messages(msg, serial_mode, &mut inputs_to_restore);
 
         self.add_snapshot();
 
         if msg_from_slave.is_none() && current_cycle > self.emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - self.emulator.get_cycles()) {
-                self.execute_and_take_snapshot(serial_mode)
+                self.execute_and_take_snapshot(serial_mode);
+                if let Some((input_cycle, input)) = inputs_to_restore.first().copied()
+                    && self.emulator.get_cycles() == input_cycle
+                {
+                    *self.emulator.get_joypad_mut() = input;
+                    inputs_to_restore = &inputs_to_restore[1..];
+                }
             }
         }
 
@@ -299,13 +318,21 @@ impl WebEmulatorInner {
         &mut self,
         msg: &ArchivedMessageFromMaster,
         serial_mode: &mut SerialMode,
+        // there is maybe an off by one error with input restoration but that's not really important I think
+        inputs_to_restore: &mut &[(u64, JoypadInput)],
     ) -> Option<MessageFromSlave> {
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
             .chain(msg.messages.iter())
             .map(|a| (a.0, a.1.to_native()))
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                self.execute_and_take_snapshot(serial_mode)
+                self.execute_and_take_snapshot(serial_mode);
+                if let Some((input_cycle, input)) = inputs_to_restore.first().copied()
+                    && self.emulator.get_cycles() == input_cycle
+                {
+                    *self.emulator.get_joypad_mut() = input;
+                    *inputs_to_restore = &inputs_to_restore[1..];
+                }
             }
 
             self.synchro_cycles = Some(SynchroCycles {

@@ -35,7 +35,7 @@ pub struct Emulator {
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
-    cycles: u64, // debug purposes
+    cycles: u64,
 }
 
 impl Emulator {
