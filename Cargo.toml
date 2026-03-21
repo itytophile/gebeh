@@ -15,17 +15,9 @@ gebeh-front-helper = { path = "./gebeh-front-helper" }
 arrayvec = "0.7.6"
 png = "0.18.0"
 
-[profile.server]
-inherits = "release"
-lto = true
-opt-level = 3
-
-[profile.web]
-inherits = "release"
-opt-level = "z"
-
 [profile.release]
 overflow-checks = true
+lto = true
 
 [profile.test]
 opt-level = 3
