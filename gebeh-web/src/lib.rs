@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::VecDeque, rc::Rc};
 
 use arraydeque::ArrayDeque;
 use arrayvec::ArrayVec;
@@ -41,6 +41,9 @@ struct WebEmulatorInner {
     synchro_cycles: Option<SynchroCycles>,
     snapshots: Box<Snapshots>,
     session: bool,
+    // it's not the actual input value at a given cycle, but WHEN the input changes
+    // to avoid saving inputs every cycle
+    inputs_history: Box<ArrayDeque<(u64, JoypadInput), INPUTS_HISTORY_SIZE>>,
 }
 
 struct SynchroCycles {
@@ -56,6 +59,24 @@ pub struct WebEmulator {
 }
 
 impl WebEmulatorInner {
+    fn set_joypad(&mut self, joypad: JoypadInput) {
+        if self.emulator.get_joypad() == &joypad {
+            return;
+        }
+
+        *self.emulator.get_joypad_mut() = joypad;
+
+        let Err(arraydeque::CapacityError { element }) = self
+            .inputs_history
+            .push_back((self.emulator.get_cycles(), joypad))
+        else {
+            return;
+        };
+
+        self.inputs_history.pop_front();
+        self.inputs_history.push_back(element).unwrap();
+    }
+
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
         // rc to easily clone the mbc for the rollback netcode
@@ -88,6 +109,7 @@ impl WebEmulatorInner {
             synchro_cycles: None,
             snapshots: Default::default(),
             session: false,
+            inputs_history: Default::default(),
         })
     }
 
@@ -407,42 +429,66 @@ impl WebEmulator {
 
     pub fn set_a(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().a = value;
+            inner.set_joypad(JoypadInput {
+                a: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_b(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().b = value;
+            inner.set_joypad(JoypadInput {
+                b: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_start(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().start = value;
+            inner.set_joypad(JoypadInput {
+                start: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_select(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().select = value;
+            inner.set_joypad(JoypadInput {
+                select: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_left(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().left = value;
+            inner.set_joypad(JoypadInput {
+                left: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_right(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().right = value;
+            inner.set_joypad(JoypadInput {
+                right: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_down(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().down = value;
+            inner.set_joypad(JoypadInput {
+                down: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_up(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.emulator.get_joypad_mut().up = value;
+            inner.set_joypad(JoypadInput {
+                up: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
 
@@ -589,6 +635,7 @@ const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
 const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
 const MAX_SNAPSHOT: usize = 20;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
+const INPUTS_HISTORY_SIZE: usize = 20;
 
 struct SynchroSerial {
     on_serial: js_sys::Function,
