@@ -63,12 +63,6 @@ impl WebEmulatorInner {
             return;
         }
 
-        console_log(&format!(
-            "before {:?} after {:?}",
-            self.emulator.get_joypad(),
-            joypad
-        ));
-
         *self.emulator.get_joypad_mut() = joypad;
 
         let Err(arraydeque::CapacityError { element }) = self
@@ -686,8 +680,6 @@ impl SynchroSerial {
                 prediction: self.current_message.prediction,
                 session: self.current_message.session,
             };
-
-            console_log(&format!("Sending batch {msg_to_send:?}"));
 
             if let Err(err) = self.on_serial.call1(
                 &JsValue::null(),

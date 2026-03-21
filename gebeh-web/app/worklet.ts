@@ -165,7 +165,7 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
         );
       }
     }
-    
+
     this.serialMessages = [];
 
     this.emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
