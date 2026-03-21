@@ -2,6 +2,7 @@
   "name": "gebeh-web",
   "version": "0.1.0",
   "author": "You <you@example.com>",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "wasm": "wasm-pack build --release . --target web",
