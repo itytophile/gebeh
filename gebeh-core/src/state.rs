@@ -135,9 +135,6 @@ pub struct State {
     pub interrupt_flag: Interruptions,
     pub sound_panning: u8,
     pub audio_master_control: u8,
-
-    pub sb: u8,
-    pub sc: SerialControl,
     pub wy: u8,
     pub oam: [u8; (NOT_USABLE - OAM) as usize],
 }
@@ -155,8 +152,6 @@ impl Default for State {
             sound_panning: 0,
             audio_master_control: 0,
 
-            sb: 0,
-            sc: SerialControl::empty(),
             wy: 0,
             oam: [0; (NOT_USABLE - OAM) as usize],
         }
