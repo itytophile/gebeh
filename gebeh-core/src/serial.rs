@@ -79,7 +79,7 @@ impl Serial {
 
     pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> Option<u8> {
         if let SerialControlState::Master {
-            cycles_since_enabled: 0,
+            cycles_since_enabled: BYTE_READY_CYCLE,
         } = self.sc
         {
             let response = self.sb;
@@ -99,3 +99,8 @@ impl Serial {
         0xff
     }
 }
+
+// https://gbdev.io/pandocs/Specifications.html https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html
+// The system clock (4194304 / 4) divided by byte transfer frequency (8192 / 8)
+// 4194304 / 4 / 8192 * 8
+const BYTE_READY_CYCLE: u16 = 1024;
