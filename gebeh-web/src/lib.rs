@@ -544,13 +544,10 @@ struct SynchroSerial {
 
 impl SynchroSerial {
     fn execute(&mut self, emulator: &mut Emulator, mbc: &dyn CloneMbc<'static>) {
-        // doesn't happen at the same time as get_serial_byte
-        if emulator.serial.needs_message() {
-            emulator
-                .serial
-                .set_msg_from_slave(self.current_message.prediction, &mut emulator.state);
-        }
-        if let Some(byte) = emulator.serial.get_serial_byte() {
+        if let Some(byte) = emulator
+            .serial
+            .set_msg_from_slave(self.current_message.prediction, &mut emulator.state)
+        {
             self.current_message
                 .messages
                 .push((byte, emulator.clone(), mbc.clone_boxed()));

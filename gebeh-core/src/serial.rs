@@ -62,28 +62,6 @@ impl Serial {
         }
     }
 
-    pub fn needs_message(&self) -> bool {
-        if let SerialControlState::Master {
-            cycles_since_enabled,
-        } = self.sc
-            && cycles_since_enabled > 0
-        {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn get_serial_byte(&self) -> Option<u8> {
-        if let SerialControlState::Master {
-            cycles_since_enabled: 0,
-        } = self.sc
-        {
-            return Some(self.sb);
-        }
-        None
-    }
-
     pub fn is_master(&self) -> bool {
         matches!(
             self.sc,
@@ -99,10 +77,16 @@ impl Serial {
         self.sb = byte;
     }
 
-    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) {
-        if core::matches!(self.sc, SerialControlState::Master { .. }) {
+    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> Option<u8> {
+        if let SerialControlState::Master {
+            cycles_since_enabled: 0,
+        } = self.sc
+        {
+            let response = self.sb;
             self.accept_byte(byte, state);
+            return Some(response);
         }
+        None
     }
 
     pub fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
