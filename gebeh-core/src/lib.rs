@@ -8,6 +8,7 @@ use crate::{
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
     ppu::Ppu,
+    serial::Serial,
     state::State,
     timer::Timer,
 };
@@ -18,6 +19,7 @@ pub mod dma;
 pub mod joypad;
 pub mod mbc;
 pub mod ppu;
+pub mod serial;
 pub mod state;
 pub mod timer;
 
@@ -35,6 +37,7 @@ pub struct Emulator {
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
+    pub serial: Serial,
     cycles: u64,
 }
 
@@ -64,6 +67,7 @@ impl Emulator {
 
 impl Emulator {
     pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
+        self.serial.execute();
         self.timer.execute(&mut self.state, self.cycles);
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
@@ -86,6 +90,7 @@ impl Emulator {
                 apu: &mut self.apu,
                 ppu: &mut self.ppu,
                 dma: &mut self.dma,
+                serial: &mut self.serial,
             },
             self.cycles,
         );

@@ -5,6 +5,7 @@ use crate::{
     joypad::Joypad,
     mbc::Mbc,
     ppu::{LcdControl, Ppu},
+    serial::Serial,
     state::*,
     timer::Timer,
 };
@@ -16,6 +17,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
     pub dma: &'a mut Dma,
+    pub serial: &'a mut Serial,
 }
 
 impl<M: Mbc + ?Sized> Peripherals<'_, M> {
@@ -27,6 +29,7 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
             apu: self.apu,
             ppu: self.ppu,
             dma: self.dma,
+            serial: self.serial,
         }
     }
 }
@@ -38,6 +41,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub apu: &'a Apu,
     pub ppu: &'a Ppu,
     pub dma: &'a Dma,
+    pub serial: &'a Serial,
 }
 
 pub trait MmuCpuExt {
@@ -88,8 +92,8 @@ impl MmuCpuExt for State {
                 }
             }
             JOYPAD => peripherals.joypad.get_register(),
-            SB => self.sb,
-            SC => self.sc.bits() | 0b01111110,
+            SB => peripherals.serial.sb,
+            SC => peripherals.serial.get_control().bits() | 0b01111110,
             0xff03 => 0xff,
             DIV => peripherals.timer.get_div(),
             TIMER_COUNTER => peripherals.timer.get_tima(),
@@ -152,8 +156,10 @@ impl MmuCpuExt for State {
             }
             NOT_USABLE..JOYPAD => {}
             JOYPAD => peripherals.joypad.set_register(value),
-            SB => self.sb = value,
-            SC => self.sc = SerialControl::from_bits_truncate(value),
+            SB => peripherals.serial.sb = value,
+            SC => peripherals
+                .serial
+                .set_control(SerialControl::from_bits_truncate(value)),
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00

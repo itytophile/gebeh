@@ -2,10 +2,7 @@ use std::rc::Rc;
 
 use arraydeque::ArrayDeque;
 use gebeh_core::{
-    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
-    apu::Mixer,
-    joypad::JoypadInput,
-    state::{Interruptions, SerialControl, State},
+    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer, joypad::JoypadInput,
 };
 use gebeh_front_helper::{CloneMbc, EasyMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
@@ -36,7 +33,6 @@ struct WebEmulatorInner {
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
-    serial_state: SerialState,
     synchro_cycles: Option<SynchroCycles>,
     snapshots: Box<Snapshots>,
     session: bool,
@@ -102,9 +98,6 @@ impl WebEmulatorInner {
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
-            serial_state: SerialState::Slave {
-                state: ProutSlave {},
-            },
             synchro_cycles: None,
             snapshots: Default::default(),
             session: false,
@@ -221,11 +214,7 @@ impl WebEmulatorInner {
     fn execute_and_take_snapshot(&mut self, serial_mode: &mut SerialMode) {
         self.emulator.execute(self.mbc.as_mut());
         let cycles = self.emulator.get_cycles();
-        serial_mode.execute(
-            &mut self.serial_state,
-            &mut self.emulator,
-            self.mbc.as_mut(),
-        );
+        serial_mode.execute(&mut self.emulator, self.mbc.as_mut());
         if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
             self.add_snapshot()
         }
@@ -311,29 +300,6 @@ impl WebEmulatorInner {
         msg_from_slave.inspect(|_| self.session = !self.session)
     }
 
-    fn set_msg_from_master(&mut self, byte: u8) -> u8 {
-        let SerialState::Slave {
-            state: ProutSlave { .. },
-        } = self.serial_state
-        else {
-            return 0xff;
-        };
-
-        if self
-            .emulator
-            .state
-            .sc
-            .contains(SerialControl::TRANSFER_ENABLE)
-        {
-            let sb = self.emulator.state.sb;
-            self.serial_state
-                .accept_byte(byte, &mut self.emulator.state);
-            sb
-        } else {
-            0xff
-        }
-    }
-
     fn advance_while_consuming_messages(
         &mut self,
         msg: &ArchivedMessageFromMaster,
@@ -360,7 +326,10 @@ impl WebEmulatorInner {
             });
 
             let emulator_clone = self.emulator.clone();
-            let response = self.set_msg_from_master(byte);
+            let response = self
+                .emulator
+                .serial
+                .set_msg_from_master(byte, &mut self.emulator.state);
             if response != msg.prediction {
                 self.emulator = emulator_clone;
                 return Some(MessageFromSlave {
@@ -559,73 +528,6 @@ struct MessageFromMasterAcc {
     session: bool,
 }
 
-#[derive(Clone, Copy)]
-enum ProutMaster {
-    Init,
-    Exchanging(u16),
-}
-
-struct ProutSlave {}
-
-enum SerialState {
-    MasterNoTransfer,
-    Master(ProutMaster),
-    Slave { state: ProutSlave },
-}
-
-impl SerialState {
-    fn needs_message(&self) -> bool {
-        matches!(self, Self::Master(ProutMaster::Exchanging(_)))
-    }
-}
-
-impl SerialState {
-    fn refresh(&mut self, state: &State) {
-        if !state.sc.contains(SerialControl::TRANSFER_ENABLE)
-            && state.sc.contains(SerialControl::CLOCK_SELECT)
-        {
-            *self = Self::MasterNoTransfer;
-            return;
-        }
-
-        if state.sc.contains(SerialControl::CLOCK_SELECT)
-            && !std::matches!(self, SerialState::Master(_))
-        {
-            *self = Self::Master(ProutMaster::Init);
-            return;
-        }
-
-        if !state.sc.contains(SerialControl::CLOCK_SELECT)
-            && !std::matches!(self, SerialState::Slave { .. })
-        {
-            *self = Self::Slave {
-                state: ProutSlave {},
-            }
-        }
-    }
-
-    fn get_serial_byte(&mut self, state: &State) -> Option<u8> {
-        if let SerialState::Master(ProutMaster::Init) = self {
-            *self = SerialState::Master(ProutMaster::Exchanging(0));
-            return Some(state.sb);
-        }
-        None
-    }
-
-    fn accept_byte(&mut self, byte: u8, state: &mut State) {
-        state.sc.remove(SerialControl::TRANSFER_ENABLE);
-        state.interrupt_flag.insert(Interruptions::SERIAL);
-        state.sb = byte;
-        self.refresh(state);
-    }
-
-    fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) {
-        if std::matches!(self, Self::Master(_)) {
-            self.accept_byte(byte, state);
-        }
-    }
-}
-
 // 1 second
 const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
 // 10 ms
@@ -641,18 +543,14 @@ struct SynchroSerial {
 }
 
 impl SynchroSerial {
-    fn execute(
-        &mut self,
-        serial_state: &mut SerialState,
-        emulator: &mut Emulator,
-        mbc: &dyn CloneMbc<'static>,
-    ) {
-        serial_state.refresh(&emulator.state);
+    fn execute(&mut self, emulator: &mut Emulator, mbc: &dyn CloneMbc<'static>) {
         // doesn't happen at the same time as get_serial_byte
-        if serial_state.needs_message() {
-            serial_state.set_msg_from_slave(self.current_message.prediction, &mut emulator.state);
+        if emulator.serial.needs_message() {
+            emulator
+                .serial
+                .set_msg_from_slave(self.current_message.prediction, &mut emulator.state);
         }
-        if let Some(byte) = serial_state.get_serial_byte(&emulator.state) {
+        if let Some(byte) = emulator.serial.get_serial_byte() {
             self.current_message
                 .messages
                 .push((byte, emulator.clone(), mbc.clone_boxed()));
@@ -688,9 +586,6 @@ impl SynchroSerial {
                 console::error_1(&err);
             }
         }
-        if let SerialState::Master(ProutMaster::Exchanging(delay)) = serial_state {
-            *delay = delay.saturating_add(1);
-        }
     }
 }
 
@@ -702,18 +597,14 @@ enum SerialMode {
 }
 
 impl SerialMode {
-    fn execute(
-        &mut self,
-        serial_state: &mut SerialState,
-        emulator: &mut Emulator,
-        mbc: &dyn CloneMbc<'static>,
-    ) {
+    fn execute(&mut self, emulator: &mut Emulator, mbc: &dyn CloneMbc<'static>) {
         match self {
             Self::Disconnected => {
-                serial_state.refresh(&emulator.state);
-                serial_state.set_msg_from_slave(0xff, &mut emulator.state);
+                emulator
+                    .serial
+                    .set_msg_from_slave(0xff, &mut emulator.state);
             }
-            Self::SynchroSerial(synchro) => synchro.execute(serial_state, emulator, mbc),
+            Self::SynchroSerial(synchro) => synchro.execute(emulator, mbc),
         }
     }
 }
