@@ -191,8 +191,6 @@ impl WebEmulatorInner {
                 response
             }
             ArchivedSerialMessage::FromSlave(msg) => {
-                let current_cycle = self.emulator.get_cycles();
-
                 let (mut emulator, mbc) =
                     core::mem::take(&mut synchro_serial.previous_batch_snapshots)
                         .into_iter()
@@ -213,24 +211,8 @@ impl WebEmulatorInner {
                 ));
                 synchro_serial.current_message.prediction = msg.correction;
 
-                let inputs_history: Vec<_> = self
-                    .inputs_history
-                    .iter()
-                    .filter(|(cycle, _)| *cycle > self.emulator.get_cycles())
-                    .copied()
-                    .collect();
-
-                let mut inputs_history = inputs_history.as_slice();
-
-                for _ in 0..(current_cycle - self.emulator.get_cycles()) {
-                    self.execute_and_take_snapshot(serial_mode);
-                    if let Some((cycle, input)) = inputs_history.first()
-                        && *cycle == self.emulator.get_cycles()
-                    {
-                        *self.emulator.get_joypad_mut() = *input;
-                        inputs_history = &inputs_history[1..];
-                    }
-                }
+                // TODO catchup, however the master will send a lot of messages without being able
+                // to receive the slave ones
 
                 None
             }
