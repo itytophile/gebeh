@@ -62,41 +62,33 @@ impl Serial {
         }
     }
 
-    pub fn is_master(&self) -> bool {
-        matches!(
+    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> Option<u8> {
+        if !core::matches!(
             self.sc,
-            SerialControlState::Master { .. } | SerialControlState::NoTransfer { is_master: true }
-        )
-    }
+            SerialControlState::Master {
+                cycles_since_enabled: BYTE_READY_CYCLE
+            }
+        ) {
+            return None;
+        }
 
-    fn accept_byte(&mut self, byte: u8, state: &mut State) {
-        self.sc = SerialControlState::NoTransfer {
-            is_master: self.is_master(),
-        };
+        let response = self.sb;
+        self.sc = SerialControlState::NoTransfer { is_master: true };
         state.interrupt_flag.insert(Interruptions::SERIAL);
         self.sb = byte;
-    }
-
-    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> Option<u8> {
-        if let SerialControlState::Master {
-            cycles_since_enabled: BYTE_READY_CYCLE,
-        } = self.sc
-        {
-            let response = self.sb;
-            self.accept_byte(byte, state);
-            return Some(response);
-        }
-        None
+        Some(response)
     }
 
     pub fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
-        if let SerialControlState::Slave = self.sc {
-            let response = self.sb;
-            self.accept_byte(byte, state);
-            return response;
+        if !core::matches!(self.sc, SerialControlState::Slave) {
+            return 0xff;
         }
 
-        0xff
+        let response = self.sb;
+        self.sc = SerialControlState::NoTransfer { is_master: false };
+        state.interrupt_flag.insert(Interruptions::SERIAL);
+        self.sb = byte;
+        response
     }
 }
 
