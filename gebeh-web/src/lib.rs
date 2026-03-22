@@ -201,6 +201,10 @@ impl WebEmulatorInner {
                 *emulator.get_joypad_mut() = *self.emulator.get_joypad_mut();
                 self.emulator = emulator;
                 self.mbc = mbc;
+                // the snapshot was taken after the can_accept_msg_from_slave check
+                self.emulator
+                    .serial
+                    .set_msg_from_slave(msg.correction, &mut self.emulator.state);
                 synchro_serial.current_message.session = !synchro_serial.current_message.session;
                 synchro_serial.current_message.messages.clear();
                 console_log(&format!(
@@ -347,13 +351,11 @@ impl WebEmulatorInner {
                 slave: self.emulator.get_cycles(),
             });
 
-            let emulator_clone = self.emulator.clone();
             let response = self
                 .emulator
                 .serial
                 .set_msg_from_master(byte, &mut self.emulator.state);
             if response != msg.prediction {
-                self.emulator = emulator_clone;
                 return Some(MessageFromSlave {
                     correction: response,
                     cycle: master_cycle,
@@ -566,13 +568,14 @@ struct SynchroSerial {
 
 impl SynchroSerial {
     fn execute(&mut self, emulator: &mut Emulator, mbc: &dyn CloneMbc<'static>) {
-        if let Some(byte) = emulator
-            .serial
-            .set_msg_from_slave(self.current_message.prediction, &mut emulator.state)
-        {
+        if emulator.serial.can_accept_msg_from_slave() {
+            let emulator_clone = emulator.clone();
+            let byte = emulator
+                .serial
+                .set_msg_from_slave(self.current_message.prediction, &mut emulator.state);
             self.current_message
                 .messages
-                .push((byte, emulator.clone(), mbc.clone_boxed()));
+                .push((byte, emulator_clone, mbc.clone_boxed()));
         }
         if let Some((_, first_snap, _)) = self.current_message.messages.first()
             && emulator.get_cycles() - first_snap.get_cycles() > BATCH_PERIOD
@@ -619,9 +622,11 @@ impl SerialMode {
     fn execute(&mut self, emulator: &mut Emulator, mbc: &dyn CloneMbc<'static>) {
         match self {
             Self::Disconnected => {
-                emulator
-                    .serial
-                    .set_msg_from_slave(0xff, &mut emulator.state);
+                if emulator.serial.can_accept_msg_from_slave() {
+                    emulator
+                        .serial
+                        .set_msg_from_slave(0xff, &mut emulator.state);
+                }
             }
             Self::SynchroSerial(synchro) => synchro.execute(emulator, mbc),
         }

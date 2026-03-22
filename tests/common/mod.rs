@@ -8,13 +8,10 @@ pub fn machine_to_serial_iter(
     iter::from_fn(move || {
         loop {
             emulator.execute(mbc);
-            if let Some(byte) = emulator
-                .serial
-                .set_msg_from_slave(0xff, &mut emulator.state)
-            {
-                emulator
+            if emulator.serial.can_accept_msg_from_slave() {
+                let byte = emulator
                     .serial
-                    .set_msg_from_slave(byte, &mut emulator.state);
+                    .set_msg_from_slave(0xff, &mut emulator.state);
                 return Some(byte);
             }
         }

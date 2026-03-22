@@ -62,21 +62,22 @@ impl Serial {
         }
     }
 
-    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> Option<u8> {
-        if !core::matches!(
+    pub fn can_accept_msg_from_slave(&self) -> bool {
+        core::matches!(
             self.sc,
             SerialControlState::Master {
                 cycles_since_enabled: BYTE_READY_CYCLE
             }
-        ) {
-            return None;
-        }
+        )
+    }
 
+    // always check can_accept_msg_from_slave before
+    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> u8 {
         let response = self.sb;
         self.sc = SerialControlState::NoTransfer { is_master: true };
         state.interrupt_flag.insert(Interruptions::SERIAL);
         self.sb = byte;
-        Some(response)
+        response
     }
 
     pub fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
