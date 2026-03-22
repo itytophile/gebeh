@@ -11,7 +11,7 @@ pub struct MessageFromMaster {
 #[derive(Archive, Serialize)]
 pub struct MessageFromSlave {
     pub correction: u8,
-    pub clock: u64,
+    pub cycle: u64,
 }
 
 #[derive(Archive, Serialize)]
