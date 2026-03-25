@@ -2,6 +2,7 @@
 ; the serial is synchronized with the system clock.
 ; I think we need 1024 M-cycles (possible off by one error) to transfer one byte
 ; The system clock (4194304 / 4) divided by byte transfer frequency (8192 / 8) = 1024
+; Boot screen is inverted if success.
 
 INCLUDE "hardware.inc"
 

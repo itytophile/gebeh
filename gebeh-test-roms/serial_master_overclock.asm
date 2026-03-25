@@ -1,3 +1,6 @@
+; Speed up the serial transfer by writing to the DIV register.
+; Boot screen is inverted if success.
+
 INCLUDE "hardware.inc"
 
 section "Header", rom0[$100]
@@ -12,13 +15,13 @@ EntryPoint:
     ld a, %11_11_11_00
     ldh [rBGP], a
 
+    ; overclock works
     xor a
     ldh [rSB], a
     ldh [rDIV], a
     ld a, SC_START | SC_INTERNAL
     ldh [rSC], a
     REPT 16
-    ; doesn't work with 28
     REPT 29
     nop
     ENDR
@@ -26,7 +29,23 @@ EntryPoint:
     ENDR
     ldh a, [rSB]
     cp $ff
-    jr nz, .end
+    jp nz, .end
+
+    ; div writes too fast, overclock fails
+    xor a
+    ldh [rSB], a
+    ldh [rDIV], a
+    ld a, SC_START | SC_INTERNAL
+    ldh [rSC], a
+    REPT 16
+    REPT 28
+    nop
+    ENDR
+    ldh [rDIV], a
+    ENDR
+    ldh a, [rSB]
+    cp $ff
+    jr z, .end
 
     ld a, %00_00_00_11
     ldh [rBGP], a
