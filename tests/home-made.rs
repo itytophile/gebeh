@@ -5,6 +5,24 @@ use gebeh_core::{Emulator, HEIGHT, WIDTH};
 use gebeh_front_helper::get_mbc;
 
 fn home_made(name: &str) {
+    let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
+    let rom = rom.as_slice();
+    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut emulator = Emulator::default();
+
+    loop {
+        emulator.execute(mbc.as_mut());
+        match emulator.get_cpu().current_opcode {
+            // ld b, b
+            0x40 => break,
+            // ld c, c
+            0x49 => panic!("ld c, c instead of ld b, b"),
+            _ => {}
+        }
+    }
+}
+
+fn home_made_ppu(name: &str) {
     let decoder = png::Decoder::new(BufReader::new(
         File::open(format!("./gebeh-test-roms/expected/{name}.png")).unwrap(),
     ));
@@ -51,20 +69,30 @@ fn home_made(name: &str) {
 
 #[test]
 fn stat_mode_2_palette_screen_edges() {
-    home_made("stat_mode_2_palette_screen_edges");
+    home_made_ppu("stat_mode_2_palette_screen_edges");
 }
 
 #[test]
 fn lyc_palette_screen_edges() {
-    home_made("lyc_palette_screen_edges");
+    home_made_ppu("lyc_palette_screen_edges");
 }
 
 #[test]
 fn halt_lyc_palette_screen_edges() {
-    home_made("halt_lyc_palette_screen_edges");
+    home_made_ppu("halt_lyc_palette_screen_edges");
 }
 
 #[test]
 fn halt_stat_mode_2_palette_screen_edges() {
-    home_made("halt_stat_mode_2_palette_screen_edges");
+    home_made_ppu("halt_stat_mode_2_palette_screen_edges");
+}
+
+#[test]
+fn serial_master_transfer_timing() {
+    home_made("serial_master_transfer_timing");
+}
+
+#[test]
+fn serial_master_overclock() {
+    home_made("serial_master_overclock");
 }
