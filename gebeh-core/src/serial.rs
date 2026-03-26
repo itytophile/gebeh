@@ -1,10 +1,13 @@
-use crate::state::{Interruptions, SerialControl, State};
+use crate::{
+    FallingEdge,
+    state::{Interruptions, SerialControl, State},
+};
 
 #[derive(Clone)]
 enum SerialControlState {
     NoTransfer { is_master: bool },
     Slave,
-    Master { cycles_since_enabled: u16 },
+    Master { serial_count: u8 },
 }
 
 impl Default for SerialControlState {
@@ -17,6 +20,7 @@ impl Default for SerialControlState {
 pub struct Serial {
     pub sb: u8,
     sc: SerialControlState,
+    falling_edge: FallingEdge,
 }
 
 impl Serial {
@@ -27,9 +31,7 @@ impl Serial {
         ) {
             (true, true) => {
                 if !core::matches!(self.sc, SerialControlState::Master { .. }) {
-                    self.sc = SerialControlState::Master {
-                        cycles_since_enabled: 0,
-                    };
+                    self.sc = SerialControlState::Master { serial_count: 0 };
                 }
             }
             (is_master, false) => {
@@ -53,12 +55,15 @@ impl Serial {
         }
     }
 
-    pub fn execute(&mut self) {
-        if let SerialControlState::Master {
-            cycles_since_enabled,
-        } = &mut self.sc
+    pub fn execute(&mut self, system_clock: u16) {
+        // don't check that inside the SerialControlState::Master if block
+        let clock_16384_hz = self.falling_edge.update(system_clock & (1 << 6) != 0);
+
+        if clock_16384_hz
+            && let SerialControlState::Master { serial_count } = &mut self.sc
+            && *serial_count < READY_COUNT
         {
-            *cycles_since_enabled = cycles_since_enabled.saturating_add(1);
+            *serial_count += 1;
         }
     }
 
@@ -66,7 +71,7 @@ impl Serial {
         core::matches!(
             self.sc,
             SerialControlState::Master {
-                cycles_since_enabled: BYTE_READY_CYCLE
+                serial_count: READY_COUNT
             }
         )
     }
@@ -93,7 +98,4 @@ impl Serial {
     }
 }
 
-// https://gbdev.io/pandocs/Specifications.html https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html
-// The system clock (4194304 / 4) divided by byte transfer frequency (8192 / 8)
-// 4194304 / 4 / 8192 * 8
-const BYTE_READY_CYCLE: u16 = 1024;
+const READY_COUNT: u8 = 16;
