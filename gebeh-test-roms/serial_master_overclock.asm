@@ -46,10 +46,13 @@ EntryPoint:
     ldh a, [rSB]
     cp $ff
     jr z, .end
-
+    ; catch ld b, b to know if there is a success
+    ld b, b
     ld a, %00_00_00_11
     ldh [rBGP], a
 .end
+    ; catch ld c, c to know if there is a failure
+    ld c, c
     ei
     nop
     halt
