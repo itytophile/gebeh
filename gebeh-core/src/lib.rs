@@ -42,6 +42,10 @@ pub struct Emulator {
 }
 
 impl Emulator {
+    pub fn will_serial_emit_byte(&self) -> bool {
+        self.serial
+            .will_emit_byte(self.timer.get_system_counter().wrapping_add(1))
+    }
     pub fn get_ppu(&self) -> &Ppu {
         &self.ppu
     }
