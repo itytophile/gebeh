@@ -66,9 +66,13 @@ impl Emulator {
 }
 
 impl Emulator {
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
         self.timer.execute(&mut self.state, self.cycles);
-        self.serial.execute(self.timer.get_system_counter(), self.cycles);
+        let master_serial_byte = self.serial.execute(
+            self.timer.get_system_counter(),
+            &mut self.state,
+            self.cycles,
+        );
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
         let interrupts_from_previous_cycle = self.state.interrupt_flag;
@@ -106,6 +110,7 @@ impl Emulator {
         }
         self.timer.commit_tima_overflow();
         self.cycles = self.cycles.wrapping_add(1);
+        master_serial_byte
     }
 }
 

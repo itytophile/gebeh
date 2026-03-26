@@ -16,11 +16,23 @@ impl Default for SerialControlState {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Serial {
     pub sb: u8,
     sc: SerialControlState,
     falling_edge: FallingEdge,
+    pub slave_byte: u8,
+}
+
+impl Default for Serial {
+    fn default() -> Self {
+        Self {
+            sb: Default::default(),
+            sc: Default::default(),
+            falling_edge: Default::default(),
+            slave_byte: 0xff,
+        }
+    }
 }
 
 impl Serial {
@@ -55,7 +67,8 @@ impl Serial {
         }
     }
 
-    pub fn execute(&mut self, system_clock: u16, cycles: u64) {
+    #[must_use]
+    pub fn execute(&mut self, system_clock: u16, state: &mut State, _: u64) -> Option<u8> {
         // don't check that inside the SerialControlState::Master if block
         let clock_16384_hz = self.falling_edge.update(system_clock & (1 << 5) != 0);
 
@@ -64,21 +77,16 @@ impl Serial {
             && *serial_count < READY_COUNT
         {
             *serial_count += 1;
-            log::info!("{cycles}: Serial transfer in progress: {serial_count}/8");
-        }
-    }
 
-    pub fn can_accept_msg_from_slave(&self) -> bool {
-        core::matches!(
-            self.sc,
-            SerialControlState::Master {
-                serial_count: READY_COUNT
+            if *serial_count == READY_COUNT {
+                return Some(self.set_msg_from_slave(self.slave_byte, state));
             }
-        )
+        }
+
+        None
     }
 
-    // always check can_accept_msg_from_slave before
-    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> u8 {
+    fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> u8 {
         let response = self.sb;
         self.sc = SerialControlState::NoTransfer { is_master: true };
         state.interrupt_flag.insert(Interruptions::SERIAL);

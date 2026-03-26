@@ -13,8 +13,6 @@ gebeh-front-helper = { path = "./gebeh-front-helper" }
 
 [dev-dependencies]
 arrayvec = "0.7.6"
-env_logger = "0.11.10"
-log = "0.4.29"
 png = "0.18.0"
 
 [profile.release]
