@@ -35,6 +35,10 @@ impl Default for Serial {
     }
 }
 
+fn get_clock_16384_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
+    falling_edge.update(system_clock & (1 << 5) != 0)
+}
+
 impl Serial {
     pub fn set_control(&mut self, sc: SerialControl) {
         match (
@@ -67,12 +71,20 @@ impl Serial {
         }
     }
 
+    pub fn will_emit_byte(&self, next_system_clock: u16) -> bool {
+        if get_clock_16384_hz(&mut self.falling_edge.clone(), next_system_clock)
+            && let SerialControlState::Master { serial_count } = self.sc
+            && serial_count == READY_COUNT - 1
+        {
+            true
+        } else {
+            false
+        }
+    }
+
     #[must_use]
     pub fn execute(&mut self, system_clock: u16, state: &mut State, _: u64) -> Option<u8> {
-        // don't check that inside the SerialControlState::Master if block
-        let clock_16384_hz = self.falling_edge.update(system_clock & (1 << 5) != 0);
-
-        if clock_16384_hz
+        if get_clock_16384_hz(&mut self.falling_edge, system_clock)
             && let SerialControlState::Master { serial_count } = &mut self.sc
             && *serial_count < READY_COUNT
         {
