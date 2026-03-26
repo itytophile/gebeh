@@ -92,7 +92,10 @@ impl MmuCpuExt for State {
                 }
             }
             JOYPAD => peripherals.joypad.get_register(),
-            SB => peripherals.serial.sb,
+            SB => {
+                log::info!("{cycles}: Reading sb (0x{:02x})", peripherals.serial.sb);
+                peripherals.serial.sb
+            }
             SC => peripherals.serial.get_control().bits() | 0b01111110,
             0xff03 => 0xff,
             DIV => peripherals.timer.get_div(),

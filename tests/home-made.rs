@@ -12,6 +12,11 @@ fn home_made(name: &str) {
 
     loop {
         emulator.execute(mbc.as_mut());
+        if emulator.serial.can_accept_msg_from_slave() {
+            log::info!("{}: setting msg", emulator.get_cycles());
+            
+            emulator.serial.set_msg_from_slave(0xff, &mut emulator.state);
+        }
         match emulator.get_cpu().current_opcode {
             // ld b, b
             0x40 => break,
@@ -89,6 +94,8 @@ fn halt_stat_mode_2_palette_screen_edges() {
 
 #[test]
 fn serial_master_transfer_timing() {
+    env_logger::builder().is_test(true).filter_level(log::LevelFilter::Info).init();
+    log::info!("salope");
     home_made("serial_master_transfer_timing");
 }
 

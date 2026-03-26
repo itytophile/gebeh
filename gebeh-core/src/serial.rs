@@ -55,15 +55,16 @@ impl Serial {
         }
     }
 
-    pub fn execute(&mut self, system_clock: u16) {
+    pub fn execute(&mut self, system_clock: u16, cycles: u64) {
         // don't check that inside the SerialControlState::Master if block
-        let clock_16384_hz = self.falling_edge.update(system_clock & (1 << 6) != 0);
+        let clock_16384_hz = self.falling_edge.update(system_clock & (1 << 5) != 0);
 
         if clock_16384_hz
             && let SerialControlState::Master { serial_count } = &mut self.sc
             && *serial_count < READY_COUNT
         {
             *serial_count += 1;
+            log::info!("{cycles}: Serial transfer in progress: {serial_count}/8");
         }
     }
 
