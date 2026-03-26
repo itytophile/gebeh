@@ -108,3 +108,14 @@ impl Emulator {
         self.cycles = self.cycles.wrapping_add(1);
     }
 }
+
+#[derive(Default, Clone)]
+pub struct FallingEdge(bool);
+
+impl FallingEdge {
+    pub fn update(&mut self, value: bool) -> bool {
+        let previous = self.0;
+        self.0 = value;
+        previous && !value
+    }
+}
