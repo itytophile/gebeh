@@ -221,6 +221,8 @@ impl WebEmulatorInner {
     }
 
     fn execute_and_take_snapshot(&mut self, serial_mode: &mut SerialMode) {
+        serial_mode.execute(self.emulator.serial.slave_byte, self.emulator.get_cycles());
+
         if let SerialMode::SynchroSerial(synchro) = serial_mode
             && self.emulator.will_serial_emit_byte()
         {
@@ -235,10 +237,6 @@ impl WebEmulatorInner {
             self.emulator.execute(self.mbc.as_mut());
         }
 
-        serial_mode.execute(
-            self.emulator.serial.slave_byte,
-            self.emulator.get_cycles().wrapping_sub(1),
-        );
         let cycles = self.emulator.get_cycles();
         if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
             self.add_snapshot()
