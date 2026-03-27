@@ -7,11 +7,7 @@ pub fn machine_to_serial_iter(
 ) -> impl Iterator<Item = u8> {
     iter::from_fn(move || {
         loop {
-            emulator.execute(mbc);
-            if emulator.serial.can_accept_msg_from_slave() {
-                let byte = emulator
-                    .serial
-                    .set_msg_from_slave(0xff, &mut emulator.state);
+            if let Some(byte) = emulator.execute(mbc) {
                 return Some(byte);
             }
         }

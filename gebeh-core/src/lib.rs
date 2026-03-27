@@ -42,6 +42,10 @@ pub struct Emulator {
 }
 
 impl Emulator {
+    pub fn will_serial_emit_byte(&self) -> bool {
+        self.serial
+            .will_emit_byte(self.timer.get_system_counter().wrapping_add(1))
+    }
     pub fn get_ppu(&self) -> &Ppu {
         &self.ppu
     }
@@ -66,9 +70,13 @@ impl Emulator {
 }
 
 impl Emulator {
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) {
-        self.serial.execute();
+    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
         self.timer.execute(&mut self.state, self.cycles);
+        let master_serial_byte = self.serial.execute(
+            self.timer.get_system_counter(),
+            &mut self.state,
+            self.cycles,
+        );
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
         let interrupts_from_previous_cycle = self.state.interrupt_flag;
@@ -106,5 +114,17 @@ impl Emulator {
         }
         self.timer.commit_tima_overflow();
         self.cycles = self.cycles.wrapping_add(1);
+        master_serial_byte
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct FallingEdge(bool);
+
+impl FallingEdge {
+    pub fn update(&mut self, value: bool) -> bool {
+        let previous = self.0;
+        self.0 = value;
+        previous && !value
     }
 }

@@ -1,10 +1,13 @@
 use core::{f32::consts::PI, ops::Deref};
 
-use crate::apu::{
-    noise_channel::{NoiseChannel, NoiseSampler},
-    pulse_channel::{PulseChannel, PulseSampler},
-    sweep::Ch1Sweep,
-    wave_channel::{WaveChannel, WaveSampler},
+use crate::{
+    FallingEdge,
+    apu::{
+        noise_channel::{NoiseChannel, NoiseSampler},
+        pulse_channel::{PulseChannel, PulseSampler},
+        sweep::Ch1Sweep,
+        wave_channel::{WaveChannel, WaveSampler},
+    },
 };
 
 mod envelope;
@@ -18,17 +21,6 @@ mod wave_channel;
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1
 // Importantly, the slope is negative: “digital 0” maps to “analog 1”, not “analog -1”.
 const MAX_VOLUME: u8 = 0x0f;
-
-#[derive(Default, Clone)]
-pub struct FallingEdge(bool);
-
-impl FallingEdge {
-    pub fn update(&mut self, value: bool) -> bool {
-        let previous = self.0;
-        self.0 = value;
-        previous && !value
-    }
-}
 
 #[derive(Clone, Default)]
 pub struct Apu {

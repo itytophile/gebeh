@@ -20,6 +20,10 @@ pub struct Timer {
 }
 
 impl Timer {
+    pub fn get_system_counter(&self) -> u16 {
+        self.system_counter
+    }
+
     pub fn get_div(&self) -> u8 {
         (self.system_counter >> 6) as u8
     }

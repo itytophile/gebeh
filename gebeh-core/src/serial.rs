@@ -1,10 +1,13 @@
-use crate::state::{Interruptions, SerialControl, State};
+use crate::{
+    FallingEdge,
+    state::{Interruptions, SerialControl, State},
+};
 
 #[derive(Clone)]
 enum SerialControlState {
     NoTransfer { is_master: bool },
     Slave,
-    Master { cycles_since_enabled: u16 },
+    Master { serial_count: u8 },
 }
 
 impl Default for SerialControlState {
@@ -13,10 +16,27 @@ impl Default for SerialControlState {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Serial {
     pub sb: u8,
     sc: SerialControlState,
+    falling_edge: FallingEdge,
+    pub slave_byte: u8,
+}
+
+impl Default for Serial {
+    fn default() -> Self {
+        Self {
+            sb: Default::default(),
+            sc: Default::default(),
+            falling_edge: Default::default(),
+            slave_byte: 0xff,
+        }
+    }
+}
+
+fn get_clock_16384_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
+    falling_edge.update(system_clock & (1 << 5) != 0)
 }
 
 impl Serial {
@@ -27,9 +47,7 @@ impl Serial {
         ) {
             (true, true) => {
                 if !core::matches!(self.sc, SerialControlState::Master { .. }) {
-                    self.sc = SerialControlState::Master {
-                        cycles_since_enabled: 0,
-                    };
+                    self.sc = SerialControlState::Master { serial_count: 0 };
                 }
             }
             (is_master, false) => {
@@ -53,31 +71,35 @@ impl Serial {
         }
     }
 
-    pub fn execute(&mut self) {
-        if let SerialControlState::Master {
-            cycles_since_enabled,
-        } = &mut self.sc
+    pub fn will_emit_byte(&self, next_system_clock: u16) -> bool {
+        if get_clock_16384_hz(&mut self.falling_edge.clone(), next_system_clock)
+            && let SerialControlState::Master { serial_count } = self.sc
+            && serial_count == READY_COUNT - 1
         {
-            *cycles_since_enabled = cycles_since_enabled.saturating_add(1);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn can_accept_msg_from_slave(&self) -> bool {
-        core::matches!(
-            self.sc,
-            SerialControlState::Master {
-                cycles_since_enabled: BYTE_READY_CYCLE
-            }
-        )
-    }
+    #[must_use]
+    pub fn execute(&mut self, system_clock: u16, state: &mut State, _: u64) -> Option<u8> {
+        if get_clock_16384_hz(&mut self.falling_edge, system_clock)
+            && let SerialControlState::Master { serial_count } = &mut self.sc
+            && *serial_count < READY_COUNT
+        {
+            *serial_count += 1;
 
-    // always check can_accept_msg_from_slave before
-    pub fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> u8 {
-        let response = self.sb;
-        self.sc = SerialControlState::NoTransfer { is_master: true };
-        state.interrupt_flag.insert(Interruptions::SERIAL);
-        self.sb = byte;
-        response
+            if *serial_count == READY_COUNT {
+                let response = self.sb;
+                self.sc = SerialControlState::NoTransfer { is_master: true };
+                state.interrupt_flag.insert(Interruptions::SERIAL);
+                self.sb = self.slave_byte;
+                return Some(response);
+            }
+        }
+
+        None
     }
 
     pub fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
@@ -93,7 +115,4 @@ impl Serial {
     }
 }
 
-// https://gbdev.io/pandocs/Specifications.html https://gbdev.io/pandocs/Serial_Data_Transfer_(Link_Cable).html
-// The system clock (4194304 / 4) divided by byte transfer frequency (8192 / 8)
-// 4194304 / 4 / 8192 * 8
-const BYTE_READY_CYCLE: u16 = 1024;
+const READY_COUNT: u8 = 16;
