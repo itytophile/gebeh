@@ -91,19 +91,15 @@ impl Serial {
             *serial_count += 1;
 
             if *serial_count == READY_COUNT {
-                return Some(self.set_msg_from_slave(self.slave_byte, state));
+                let response = self.sb;
+                self.sc = SerialControlState::NoTransfer { is_master: true };
+                state.interrupt_flag.insert(Interruptions::SERIAL);
+                self.sb = self.slave_byte;
+                return Some(response);
             }
         }
 
         None
-    }
-
-    fn set_msg_from_slave(&mut self, byte: u8, state: &mut State) -> u8 {
-        let response = self.sb;
-        self.sc = SerialControlState::NoTransfer { is_master: true };
-        state.interrupt_flag.insert(Interruptions::SERIAL);
-        self.sb = byte;
-        response
     }
 
     pub fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {

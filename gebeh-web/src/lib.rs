@@ -191,11 +191,10 @@ impl WebEmulatorInner {
                 response
             }
             ArchivedSerialMessage::FromSlave(msg) => {
-                let (mut emulator, mbc) =
-                    core::mem::take(&mut synchro_serial.previous_batch_snapshots)
-                        .into_iter()
-                        .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
-                        .expect("desync too big");
+                let (mut emulator, mbc) = core::mem::take(&mut synchro_serial.snapshots)
+                    .into_iter()
+                    .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
+                    .expect("desync too big");
                 *emulator.get_joypad_mut() = *self.emulator.get_joypad_mut();
                 self.emulator = emulator;
                 self.mbc = mbc;
@@ -203,9 +202,15 @@ impl WebEmulatorInner {
                     "Correction from slave 0x{:02x} -> 0x{:02x}",
                     self.emulator.serial.slave_byte, msg.correction
                 ));
+                console_log(&format!(
+                    "Will emit serial {}",
+                    self.emulator.will_serial_emit_byte()
+                ));
+
                 self.emulator.serial.slave_byte = msg.correction;
                 synchro_serial.current_message.session = !synchro_serial.current_message.session;
                 synchro_serial.current_message.messages.clear();
+                self.emulator.execute(self.mbc.as_mut());
 
                 // TODO catchup, however the master will send a lot of messages without being able
                 // to receive the slave ones
@@ -230,7 +235,10 @@ impl WebEmulatorInner {
             self.emulator.execute(self.mbc.as_mut());
         }
 
-        serial_mode.execute(self.emulator.serial.slave_byte, self.emulator.get_cycles().wrapping_sub(1));
+        serial_mode.execute(
+            self.emulator.serial.slave_byte,
+            self.emulator.get_cycles().wrapping_sub(1),
+        );
         let cycles = self.emulator.get_cycles();
         if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
             self.add_snapshot()
@@ -505,7 +513,7 @@ impl WebEmulator {
                     messages: Default::default(),
                     session: false,
                 },
-                previous_batch_snapshots: Default::default(),
+                snapshots: Default::default(),
             })
         } else {
             self.serial_mode = SerialMode::Disconnected;
@@ -552,41 +560,45 @@ const INPUTS_HISTORY_SIZE: usize = 50;
 struct SynchroSerial {
     on_serial: js_sys::Function,
     current_message: MessageFromMasterAcc,
-    previous_batch_snapshots: Vec<(Emulator, EasyMbc)>,
+    snapshots: Vec<(Emulator, EasyMbc)>,
 }
 
 impl SynchroSerial {
     fn execute(&mut self, prediction: u8, cycles: u64) {
-        if let Some((_, first_snap, _)) = self.current_message.messages.first()
-            && cycles - first_snap.get_cycles() > BATCH_PERIOD
-        {
-            self.previous_batch_snapshots
-                .retain(|(snap, _)| cycles - snap.get_cycles() < ROLLBACK_TRESHOLD);
-            let mut messages = core::mem::take(&mut self.current_message.messages).into_iter();
-            let (first_byte, first_snap, first_mbc) = messages.next().unwrap();
-            let first_cycle = first_snap.get_cycles();
+        let Some((_, first_snap, _)) = self.current_message.messages.first() else {
+            return;
+        };
 
-            self.previous_batch_snapshots.push((first_snap, first_mbc));
+        if cycles - first_snap.get_cycles() <= BATCH_PERIOD {
+            return;
+        }
 
-            let mut messages_to_send = Vec::new();
-            for (byte, emulator, mbc) in messages {
-                messages_to_send.push((byte, emulator.get_cycles()));
-                self.previous_batch_snapshots.push((emulator, mbc));
-            }
+        self.snapshots
+            .retain(|(snap, _)| cycles - snap.get_cycles() < ROLLBACK_TRESHOLD);
+        let mut messages = core::mem::take(&mut self.current_message.messages).into_iter();
+        let (first_byte, first_snap, first_mbc) = messages.next().unwrap();
+        let first_cycle = first_snap.get_cycles();
 
-            let msg_to_send = MessageFromMaster {
-                first_message: (first_byte, first_cycle),
-                messages: messages_to_send,
-                prediction,
-                session: self.current_message.session,
-            };
+        self.snapshots.push((first_snap, first_mbc));
 
-            if let Err(err) = self.on_serial.call1(
-                &JsValue::null(),
-                &SerialMessage::FromMaster(msg_to_send).serialize().into(),
-            ) {
-                console::error_1(&err);
-            }
+        let mut messages_to_send = Vec::new();
+        for (byte, emulator, mbc) in messages {
+            messages_to_send.push((byte, emulator.get_cycles()));
+            self.snapshots.push((emulator, mbc));
+        }
+
+        let msg_to_send = MessageFromMaster {
+            first_message: (first_byte, first_cycle),
+            messages: messages_to_send,
+            prediction,
+            session: self.current_message.session,
+        };
+
+        if let Err(err) = self.on_serial.call1(
+            &JsValue::null(),
+            &SerialMessage::FromMaster(msg_to_send).serialize().into(),
+        ) {
+            console::error_1(&err);
         }
     }
 }
