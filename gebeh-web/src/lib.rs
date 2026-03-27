@@ -512,9 +512,12 @@ impl WebEmulator {
                     session: false,
                 },
                 snapshots: Default::default(),
-            })
+            });
         } else {
             self.serial_mode = SerialMode::Disconnected;
+            if let Some(inner) = &mut self.inner {
+                inner.emulator.serial.slave_byte = 0xff;
+            }
         }
     }
 
