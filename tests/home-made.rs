@@ -3,6 +3,7 @@ use std::{fs::File, io::BufReader};
 use gebeh::InstantRtc;
 use gebeh_core::{Emulator, HEIGHT, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
+use gebeh_network::RollbackSerial;
 
 fn home_made(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
@@ -99,16 +100,18 @@ fn serial_master_overclock() {
 
 #[test]
 fn serial_exchange() {
-    let rom = std::fs::read("./gebeh-test-roms/serial.gb").unwrap();
-    let rom = rom.as_slice();
+    let rom = &*std::fs::read("./gebeh-test-roms/serial.gb").unwrap().leak();
     let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut slave_emulator = Emulator::default();
     let (_, mut master_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut master_emulator = Emulator::default();
 
+    let mut slave_rollback = RollbackSerial::default();
+    let master_rollback = RollbackSerial::default();
+
     // wait for ld a, a
     loop {
-        slave_emulator.execute(slave_mbc.as_mut());
+        slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut());
         if let 0x7f = slave_emulator.get_cpu().current_opcode {
             break;
         }

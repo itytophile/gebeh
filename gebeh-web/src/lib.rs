@@ -10,10 +10,7 @@ use web_sys::{
     js_sys::{self},
 };
 
-use gebeh_network::{
-    SynchroSerial,
-    message::{ArchivedSerialMessage, MessageFromSlave, SerialMessage},
-};
+use gebeh_network::RollbackSerial;
 
 use crate::rtc::NullRtc;
 
@@ -34,11 +31,11 @@ struct WebEmulatorInner {
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Option<WebEmulatorInner>,
-    network: Option<(js_sys::Function, SynchroSerial)>,
+    network: Option<(js_sys::Function, RollbackSerial)>,
 }
 
 impl WebEmulatorInner {
-    fn set_joypad(&mut self, joypad: JoypadInput, synchro: Option<&mut SynchroSerial>) {
+    fn set_joypad(&mut self, joypad: JoypadInput, synchro: Option<&mut RollbackSerial>) {
         if self.emulator.get_joypad() == &joypad {
             return;
         }
@@ -88,7 +85,7 @@ impl WebEmulatorInner {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-        serial_mode: &mut Option<(js_sys::Function, SynchroSerial)>,
+        serial_mode: &mut Option<(js_sys::Function, RollbackSerial)>,
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -106,12 +103,8 @@ impl WebEmulatorInner {
                 if let Some((send, synchro)) = serial_mode.as_mut() {
                     if let Some(msg) =
                         synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut())
-                        && let Err(err) = send.call1(
-                            &JsValue::null(),
-                            &js_sys::Uint8Array::new_from_slice(
-                                &SerialMessage::FromMaster(msg).serialize(),
-                            ),
-                        )
+                        && let Err(err) =
+                            send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
                     {
                         console::error_1(&err);
                     }
@@ -163,10 +156,6 @@ impl WebEmulatorInner {
             game_title: get_title_from_rom(self.mbc.get_rom()).to_owned(),
         })
     }
-}
-
-fn console_log(text: &str) {
-    console::log_1(&JsValue::from_str(text));
 }
 
 #[wasm_bindgen]
@@ -293,36 +282,17 @@ impl WebEmulator {
             panic!("No synchro");
         };
 
-        let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            let (slave, master) =
-                synchro.set_serial_msg(msg.get(), &mut inner.emulator, &mut inner.mbc);
-            slave
-                .map(|msg| {
-                    console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
-                    SerialMessage::FromSlave(msg).serialize()
-                })
+            synchro
+                .set_serial_msg(msg, &mut inner.emulator, &mut inner.mbc)
                 .into_iter()
-                .chain(
-                    master
-                        .into_iter()
-                        .map(|msg| SerialMessage::FromMaster(msg).serialize()),
-                )
                 .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
                 .collect()
-        } else if let ArchivedSerialMessage::FromMaster(msg) = msg.get()
-            && msg.prediction != 0xff
-        {
-            core::iter::once(js_sys::Uint8Array::new_from_slice(
-                &SerialMessage::FromSlave(MessageFromSlave {
-                    correction: 0xff,
-                    cycle: msg.first_message.1.to_native(),
-                })
-                .serialize(),
-            ))
-            .collect()
         } else {
-            Default::default()
+            RollbackSerial::handle_msg_no_emulator(msg)
+                .into_iter()
+                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
+                .collect()
         }
     }
 

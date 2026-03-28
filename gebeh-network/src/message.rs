@@ -1,33 +1,26 @@
 use rkyv::{Archive, Serialize};
 
 #[derive(Archive, Serialize, Debug)]
-pub struct MessageFromMaster {
+pub(crate) struct MessageFromMaster {
     pub prediction: u8,
     pub first_message: (u8, u64),
     pub messages: Vec<(u8, u64)>,
     pub session: bool,
 }
 
-impl MessageFromMaster {
-    pub fn append(&mut self, other: MessageFromMaster) {
-        self.messages.push(other.first_message);
-        self.messages.extend(other.messages);
-    }
-}
-
 #[derive(Archive, Serialize)]
-pub struct MessageFromSlave {
+pub(crate) struct MessageFromSlave {
     pub correction: u8,
     pub cycle: u64,
 }
 
 #[derive(Archive, Serialize)]
-pub enum SerialMessage {
+pub(crate) enum SerialMessage {
     FromMaster(MessageFromMaster),
     FromSlave(MessageFromSlave),
 }
 
-pub struct DecompressedSerialMessage {
+pub(crate) struct DecompressedSerialMessage {
     buffer: Vec<u8>,
 }
 

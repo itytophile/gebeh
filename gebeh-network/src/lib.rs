@@ -4,6 +4,7 @@ use gebeh_front_helper::{CloneMbc, EasyMbc};
 
 use crate::message::{
     ArchivedMessageFromMaster, ArchivedSerialMessage, MessageFromMaster, MessageFromSlave,
+    SerialMessage,
 };
 
 pub mod message;
@@ -32,7 +33,7 @@ const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
 #[derive(Default)]
-pub struct SynchroSerial {
+pub struct RollbackSerial {
     current_message: MessageFromMasterAcc,
     master_snapshots: Vec<(Emulator, EasyMbc)>,
     slave_snapshots: Box<Snapshots>,
@@ -43,7 +44,7 @@ pub struct SynchroSerial {
     inputs_history: Box<ArrayDeque<(u64, JoypadInput), INPUTS_HISTORY_SIZE>>,
 }
 
-impl SynchroSerial {
+impl RollbackSerial {
     #[must_use]
     fn execute(&mut self, prediction: u8, cycles: u64) -> Option<MessageFromMaster> {
         let (_, first_snap, _) = self.current_message.messages.first()?;
@@ -84,19 +85,38 @@ impl SynchroSerial {
         }
     }
 
+    pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<Box<[u8]>> {
+        let msg = SerialMessage::deserialize(msg);
+        if let ArchivedSerialMessage::FromMaster(msg) = msg.get()
+            && msg.prediction != 0xff
+        {
+            Some(
+                SerialMessage::FromSlave(MessageFromSlave {
+                    correction: 0xff,
+                    cycle: msg.first_message.1.to_native(),
+                })
+                .serialize(),
+            )
+        } else {
+            None
+        }
+    }
+
     #[must_use]
     pub fn set_serial_msg(
         &mut self,
-        msg: &ArchivedSerialMessage,
+        msg: &[u8],
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
-    ) -> (Option<MessageFromSlave>, Option<MessageFromMaster>) {
+    ) -> Vec<Box<[u8]>> {
+        let msg = SerialMessage::deserialize(msg);
+        let msg = msg.get();
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
                 let current_joypad = *emulator.get_joypad();
-                let response = self.handle_message_from_master(emulator, mbc, msg);
+                let messages = self.handle_message_from_master(emulator, mbc, msg);
                 emulator.set_joypad(current_joypad);
-                response
+                messages
             }
             ArchivedSerialMessage::FromSlave(msg) => {
                 let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
@@ -132,7 +152,7 @@ impl SynchroSerial {
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
         msg: &ArchivedMessageFromMaster,
-    ) -> (Option<MessageFromSlave>, Option<MessageFromMaster>) {
+    ) -> Vec<Box<[u8]>> {
         if msg.session != self.session {
             log::info!("Bad session");
             return Default::default();
@@ -146,7 +166,7 @@ impl SynchroSerial {
                 slave: slave_cycles,
             });
 
-            let msg_from_slave = self.advance_while_consuming_messages(
+            let (msg_from_slave, is_correction) = self.advance_while_consuming_messages(
                 msg,
                 &mut [].as_slice(),
                 emulator,
@@ -155,7 +175,7 @@ impl SynchroSerial {
 
             self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
 
-            if msg_from_slave.0.is_some() {
+            if is_correction {
                 self.session = !self.session;
             }
 
@@ -195,21 +215,15 @@ impl SynchroSerial {
             .collect();
         let mut inputs_history = inputs_history.as_slice();
 
-        let mut msg_from_slave =
+        let (mut messages, is_correction) =
             self.advance_while_consuming_messages(msg, &mut inputs_history, emulator, mbc.as_mut());
 
         self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
 
-        if msg_from_slave.0.is_none() && current_cycle > emulator.get_cycles() {
+        if !is_correction && current_cycle > emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - emulator.get_cycles()) {
-                if let Some(lol) = msg_from_slave.1.as_mut() {
-                    if let Some(lul) = self.execute_and_take_snapshot(emulator, mbc.as_mut()) {
-                        lol.append(lul);
-                    }
-                } else {
-                    msg_from_slave.1 = self.execute_and_take_snapshot(emulator, mbc.as_mut());
-                }
+                messages.extend(self.execute_and_take_snapshot(emulator, mbc.as_mut()));
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
                 {
@@ -219,11 +233,11 @@ impl SynchroSerial {
             }
         }
 
-        if msg_from_slave.0.is_some() {
+        if is_correction {
             self.session = !self.session
         }
 
-        msg_from_slave
+        messages
     }
 
     #[must_use]
@@ -233,20 +247,14 @@ impl SynchroSerial {
         inputs_history: &mut &[(u64, JoypadInput)],
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
-    ) -> (Option<MessageFromSlave>, Option<MessageFromMaster>) {
-        let mut msg_from_master: Option<MessageFromMaster> = None;
+    ) -> (Vec<Box<[u8]>>, bool) {
+        let mut messages = Vec::new();
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
             .chain(msg.messages.iter())
             .map(|a| (a.0, a.1.to_native()))
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                if let Some(lol) = msg_from_master.as_mut() {
-                    if let Some(lul) = self.execute_and_take_snapshot(emulator, mbc) {
-                        lol.append(lul);
-                    }
-                } else {
-                    msg_from_master = self.execute_and_take_snapshot(emulator, mbc);
-                }
+                messages.extend(self.execute_and_take_snapshot(emulator, mbc));
 
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
@@ -265,16 +273,17 @@ impl SynchroSerial {
                 .serial
                 .set_msg_from_master(byte, &mut emulator.state);
             if response != msg.prediction {
-                return (
-                    Some(MessageFromSlave {
+                messages.push(
+                    SerialMessage::FromSlave(MessageFromSlave {
                         correction: response,
                         cycle: master_cycle,
-                    }),
-                    msg_from_master,
+                    })
+                    .serialize(),
                 );
+                return (messages, true);
             }
         }
-        (None, msg_from_master)
+        (messages, false)
     }
 
     #[must_use]
@@ -282,7 +291,7 @@ impl SynchroSerial {
         &mut self,
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
-    ) -> Option<MessageFromMaster> {
+    ) -> Option<Box<[u8]>> {
         let msg = self.execute(emulator.serial.slave_byte, emulator.get_cycles());
 
         if emulator.will_serial_emit_byte() {
@@ -301,7 +310,7 @@ impl SynchroSerial {
             self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
         }
 
-        msg
+        msg.map(|msg| SerialMessage::FromMaster(msg).serialize())
     }
 
     pub fn save_input(&mut self, cycles: u64, joypad: JoypadInput) {
