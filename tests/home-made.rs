@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader};
 
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, WIDTH};
+use gebeh_core::{Emulator, HEIGHT, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
 
 fn home_made(name: &str) {
@@ -95,4 +95,44 @@ fn serial_master_transfer_timing() {
 #[test]
 fn serial_master_overclock() {
     home_made("serial_master_overclock");
+}
+
+#[test]
+fn serial_exchange() {
+    let rom = std::fs::read("./gebeh-test-roms/serial.gb").unwrap();
+    let rom = rom.as_slice();
+    let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut slave_emulator = Emulator::default();
+    let (_, mut master_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut master_emulator = Emulator::default();
+
+    // wait for ld a, a
+    loop {
+        slave_emulator.execute(slave_mbc.as_mut());
+        if let 0x7f = slave_emulator.get_cpu().current_opcode {
+            break;
+        }
+    }
+    loop {
+        master_emulator.execute(master_mbc.as_mut());
+        if let 0x7f = master_emulator.get_cpu().current_opcode {
+            break;
+        }
+    }
+    master_emulator.set_joypad(JoypadInput {
+        start: true,
+        ..Default::default()
+    });
+
+    loop {
+        master_emulator.execute(master_mbc.as_mut());
+        slave_emulator.execute(slave_mbc.as_mut());
+        match slave_emulator.get_cpu().current_opcode {
+            // ld b, b
+            0x40 => break,
+            // ld c, c
+            0x49 => panic!("ld c, c instead of ld b, b"),
+            _ => {}
+        }
+    }
 }
