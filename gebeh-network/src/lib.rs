@@ -90,7 +90,7 @@ impl SynchroSerial {
         msg: &ArchivedSerialMessage,
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
-    ) -> (Option<MessageFromSlave>, Vec<MessageFromMaster>) {
+    ) -> (Option<MessageFromSlave>, Option<MessageFromMaster>) {
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
                 let current_joypad = *emulator.get_joypad();
@@ -132,7 +132,7 @@ impl SynchroSerial {
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
         msg: &ArchivedMessageFromMaster,
-    ) -> (Option<MessageFromSlave>, Vec<MessageFromMaster>) {
+    ) -> (Option<MessageFromSlave>, Option<MessageFromMaster>) {
         if msg.session != self.session {
             log::info!("Bad session");
             return Default::default();
@@ -203,9 +203,13 @@ impl SynchroSerial {
         if msg_from_slave.0.is_none() && current_cycle > emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - emulator.get_cycles()) {
-                msg_from_slave
-                    .1
-                    .extend(self.execute_and_take_snapshot(emulator, mbc.as_mut()));
+                if let Some(lol) = msg_from_slave.1.as_mut() {
+                    if let Some(lul) = self.execute_and_take_snapshot(emulator, mbc.as_mut()) {
+                        lol.append(lul);
+                    }
+                } else {
+                    msg_from_slave.1 = self.execute_and_take_snapshot(emulator, mbc.as_mut());
+                }
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
                 {
@@ -229,14 +233,21 @@ impl SynchroSerial {
         inputs_history: &mut &[(u64, JoypadInput)],
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
-    ) -> (Option<MessageFromSlave>, Vec<MessageFromMaster>) {
-        let mut msg_from_master = Vec::new();
+    ) -> (Option<MessageFromSlave>, Option<MessageFromMaster>) {
+        let mut msg_from_master: Option<MessageFromMaster> = None;
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
             .chain(msg.messages.iter())
             .map(|a| (a.0, a.1.to_native()))
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                msg_from_master.extend(self.execute_and_take_snapshot(emulator, mbc));
+                if let Some(lol) = msg_from_master.as_mut() {
+                    if let Some(lul) = self.execute_and_take_snapshot(emulator, mbc) {
+                        lol.append(lul);
+                    }
+                } else {
+                    msg_from_master = self.execute_and_take_snapshot(emulator, mbc);
+                }
+
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
                 {

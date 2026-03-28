@@ -8,6 +8,13 @@ pub struct MessageFromMaster {
     pub session: bool,
 }
 
+impl MessageFromMaster {
+    pub fn append(&mut self, other: MessageFromMaster) {
+        self.messages.push(other.first_message);
+        self.messages.extend(other.messages);
+    }
+}
+
 #[derive(Archive, Serialize)]
 pub struct MessageFromSlave {
     pub correction: u8,
