@@ -121,11 +121,11 @@ impl WebEmulatorInner {
             }
 
             for _ in 0..cycles {
-                execute_and_take_snapshot(
-                    &mut self.emulator,
-                    self.mbc.as_mut(),
-                    serial_mode.as_deref_mut(),
-                );
+                if let Some(synchro) = serial_mode.as_mut() {
+                    synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut());
+                } else {
+                    self.emulator.execute(self.mbc.as_mut());
+                }
                 self.handle_graphics(on_new_frame);
             }
 
@@ -564,7 +564,7 @@ impl SynchroSerial {
         if msg_from_slave.is_none() && current_cycle > emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - emulator.get_cycles()) {
-                execute_and_take_snapshot(emulator, mbc.as_mut(), Some(self));
+                self.execute_and_take_snapshot(emulator, mbc.as_mut());
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
                 {
@@ -589,7 +589,7 @@ impl SynchroSerial {
             .map(|a| (a.0, a.1.to_native()))
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                execute_and_take_snapshot(emulator, mbc, Some(self));
+                self.execute_and_take_snapshot(emulator, mbc);
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
                 {
@@ -615,35 +615,28 @@ impl SynchroSerial {
         }
         None
     }
-}
 
-fn execute_and_take_snapshot(
-    emulator: &mut Emulator,
-    mbc: &mut dyn CloneMbc<'static>,
-    mut serial_mode: Option<&mut SynchroSerial>,
-) {
-    if let Some(serial_mode) = serial_mode.as_deref_mut() {
-        serial_mode.execute(emulator.serial.slave_byte, emulator.get_cycles());
-    }
+    fn execute_and_take_snapshot(
+        &mut self,
+        emulator: &mut Emulator,
+        mbc: &mut dyn CloneMbc<'static>,
+    ) {
+        self.execute(emulator.serial.slave_byte, emulator.get_cycles());
 
-    if let Some(synchro) = serial_mode.as_deref_mut()
-        && emulator.will_serial_emit_byte()
-    {
-        let emulator_clone = emulator.clone();
-        let mbc_clone = mbc.clone_boxed();
-        let byte = emulator.execute(mbc).unwrap();
-        synchro
-            .current_message
-            .messages
-            .push((byte, emulator_clone, mbc_clone));
-    } else {
-        emulator.execute(mbc);
-    }
+        if emulator.will_serial_emit_byte() {
+            let emulator_clone = emulator.clone();
+            let mbc_clone = mbc.clone_boxed();
+            let byte = emulator.execute(mbc).unwrap();
+            self.current_message
+                .messages
+                .push((byte, emulator_clone, mbc_clone));
+        } else {
+            emulator.execute(mbc);
+        }
 
-    let cycles = emulator.get_cycles();
-    if let Some(synchro) = serial_mode
-        && cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-    {
-        synchro.add_snapshot((emulator.clone(), mbc.clone_boxed()));
+        let cycles = emulator.get_cycles();
+        if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
+            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
+        }
     }
 }

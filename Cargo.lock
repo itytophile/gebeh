@@ -1058,6 +1058,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "gebeh-network"
+version = "0.1.0"
+
+[[package]]
 name = "gebeh-server"
 version = "0.1.0"
 dependencies = [
