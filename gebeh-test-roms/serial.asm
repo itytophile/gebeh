@@ -20,6 +20,8 @@ section "Header", rom0[$100]
 EntryPoint:
     di
 
+    ld a, JOYP_GET_BUTTONS
+    ldh [rJOYP], a
     ld a, LCDC_ON | LCDC_WIN_OFF | LCDC_BG_ON | LCDC_BLOCK01
     ldh [rLCDC], a
     ld a, %11_11_11_00
@@ -31,11 +33,12 @@ EntryPoint:
     ld d, 67
     ld a, IE_SERIAL | IE_JOYPAD
     ldh [rIE], a
-    ei
     ld a, d
     ldh [rSB], a
     ld a, SC_START
     ldh [rSC], a
+    ei
+    nop
     halt
     ; master mode
     ld a, c
@@ -45,9 +48,9 @@ EntryPoint:
     halt
 check:
     ldh a, [rSC]
-    cp SC_INTERNAL
+    and SC_INTERNAL
     ldh a, [rSB]
-    jr z, .is_master
+    jr nz, .is_master
     ld d, c
 .is_master:
     cp d
