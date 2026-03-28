@@ -237,7 +237,7 @@ impl WebEmulatorInner {
         if let Some(synchro) = serial_mode
             && cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
         {
-            self.add_snapshot(synchro)
+            synchro.add_snapshot((self.emulator.clone(), self.mbc.clone_boxed()));
         }
     }
 
@@ -262,7 +262,7 @@ impl WebEmulatorInner {
             let msg_from_slave =
                 self.advance_while_consuming_messages(msg, synchro, &mut [].as_slice());
 
-            self.add_snapshot(synchro);
+            synchro.add_snapshot((self.emulator.clone(), self.mbc.clone_boxed()));
 
             return msg_from_slave.inspect(|_| self.session = !self.session);
         };
@@ -281,7 +281,7 @@ impl WebEmulatorInner {
         {
             self.emulator = emulator;
             self.mbc = mbc;
-            self.add_snapshot(synchro);
+            synchro.add_snapshot((self.emulator.clone(), self.mbc.clone_boxed()));
         } else {
             panic!("big delay");
         };
@@ -303,7 +303,7 @@ impl WebEmulatorInner {
         let msg_from_slave =
             self.advance_while_consuming_messages(msg, synchro, &mut inputs_history);
 
-        self.add_snapshot(synchro);
+        synchro.add_snapshot((self.emulator.clone(), self.mbc.clone_boxed()));
 
         if msg_from_slave.is_none() && current_cycle > self.emulator.get_cycles() {
             // catching up
@@ -358,16 +358,6 @@ impl WebEmulatorInner {
             }
         }
         None
-    }
-
-    fn add_snapshot(&mut self, synchro: &mut SynchroSerial) {
-        if let Err(arraydeque::CapacityError { element }) = synchro
-            .slave_snapshots
-            .push_back((self.emulator.clone(), self.mbc.clone_boxed()))
-        {
-            synchro.slave_snapshots.pop_front();
-            synchro.slave_snapshots.push_back(element).unwrap();
-        }
     }
 }
 
@@ -602,6 +592,14 @@ impl SynchroSerial {
             &SerialMessage::FromMaster(msg_to_send).serialize().into(),
         ) {
             console::error_1(&err);
+        }
+    }
+
+    fn add_snapshot(&mut self, snapshot: Snapshot) {
+        if let Err(arraydeque::CapacityError { element }) = self.slave_snapshots.push_back(snapshot)
+        {
+            self.slave_snapshots.pop_front();
+            self.slave_snapshots.push_back(element).unwrap();
         }
     }
 }
