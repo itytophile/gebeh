@@ -12,5 +12,4 @@ gebeh = { path = ".." }
 env_logger = "0.11.8"
 winit = "0.29"
 pixels = "0.15.0"
-log = "0.4.29"
 cpal = "0.17.0"

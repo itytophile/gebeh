@@ -8,7 +8,6 @@ publish = false
 gebeh-core = { path = "../gebeh-core" }
 gebeh-front-helper = { path = "../gebeh-front-helper" }
 rkyv = "0.8.15"
-arrayvec = "0.7.6"
 arraydeque = "0.5.1"
 zstd = { version = "0.13.3", features = ["wasm"] }
 log = "0.4.29"
