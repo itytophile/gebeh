@@ -2,6 +2,7 @@
 name = "gebeh-server"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 arrayvec = "0.7.6"

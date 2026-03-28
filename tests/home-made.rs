@@ -1,8 +1,9 @@
 use std::{fs::File, io::BufReader};
 
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, WIDTH};
+use gebeh_core::{Emulator, HEIGHT, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
+use gebeh_network::RollbackSerial;
 
 fn home_made(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
@@ -95,4 +96,88 @@ fn serial_master_transfer_timing() {
 #[test]
 fn serial_master_overclock() {
     home_made("serial_master_overclock");
+}
+
+#[test]
+fn serial_exchange() {
+    let rom = &*std::fs::read("./gebeh-test-roms/serial.gb").unwrap().leak();
+    let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut slave_emulator = Emulator::default();
+    let (_, mut master_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut master_emulator = Emulator::default();
+
+    let mut slave_rollback = RollbackSerial::default();
+    let mut master_rollback = RollbackSerial::default();
+
+    let mut messages_from_slave = Vec::new();
+    let mut messages_from_master = Vec::new();
+
+    // wait for ld a, a
+    loop {
+        messages_from_slave.extend(
+            slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
+        if let 0x7f = slave_emulator.get_cpu().current_opcode {
+            break;
+        }
+    }
+    loop {
+        messages_from_master.extend(
+            master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
+        );
+        if let 0x7f = master_emulator.get_cpu().current_opcode {
+            break;
+        }
+    }
+    master_emulator.set_joypad(JoypadInput {
+        start: true,
+        ..Default::default()
+    });
+
+    while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
+        let mut new_messages_from_master = Vec::new();
+        for msg in messages_from_slave.drain(..) {
+            new_messages_from_master.extend(master_rollback.set_serial_msg(
+                &msg,
+                &mut master_emulator,
+                &mut master_mbc,
+            ));
+        }
+        for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
+            messages_from_slave.extend(slave_rollback.set_serial_msg(
+                &msg,
+                &mut slave_emulator,
+                &mut slave_mbc,
+            ));
+        }
+    }
+
+    while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
+        messages_from_slave.extend(
+            slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
+        messages_from_master.extend(
+            master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
+        );
+        while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
+            let mut new_messages_from_master = Vec::new();
+            for msg in messages_from_slave.drain(..) {
+                new_messages_from_master.extend(master_rollback.set_serial_msg(
+                    &msg,
+                    &mut master_emulator,
+                    &mut master_mbc,
+                ));
+            }
+            for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
+                messages_from_slave.extend(slave_rollback.set_serial_msg(
+                    &msg,
+                    &mut slave_emulator,
+                    &mut slave_mbc,
+                ));
+            }
+        }
+    }
+
+    assert_eq!(slave_emulator.get_cpu().b, 7);
+    assert_eq!(master_emulator.get_cpu().b, 7)
 }

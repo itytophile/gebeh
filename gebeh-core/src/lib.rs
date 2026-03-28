@@ -9,7 +9,7 @@ use crate::{
     mbc::Mbc,
     ppu::Ppu,
     serial::Serial,
-    state::State,
+    state::{Interruptions, State},
     timer::Timer,
 };
 
@@ -52,8 +52,15 @@ impl Emulator {
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
     }
-    pub fn get_joypad_mut(&mut self) -> &mut JoypadInput {
-        &mut self.joypad.input
+    // don't call this function multiple times in a cycle with different inputs
+    // or it can fire interrupts when it shouldn't
+    pub fn set_joypad(&mut self, joypad: JoypadInput) {
+        let previous_joypad = self.joypad;
+        self.joypad.input = joypad;
+        // if some bits went from 1 to 0
+        if previous_joypad.get_register() & !self.joypad.get_register() != 0 {
+            self.state.interrupt_flag.insert(Interruptions::JOYPAD);
+        }
     }
     pub fn get_joypad(&self) -> &JoypadInput {
         &self.joypad.input

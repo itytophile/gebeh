@@ -1,5 +1,5 @@
 [workspace]
-members = ["gebeh-core", "gebeh-front-helper", "gebeh-native", "gebeh-server", "gebeh-web"]
+members = ["gebeh-core", "gebeh-front-helper", "gebeh-native", "gebeh-network", "gebeh-server", "gebeh-web"]
 
 [package]
 name = "gebeh"
@@ -14,6 +14,7 @@ gebeh-front-helper = { path = "./gebeh-front-helper" }
 [dev-dependencies]
 arrayvec = "0.7.6"
 png = "0.18.0"
+gebeh-network = { path = "./gebeh-network" }
 
 [profile.release]
 overflow-checks = true

@@ -22,11 +22,11 @@ pub struct JoypadInput {
     pub down: bool,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Copy)]
 pub struct Joypad {
     pub input: JoypadInput,
-    is_dpad_selected: bool,
-    is_buttons_selected: bool,
+    pub is_dpad_selected: bool,
+    pub is_buttons_selected: bool,
 }
 
 impl Joypad {

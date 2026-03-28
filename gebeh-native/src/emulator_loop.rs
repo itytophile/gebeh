@@ -117,7 +117,7 @@ where
             &config,
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                 if let Ok(input) = shared_joypad.try_read() {
-                    *emulator.get_joypad_mut() = *input;
+                    emulator.set_joypad(*input);
                 }
                 for frame in data.as_chunks_mut::<2>().0 {
                     let mut cycles = base;
