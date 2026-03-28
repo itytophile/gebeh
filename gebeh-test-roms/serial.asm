@@ -59,9 +59,11 @@ check:
 .is_master:
     cp d
     jr nz, .end
-    ld b, b
+    ; success
+    ld b, 7
     ld a, %00_00_00_11
     ldh [rBGP], a
 .end
-    ld c, c
+    ; end of program
+    ld h, 7
     halt

@@ -107,17 +107,24 @@ fn serial_exchange() {
     let mut master_emulator = Emulator::default();
 
     let mut slave_rollback = RollbackSerial::default();
-    let master_rollback = RollbackSerial::default();
+    let mut master_rollback = RollbackSerial::default();
+
+    let mut messages_from_slave = Vec::new();
+    let mut messages_from_master = Vec::new();
 
     // wait for ld a, a
     loop {
-        slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut());
+        messages_from_slave.extend(
+            slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
         if let 0x7f = slave_emulator.get_cpu().current_opcode {
             break;
         }
     }
     loop {
-        master_emulator.execute(master_mbc.as_mut());
+        messages_from_master.extend(
+            master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
+        );
         if let 0x7f = master_emulator.get_cpu().current_opcode {
             break;
         }
@@ -127,15 +134,50 @@ fn serial_exchange() {
         ..Default::default()
     });
 
-    loop {
-        master_emulator.execute(master_mbc.as_mut());
-        slave_emulator.execute(slave_mbc.as_mut());
-        match slave_emulator.get_cpu().current_opcode {
-            // ld b, b
-            0x40 => break,
-            // ld c, c
-            0x49 => panic!("ld c, c instead of ld b, b"),
-            _ => {}
+    while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
+        let mut new_messages_from_master = Vec::new();
+        for msg in messages_from_slave.drain(..) {
+            new_messages_from_master.extend(master_rollback.set_serial_msg(
+                &msg,
+                &mut master_emulator,
+                &mut master_mbc,
+            ));
+        }
+        for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
+            messages_from_slave.extend(slave_rollback.set_serial_msg(
+                &msg,
+                &mut slave_emulator,
+                &mut slave_mbc,
+            ));
         }
     }
+
+    while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
+        messages_from_slave.extend(
+            slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
+        messages_from_master.extend(
+            master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
+        );
+        while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
+            let mut new_messages_from_master = Vec::new();
+            for msg in messages_from_slave.drain(..) {
+                new_messages_from_master.extend(master_rollback.set_serial_msg(
+                    &msg,
+                    &mut master_emulator,
+                    &mut master_mbc,
+                ));
+            }
+            for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
+                messages_from_slave.extend(slave_rollback.set_serial_msg(
+                    &msg,
+                    &mut slave_emulator,
+                    &mut slave_mbc,
+                ));
+            }
+        }
+    }
+
+    assert_eq!(slave_emulator.get_cpu().b, 7);
+    assert_eq!(master_emulator.get_cpu().b, 7)
 }
