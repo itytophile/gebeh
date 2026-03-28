@@ -34,7 +34,6 @@ struct WebEmulatorInner {
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
     synchro_cycles: Option<SynchroCycles>,
-    snapshots: Box<Snapshots>,
     session: bool,
     // it's not the actual input value at a given cycle, but WHEN the input changes
     // to avoid saving inputs every cycle
@@ -50,7 +49,7 @@ struct SynchroCycles {
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Option<WebEmulatorInner>,
-    serial_mode: SerialMode,
+    serial_mode: Option<SynchroSerial>,
 }
 
 impl WebEmulatorInner {
@@ -99,7 +98,6 @@ impl WebEmulatorInner {
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
             synchro_cycles: None,
-            snapshots: Default::default(),
             session: false,
             inputs_history: Default::default(),
         })
@@ -112,7 +110,7 @@ impl WebEmulatorInner {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-        serial_mode: &mut SerialMode,
+        mut serial_mode: Option<&mut SynchroSerial>,
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -127,7 +125,7 @@ impl WebEmulatorInner {
             }
 
             for _ in 0..cycles {
-                self.execute_and_take_snapshot(serial_mode);
+                self.execute_and_take_snapshot(serial_mode.as_deref_mut());
                 self.handle_graphics(on_new_frame);
             }
 
@@ -177,21 +175,17 @@ impl WebEmulatorInner {
     pub fn set_serial_msg(
         &mut self,
         msg: &ArchivedSerialMessage,
-        serial_mode: &mut SerialMode,
+        synchro: &mut SynchroSerial,
     ) -> Option<MessageFromSlave> {
-        let SerialMode::SynchroSerial(synchro_serial) = serial_mode else {
-            panic!("no serial set despite receiving a message");
-        };
-
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
                 let current_joypad = *self.emulator.get_joypad();
-                let response = self.handle_message_from_master(serial_mode, msg);
+                let response = self.handle_message_from_master(synchro, msg);
                 self.emulator.set_joypad(current_joypad);
                 response
             }
             ArchivedSerialMessage::FromSlave(msg) => {
-                let (mut emulator, mbc) = core::mem::take(&mut synchro_serial.snapshots)
+                let (mut emulator, mbc) = core::mem::take(&mut synchro.master_snapshots)
                     .into_iter()
                     .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
                     .expect("desync too big");
@@ -208,8 +202,8 @@ impl WebEmulatorInner {
                 ));
 
                 self.emulator.serial.slave_byte = msg.correction;
-                synchro_serial.current_message.session = !synchro_serial.current_message.session;
-                synchro_serial.current_message.messages.clear();
+                synchro.current_message.session = !synchro.current_message.session;
+                synchro.current_message.messages.clear();
                 self.emulator.execute(self.mbc.as_mut());
 
                 // TODO catchup, however the master will send a lot of messages without being able
@@ -220,10 +214,12 @@ impl WebEmulatorInner {
         }
     }
 
-    fn execute_and_take_snapshot(&mut self, serial_mode: &mut SerialMode) {
-        serial_mode.execute(self.emulator.serial.slave_byte, self.emulator.get_cycles());
+    fn execute_and_take_snapshot(&mut self, mut serial_mode: Option<&mut SynchroSerial>) {
+        if let Some(serial_mode) = serial_mode.as_deref_mut() {
+            serial_mode.execute(self.emulator.serial.slave_byte, self.emulator.get_cycles());
+        }
 
-        if let SerialMode::SynchroSerial(synchro) = serial_mode
+        if let Some(synchro) = serial_mode.as_deref_mut()
             && self.emulator.will_serial_emit_byte()
         {
             let emulator_clone = self.emulator.clone();
@@ -238,14 +234,16 @@ impl WebEmulatorInner {
         }
 
         let cycles = self.emulator.get_cycles();
-        if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
-            self.add_snapshot()
+        if let Some(synchro) = serial_mode
+            && cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+        {
+            self.add_snapshot(synchro)
         }
     }
 
     fn handle_message_from_master(
         &mut self,
-        serial_mode: &mut SerialMode,
+        synchro: &mut SynchroSerial,
         msg: &ArchivedMessageFromMaster,
     ) -> Option<MessageFromSlave> {
         if msg.session != self.session {
@@ -262,9 +260,9 @@ impl WebEmulatorInner {
             });
 
             let msg_from_slave =
-                self.advance_while_consuming_messages(msg, serial_mode, &mut [].as_slice());
+                self.advance_while_consuming_messages(msg, synchro, &mut [].as_slice());
 
-            self.add_snapshot();
+            self.add_snapshot(synchro);
 
             return msg_from_slave.inspect(|_| self.session = !self.session);
         };
@@ -274,7 +272,7 @@ impl WebEmulatorInner {
         let restore_cycle =
             synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
 
-        let snapshots = core::mem::take(&mut self.snapshots);
+        let snapshots = core::mem::take(&mut synchro.slave_snapshots);
 
         if let Some((emulator, mbc)) = snapshots
             .into_iter()
@@ -283,7 +281,7 @@ impl WebEmulatorInner {
         {
             self.emulator = emulator;
             self.mbc = mbc;
-            self.add_snapshot();
+            self.add_snapshot(synchro);
         } else {
             panic!("big delay");
         };
@@ -303,14 +301,14 @@ impl WebEmulatorInner {
         let mut inputs_history = inputs_history.as_slice();
 
         let msg_from_slave =
-            self.advance_while_consuming_messages(msg, serial_mode, &mut inputs_history);
+            self.advance_while_consuming_messages(msg, synchro, &mut inputs_history);
 
-        self.add_snapshot();
+        self.add_snapshot(synchro);
 
         if msg_from_slave.is_none() && current_cycle > self.emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - self.emulator.get_cycles()) {
-                self.execute_and_take_snapshot(serial_mode);
+                self.execute_and_take_snapshot(Some(synchro));
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == self.emulator.get_cycles()
                 {
@@ -326,7 +324,7 @@ impl WebEmulatorInner {
     fn advance_while_consuming_messages(
         &mut self,
         msg: &ArchivedMessageFromMaster,
-        serial_mode: &mut SerialMode,
+        synchro: &mut SynchroSerial,
         inputs_history: &mut &[(u64, JoypadInput)],
     ) -> Option<MessageFromSlave> {
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
@@ -334,7 +332,7 @@ impl WebEmulatorInner {
             .map(|a| (a.0, a.1.to_native()))
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                self.execute_and_take_snapshot(serial_mode);
+                self.execute_and_take_snapshot(Some(synchro));
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == self.emulator.get_cycles()
                 {
@@ -362,13 +360,13 @@ impl WebEmulatorInner {
         None
     }
 
-    fn add_snapshot(&mut self) {
-        if let Err(arraydeque::CapacityError { element }) = self
-            .snapshots
+    fn add_snapshot(&mut self, synchro: &mut SynchroSerial) {
+        if let Err(arraydeque::CapacityError { element }) = synchro
+            .slave_snapshots
             .push_back((self.emulator.clone(), self.mbc.clone_boxed()))
         {
-            self.snapshots.pop_front();
-            self.snapshots.push_back(element).unwrap();
+            synchro.slave_snapshots.pop_front();
+            synchro.slave_snapshots.push_back(element).unwrap();
         }
     }
 }
@@ -405,7 +403,7 @@ impl WebEmulator {
                 right,
                 sample_rate,
                 on_new_frame,
-                &mut self.serial_mode,
+                self.serial_mode.as_mut(),
             );
         }
     }
@@ -480,14 +478,16 @@ impl WebEmulator {
     }
 
     pub fn set_serial_msg(&mut self, msg: &[u8]) -> Option<Box<[u8]>> {
+        let Some(synchro) = &mut self.serial_mode else {
+            panic!("No synchro");
+        };
+
         let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            inner
-                .set_serial_msg(msg.get(), &mut self.serial_mode)
-                .map(|msg| {
-                    console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
-                    SerialMessage::FromSlave(msg).serialize()
-                })
+            inner.set_serial_msg(msg.get(), synchro).map(|msg| {
+                console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
+                SerialMessage::FromSlave(msg).serialize()
+            })
         } else if let ArchivedSerialMessage::FromMaster(msg) = msg.get()
             && msg.prediction != 0xff
         {
@@ -505,16 +505,17 @@ impl WebEmulator {
 
     pub fn set_is_serial_connected(&mut self, on_serial: Option<js_sys::Function>) {
         if let Some(on_serial) = on_serial {
-            self.serial_mode = SerialMode::SynchroSerial(SynchroSerial {
+            self.serial_mode = Some(SynchroSerial {
                 on_serial,
                 current_message: MessageFromMasterAcc {
                     messages: Default::default(),
                     session: false,
                 },
-                snapshots: Default::default(),
+                master_snapshots: Default::default(),
+                slave_snapshots: Default::default(),
             });
         } else {
-            self.serial_mode = SerialMode::Disconnected;
+            self.serial_mode = None;
             if let Some(inner) = &mut self.inner {
                 inner.emulator.serial.slave_byte = 0xff;
             }
@@ -561,7 +562,8 @@ const INPUTS_HISTORY_SIZE: usize = 50;
 struct SynchroSerial {
     on_serial: js_sys::Function,
     current_message: MessageFromMasterAcc,
-    snapshots: Vec<(Emulator, EasyMbc)>,
+    master_snapshots: Vec<(Emulator, EasyMbc)>,
+    slave_snapshots: Box<Snapshots>,
 }
 
 impl SynchroSerial {
@@ -574,18 +576,18 @@ impl SynchroSerial {
             return;
         }
 
-        self.snapshots
+        self.master_snapshots
             .retain(|(snap, _)| cycles - snap.get_cycles() < ROLLBACK_TRESHOLD);
         let mut messages = core::mem::take(&mut self.current_message.messages).into_iter();
         let (first_byte, first_snap, first_mbc) = messages.next().unwrap();
         let first_cycle = first_snap.get_cycles();
 
-        self.snapshots.push((first_snap, first_mbc));
+        self.master_snapshots.push((first_snap, first_mbc));
 
         let mut messages_to_send = Vec::new();
         for (byte, emulator, mbc) in messages {
             messages_to_send.push((byte, emulator.get_cycles()));
-            self.snapshots.push((emulator, mbc));
+            self.master_snapshots.push((emulator, mbc));
         }
 
         let msg_to_send = MessageFromMaster {
@@ -600,22 +602,6 @@ impl SynchroSerial {
             &SerialMessage::FromMaster(msg_to_send).serialize().into(),
         ) {
             console::error_1(&err);
-        }
-    }
-}
-
-#[derive(Default)]
-enum SerialMode {
-    #[default]
-    Disconnected,
-    SynchroSerial(SynchroSerial),
-}
-
-impl SerialMode {
-    fn execute(&mut self, prediction: u8, cycles: u64) {
-        match self {
-            Self::Disconnected => {}
-            Self::SynchroSerial(synchro) => synchro.execute(prediction, cycles),
         }
     }
 }
