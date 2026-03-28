@@ -1060,6 +1060,15 @@ dependencies = [
 [[package]]
 name = "gebeh-network"
 version = "0.1.0"
+dependencies = [
+ "arraydeque",
+ "arrayvec",
+ "gebeh-core",
+ "gebeh-front-helper",
+ "log",
+ "rkyv",
+ "zstd",
+]
 
 [[package]]
 name = "gebeh-server"
@@ -1093,6 +1102,7 @@ dependencies = [
  "console_error_panic_hook",
  "gebeh-core",
  "gebeh-front-helper",
+ "gebeh-network",
  "rkyv",
  "wasm-bindgen",
  "web-sys",

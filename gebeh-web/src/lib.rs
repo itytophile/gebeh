@@ -1,28 +1,23 @@
 use std::rc::Rc;
 
-use arraydeque::ArrayDeque;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer, joypad::JoypadInput,
 };
-use gebeh_front_helper::{CloneMbc, EasyMbc, get_mbc, get_noise, get_title_from_rom};
+use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
     js_sys::{self},
 };
 
-use crate::{
-    message::{
-        ArchivedMessageFromMaster, ArchivedSerialMessage, MessageFromMaster, MessageFromSlave,
-        SerialMessage,
-    },
-    rtc::NullRtc,
+use gebeh_network::{
+    SynchroSerial,
+    message::{ArchivedSerialMessage, MessageFromSlave, SerialMessage},
 };
 
-mod message;
-mod rtc;
+use crate::rtc::NullRtc;
 
-type Snapshots = ArrayDeque<Snapshot, MAX_SNAPSHOT>;
+mod rtc;
 
 struct WebEmulatorInner {
     emulator: Emulator,
@@ -35,16 +30,11 @@ struct WebEmulatorInner {
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
 }
 
-struct SynchroCycles {
-    master: u64,
-    slave: u64,
-}
-
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Option<WebEmulatorInner>,
-    serial_mode: Option<SynchroSerial>,
+    network: Option<(js_sys::Function, SynchroSerial)>,
 }
 
 impl WebEmulatorInner {
@@ -59,15 +49,7 @@ impl WebEmulatorInner {
             return;
         };
 
-        let Err(arraydeque::CapacityError { element }) = synchro
-            .inputs_history
-            .push_back((self.emulator.get_cycles(), joypad))
-        else {
-            return;
-        };
-
-        synchro.inputs_history.pop_front();
-        synchro.inputs_history.push_back(element).unwrap();
+        synchro.save_input(self.emulator.get_cycles(), joypad);
     }
 
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
@@ -106,7 +88,7 @@ impl WebEmulatorInner {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-        mut serial_mode: Option<&mut SynchroSerial>,
+        serial_mode: &mut Option<(js_sys::Function, SynchroSerial)>,
     ) {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
@@ -121,8 +103,18 @@ impl WebEmulatorInner {
             }
 
             for _ in 0..cycles {
-                if let Some(synchro) = serial_mode.as_mut() {
-                    synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut());
+                if let Some((send, synchro)) = serial_mode.as_mut() {
+                    if let Some(msg) =
+                        synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut())
+                        && let Err(err) = send.call1(
+                            &JsValue::null(),
+                            &js_sys::Uint8Array::new_from_slice(
+                                &SerialMessage::FromMaster(msg).serialize(),
+                            ),
+                        )
+                    {
+                        console::error_1(&err);
+                    }
                 } else {
                     self.emulator.execute(self.mbc.as_mut());
                 }
@@ -177,8 +169,6 @@ fn console_log(text: &str) {
     console::log_1(&JsValue::from_str(text));
 }
 
-type Snapshot = (Emulator, EasyMbc);
-
 #[wasm_bindgen]
 impl WebEmulator {
     #[wasm_bindgen(constructor)]
@@ -200,13 +190,7 @@ impl WebEmulator {
         on_new_frame: &js_sys::Function,
     ) {
         if let Some(inner) = &mut self.inner {
-            inner.drive_and_sample(
-                left,
-                right,
-                sample_rate,
-                on_new_frame,
-                self.serial_mode.as_mut(),
-            );
+            inner.drive_and_sample(left, right, sample_rate, on_new_frame, &mut self.network);
         }
     }
 
@@ -221,7 +205,7 @@ impl WebEmulator {
                     a: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -232,7 +216,7 @@ impl WebEmulator {
                     b: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -243,7 +227,7 @@ impl WebEmulator {
                     start: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -254,7 +238,7 @@ impl WebEmulator {
                     select: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -265,7 +249,7 @@ impl WebEmulator {
                     left: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -276,7 +260,7 @@ impl WebEmulator {
                     right: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -287,7 +271,7 @@ impl WebEmulator {
                     down: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
@@ -298,55 +282,55 @@ impl WebEmulator {
                     up: value,
                     ..*inner.emulator.get_joypad()
                 },
-                self.serial_mode.as_mut(),
+                self.network.as_mut().map(|(_, synchro)| synchro),
             );
         }
     }
 
-    pub fn set_serial_msg(&mut self, msg: &[u8]) -> Option<Box<[u8]>> {
-        let Some(synchro) = &mut self.serial_mode else {
+    #[must_use]
+    pub fn set_serial_msg(&mut self, msg: &[u8]) -> Box<[js_sys::Uint8Array]> {
+        let Some((_, synchro)) = &mut self.network else {
             panic!("No synchro");
         };
 
         let msg = SerialMessage::deserialize(msg);
         if let Some(inner) = &mut self.inner {
-            synchro
-                .set_serial_msg(msg.get(), &mut inner.emulator, &mut inner.mbc)
+            let (slave, master) =
+                synchro.set_serial_msg(msg.get(), &mut inner.emulator, &mut inner.mbc);
+            slave
                 .map(|msg| {
                     console_log(&format!("DURE CORREKUSHOOON 0x{:02x}", msg.correction));
                     SerialMessage::FromSlave(msg).serialize()
                 })
+                .into_iter()
+                .chain(
+                    master
+                        .into_iter()
+                        .map(|msg| SerialMessage::FromMaster(msg).serialize()),
+                )
+                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
+                .collect()
         } else if let ArchivedSerialMessage::FromMaster(msg) = msg.get()
             && msg.prediction != 0xff
         {
-            Some(
-                SerialMessage::FromSlave(MessageFromSlave {
+            core::iter::once(js_sys::Uint8Array::new_from_slice(
+                &SerialMessage::FromSlave(MessageFromSlave {
                     correction: 0xff,
                     cycle: msg.first_message.1.to_native(),
                 })
                 .serialize(),
-            )
+            ))
+            .collect()
         } else {
-            None
+            Default::default()
         }
     }
 
     pub fn set_is_serial_connected(&mut self, on_serial: Option<js_sys::Function>) {
         if let Some(on_serial) = on_serial {
-            self.serial_mode = Some(SynchroSerial {
-                on_serial,
-                current_message: MessageFromMasterAcc {
-                    messages: Default::default(),
-                    session: false,
-                },
-                master_snapshots: Default::default(),
-                slave_snapshots: Default::default(),
-                inputs_history: Default::default(),
-                session: Default::default(),
-                synchro_cycles: Default::default(),
-            });
+            self.network = Some((on_serial.clone(), Default::default()));
         } else {
-            self.serial_mode = None;
+            self.network = None;
             if let Some(inner) = &mut self.inner {
                 inner.emulator.serial.slave_byte = 0xff;
             }
@@ -374,269 +358,5 @@ impl Save {
 
     pub fn get_game_title(&self) -> String {
         self.game_title.clone()
-    }
-}
-
-struct MessageFromMasterAcc {
-    messages: Vec<(u8, Emulator, EasyMbc)>,
-    session: bool,
-}
-
-// 1 second
-const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
-// 10 ms
-const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
-const MAX_SNAPSHOT: usize = 20;
-const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
-const INPUTS_HISTORY_SIZE: usize = 50;
-
-struct SynchroSerial {
-    on_serial: js_sys::Function,
-    current_message: MessageFromMasterAcc,
-    master_snapshots: Vec<(Emulator, EasyMbc)>,
-    slave_snapshots: Box<Snapshots>,
-    synchro_cycles: Option<SynchroCycles>,
-    session: bool,
-    // it's not the actual input value at a given cycle, but WHEN the input changes
-    // to avoid saving inputs every cycle
-    inputs_history: Box<ArrayDeque<(u64, JoypadInput), INPUTS_HISTORY_SIZE>>,
-}
-
-impl SynchroSerial {
-    fn execute(&mut self, prediction: u8, cycles: u64) {
-        let Some((_, first_snap, _)) = self.current_message.messages.first() else {
-            return;
-        };
-
-        if cycles - first_snap.get_cycles() <= BATCH_PERIOD {
-            return;
-        }
-
-        self.master_snapshots
-            .retain(|(snap, _)| cycles - snap.get_cycles() < ROLLBACK_TRESHOLD);
-        let mut messages = core::mem::take(&mut self.current_message.messages).into_iter();
-        let (first_byte, first_snap, first_mbc) = messages.next().unwrap();
-        let first_cycle = first_snap.get_cycles();
-
-        self.master_snapshots.push((first_snap, first_mbc));
-
-        let mut messages_to_send = Vec::new();
-        for (byte, emulator, mbc) in messages {
-            messages_to_send.push((byte, emulator.get_cycles()));
-            self.master_snapshots.push((emulator, mbc));
-        }
-
-        let msg_to_send = MessageFromMaster {
-            first_message: (first_byte, first_cycle),
-            messages: messages_to_send,
-            prediction,
-            session: self.current_message.session,
-        };
-
-        if let Err(err) = self.on_serial.call1(
-            &JsValue::null(),
-            &SerialMessage::FromMaster(msg_to_send).serialize().into(),
-        ) {
-            console::error_1(&err);
-        }
-    }
-
-    fn add_snapshot(&mut self, snapshot: Snapshot) {
-        if let Err(arraydeque::CapacityError { element }) = self.slave_snapshots.push_back(snapshot)
-        {
-            self.slave_snapshots.pop_front();
-            self.slave_snapshots.push_back(element).unwrap();
-        }
-    }
-
-    pub fn set_serial_msg(
-        &mut self,
-        msg: &ArchivedSerialMessage,
-        emulator: &mut Emulator,
-        mbc: &mut EasyMbc,
-    ) -> Option<MessageFromSlave> {
-        match msg {
-            ArchivedSerialMessage::FromMaster(msg) => {
-                let current_joypad = *emulator.get_joypad();
-                let response = self.handle_message_from_master(emulator, mbc, msg);
-                emulator.set_joypad(current_joypad);
-                response
-            }
-            ArchivedSerialMessage::FromSlave(msg) => {
-                let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
-                    .into_iter()
-                    .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
-                    .expect("desync too big");
-                snap_emulator.set_joypad(*emulator.get_joypad());
-                *emulator = snap_emulator;
-                *mbc = snap_mbc;
-                console_log(&format!(
-                    "Correction from slave 0x{:02x} -> 0x{:02x}",
-                    emulator.serial.slave_byte, msg.correction
-                ));
-                console_log(&format!(
-                    "Will emit serial {}",
-                    emulator.will_serial_emit_byte()
-                ));
-
-                emulator.serial.slave_byte = msg.correction;
-                self.current_message.session = !self.current_message.session;
-                self.current_message.messages.clear();
-                emulator.execute(mbc.as_mut());
-
-                // TODO catchup, however the master will send a lot of messages without being able
-                // to receive the slave ones
-
-                None
-            }
-        }
-    }
-
-    fn handle_message_from_master(
-        &mut self,
-        emulator: &mut Emulator,
-        mbc: &mut EasyMbc,
-        msg: &ArchivedMessageFromMaster,
-    ) -> Option<MessageFromSlave> {
-        if msg.session != self.session {
-            console::log_1(&JsValue::from_str("Bad session"));
-            return None;
-        }
-
-        let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
-            console_log("first batch");
-            let slave_cycles = emulator.get_cycles();
-            self.synchro_cycles = Some(SynchroCycles {
-                master: msg.first_message.1.to_native(),
-                slave: slave_cycles,
-            });
-
-            let msg_from_slave = self.advance_while_consuming_messages(
-                msg,
-                &mut [].as_slice(),
-                emulator,
-                mbc.as_mut(),
-            );
-
-            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
-
-            return msg_from_slave.inspect(|_| self.session = !self.session);
-        };
-
-        let current_cycle = emulator.get_cycles();
-
-        let restore_cycle =
-            synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
-
-        let snapshots = core::mem::take(&mut self.slave_snapshots);
-
-        if let Some((snap_emulator, snap_mbc)) = snapshots
-            .into_iter()
-            .rev()
-            .find(|(emulator, _)| emulator.get_cycles() <= restore_cycle)
-        {
-            *emulator = snap_emulator;
-            *mbc = snap_mbc;
-            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
-        } else {
-            panic!("big delay");
-        };
-
-        self.synchro_cycles = Some(SynchroCycles {
-            master: self.synchro_cycles.as_ref().unwrap().master + emulator.get_cycles()
-                - self.synchro_cycles.as_ref().unwrap().slave,
-            slave: emulator.get_cycles(),
-        });
-
-        let inputs_history: Vec<_> = self
-            .inputs_history
-            .iter()
-            .filter(|(cycle, _)| *cycle > emulator.get_cycles())
-            .copied()
-            .collect();
-        let mut inputs_history = inputs_history.as_slice();
-
-        let msg_from_slave =
-            self.advance_while_consuming_messages(msg, &mut inputs_history, emulator, mbc.as_mut());
-
-        self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
-
-        if msg_from_slave.is_none() && current_cycle > emulator.get_cycles() {
-            // catching up
-            for _ in 0..(current_cycle - emulator.get_cycles()) {
-                self.execute_and_take_snapshot(emulator, mbc.as_mut());
-                if let Some((cycle, input)) = inputs_history.first()
-                    && *cycle == emulator.get_cycles()
-                {
-                    emulator.set_joypad(*input);
-                    inputs_history = &inputs_history[1..];
-                }
-            }
-        }
-
-        msg_from_slave.inspect(|_| self.session = !self.session)
-    }
-
-    fn advance_while_consuming_messages(
-        &mut self,
-        msg: &ArchivedMessageFromMaster,
-        inputs_history: &mut &[(u64, JoypadInput)],
-        emulator: &mut Emulator,
-        mbc: &mut dyn CloneMbc<'static>,
-    ) -> Option<MessageFromSlave> {
-        for (byte, master_cycle) in std::iter::once(&msg.first_message)
-            .chain(msg.messages.iter())
-            .map(|a| (a.0, a.1.to_native()))
-        {
-            for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                self.execute_and_take_snapshot(emulator, mbc);
-                if let Some((cycle, input)) = inputs_history.first()
-                    && *cycle == emulator.get_cycles()
-                {
-                    emulator.set_joypad(*input);
-                    *inputs_history = &inputs_history[1..];
-                }
-            }
-
-            self.synchro_cycles = Some(SynchroCycles {
-                master: master_cycle,
-                slave: emulator.get_cycles(),
-            });
-
-            let response = emulator
-                .serial
-                .set_msg_from_master(byte, &mut emulator.state);
-            if response != msg.prediction {
-                return Some(MessageFromSlave {
-                    correction: response,
-                    cycle: master_cycle,
-                });
-            }
-        }
-        None
-    }
-
-    fn execute_and_take_snapshot(
-        &mut self,
-        emulator: &mut Emulator,
-        mbc: &mut dyn CloneMbc<'static>,
-    ) {
-        self.execute(emulator.serial.slave_byte, emulator.get_cycles());
-
-        if emulator.will_serial_emit_byte() {
-            let emulator_clone = emulator.clone();
-            let mbc_clone = mbc.clone_boxed();
-            let byte = emulator.execute(mbc).unwrap();
-            self.current_message
-                .messages
-                .push((byte, emulator_clone, mbc_clone));
-        } else {
-            emulator.execute(mbc);
-        }
-
-        let cycles = emulator.get_cycles();
-        if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
-            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
-        }
     }
 }

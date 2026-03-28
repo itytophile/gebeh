@@ -149,26 +149,27 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       throw new Error("No stereo");
     }
 
-    if (!this.emulator) {
+    const { emulator } = this;
+
+    if (!emulator) {
       return true;
     }
 
-    for (const message of this.serialMessages) {
-      const messageToSend = this.emulator.set_serial_msg(message);
-      if (messageToSend) {
-        this.port.postMessage(
-          {
-            type: "serial",
-            buffer: messageToSend,
-          } satisfies FromNodeMessage,
-          [messageToSend.buffer],
-        );
-      }
+    for (const message of this.serialMessages.flatMap((message) =>
+      emulator.set_serial_msg(message),
+    )) {
+      this.port.postMessage(
+        {
+          type: "serial",
+          buffer: message,
+        } satisfies FromNodeMessage,
+        [message.buffer],
+      );
     }
 
     this.serialMessages = [];
 
-    this.emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
+    emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
       if (!this.isMessagesEnabled) {
         return;
       }
@@ -187,7 +188,7 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
     this.poor_mans_time = (this.poor_mans_time + 1) % Math.round((sampleRate / 128) * 5);
 
     if (this.poor_mans_time === 0 && this.isMessagesEnabled) {
-      const save = this.emulator.get_save();
+      const save = emulator.get_save();
       if (save) {
         const ram = save.get_ram();
         this.port.postMessage(
