@@ -3,11 +3,13 @@ INCLUDE "hardware.inc"
 ; enable master mode after joypad press
 section "joypad", rom0[INT_HANDLER_JOYPAD]
     ld a, IE_SERIAL
-    ld [rIE], a
+    ldh [rIE], a
     reti
 
 section "serial", rom0[INT_HANDLER_SERIAL]
-    ei
+    ei ; to halt later
+    xor a
+    ldh [rIE], a
     jp check
 
 section "Header", rom0[$100]
@@ -28,7 +30,7 @@ EntryPoint:
     ; byte sent by slave
     ld d, 67
     ld a, IE_SERIAL | IE_JOYPAD
-    ld [rIE], a
+    ldh [rIE], a
     ei
     ld a, d
     ldh [rSB], a
@@ -44,13 +46,15 @@ EntryPoint:
 check:
     ldh a, [rSC]
     cp SC_INTERNAL
+    ldh a, [rSB]
     jr z, .is_master
-    cp c
+    ld d, c
 .is_master:
     cp d
     jr nz, .end
     ld b, b
     ld a, %00_00_00_11
+    ldh [rBGP], a
 .end
     ld c, c
     halt
