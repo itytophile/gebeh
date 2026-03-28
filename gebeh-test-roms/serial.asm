@@ -4,7 +4,8 @@ INCLUDE "hardware.inc"
 section "joypad", rom0[INT_HANDLER_JOYPAD]
     ld a, IE_SERIAL
     ldh [rIE], a
-    reti
+    ei
+    jp master_mode
 
 section "serial", rom0[INT_HANDLER_SERIAL]
     ei ; to halt later
@@ -38,8 +39,11 @@ EntryPoint:
     ld a, SC_START
     ldh [rSC], a
     ei
-    nop
+    ; to tell the emulator that it can inject an input
+    ld a, a
+    ; don't reti in case the interrupt is fired before the halt (problem happening if spamming buttons irl)
     halt
+master_mode:
     ; master mode
     ld a, c
     ldh [rSB], a
