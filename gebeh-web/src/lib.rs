@@ -59,7 +59,7 @@ impl WebEmulatorInner {
             return;
         }
 
-        *self.emulator.get_joypad_mut() = joypad;
+        self.emulator.set_joypad(joypad);
 
         let Err(arraydeque::CapacityError { element }) = self
             .inputs_history
@@ -185,9 +185,9 @@ impl WebEmulatorInner {
 
         match msg {
             ArchivedSerialMessage::FromMaster(msg) => {
-                let current_joypad = *self.emulator.get_joypad_mut();
+                let current_joypad = *self.emulator.get_joypad();
                 let response = self.handle_message_from_master(serial_mode, msg);
-                *self.emulator.get_joypad_mut() = current_joypad;
+                self.emulator.set_joypad(current_joypad);
                 response
             }
             ArchivedSerialMessage::FromSlave(msg) => {
@@ -195,7 +195,7 @@ impl WebEmulatorInner {
                     .into_iter()
                     .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
                     .expect("desync too big");
-                *emulator.get_joypad_mut() = *self.emulator.get_joypad_mut();
+                emulator.set_joypad(*self.emulator.get_joypad());
                 self.emulator = emulator;
                 self.mbc = mbc;
                 console_log(&format!(
@@ -314,7 +314,7 @@ impl WebEmulatorInner {
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == self.emulator.get_cycles()
                 {
-                    *self.emulator.get_joypad_mut() = *input;
+                    self.emulator.set_joypad(*input);
                     inputs_history = &inputs_history[1..];
                 }
             }
@@ -338,7 +338,7 @@ impl WebEmulatorInner {
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == self.emulator.get_cycles()
                 {
-                    *self.emulator.get_joypad_mut() = *input;
+                    self.emulator.set_joypad(*input);
                     *inputs_history = &inputs_history[1..];
                 }
             }
