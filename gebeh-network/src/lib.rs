@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use arraydeque::ArrayDeque;
 use gebeh_core::{Emulator, joypad::JoypadInput};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
@@ -20,15 +22,15 @@ struct MessageFromMasterAcc {
     session: bool,
 }
 
-type Snapshots = ArrayDeque<Snapshot, MAX_SNAPSHOT>;
+type Snapshots = VecDeque<Snapshot>;
 
 type Snapshot = (Emulator, EasyMbc);
 
-// 1 second
-const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
+// 3 seconds
+const ROLLBACK_TRESHOLD: u64 = 4194304 * 3 / 4;
 // 10 ms
 const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
-const MAX_SNAPSHOT: usize = 20;
+const MAX_SNAPSHOT: usize = 120;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
@@ -78,11 +80,10 @@ impl RollbackSerial {
     }
 
     fn add_snapshot(&mut self, snapshot: Snapshot) {
-        if let Err(arraydeque::CapacityError { element }) = self.slave_snapshots.push_back(snapshot)
-        {
+        if self.slave_snapshots.len() == MAX_SNAPSHOT {
             self.slave_snapshots.pop_front();
-            self.slave_snapshots.push_back(element).unwrap();
         }
+        self.slave_snapshots.push_back(snapshot)
     }
 
     pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<Box<[u8]>> {
