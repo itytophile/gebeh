@@ -1,15 +1,11 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
 import Button from "./bulma/button";
-import { faRocket } from "@fortawesome/free-solid-svg-icons";
-import { faPlug } from "@fortawesome/free-solid-svg-icons/faPlug";
-import { faRotateLeft } from "@fortawesome/free-solid-svg-icons/faRotateLeft";
+import { faRocket, faPlug, faRotateLeft } from "@fortawesome/free-solid-svg-icons";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
-    | { type: "input"; value: string }
-    | { type: "created" }
-    | { type: "joined"; name: string }
+    { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
   >({ type: "input", value: "" });
 
   if (room.type === "input") {
@@ -89,9 +85,7 @@ function CreatedRoom({ port }: { port: MessagePort }) {
   >({ type: "loading" });
 
   useEffect(() => {
-    const ws = new WebSocket(
-      `${globalThis.location.protocol}//${globalThis.location.host}/ws`,
-    );
+    const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
     ws.binaryType = "arraybuffer";
     const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
       if (data.type === "serial") {
@@ -103,10 +97,7 @@ function CreatedRoom({ port }: { port: MessagePort }) {
       port.addEventListener("message", portListener);
     });
 
-    let state:
-      | { type: "waitName" }
-      | { type: "waitGuest"; room: string }
-      | { type: "done" } = {
+    let state: { type: "waitName" } | { type: "waitGuest"; room: string } | { type: "done" } = {
       type: "waitName",
     };
 
@@ -179,9 +170,7 @@ function CreatedRoom({ port }: { port: MessagePort }) {
 }
 
 function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
-  const [status, setStatus] = useState<"loading" | "ready" | "closed">(
-    "loading",
-  );
+  const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
   useEffect(() => {
     const ws = new WebSocket(
       `${globalThis.location.protocol}//${globalThis.location.host}/ws?room=${room}`,
