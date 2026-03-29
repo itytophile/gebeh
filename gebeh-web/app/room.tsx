@@ -3,11 +3,16 @@ import type { FromNodeMessage, FromMainMessage } from "./common";
 import Button from "./bulma/button";
 import { faRocket } from "@fortawesome/free-solid-svg-icons";
 import { faPlug } from "@fortawesome/free-solid-svg-icons/faPlug";
+import { faRotateLeft } from "@fortawesome/free-solid-svg-icons/faRotateLeft";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
     { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
   >({ type: "input", value: "" });
+
+  const handleReset = () => {
+    setRoom({ type: "input", value: "" });
+  };
 
   if (room.type === "input") {
     return (
@@ -54,13 +59,13 @@ function Room({ port }: { port: MessagePort }) {
   }
 
   if (room.type === "created") {
-    return <CreatedRoom port={port} />;
+    return <CreatedRoom port={port} onReset={handleReset} />;
   }
 
-  return <JoinedRoom port={port} room={room.name} />;
+  return <JoinedRoom port={port} room={room.name} onReset={handleReset} />;
 }
 
-function CreatedRoom({ port }: { port: MessagePort }) {
+function CreatedRoom({ port, onReset }: { port: MessagePort; onReset: () => void }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
@@ -132,28 +137,70 @@ function CreatedRoom({ port }: { port: MessagePort }) {
   }, [port]);
 
   if (status.type === "loading") {
-    return <Button label="Loading..." />;
+    return (
+      <div className="field has-addons">
+        <div className="control">
+          <Button label="Loading..." />
+        </div>
+        <div className="control">
+          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+        </div>
+      </div>
+    );
   }
 
   if (status.type === "closed") {
-    return <Button label="Room closed 🍗🍗" />;
+    return (
+      <div className="field has-addons">
+        <div className="control">
+          <Button label="Room closed 🍗🍗" />
+        </div>
+        <div className="control">
+          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+        </div>
+      </div>
+    );
   }
 
   if (status.type === "waiting") {
     return (
-      <Button
-        label={`${status.room} 🥚🐔`}
-        onClick={() => {
-          void navigator.clipboard.writeText(status.room);
-        }}
-      />
+      <div className="field has-addons">
+        <div className="control">
+          <Button
+            label={`${status.room} 🥚🐔`}
+            onClick={() => {
+              void navigator.clipboard.writeText(status.room);
+            }}
+          />
+        </div>
+        <div className="control">
+          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+        </div>
+      </div>
     );
   }
 
-  return <Button label="Connected 🐣🐔" />;
+  return (
+    <div className="field has-addons">
+      <div className="control">
+        <Button label="Connected 🐣🐔" />
+      </div>
+      <div className="control">
+        <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+      </div>
+    </div>
+  );
 }
 
-function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
+function JoinedRoom({
+  room,
+  port,
+  onReset,
+}: {
+  room: string;
+  port: MessagePort;
+  onReset: () => void;
+}) {
   const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
   useEffect(() => {
     const ws = new WebSocket(
@@ -195,14 +242,41 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
   }, [port, room]);
 
   if (status === "loading") {
-    return <Button label="Loading..." />;
+    return (
+      <div className="field has-addons">
+        <div className="control">
+          <Button label="Loading..." />
+        </div>
+        <div className="control">
+          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+        </div>
+      </div>
+    );
   }
 
   if (status === "closed") {
-    return <Button label="Room closed 🍗🍗" />;
+    return (
+      <div className="field has-addons">
+        <div className="control">
+          <Button label="Room closed 🍗🍗" />
+        </div>
+        <div className="control">
+          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+        </div>
+      </div>
+    );
   }
 
-  return <Button label="Connected 🐣🐔" />;
+  return (
+    <div className="field has-addons">
+      <div className="control">
+        <Button label="Connected 🐣🐔" />
+      </div>
+      <div className="control">
+        <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
+      </div>
+    </div>
+  );
 }
 
 export default Room;
