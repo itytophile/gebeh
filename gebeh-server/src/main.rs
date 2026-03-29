@@ -55,18 +55,34 @@ fn get_room<T>(req: &Request<T>) -> Option<Cow<'_, str>> {
     Some(room)
 }
 
-fn tls_acceptor(mut cert: &[u8], mut key: &[u8]) -> color_eyre::Result<TlsAcceptor> {
-    let key = rustls_pemfile::pkcs8_private_keys(&mut key)
-        .map(|key| key.unwrap())
+fn get_private_key(key: &[u8]) -> PrivateKeyDer<'static> {
+    let mut ec = key;
+    let mut rsa = key;
+    let mut pkcs8 = key;
+    rustls_pemfile::ec_private_keys(&mut ec)
+        .flatten()
+        .map(PrivateKeyDer::Sec1)
+        .chain(
+            rustls_pemfile::rsa_private_keys(&mut rsa)
+                .flatten()
+                .map(PrivateKeyDer::Pkcs1),
+        )
+        .chain(
+            rustls_pemfile::pkcs8_private_keys(&mut pkcs8)
+                .flatten()
+                .map(PrivateKeyDer::Pkcs8),
+        )
         .next()
-        .unwrap();
+        .expect("Can't get a private key")
+}
+
+fn tls_acceptor(mut cert: &[u8], key: &[u8]) -> color_eyre::Result<TlsAcceptor> {
     let certs = rustls_pemfile::certs(&mut cert)
         .map(|cert| cert.unwrap())
         .collect();
-
     let config = rustls::ServerConfig::builder()
         .with_no_client_auth()
-        .with_single_cert(certs, PrivateKeyDer::Pkcs8(key))?;
+        .with_single_cert(certs, get_private_key(key))?;
     Ok(TlsAcceptor::from(Arc::new(config)))
 }
 
