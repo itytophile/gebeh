@@ -1,6 +1,12 @@
 # gebeh
 
+![gebeh logo. Two Game Boys connected with a Link cable. There is a fried egg on them.](./gebeh_256px.png)
+
 Pronounced gebeh.
+
+gebeh is a browser based DMG (Game Boy) emulator with online multiplayer.
+gebeh is "accurate" enough to pass 31 Mealybug Tearoom tests and the majority of the mooneye acceptance test suites.
+It doesn't support all cartridge types but the support can easily be added (hopefully).
 
 ## Bibliography
 
@@ -22,11 +28,13 @@ Pronounced gebeh.
 - [Trying to understand Sprite FIFO behavior in the PPU (Reddit)](https://www.reddit.com/r/EmuDev/comments/s6cpis/gameboy_trying_to_understand_sprite_fifo_behavior/) - About sprite fetching timing and FIFOs.
 - https://www.reddit.com/r/EmuDev/comments/6h2asw/stat_register_and_stat_interrupt_delay_in_dmgcgb/
 - https://github.com/msinger/dmg-schematics
+
 ### Test roms
 
 - [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)
 - [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/gb-test-roms)
 - [Acid2](https://github.com/mattcurrie/dmg-acid2)
+- [Mealybug Tearoom Tests](https://github.com/mattcurrie/mealybug-tearoom-tests)
 
 ### Reference emulators
 
