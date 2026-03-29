@@ -7,12 +7,10 @@ import { faRotateLeft } from "@fortawesome/free-solid-svg-icons/faRotateLeft";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
-    { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
+    | { type: "input"; value: string }
+    | { type: "created" }
+    | { type: "joined"; name: string }
   >({ type: "input", value: "" });
-
-  const handleReset = () => {
-    setRoom({ type: "input", value: "" });
-  };
 
   if (room.type === "input") {
     return (
@@ -58,14 +56,31 @@ function Room({ port }: { port: MessagePort }) {
     );
   }
 
-  if (room.type === "created") {
-    return <CreatedRoom port={port} onReset={handleReset} />;
-  }
+  const button =
+    room.type === "created" ? (
+      <CreatedRoom port={port} />
+    ) : (
+      <JoinedRoom port={port} room={room.name} />
+    );
 
-  return <JoinedRoom port={port} room={room.name} onReset={handleReset} />;
+  return (
+    <div className="field has-addons">
+      <div className="control">{button}</div>
+      <div className="control">
+        <Button
+          label="Reset"
+          color="is-warning"
+          icon={faRotateLeft}
+          onClick={() => {
+            setRoom({ type: "input", value: "" });
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
-function CreatedRoom({ port, onReset }: { port: MessagePort; onReset: () => void }) {
+function CreatedRoom({ port }: { port: MessagePort }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
@@ -74,7 +89,9 @@ function CreatedRoom({ port, onReset }: { port: MessagePort; onReset: () => void
   >({ type: "loading" });
 
   useEffect(() => {
-    const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
+    const ws = new WebSocket(
+      `${globalThis.location.protocol}//${globalThis.location.host}/ws`,
+    );
     ws.binaryType = "arraybuffer";
     const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
       if (data.type === "serial") {
@@ -86,7 +103,10 @@ function CreatedRoom({ port, onReset }: { port: MessagePort; onReset: () => void
       port.addEventListener("message", portListener);
     });
 
-    let state: { type: "waitName" } | { type: "waitGuest"; room: string } | { type: "done" } = {
+    let state:
+      | { type: "waitName" }
+      | { type: "waitGuest"; room: string }
+      | { type: "done" } = {
       type: "waitName",
     };
 
@@ -137,71 +157,31 @@ function CreatedRoom({ port, onReset }: { port: MessagePort; onReset: () => void
   }, [port]);
 
   if (status.type === "loading") {
-    return (
-      <div className="field has-addons">
-        <div className="control">
-          <Button label="Loading..." />
-        </div>
-        <div className="control">
-          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-        </div>
-      </div>
-    );
+    return <Button label="Loading..." />;
   }
 
   if (status.type === "closed") {
-    return (
-      <div className="field has-addons">
-        <div className="control">
-          <Button label="Room closed 🍗🍗" />
-        </div>
-        <div className="control">
-          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-        </div>
-      </div>
-    );
+    return <Button label="Room closed 🍗🍗" />;
   }
 
   if (status.type === "waiting") {
     return (
-      <div className="field has-addons">
-        <div className="control">
-          <Button
-            label={`${status.room} 🥚🐔`}
-            onClick={() => {
-              void navigator.clipboard.writeText(status.room);
-            }}
-          />
-        </div>
-        <div className="control">
-          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-        </div>
-      </div>
+      <Button
+        label={`${status.room} 🥚🐔`}
+        onClick={() => {
+          void navigator.clipboard.writeText(status.room);
+        }}
+      />
     );
   }
 
-  return (
-    <div className="field has-addons">
-      <div className="control">
-        <Button label="Connected 🐣🐔" />
-      </div>
-      <div className="control">
-        <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-      </div>
-    </div>
-  );
+  return <Button label="Connected 🐣🐔" />;
 }
 
-function JoinedRoom({
-  room,
-  port,
-  onReset,
-}: {
-  room: string;
-  port: MessagePort;
-  onReset: () => void;
-}) {
-  const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
+function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
+  const [status, setStatus] = useState<"loading" | "ready" | "closed">(
+    "loading",
+  );
   useEffect(() => {
     const ws = new WebSocket(
       `${globalThis.location.protocol}//${globalThis.location.host}/ws?room=${room}`,
@@ -242,41 +222,14 @@ function JoinedRoom({
   }, [port, room]);
 
   if (status === "loading") {
-    return (
-      <div className="field has-addons">
-        <div className="control">
-          <Button label="Loading..." />
-        </div>
-        <div className="control">
-          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-        </div>
-      </div>
-    );
+    return <Button label="Loading..." />;
   }
 
   if (status === "closed") {
-    return (
-      <div className="field has-addons">
-        <div className="control">
-          <Button label="Room closed 🍗🍗" />
-        </div>
-        <div className="control">
-          <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-        </div>
-      </div>
-    );
+    return <Button label="Room closed 🍗🍗" />;
   }
 
-  return (
-    <div className="field has-addons">
-      <div className="control">
-        <Button label="Connected 🐣🐔" />
-      </div>
-      <div className="control">
-        <Button label="Reset" color="is-warning" icon={faRotateLeft} onClick={onReset} />
-      </div>
-    </div>
-  );
+  return <Button label="Connected 🐣🐔" />;
 }
 
 export default Room;
