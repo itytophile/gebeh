@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import type { FromNodeMessage, FromMainMessage } from "./common";
 import Button from "./bulma/button";
-import { faRocket } from "@fortawesome/free-solid-svg-icons";
-import { faPlug } from "@fortawesome/free-solid-svg-icons/faPlug";
+import { faRocket, faPlug, faRotateLeft } from "@fortawesome/free-solid-svg-icons";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -53,11 +52,28 @@ function Room({ port }: { port: MessagePort }) {
     );
   }
 
-  if (room.type === "created") {
-    return <CreatedRoom port={port} />;
-  }
+  const button =
+    room.type === "created" ? (
+      <CreatedRoom port={port} />
+    ) : (
+      <JoinedRoom port={port} room={room.name} />
+    );
 
-  return <JoinedRoom port={port} room={room.name} />;
+  return (
+    <div className="field has-addons">
+      <div className="control">{button}</div>
+      <div className="control">
+        <Button
+          label="Reset"
+          color="is-warning"
+          icon={faRotateLeft}
+          onClick={() => {
+            setRoom({ type: "input", value: "" });
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function CreatedRoom({ port }: { port: MessagePort }) {
