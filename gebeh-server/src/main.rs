@@ -178,19 +178,29 @@ where
     if let Some(acceptor) = acceptor {
         loop {
             let (stream, _) = listener.accept().await?;
-            let stream = match acceptor.accept(stream).await {
-                Ok(stream) => stream,
-                Err(err) => {
-                    tracing::warn!("TLS accept failed: {err}");
-                    continue;
-                }
-            };
-            tokio::task::spawn_local(
+            let service = service.clone();
+            let acceptor = acceptor.clone();
+            tokio::task::spawn_local(async move {
+                let stream =
+                    match tokio::time::timeout(Duration::from_secs(10), acceptor.accept(stream))
+                        .await
+                    {
+                        Ok(Ok(stream)) => stream,
+                        Ok(Err(err)) => {
+                            tracing::warn!("TLS accept failed: {err}");
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            tracing::warn!("Timeout TLS");
+                            return Ok(());
+                        }
+                    };
                 http1::Builder::new()
-                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service)
                     .with_upgrades()
-                    .inspect_err(|err| tracing::warn!("Connection closed: {err:?}")),
-            );
+                    .inspect_err(|err| tracing::warn!("Connection closed: {err:?}"))
+                    .await
+            });
         }
     } else {
         loop {
