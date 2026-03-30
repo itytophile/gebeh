@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::net::Ipv4Addr;
+use std::net::SocketAddr;
 use std::net::SocketAddrV4;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -36,6 +37,7 @@ use rustls::pki_types::PrivateKeyDer;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
+use tokio::net::TcpSocket;
 use tokio::signal::unix::SignalKind;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_rustls::TlsAcceptor;
@@ -158,7 +160,15 @@ fn main() -> color_eyre::Result<()> {
     local.block_on(&rt, async {
         let mut terminate_sig = tokio::signal::unix::signal(SignalKind::terminate())?;
         let mut interrupt_sig = tokio::signal::unix::signal(SignalKind::interrupt())?;
-        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
+        let socket = TcpSocket::new_v4()?;
+        socket.set_keepalive(true)?;
+        socket.set_nodelay(true)?;
+        socket.set_reuseaddr(true)?;
+        socket.bind(SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::UNSPECIFIED,
+            port,
+        )))?;
+        let listener = socket.listen(1024)?;
         tracing::info!("Listening on {}", listener.local_addr()?);
         futures_util::select! {
             res = handle_connections(service, acceptor, listener).fuse() => res,
