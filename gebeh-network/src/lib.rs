@@ -38,7 +38,7 @@ const INPUTS_HISTORY_SIZE: usize = 50;
 pub struct RollbackSerial {
     current_message: MessageFromMasterAcc,
     master_snapshots: Vec<(Emulator, EasyMbc)>,
-    slave_snapshots: Box<Snapshots>,
+    slave_snapshots: Snapshots,
     synchro_cycles: Option<SynchroCycles>,
     session: bool,
     // it's not the actual input value at a given cycle, but WHEN the input changes
