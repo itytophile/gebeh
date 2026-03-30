@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
 use std::net::SocketAddr;
 use std::net::SocketAddrV4;
+use std::net::SocketAddrV6;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -160,15 +162,7 @@ fn main() -> color_eyre::Result<()> {
     local.block_on(&rt, async {
         let mut terminate_sig = tokio::signal::unix::signal(SignalKind::terminate())?;
         let mut interrupt_sig = tokio::signal::unix::signal(SignalKind::interrupt())?;
-        let socket = TcpSocket::new_v4()?;
-        socket.set_keepalive(true)?;
-        socket.set_nodelay(true)?;
-        socket.set_reuseaddr(true)?;
-        socket.bind(SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::UNSPECIFIED,
-            port,
-        )))?;
-        let listener = socket.listen(1024)?;
+        let listener = get_listener_v6(port)?;
         tracing::info!("Listening on {}", listener.local_addr()?);
         futures_util::select! {
             res = handle_connections(service, acceptor, listener).fuse() => res,
@@ -182,6 +176,35 @@ fn main() -> color_eyre::Result<()> {
             },
         }
     })
+}
+
+fn _get_listener_v4(port: u16) -> Result<TcpListener, color_eyre::eyre::Error> {
+    let socket = TcpSocket::new_v4()?;
+    socket_configuration(&socket)?;
+    socket.bind(SocketAddr::V4(SocketAddrV4::new(
+        Ipv4Addr::UNSPECIFIED,
+        port,
+    )))?;
+    Ok(socket.listen(1024)?)
+}
+
+fn get_listener_v6(port: u16) -> Result<TcpListener, color_eyre::eyre::Error> {
+    let socket = TcpSocket::new_v6()?;
+    socket_configuration(&socket)?;
+    socket.bind(SocketAddr::V6(SocketAddrV6::new(
+        Ipv6Addr::UNSPECIFIED,
+        port,
+        0,
+        0,
+    )))?;
+    Ok(socket.listen(1024)?)
+}
+
+fn socket_configuration(socket: &TcpSocket) -> Result<(), color_eyre::eyre::Error> {
+    socket.set_keepalive(true)?;
+    socket.set_nodelay(true)?;
+    socket.set_reuseaddr(true)?;
+    Ok(())
 }
 
 async fn handle_connections<S>(
