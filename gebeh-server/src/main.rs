@@ -24,7 +24,9 @@ use futures_util::StreamExt;
 use futures_util::TryFutureExt;
 use futures_util::future;
 use futures_util::stream;
+use http_body_util::BodyExt;
 use hyper::Request;
+use hyper::StatusCode;
 use hyper::body::Body;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -41,6 +43,7 @@ use tower::ServiceBuilder;
 use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -121,6 +124,10 @@ fn main() -> color_eyre::Result<()> {
 
     let service = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(10),
+        ))
         .layer(CompressionLayer::new())
         .service(tower::service_fn(move |req| {
             let upgrade_service = upgrade_service.clone();
@@ -129,8 +136,11 @@ fn main() -> color_eyre::Result<()> {
                 "/ws",
                 upgrade_service,
                 ServiceExt::<Request<Incoming>>::map_err(
-                    ServeDir::new(assets_path),
-                    color_eyre::Report::new,
+                    ServiceExt::<Request<Incoming>>::map_response(
+                        ServeDir::new(assets_path),
+                        |res| res.map(|body| body.map_err(color_eyre::Report::new).boxed_unsync()),
+                    ),
+                    |_| unreachable!(),
                 ),
             )
         }));

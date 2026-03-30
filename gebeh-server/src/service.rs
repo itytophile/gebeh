@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use fastwebsockets::upgrade;
 use futures_util::future;
-use http_body_util::Empty;
+use http_body_util::combinators::UnsyncBoxBody;
 use hyper::{Request, Response, StatusCode, body::Bytes};
 
 use crate::{Guest, get_room, host};
@@ -11,7 +11,7 @@ pub fn upgrade<T>(
     mut req: Request<T>,
     tx: tokio::sync::broadcast::Sender<Arc<Guest>>,
     names: Rc<RefCell<names::Generator<'static>>>,
-) -> impl Future<Output = color_eyre::Result<Response<Empty<Bytes>>>> {
+) -> impl Future<Output = color_eyre::Result<Response<UnsyncBoxBody<Bytes, color_eyre::Report>>>> {
     let (response, fut) = match upgrade::upgrade(&mut req) {
         Ok(a) => a,
         Err(err) => return future::err(color_eyre::Report::new(err)),
@@ -28,7 +28,7 @@ pub fn upgrade<T>(
             return future::ok(
                 Response::builder()
                     .status(StatusCode::NOT_FOUND)
-                    .body(Empty::new())
+                    .body(UnsyncBoxBody::default())
                     .unwrap(),
             );
         }
@@ -42,24 +42,26 @@ pub fn upgrade<T>(
         });
     }
 
-    future::ok(response)
+    future::ok(response.map(|_| Default::default()))
 }
 
-pub async fn route<Req, Err, Res1, Res2>(
+pub async fn route<Req, Err>(
     req: Request<Req>,
     route: &'static str,
-    mut service: impl tower::Service<Request<Req>, Response = Response<Res1>, Error = Err>,
-    mut fallback: impl tower::Service<Request<Req>, Response = Response<Res2>, Error = Err>,
-) -> Result<Response<http_body_util::Either<Res1, Res2>>, Err> {
+    mut service: impl tower::Service<
+        Request<Req>,
+        Response = Response<UnsyncBoxBody<Bytes, color_eyre::Report>>,
+        Error = Err,
+    >,
+    mut fallback: impl tower::Service<
+        Request<Req>,
+        Response = Response<UnsyncBoxBody<Bytes, color_eyre::Report>>,
+        Error = Err,
+    >,
+) -> Result<Response<UnsyncBoxBody<Bytes, color_eyre::Report>>, Err> {
     if req.uri().path() == route {
-        service
-            .call(req)
-            .await
-            .map(|res| res.map(http_body_util::Either::Left))
+        service.call(req).await
     } else {
-        fallback
-            .call(req)
-            .await
-            .map(|res| res.map(http_body_util::Either::Right))
+        fallback.call(req).await
     }
 }
