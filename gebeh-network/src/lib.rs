@@ -26,11 +26,11 @@ type Snapshots = VecDeque<Snapshot>;
 
 type Snapshot = (Emulator, EasyMbc);
 
-// 3 seconds
-const ROLLBACK_TRESHOLD: u64 = 4194304 * 3 / 4;
+// 6 seconds
+const ROLLBACK_TRESHOLD: u64 = 4194304 * 6 / 4;
 // 10 ms
 const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
-const MAX_SNAPSHOT: usize = 120;
+const MAX_SNAPSHOT: usize = 240;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
@@ -38,7 +38,7 @@ const INPUTS_HISTORY_SIZE: usize = 50;
 pub struct RollbackSerial {
     current_message: MessageFromMasterAcc,
     master_snapshots: Vec<(Emulator, EasyMbc)>,
-    slave_snapshots: Box<Snapshots>,
+    slave_snapshots: Snapshots,
     synchro_cycles: Option<SynchroCycles>,
     session: bool,
     // it's not the actual input value at a given cycle, but WHEN the input changes

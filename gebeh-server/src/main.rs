@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::net::SocketAddr;
 use std::net::SocketAddrV4;
+use std::net::SocketAddrV6;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,7 +27,9 @@ use futures_util::StreamExt;
 use futures_util::TryFutureExt;
 use futures_util::future;
 use futures_util::stream;
+use http_body_util::BodyExt;
 use hyper::Request;
+use hyper::StatusCode;
 use hyper::body::Body;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -34,6 +39,7 @@ use rustls::pki_types::PrivateKeyDer;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
+use tokio::net::TcpSocket;
 use tokio::signal::unix::SignalKind;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_rustls::TlsAcceptor;
@@ -41,6 +47,7 @@ use tower::ServiceBuilder;
 use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -121,6 +128,10 @@ fn main() -> color_eyre::Result<()> {
 
     let service = ServiceBuilder::new()
         .layer(TraceLayer::new_for_http())
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(10),
+        ))
         .layer(CompressionLayer::new())
         .service(tower::service_fn(move |req| {
             let upgrade_service = upgrade_service.clone();
@@ -129,8 +140,11 @@ fn main() -> color_eyre::Result<()> {
                 "/ws",
                 upgrade_service,
                 ServiceExt::<Request<Incoming>>::map_err(
-                    ServeDir::new(assets_path),
-                    color_eyre::Report::new,
+                    ServiceExt::<Request<Incoming>>::map_response(
+                        ServeDir::new(assets_path),
+                        |res| res.map(|body| body.map_err(color_eyre::Report::new).boxed_unsync()),
+                    ),
+                    |_| unreachable!(),
                 ),
             )
         }));
@@ -148,7 +162,7 @@ fn main() -> color_eyre::Result<()> {
     local.block_on(&rt, async {
         let mut terminate_sig = tokio::signal::unix::signal(SignalKind::terminate())?;
         let mut interrupt_sig = tokio::signal::unix::signal(SignalKind::interrupt())?;
-        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
+        let listener = get_listener_v6(port)?;
         tracing::info!("Listening on {}", listener.local_addr()?);
         futures_util::select! {
             res = handle_connections(service, acceptor, listener).fuse() => res,
@@ -162,6 +176,35 @@ fn main() -> color_eyre::Result<()> {
             },
         }
     })
+}
+
+fn _get_listener_v4(port: u16) -> Result<TcpListener, color_eyre::eyre::Error> {
+    let socket = TcpSocket::new_v4()?;
+    socket_configuration(&socket)?;
+    socket.bind(SocketAddr::V4(SocketAddrV4::new(
+        Ipv4Addr::UNSPECIFIED,
+        port,
+    )))?;
+    Ok(socket.listen(1024)?)
+}
+
+fn get_listener_v6(port: u16) -> Result<TcpListener, color_eyre::eyre::Error> {
+    let socket = TcpSocket::new_v6()?;
+    socket_configuration(&socket)?;
+    socket.bind(SocketAddr::V6(SocketAddrV6::new(
+        Ipv6Addr::UNSPECIFIED,
+        port,
+        0,
+        0,
+    )))?;
+    Ok(socket.listen(1024)?)
+}
+
+fn socket_configuration(socket: &TcpSocket) -> Result<(), color_eyre::eyre::Error> {
+    socket.set_keepalive(true)?;
+    socket.set_nodelay(true)?;
+    socket.set_reuseaddr(true)?;
+    Ok(())
 }
 
 async fn handle_connections<S>(
@@ -178,25 +221,39 @@ where
     if let Some(acceptor) = acceptor {
         loop {
             let (stream, _) = listener.accept().await?;
-            let stream = match acceptor.accept(stream).await {
-                Ok(stream) => stream,
-                Err(err) => {
-                    tracing::warn!("TLS accept failed: {err}");
-                    continue;
-                }
-            };
-            tokio::task::spawn_local(
+            let service = service.clone();
+            let acceptor = acceptor.clone();
+            tokio::task::spawn_local(async move {
+                let stream =
+                    match tokio::time::timeout(Duration::from_secs(10), acceptor.accept(stream))
+                        .await
+                    {
+                        Ok(Ok(stream)) => stream,
+                        Ok(Err(err)) => {
+                            tracing::warn!("TLS accept failed: {err}");
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            tracing::warn!("Timeout TLS");
+                            return Ok(());
+                        }
+                    };
                 http1::Builder::new()
-                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
+                    .timer(hyper_util::rt::TokioTimer::new())
+                    .header_read_timeout(Duration::from_secs(10))
+                    .serve_connection(hyper_util::rt::TokioIo::new(stream), service)
                     .with_upgrades()
-                    .inspect_err(|err| tracing::warn!("Connection closed: {err:?}")),
-            );
+                    .inspect_err(|err| tracing::warn!("Connection closed: {err:?}"))
+                    .await
+            });
         }
     } else {
         loop {
             let (stream, _) = listener.accept().await?;
             tokio::task::spawn_local(
                 http1::Builder::new()
+                    .timer(hyper_util::rt::TokioTimer::new())
+                    .header_read_timeout(Duration::from_secs(10))
                     .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
                     .with_upgrades()
                     .inspect_err(|err| println!("An error occurred: {err:?}")),
