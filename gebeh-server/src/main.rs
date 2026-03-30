@@ -216,6 +216,8 @@ where
                         }
                     };
                 http1::Builder::new()
+                    .timer(hyper_util::rt::TokioTimer::new())
+                    .header_read_timeout(Duration::from_secs(10))
                     .serve_connection(hyper_util::rt::TokioIo::new(stream), service)
                     .with_upgrades()
                     .inspect_err(|err| tracing::warn!("Connection closed: {err:?}"))
@@ -227,6 +229,8 @@ where
             let (stream, _) = listener.accept().await?;
             tokio::task::spawn_local(
                 http1::Builder::new()
+                    .timer(hyper_util::rt::TokioTimer::new())
+                    .header_read_timeout(Duration::from_secs(10))
                     .serve_connection(hyper_util::rt::TokioIo::new(stream), service.clone())
                     .with_upgrades()
                     .inspect_err(|err| println!("An error occurred: {err:?}")),
