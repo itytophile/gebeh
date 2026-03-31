@@ -1093,7 +1093,9 @@ dependencies = [
  "gebeh-core",
  "gebeh-front-helper",
  "gebeh-network",
+ "log",
  "wasm-bindgen",
+ "wasm-logger",
  "web-sys",
  "web-time 1.1.0",
 ]
@@ -3431,6 +3433,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a93e946af942b58934c604527337bad9ae33ba1d5c6900bbb41c2c07c2364a93"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm-logger"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "074649a66bb306c8f2068c9016395fa65d8e08d2affcbf95acf3c24c3ab19718"
+dependencies = [
+ "log",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

@@ -163,6 +163,7 @@ impl WebEmulator {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
         Default::default()
     }
 

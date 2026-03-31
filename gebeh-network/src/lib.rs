@@ -34,16 +34,28 @@ const MAX_SNAPSHOT: usize = 240;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
-#[derive(Default)]
 pub struct RollbackSerial {
     current_message: MessageFromMasterAcc,
     master_snapshots: Vec<(Emulator, EasyMbc)>,
     slave_snapshots: Snapshots,
     synchro_cycles: Option<SynchroCycles>,
-    session: bool,
     // it's not the actual input value at a given cycle, but WHEN the input changes
     // to avoid saving inputs every cycle
     inputs_history: Box<ArrayDeque<(u64, JoypadInput), INPUTS_HISTORY_SIZE>>,
+    last_correction: u8,
+}
+
+impl Default for RollbackSerial {
+    fn default() -> Self {
+        Self {
+            current_message: Default::default(),
+            master_snapshots: Default::default(),
+            slave_snapshots: Default::default(),
+            synchro_cycles: Default::default(),
+            inputs_history: Default::default(),
+            last_correction: 0xff,
+        }
+    }
 }
 
 impl RollbackSerial {
@@ -73,7 +85,6 @@ impl RollbackSerial {
             first_message: (first_byte, first_cycle),
             messages: messages_to_send,
             prediction,
-            session: self.current_message.session,
         };
 
         Some(msg_to_send)
@@ -154,7 +165,7 @@ impl RollbackSerial {
         mbc: &mut EasyMbc,
         msg: &ArchivedMessageFromMaster,
     ) -> Vec<Box<[u8]>> {
-        if msg.session != self.session {
+        if msg.prediction != self.last_correction {
             log::info!("Bad session");
             return Default::default();
         }
@@ -167,7 +178,7 @@ impl RollbackSerial {
                 slave: slave_cycles,
             });
 
-            let (msg_from_slave, is_correction) = self.advance_while_consuming_messages(
+            let (msg_from_slave, correction) = self.advance_while_consuming_messages(
                 msg,
                 &mut [].as_slice(),
                 emulator,
@@ -176,8 +187,8 @@ impl RollbackSerial {
 
             self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
 
-            if is_correction {
-                self.session = !self.session;
+            if let Some(correction) = correction {
+                self.last_correction = correction;
             }
 
             return msg_from_slave;
@@ -216,12 +227,12 @@ impl RollbackSerial {
             .collect();
         let mut inputs_history = inputs_history.as_slice();
 
-        let (mut messages, is_correction) =
+        let (mut messages, correction) =
             self.advance_while_consuming_messages(msg, &mut inputs_history, emulator, mbc.as_mut());
 
         self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
 
-        if !is_correction && current_cycle > emulator.get_cycles() {
+        if correction.is_none() && current_cycle > emulator.get_cycles() {
             // catching up
             for _ in 0..(current_cycle - emulator.get_cycles()) {
                 messages.extend(self.execute_and_take_snapshot(emulator, mbc.as_mut()));
@@ -234,8 +245,8 @@ impl RollbackSerial {
             }
         }
 
-        if is_correction {
-            self.session = !self.session
+        if let Some(correction) = correction {
+            self.last_correction = correction;
         }
 
         messages
@@ -248,7 +259,7 @@ impl RollbackSerial {
         inputs_history: &mut &[(u64, JoypadInput)],
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
-    ) -> (Vec<Box<[u8]>>, bool) {
+    ) -> (Vec<Box<[u8]>>, Option<u8>) {
         let mut messages = Vec::new();
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
             .chain(msg.messages.iter())
@@ -281,10 +292,10 @@ impl RollbackSerial {
                     })
                     .serialize(),
                 );
-                return (messages, true);
+                return (messages, Some(response));
             }
         }
-        (messages, false)
+        (messages, None)
     }
 
     #[must_use]

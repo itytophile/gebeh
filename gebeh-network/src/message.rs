@@ -5,7 +5,6 @@ pub(crate) struct MessageFromMaster {
     pub prediction: u8,
     pub first_message: (u8, u64),
     pub messages: Vec<(u8, u64)>,
-    pub session: bool,
 }
 
 #[derive(Archive, Serialize)]
