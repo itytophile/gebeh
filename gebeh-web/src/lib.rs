@@ -279,19 +279,31 @@ impl WebEmulator {
 
     #[must_use]
     #[allow(clippy::boxed_local)]
-    pub fn set_serial_messages(&mut self, messages: Box<[js_sys::Uint8Array]>) -> Box<[js_sys::Uint8Array]> {
+    pub fn set_serial_messages(
+        &mut self,
+        messages: Box<[js_sys::Uint8Array]>,
+    ) -> Box<[js_sys::Uint8Array]> {
         let Some((_, synchro)) = &mut self.network else {
             panic!("No synchro");
         };
 
         if let Some(inner) = &mut self.inner {
             synchro
-                .set_serial_messages(messages.iter().map(|lol|lol.to_vec().into_boxed_slice()), &mut inner.emulator, &mut inner.mbc)
+                .set_serial_messages(
+                    messages.iter().map(|lol| lol.to_vec().into_boxed_slice()),
+                    &mut inner.emulator,
+                    &mut inner.mbc,
+                )
                 .into_iter()
                 .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
                 .collect()
         } else {
-            messages.iter().flat_map(|lol|RollbackSerial::handle_msg_no_emulator(&lol.to_vec())).map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes)).take(1).collect()
+            messages
+                .iter()
+                .flat_map(|lol| RollbackSerial::handle_msg_no_emulator(&lol.to_vec()))
+                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
+                .take(1)
+                .collect()
         }
     }
 
