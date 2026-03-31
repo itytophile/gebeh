@@ -156,20 +156,20 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
     }
 
     if (this.serialMessages.length > 0) {
-      console.log(`handling ${this.serialMessages.length} messages`)
+      // console.log(`handling ${this.serialMessages.length} messages`);
+      
+      for (const message of emulator.set_serial_messages(this.serialMessages)) {
+        this.port.postMessage(
+          {
+            type: "serial",
+            buffer: message,
+          } satisfies FromNodeMessage,
+          [message.buffer],
+        );
+      }
     }
+
     
-    for (const message of this.serialMessages.flatMap((message) =>
-      emulator.set_serial_msg(message),
-    )) {
-      this.port.postMessage(
-        {
-          type: "serial",
-          buffer: message,
-        } satisfies FromNodeMessage,
-        [message.buffer],
-      );
-    }
 
     this.serialMessages = [];
 
