@@ -136,20 +136,17 @@ fn serial_exchange() {
 
     while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
         let mut new_messages_from_master = Vec::new();
-        for msg in messages_from_slave.drain(..) {
-            new_messages_from_master.extend(master_rollback.set_serial_msg(
-                &msg,
+            new_messages_from_master.extend(master_rollback.set_serial_messages(
+                messages_from_slave.drain(..),
                 &mut master_emulator,
                 &mut master_mbc,
             ));
-        }
-        for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
-            messages_from_slave.extend(slave_rollback.set_serial_msg(
-                &msg,
+            messages_from_slave.extend(slave_rollback.set_serial_messages(
+                core::mem::replace(&mut messages_from_master, new_messages_from_master),
                 &mut slave_emulator,
                 &mut slave_mbc,
             ));
-        }
+        
     }
 
     while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
@@ -161,20 +158,16 @@ fn serial_exchange() {
         );
         while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
             let mut new_messages_from_master = Vec::new();
-            for msg in messages_from_slave.drain(..) {
-                new_messages_from_master.extend(master_rollback.set_serial_msg(
-                    &msg,
+                new_messages_from_master.extend(master_rollback.set_serial_messages(
+                    messages_from_slave.drain(..),
                     &mut master_emulator,
                     &mut master_mbc,
                 ));
-            }
-            for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
-                messages_from_slave.extend(slave_rollback.set_serial_msg(
-                    &msg,
+                messages_from_slave.extend(slave_rollback.set_serial_messages(
+                    core::mem::replace(&mut messages_from_master, new_messages_from_master),
                     &mut slave_emulator,
                     &mut slave_mbc,
                 ));
-            }
         }
     }
 

@@ -4,10 +4,10 @@ use arraydeque::ArrayDeque;
 use arrayvec::ArrayVec;
 use gebeh_core::{Emulator, joypad::JoypadInput};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
-use rkyv::{Deserialize, rancor};
+use rkyv::rancor;
 
 use crate::message::{
-    ArchivedMessageFromMaster, ArchivedSerialMessage, MessageFromMaster, MessageFromSlave,
+    ArchivedSerialMessage, DecompressedSerialMessage, MessageFromMaster, MessageFromSlave,
     SerialMessage,
 };
 
@@ -117,47 +117,50 @@ impl RollbackSerial {
     }
 
     #[must_use]
-    pub fn set_serial_msg(
+    pub fn set_serial_messages(
         &mut self,
-        msg: &[u8],
+        msg: impl IntoIterator<Item = Box<[u8]>>,
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
     ) -> Vec<Box<[u8]>> {
-        let msg = SerialMessage::deserialize(msg);
-        let msg = msg.get();
-        match msg {
-            ArchivedSerialMessage::FromMaster(msg) => {
-                let current_joypad = *emulator.get_joypad();
-                let messages = self.handle_message_from_master(emulator, mbc, msg);
-                emulator.set_joypad(current_joypad);
-                messages
-            }
-            ArchivedSerialMessage::FromSlave(msg) => {
-                let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
-                    .into_iter()
-                    .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
-                    .expect("desync too big");
-                snap_emulator.set_joypad(*emulator.get_joypad());
-                *emulator = snap_emulator;
-                *mbc = snap_mbc;
-                log::info!(
-                    "Correction from slave 0x{:02x} -> 0x{:02x}",
-                    emulator.serial.slave_byte,
-                    msg.correction
-                );
-                log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
+        group_master_messages(msg.into_iter().map(|a| SerialMessage::deserialize(&a)))
+            .flat_map(|msg| {
+                match msg {
+                    SerialMessage::FromMaster(msg) => {
+                        let current_joypad = *emulator.get_joypad();
+                        let messages = self.handle_message_from_master(emulator, mbc, msg);
+                        emulator.set_joypad(current_joypad);
+                        messages
+                    }
+                    SerialMessage::FromSlave(msg) => {
+                        let (mut snap_emulator, snap_mbc) =
+                            core::mem::take(&mut self.master_snapshots)
+                                .into_iter()
+                                .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
+                                .expect("desync too big");
+                        snap_emulator.set_joypad(*emulator.get_joypad());
+                        *emulator = snap_emulator;
+                        *mbc = snap_mbc;
+                        log::info!(
+                            "Correction from slave 0x{:02x} -> 0x{:02x}",
+                            emulator.serial.slave_byte,
+                            msg.correction
+                        );
+                        log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
 
-                emulator.serial.slave_byte = msg.correction;
-                self.current_message.session = !self.current_message.session;
-                self.current_message.messages.clear();
-                emulator.execute(mbc.as_mut());
+                        emulator.serial.slave_byte = msg.correction;
+                        self.current_message.session = !self.current_message.session;
+                        self.current_message.messages.clear();
+                        emulator.execute(mbc.as_mut());
 
-                // TODO catchup, however the master will send a lot of messages without being able
-                // to receive the slave ones
+                        // TODO catchup, however the master will send a lot of messages without being able
+                        // to receive the slave ones
 
-                Default::default()
-            }
-        }
+                        Default::default()
+                    }
+                }
+            })
+            .collect()
     }
 
     #[must_use]
@@ -165,7 +168,7 @@ impl RollbackSerial {
         &mut self,
         emulator: &mut Emulator,
         mbc: &mut EasyMbc,
-        msg: &ArchivedMessageFromMaster,
+        msg: MessageFromMaster,
     ) -> Vec<Box<[u8]>> {
         if msg.prediction != self.last_correction {
             log::info!("Bad session");
@@ -176,7 +179,7 @@ impl RollbackSerial {
             log::info!("first batch");
             let slave_cycles = emulator.get_cycles();
             self.synchro_cycles = Some(SynchroCycles {
-                master: msg.first_message.1.to_native(),
+                master: msg.first_message.1,
                 slave: slave_cycles,
             });
 
@@ -198,8 +201,7 @@ impl RollbackSerial {
 
         let current_cycle = emulator.get_cycles();
 
-        let restore_cycle =
-            synchro_cycles.slave + msg.first_message.1.to_native() - synchro_cycles.master;
+        let restore_cycle = synchro_cycles.slave + msg.first_message.1 - synchro_cycles.master;
 
         let snapshots = core::mem::take(&mut self.slave_snapshots);
 
@@ -257,7 +259,7 @@ impl RollbackSerial {
     #[must_use]
     fn advance_while_consuming_messages(
         &mut self,
-        msg: &ArchivedMessageFromMaster,
+        msg: MessageFromMaster,
         inputs_history: &mut &[(u64, JoypadInput)],
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
@@ -265,7 +267,7 @@ impl RollbackSerial {
         let mut messages = Vec::new();
         for (byte, master_cycle) in std::iter::once(&msg.first_message)
             .chain(msg.messages.iter())
-            .map(|a| (a.0, a.1.to_native()))
+            .map(|a| (a.0, a.1))
         {
             for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
                 messages.extend(self.execute_and_take_snapshot(emulator, mbc));
@@ -340,7 +342,7 @@ impl RollbackSerial {
 }
 
 fn group_master_messages(
-    messages: impl IntoIterator<Item = ArchivedSerialMessage>,
+    messages: impl IntoIterator<Item = DecompressedSerialMessage>,
 ) -> impl Iterator<Item = SerialMessage> {
     messages
         .into_iter()
@@ -358,16 +360,17 @@ fn group_master_messages(
                             .collect(),
                     );
                 };
+                let serial_msg = serial_msg.get();
                 match (acc_serial_msg, serial_msg) {
                     (acc @ None, ArchivedSerialMessage::FromMaster(msg)) => {
                         *acc = Some(
-                            rkyv::deserialize::<MessageFromMaster, rancor::Error>(&msg).unwrap(),
+                            rkyv::deserialize::<MessageFromMaster, rancor::Error>(msg).unwrap(),
                         );
                         Some(Default::default())
                     }
                     (None, ArchivedSerialMessage::FromSlave(msg)) => Some(
                         core::iter::once(SerialMessage::FromSlave(
-                            rkyv::deserialize::<MessageFromSlave, rancor::Error>(&msg).unwrap(),
+                            rkyv::deserialize::<MessageFromSlave, rancor::Error>(msg).unwrap(),
                         ))
                         .collect(),
                     ),
@@ -383,7 +386,7 @@ fn group_master_messages(
                             Some(
                                 core::iter::once(SerialMessage::FromMaster(core::mem::replace(
                                     acc,
-                                    rkyv::deserialize::<MessageFromMaster, rancor::Error>(&msg)
+                                    rkyv::deserialize::<MessageFromMaster, rancor::Error>(msg)
                                         .unwrap(),
                                 )))
                                 .collect(),
@@ -394,7 +397,7 @@ fn group_master_messages(
                         [
                             SerialMessage::FromMaster(acc.take().unwrap()),
                             SerialMessage::FromSlave(
-                                rkyv::deserialize::<MessageFromSlave, rancor::Error>(&msg).unwrap(),
+                                rkyv::deserialize::<MessageFromSlave, rancor::Error>(msg).unwrap(),
                             ),
                         ]
                         .into(),
