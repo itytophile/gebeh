@@ -53,7 +53,7 @@ export default defineConfig(
       "unicorn/prefer-query-selector": "off",
       "unicorn/numeric-separators-style": "off",
       "react/self-closing-comp": "warn",
-      "@typescript-eslint/restrict-template-expressions": "off"
+      "@typescript-eslint/restrict-template-expressions": "off",
     },
   },
 );
