@@ -1,8 +1,10 @@
 use std::collections::VecDeque;
 
 use arraydeque::ArrayDeque;
+use arrayvec::ArrayVec;
 use gebeh_core::{Emulator, joypad::JoypadInput};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
+use rkyv::{Deserialize, rancor};
 
 use crate::message::{
     ArchivedMessageFromMaster, ArchivedSerialMessage, MessageFromMaster, MessageFromSlave,
@@ -335,4 +337,70 @@ impl RollbackSerial {
         self.inputs_history.pop_front();
         self.inputs_history.push_back(element).unwrap();
     }
+}
+
+fn group_master_messages(
+    messages: impl IntoIterator<Item = ArchivedSerialMessage>,
+) -> impl Iterator<Item = SerialMessage> {
+    messages
+        .into_iter()
+        .map(Some)
+        .chain(core::iter::once(None))
+        .scan::<Option<MessageFromMaster>, ArrayVec<SerialMessage, 2>, _>(
+            None,
+            |acc_serial_msg, serial_msg| {
+                let Some(serial_msg) = serial_msg else {
+                    return Some(
+                        acc_serial_msg
+                            .take()
+                            .map(SerialMessage::FromMaster)
+                            .into_iter()
+                            .collect(),
+                    );
+                };
+                match (acc_serial_msg, serial_msg) {
+                    (acc @ None, ArchivedSerialMessage::FromMaster(msg)) => {
+                        *acc = Some(
+                            rkyv::deserialize::<MessageFromMaster, rancor::Error>(&msg).unwrap(),
+                        );
+                        Some(Default::default())
+                    }
+                    (None, ArchivedSerialMessage::FromSlave(msg)) => Some(
+                        core::iter::once(SerialMessage::FromSlave(
+                            rkyv::deserialize::<MessageFromSlave, rancor::Error>(&msg).unwrap(),
+                        ))
+                        .collect(),
+                    ),
+                    (Some(acc), ArchivedSerialMessage::FromMaster(msg)) => {
+                        if acc.prediction == msg.prediction {
+                            acc.messages.extend(
+                                core::iter::once(&msg.first_message)
+                                    .chain(msg.messages.iter())
+                                    .map(|a| (a.0, a.1.to_native())),
+                            );
+                            Some(Default::default())
+                        } else {
+                            Some(
+                                core::iter::once(SerialMessage::FromMaster(core::mem::replace(
+                                    acc,
+                                    rkyv::deserialize::<MessageFromMaster, rancor::Error>(&msg)
+                                        .unwrap(),
+                                )))
+                                .collect(),
+                            )
+                        }
+                    }
+                    (acc @ Some(_), ArchivedSerialMessage::FromSlave(msg)) => Some(
+                        [
+                            SerialMessage::FromMaster(acc.take().unwrap()),
+                            SerialMessage::FromSlave(
+                                rkyv::deserialize::<MessageFromSlave, rancor::Error>(&msg).unwrap(),
+                            ),
+                        ]
+                        .into(),
+                    ),
+                }
+            },
+        )
+        .flatten()
 }

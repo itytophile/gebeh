@@ -1,13 +1,13 @@
-use rkyv::{Archive, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
-#[derive(Archive, Serialize, Debug)]
+#[derive(Archive, Serialize, Debug, Deserialize)]
 pub(crate) struct MessageFromMaster {
     pub prediction: u8,
     pub first_message: (u8, u64),
     pub messages: Vec<(u8, u64)>,
 }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 pub(crate) struct MessageFromSlave {
     pub correction: u8,
     pub cycle: u64,

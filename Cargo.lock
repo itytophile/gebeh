@@ -1055,6 +1055,7 @@ name = "gebeh-network"
 version = "0.1.0"
 dependencies = [
  "arraydeque",
+ "arrayvec",
  "gebeh-core",
  "gebeh-front-helper",
  "log",
