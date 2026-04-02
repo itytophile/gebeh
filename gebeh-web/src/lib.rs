@@ -294,7 +294,7 @@ impl WebEmulator {
             panic!("No synchro");
         };
 
-        if let Some(inner) = &mut self.inner {
+        if self.inner.is_some() {
             synchro.add_message(&message);
             None
         } else {
