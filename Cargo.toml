@@ -8,8 +8,10 @@ edition = "2024"
 publish = false
 
 [dependencies]
+env_logger = "0.11.10"
 gebeh-core = { path = "./gebeh-core" }
 gebeh-front-helper = { path = "./gebeh-front-helper" }
+log = "0.4.29"
 
 [dev-dependencies]
 arrayvec = "0.7.6"

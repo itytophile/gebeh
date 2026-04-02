@@ -4,14 +4,13 @@ use arraydeque::ArrayDeque;
 use gebeh_core::{Emulator, joypad::JoypadInput};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
 
-use crate::message::{ArchivedSerialMessage, MessageFromMaster, MessageFromSlave, SerialMessage};
+use crate::{
+    message::{ArchivedSerialMessage, MessageFromMaster, MessageFromSlave, SerialMessage},
+    synchro_cycles::{CycleToSync, SynchroCycles},
+};
 
 pub mod message;
-
-struct SynchroCycles {
-    master: u64,
-    slave: u64,
-}
+mod synchro_cycles;
 
 #[derive(Default)]
 struct MessageFromMasterAcc {
@@ -31,10 +30,9 @@ const MAX_SNAPSHOT: usize = 240;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
-struct MiamMessage {
-    is_master: bool,
-    cycle: u64,
-    value: u8,
+enum MiamMessage {
+    FromMaster(CycleToSync, u8),
+    FromSlave(u64, u8),
 }
 
 pub struct RollbackSerial {
@@ -78,19 +76,15 @@ impl RollbackSerial {
                 core::iter::once((msg.first_message.0, msg.first_message.1.to_native()))
                     .chain(msg.messages.iter().map(|a| (a.0, a.1.to_native())))
                     .for_each(|(byte, cycle)| {
-                        self.messages_to_handle.push_back(MiamMessage {
-                            is_master: true,
-                            cycle,
-                            value: byte,
-                        })
+                        self.messages_to_handle
+                            .push_back(MiamMessage::FromMaster(CycleToSync::new(cycle), byte))
                     });
             }
             ArchivedSerialMessage::FromSlave(msg) => {
-                self.messages_to_handle.push_back(MiamMessage {
-                    is_master: false,
-                    cycle: msg.cycle.to_native(),
-                    value: msg.correction,
-                });
+                self.messages_to_handle.push_back(MiamMessage::FromSlave(
+                    msg.cycle.to_native(),
+                    msg.correction,
+                ));
             }
         }
     }
@@ -162,45 +156,46 @@ impl RollbackSerial {
 
         let current_cycle = emulator.get_cycles();
 
-        if !msg.is_master {
-            let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
-                .into_iter()
-                .find(|(emulator, _)| emulator.get_cycles() == msg.cycle)
-                .expect("desync too big");
-            snap_emulator.set_joypad(*emulator.get_joypad());
-            *emulator = snap_emulator;
-            *mbc = snap_mbc;
-            log::info!(
-                "Correction from slave 0x{:02x} -> 0x{:02x}",
-                emulator.serial.slave_byte,
-                msg.value
-            );
-            log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
+        let (cycle, _) = match msg {
+            MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
+            MiamMessage::FromSlave(cycle, value) => {
+                log::info!("first not mastaaaa");
+                let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
+                    .into_iter()
+                    .find(|(emulator, _)| emulator.get_cycles() == *cycle)
+                    .expect("desync too big");
+                snap_emulator.set_joypad(*emulator.get_joypad());
+                *emulator = snap_emulator;
+                *mbc = snap_mbc;
+                log::info!(
+                    "Correction from slave 0x{:02x} -> 0x{:02x}",
+                    emulator.serial.slave_byte,
+                    value
+                );
+                log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
 
-            emulator.serial.slave_byte = msg.value;
-            self.current_message.session = !self.current_message.session;
-            self.current_message.messages.clear();
-            emulator.execute(mbc.as_mut());
+                emulator.serial.slave_byte = *value;
+                self.current_message.session = !self.current_message.session;
+                self.current_message.messages.clear();
+                // to avoid the master to reemit a message already handled by the slave
+                emulator.execute(mbc.as_mut());
 
-            // catch up
-            return (emulator.get_cycles()..current_cycle)
-                .flat_map(|_| self.execute_and_take_snapshot(emulator, mbc.as_mut()))
-                .collect();
-        }
+                self.messages_to_handle.clear();
+
+                // catch up
+                return (emulator.get_cycles()..current_cycle)
+                    .flat_map(|_| self.execute_and_take_snapshot(emulator, mbc.as_mut()))
+                    .collect();
+            }
+        };
+
+        log::info!("mastaaaa");
 
         let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
-            log::info!("first batch");
-            let slave_cycles = emulator.get_cycles();
-            // will consume the messages later during the normal execution
-            self.synchro_cycles = Some(SynchroCycles {
-                master: msg.cycle.wrapping_add(1),
-                slave: slave_cycles.wrapping_add(1),
-            });
-
             return Default::default();
         };
 
-        let restore_cycle = synchro_cycles.slave + msg.cycle - synchro_cycles.master;
+        let restore_cycle = synchro_cycles.get_slave_cycle_from_master_cycle(cycle);
 
         if restore_cycle >= current_cycle {
             return Default::default();
@@ -220,12 +215,6 @@ impl RollbackSerial {
             panic!("big delay");
         };
 
-        self.synchro_cycles = Some(SynchroCycles {
-            master: self.synchro_cycles.as_ref().unwrap().master + emulator.get_cycles()
-                - self.synchro_cycles.as_ref().unwrap().slave,
-            slave: emulator.get_cycles(),
-        });
-
         let inputs_history: Vec<_> = self
             .inputs_history
             .iter()
@@ -234,82 +223,18 @@ impl RollbackSerial {
             .collect();
         let mut inputs_history = inputs_history.as_slice();
 
-        let mut messages = core::mem::take(&mut self.messages_to_handle);
-
-        let (mut messages, correction) = self.advance_while_consuming_messages2(
-            // ignore messages from slave we shouldn't receive them (will be replayed anyway)
-            take_while_pop_front(&mut messages, |msg| {
-                msg.is_master && msg.cycle <= current_cycle
-            })
-            .filter_map(|msg| msg.is_master.then_some((msg.cycle, msg.value))),
-            &mut inputs_history,
-            emulator,
-            mbc.as_mut(),
-        );
-
-        self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
-
-        if correction.is_none() && current_cycle > emulator.get_cycles() {
-            // catching up
-            for _ in 0..(current_cycle - emulator.get_cycles()) {
-                messages.extend(self.execute_and_take_snapshot(emulator, mbc.as_mut()));
+        (emulator.get_cycles()..current_cycle)
+            .flat_map(|_| {
+                let messages = self.execute_and_take_snapshot(emulator, mbc.as_mut());
                 if let Some((cycle, input)) = inputs_history.first()
                     && *cycle == emulator.get_cycles()
                 {
                     emulator.set_joypad(*input);
                     inputs_history = &inputs_history[1..];
                 }
-            }
-        }
-
-        if let Some(correction) = correction {
-            self.last_correction = correction;
-        }
-
-        messages
-    }
-
-    #[must_use]
-    fn advance_while_consuming_messages2(
-        &mut self,
-        messages_from_master: impl IntoIterator<Item = (u64, u8)>,
-        inputs_history: &mut &[(u64, JoypadInput)],
-        emulator: &mut Emulator,
-        mbc: &mut dyn CloneMbc<'static>,
-    ) -> (Vec<Box<[u8]>>, Option<u8>) {
-        let mut messages = Vec::new();
-        for (master_cycle, byte) in messages_from_master.into_iter() {
-            for _ in 0..master_cycle - self.synchro_cycles.as_ref().unwrap().master {
-                messages.extend(self.execute_and_take_snapshot(emulator, mbc));
-
-                if let Some((cycle, input)) = inputs_history.first()
-                    && *cycle == emulator.get_cycles()
-                {
-                    emulator.set_joypad(*input);
-                    *inputs_history = &inputs_history[1..];
-                }
-            }
-
-            self.synchro_cycles = Some(SynchroCycles {
-                master: master_cycle,
-                slave: emulator.get_cycles(),
-            });
-
-            let response = emulator
-                .serial
-                .set_msg_from_master(byte, &mut emulator.state);
-            if response != self.last_correction {
-                messages.push(
-                    SerialMessage::FromSlave(MessageFromSlave {
-                        correction: response,
-                        cycle: master_cycle,
-                    })
-                    .serialize(),
-                );
-                return (messages, Some(response));
-            }
-        }
-        (messages, None)
+                messages
+            })
+            .collect()
     }
 
     #[must_use]
@@ -335,34 +260,44 @@ impl RollbackSerial {
             emulator.execute(mbc);
         }
 
-        let cycles = emulator.get_cycles();
-
         if let Some(msg) = self.messages_to_handle.front() {
-            if !msg.is_master {
-                panic!("pas possible de recevoir un slave");
-            }
-            if msg.cycle < cycles {
-                panic!("les cycles maintenant ou plus tard")
-            }
-            if msg.cycle == cycles {
-                let response = emulator
-                    .serial
-                    .set_msg_from_master(msg.value, &mut emulator.state);
-                if response != self.last_correction {
-                    messages.push(
-                        SerialMessage::FromSlave(MessageFromSlave {
-                            correction: response,
-                            cycle: msg.cycle,
-                        })
-                        .serialize(),
-                    );
-                    self.messages_to_handle.clear();
+            match msg {
+                MiamMessage::FromMaster(cycle_to_sync, value) => {
+                    let synchro_cycle = self
+                        .synchro_cycles
+                        .get_or_insert(SynchroCycles::new(*cycle_to_sync, emulator.get_cycles()));
+                    let restored_cycle =
+                        synchro_cycle.get_slave_cycle_from_master_cycle(*cycle_to_sync);
+                    if restored_cycle < emulator.get_cycles() {
+                        panic!("msg from master: cycle problem");
+                    }
+                    if restored_cycle == emulator.get_cycles() {
+                        let response = emulator
+                            .serial
+                            .set_msg_from_master(*value, &mut emulator.state);
+                        if response != self.last_correction {
+                            messages.push(
+                                SerialMessage::FromSlave(cycle_to_sync.get_response(response))
+                                    .serialize(),
+                            );
+                            self.messages_to_handle.clear();
+                            self.last_correction = response;
+                        }
+                        self.messages_to_handle.pop_front();
+                    }
                 }
-                self.messages_to_handle.pop_front();
+                MiamMessage::FromSlave(_, _) => {
+                    panic!(
+                        "shouldn't receive slave message because the master didn't even send messages to receive a response"
+                    )
+                }
             }
         }
 
-        if cycles.is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) {
+        if emulator
+            .get_cycles()
+            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+        {
             self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
         }
 
@@ -379,17 +314,4 @@ impl RollbackSerial {
         self.inputs_history.pop_front();
         self.inputs_history.push_back(element).unwrap();
     }
-}
-
-fn take_while_pop_front<'a, T, F>(
-    deque: &'a mut VecDeque<T>,
-    mut pred: F,
-) -> impl Iterator<Item = T> + 'a
-where
-    F: FnMut(&T) -> bool + 'a,
-{
-    std::iter::from_fn(move || match deque.front() {
-        Some(x) if pred(x) => deque.pop_front(),
-        _ => None,
-    })
 }

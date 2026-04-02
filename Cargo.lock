@@ -1014,9 +1014,11 @@ name = "gebeh"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "env_logger",
  "gebeh-core",
  "gebeh-front-helper",
  "gebeh-network",
+ "log",
  "png",
 ]
 
