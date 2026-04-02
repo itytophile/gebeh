@@ -99,14 +99,26 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
-            for _ in 0..cycles {
-                if let Some((send, synchro)) = serial_mode.as_mut() {
-                    if let Some(msg) =
-                        synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut())
-                        && let Err(err) =
-                            send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
+            if let Some((send, synchro)) = serial_mode.as_mut() {
+                for msg in synchro.fix_deviation_before_running(&mut self.emulator, &mut self.mbc) {
+                    if let Err(err) =
+                        send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
                     {
                         console::error_1(&err);
+                    }
+                }
+            }
+
+            for _ in 0..cycles {
+                if let Some((send, synchro)) = serial_mode.as_mut() {
+                    for msg in
+                        synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut())
+                    {
+                        if let Err(err) =
+                            send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
+                        {
+                            console::error_1(&err);
+                        }
                     }
                 } else {
                     self.emulator.execute(self.mbc.as_mut());
@@ -277,33 +289,16 @@ impl WebEmulator {
         }
     }
 
-    #[must_use]
-    #[allow(clippy::boxed_local)]
-    pub fn set_serial_messages(
-        &mut self,
-        messages: Box<[js_sys::Uint8Array]>,
-    ) -> Box<[js_sys::Uint8Array]> {
+    pub fn add_serial_message(&mut self, message: Box<[u8]>) -> Option<Box<[u8]>> {
         let Some((_, synchro)) = &mut self.network else {
             panic!("No synchro");
         };
 
         if let Some(inner) = &mut self.inner {
-            synchro
-                .set_serial_messages(
-                    messages.iter().map(|lol| lol.to_vec().into_boxed_slice()),
-                    &mut inner.emulator,
-                    &mut inner.mbc,
-                )
-                .into_iter()
-                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
-                .collect()
+            synchro.add_message(&message);
+            None
         } else {
-            messages
-                .iter()
-                .flat_map(|lol| RollbackSerial::handle_msg_no_emulator(&lol.to_vec()))
-                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
-                .take(1)
-                .collect()
+            RollbackSerial::handle_msg_no_emulator(&message)
         }
     }
 

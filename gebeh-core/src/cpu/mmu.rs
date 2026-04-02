@@ -197,7 +197,10 @@ impl MmuCpuExt for State {
             BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control = value & 0b1 != 0,
             0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)] = value,
-            INTERRUPT_ENABLE => cpu.interrupt_enable = Interruptions::from_bits_retain(value),
+            INTERRUPT_ENABLE => {
+                cpu.interrupt_enable = Interruptions::from_bits_retain(value);
+                // log::info!("IE -> {:?}", cpu.interrupt_enable);
+            }
         }
     }
 }

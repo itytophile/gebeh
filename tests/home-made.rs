@@ -134,39 +134,31 @@ fn serial_exchange() {
         ..Default::default()
     });
 
-    while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
-        let mut new_messages_from_master = Vec::new();
-        new_messages_from_master.extend(master_rollback.set_serial_messages(
-            messages_from_slave.drain(..),
-            &mut master_emulator,
-            &mut master_mbc,
-        ));
-        messages_from_slave.extend(slave_rollback.set_serial_messages(
-            core::mem::replace(&mut messages_from_master, new_messages_from_master),
-            &mut slave_emulator,
-            &mut slave_mbc,
-        ));
+    for msg in messages_from_slave.drain(..) {
+        master_rollback.add_message(&msg);
+    }
+    for msg in messages_from_master.drain(..) {
+        slave_rollback.add_message(&msg);
     }
 
     while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
         messages_from_slave.extend(
+            slave_rollback.fix_deviation_before_running(&mut slave_emulator, &mut slave_mbc),
+        );
+        messages_from_slave.extend(
             slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
+        messages_from_master.extend(
+            master_rollback.fix_deviation_before_running(&mut master_emulator, &mut master_mbc),
         );
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
-            let mut new_messages_from_master = Vec::new();
-            new_messages_from_master.extend(master_rollback.set_serial_messages(
-                messages_from_slave.drain(..),
-                &mut master_emulator,
-                &mut master_mbc,
-            ));
-            messages_from_slave.extend(slave_rollback.set_serial_messages(
-                core::mem::replace(&mut messages_from_master, new_messages_from_master),
-                &mut slave_emulator,
-                &mut slave_mbc,
-            ));
+        for msg in messages_from_slave.drain(..) {
+            master_rollback.add_message(&msg);
+        }
+        for msg in messages_from_master.drain(..) {
+            slave_rollback.add_message(&msg);
         }
     }
 

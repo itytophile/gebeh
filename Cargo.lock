@@ -1027,6 +1027,7 @@ dependencies = [
  "arrayvec",
  "bitflags 2.11.0",
  "env_logger",
+ "log",
 ]
 
 [[package]]
