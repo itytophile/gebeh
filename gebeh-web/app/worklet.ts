@@ -32,7 +32,6 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
   emulator?: WebEmulator;
   poor_mans_time = 0;
   isMessagesEnabled = true;
-  serialMessages: Uint8Array[] = [];
 
   constructor() {
     super();
@@ -127,7 +126,16 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           if (!this.emulator) {
             throw new Error("Emulator not ready for serial");
           }
-          this.serialMessages.push(data.buffer);
+          const message = this.emulator.add_serial_message(data.buffer);
+          if (message) {
+            this.port.postMessage(
+              {
+                type: "serial",
+                buffer: message,
+              } satisfies FromNodeMessage,
+              [message.buffer],
+            );
+          }
 
           break;
         }
@@ -155,24 +163,6 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
     if (!emulator) {
       return true;
     }
-
-    if (this.serialMessages.length > 0) {
-      // console.log(`handling ${this.serialMessages.length} messages`);
-      
-      for (const message of emulator.set_serial_messages(this.serialMessages)) {
-        this.port.postMessage(
-          {
-            type: "serial",
-            buffer: message,
-          } satisfies FromNodeMessage,
-          [message.buffer],
-        );
-      }
-    }
-
-    
-
-    this.serialMessages = [];
 
     emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
       if (!this.isMessagesEnabled) {

@@ -159,7 +159,7 @@ impl RollbackSerial {
         let (cycle, _) = match msg {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
-                log::info!("first not mastaaaa");
+                // log::info!("first not mastaaaa");
                 let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
                     .into_iter()
                     .find(|(emulator, _)| emulator.get_cycles() == *cycle)
@@ -167,12 +167,12 @@ impl RollbackSerial {
                 snap_emulator.set_joypad(*emulator.get_joypad());
                 *emulator = snap_emulator;
                 *mbc = snap_mbc;
-                log::info!(
-                    "Correction from slave 0x{:02x} -> 0x{:02x}",
-                    emulator.serial.slave_byte,
-                    value
-                );
-                log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
+                // log::info!(
+                //     "Correction from slave 0x{:02x} -> 0x{:02x}",
+                //     emulator.serial.slave_byte,
+                //     value
+                // );
+                // log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
 
                 emulator.serial.slave_byte = *value;
                 self.current_message.session = !self.current_message.session;
@@ -189,7 +189,7 @@ impl RollbackSerial {
             }
         };
 
-        log::info!("mastaaaa");
+        // log::info!("mastaaaa");
 
         let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
             return Default::default();
