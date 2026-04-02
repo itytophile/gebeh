@@ -22,11 +22,11 @@ type Snapshots = VecDeque<Snapshot>;
 
 type Snapshot = (Emulator, EasyMbc);
 
-// 6 seconds
-const ROLLBACK_TRESHOLD: u64 = 4194304 * 6 / 4;
+// 1 seconds
+const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
 // 10 ms
 const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
-const MAX_SNAPSHOT: usize = 240;
+const MAX_SNAPSHOT: usize = 800;
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
@@ -167,11 +167,11 @@ impl RollbackSerial {
                 snap_emulator.set_joypad(*emulator.get_joypad());
                 *emulator = snap_emulator;
                 *mbc = snap_mbc;
-                // log::info!(
-                //     "Correction from slave 0x{:02x} -> 0x{:02x}",
-                //     emulator.serial.slave_byte,
-                //     value
-                // );
+                log::info!(
+                    "Correction from slave 0x{:02x} -> 0x{:02x}",
+                    emulator.serial.slave_byte,
+                    value
+                );
                 // log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
 
                 emulator.serial.slave_byte = *value;
@@ -201,6 +201,11 @@ impl RollbackSerial {
             return Default::default();
         }
 
+        log::info!(
+            "rollback from {current_cycle} to {restore_cycle} (diff of {})!",
+            current_cycle - restore_cycle
+        );
+
         let snapshots = core::mem::take(&mut self.slave_snapshots);
 
         if let Some((snap_emulator, snap_mbc)) = snapshots
@@ -210,7 +215,6 @@ impl RollbackSerial {
         {
             *emulator = snap_emulator;
             *mbc = snap_mbc;
-            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
         } else {
             panic!("big delay");
         };
@@ -243,22 +247,14 @@ impl RollbackSerial {
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
     ) -> Vec<Box<[u8]>> {
-        let mut messages: Vec<Box<[u8]>> = self
-            .execute(emulator.serial.slave_byte, emulator.get_cycles())
-            .into_iter()
-            .map(|msg| SerialMessage::FromMaster(msg).serialize())
-            .collect();
-
-        if emulator.will_serial_emit_byte() {
-            let emulator_clone = emulator.clone();
-            let mbc_clone = mbc.clone_boxed();
-            let byte = emulator.execute(mbc).unwrap();
-            self.current_message
-                .messages
-                .push((byte, emulator_clone, mbc_clone));
-        } else {
-            emulator.execute(mbc);
+        if emulator
+            .get_cycles()
+            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+        {
+            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
         }
+
+        let mut messages = Vec::<Box<[u8]>>::new();
 
         if let Some(msg) = self.messages_to_handle.front() {
             match msg {
@@ -266,16 +262,20 @@ impl RollbackSerial {
                     let synchro_cycle = self
                         .synchro_cycles
                         .get_or_insert(SynchroCycles::new(*cycle_to_sync, emulator.get_cycles()));
-                    let restored_cycle =
+                    let synced_cycle =
                         synchro_cycle.get_slave_cycle_from_master_cycle(*cycle_to_sync);
-                    if restored_cycle < emulator.get_cycles() {
-                        panic!("msg from master: cycle problem");
+                    if synced_cycle < emulator.get_cycles() {
+                        panic!(
+                            "msg from master: cycle problem {synced_cycle} < {}",
+                            emulator.get_cycles()
+                        );
                     }
-                    if restored_cycle == emulator.get_cycles() {
+                    if synced_cycle == emulator.get_cycles() {
                         let response = emulator
                             .serial
                             .set_msg_from_master(*value, &mut emulator.state);
                         if response != self.last_correction {
+                            log::info!("Sending response 0x{response:02x}");
                             messages.push(
                                 SerialMessage::FromSlave(cycle_to_sync.get_response(response))
                                     .serialize(),
@@ -294,11 +294,21 @@ impl RollbackSerial {
             }
         }
 
-        if emulator
-            .get_cycles()
-            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
-        {
-            self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
+        messages.extend(
+            self.execute(emulator.serial.slave_byte, emulator.get_cycles())
+                .into_iter()
+                .map(|msg| SerialMessage::FromMaster(msg).serialize()),
+        );
+
+        if emulator.will_serial_emit_byte() {
+            let emulator_clone = emulator.clone();
+            let mbc_clone = mbc.clone_boxed();
+            let byte = emulator.execute(mbc).unwrap();
+            self.current_message
+                .messages
+                .push((byte, emulator_clone, mbc_clone));
+        } else {
+            emulator.execute(mbc);
         }
 
         messages
