@@ -16,19 +16,17 @@ impl CycleToSync {
 }
 
 pub struct SynchroCycles {
-    master: u64,
-    slave: u64,
+    diff: i64,
 }
 
 impl SynchroCycles {
     pub fn new(master: CycleToSync, slave: u64) -> Self {
         Self {
-            master: master.0,
-            slave,
+            diff: i64::try_from(slave).unwrap() - i64::try_from(master.0).unwrap(),
         }
     }
 
     pub fn get_slave_cycle_from_master_cycle(&self, cycle: CycleToSync) -> u64 {
-        self.slave + cycle.0 - self.master
+        cycle.0.strict_add_signed(self.diff)
     }
 }
