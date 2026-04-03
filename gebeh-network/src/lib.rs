@@ -22,12 +22,13 @@ type Snapshots = VecDeque<Snapshot>;
 
 type Snapshot = (Emulator, EasyMbc);
 
-// 1 seconds
-const ROLLBACK_TRESHOLD: u64 = 4194304 / 4;
+// 3 seconds
+const ROLLBACK_TRESHOLD: u64 = 4194304 * 3 / 4;
 // 10 ms
 const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
-const MAX_SNAPSHOT: usize = 800;
-const ROLLBACK_SNAPSHOT_PERIOD: u64 = ROLLBACK_TRESHOLD / MAX_SNAPSHOT as u64;
+const MAX_SNAPSHOT: usize = (ROLLBACK_TRESHOLD / ROLLBACK_SNAPSHOT_PERIOD) as usize;
+// half of a quantum batch duration
+const ROLLBACK_SNAPSHOT_PERIOD: u64 = 4194304 / 4 * 128 / 48000 / 2;
 const INPUTS_HISTORY_SIZE: usize = 50;
 
 enum MiamMessage {
