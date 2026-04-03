@@ -7,10 +7,11 @@ impl CycleToSync {
     pub fn new(cycle: u64) -> Self {
         Self(cycle)
     }
-    pub fn get_response(self, value: u8) -> MessageFromSlave {
+    pub fn get_response(self, value: u8, prediction: u8) -> MessageFromSlave {
         MessageFromSlave {
             correction: value,
             cycle: self.0,
+            prediction,
         }
     }
 }

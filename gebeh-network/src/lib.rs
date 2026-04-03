@@ -76,6 +76,9 @@ impl RollbackSerial {
                     });
             }
             ArchivedSerialMessage::FromSlave(msg) => {
+                if msg.prediction != self.last_correction {
+                    return;
+                }
                 self.messages_to_handle.push_back(MiamMessage::FromSlave(
                     msg.cycle.to_native(),
                     msg.correction,
@@ -131,6 +134,7 @@ impl RollbackSerial {
                 SerialMessage::FromSlave(MessageFromSlave {
                     correction: 0xff,
                     cycle: msg.first_message.1.to_native(),
+                    prediction: 0xff,
                 })
                 .serialize(),
             )
@@ -234,8 +238,11 @@ impl RollbackSerial {
                             .set_msg_from_master(*value, &mut emulator.state);
                         if response != self.last_correction {
                             messages.push(
-                                SerialMessage::FromSlave(cycle_to_sync.get_response(response))
-                                    .serialize(),
+                                SerialMessage::FromSlave(
+                                    cycle_to_sync
+                                        .get_response(response, emulator.serial.slave_byte),
+                                )
+                                .serialize(),
                             );
                             self.messages_to_handle.clear();
                             self.last_correction = response;
