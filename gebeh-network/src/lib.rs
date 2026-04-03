@@ -182,12 +182,11 @@ impl RollbackSerial {
             return;
         }
 
-        let snapshots = core::mem::take(&mut self.slave_snapshots);
-
         let previous_input = *emulator.get_joypad();
 
-        if let Some((snap_emulator, snap_mbc)) = snapshots
-            .into_iter()
+        if let Some((snap_emulator, snap_mbc)) = self
+            .slave_snapshots
+            .drain(..)
             .rev()
             .find(|(emulator, _)| emulator.get_cycles() <= restore_cycle)
         {
