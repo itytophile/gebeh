@@ -183,9 +183,10 @@ impl RollbackSerial {
                 self.messages_to_handle.clear();
 
                 // catch up
-                return (emulator.get_cycles()..current_cycle)
-                    .flat_map(|_| self.execute_and_take_snapshot(emulator, mbc.as_mut()))
-                    .collect();
+                return Default::default();
+                // return (emulator.get_cycles()..current_cycle)
+                //     .flat_map(|_| self.execute_and_take_snapshot(emulator, mbc.as_mut()))
+                //     .collect();
             }
         };
 
@@ -207,6 +208,8 @@ impl RollbackSerial {
         );
 
         let snapshots = core::mem::take(&mut self.slave_snapshots);
+        
+        let previous_input = *emulator.get_joypad();
 
         if let Some((snap_emulator, snap_mbc)) = snapshots
             .into_iter()
@@ -227,18 +230,27 @@ impl RollbackSerial {
             .collect();
         let mut inputs_history = inputs_history.as_slice();
 
-        (emulator.get_cycles()..current_cycle)
-            .flat_map(|_| {
-                let messages = self.execute_and_take_snapshot(emulator, mbc.as_mut());
-                if let Some((cycle, input)) = inputs_history.first()
-                    && *cycle == emulator.get_cycles()
-                {
-                    emulator.set_joypad(*input);
-                    inputs_history = &inputs_history[1..];
-                }
-                messages
-            })
-            .collect()
+        let last_correction = self.last_correction;
+
+        let mut prout = Vec::new();
+
+        for _ in emulator.get_cycles()..current_cycle {
+            let messages = self.execute_and_take_snapshot(emulator, mbc.as_mut());
+            if let Some((cycle, input)) = inputs_history.first()
+                && *cycle == emulator.get_cycles()
+            {
+                emulator.set_joypad(*input);
+                inputs_history = &inputs_history[1..];
+            }
+            prout.extend(messages);
+            if last_correction != self.last_correction {
+                break;
+            }
+        }
+        
+        emulator.set_joypad(previous_input);
+
+        prout
     }
 
     #[must_use]
