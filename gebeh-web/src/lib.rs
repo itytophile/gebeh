@@ -99,14 +99,8 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
-            if let Some((send, synchro)) = serial_mode.as_mut() {
-                for msg in synchro.fix_deviation_before_running(&mut self.emulator, &mut self.mbc) {
-                    if let Err(err) =
-                        send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
-                    {
-                        console::error_1(&err);
-                    }
-                }
+            if let Some((_, synchro)) = serial_mode.as_mut() {
+                synchro.rollback_if_necessary(&mut self.emulator, &mut self.mbc);
             }
 
             for _ in 0..cycles {

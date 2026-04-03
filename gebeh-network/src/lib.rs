@@ -144,12 +144,9 @@ impl RollbackSerial {
         }
     }
 
-    #[must_use]
-    pub fn fix_deviation_before_running(
-        &mut self,
-        emulator: &mut Emulator,
-        mbc: &mut EasyMbc,
-    ) -> Vec<Box<[u8]>> {
+    // never try to "catch up" when there is a rollback, that's too hard for phone CPUs
+
+    pub fn rollback_if_necessary(&mut self, emulator: &mut Emulator, mbc: &mut EasyMbc) {
         let Some(msg) = self.messages_to_handle.front() else {
             return Default::default();
         };
@@ -159,7 +156,6 @@ impl RollbackSerial {
         let (cycle, _) = match msg {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
-                // log::info!("first not mastaaaa");
                 let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
                     .into_iter()
                     .find(|(emulator, _)| emulator.get_cycles() == *cycle)
@@ -167,12 +163,6 @@ impl RollbackSerial {
                 snap_emulator.set_joypad(*emulator.get_joypad());
                 *emulator = snap_emulator;
                 *mbc = snap_mbc;
-                log::info!(
-                    "Correction from slave 0x{:02x} -> 0x{:02x}",
-                    emulator.serial.slave_byte,
-                    value
-                );
-                // log::info!("Will emit serial {}", emulator.will_serial_emit_byte());
 
                 emulator.serial.slave_byte = *value;
                 self.current_message.session = !self.current_message.session;
@@ -182,33 +172,22 @@ impl RollbackSerial {
 
                 self.messages_to_handle.clear();
 
-                // catch up
-                return Default::default();
-                // return (emulator.get_cycles()..current_cycle)
-                //     .flat_map(|_| self.execute_and_take_snapshot(emulator, mbc.as_mut()))
-                //     .collect();
+                return;
             }
         };
 
-        // log::info!("mastaaaa");
-
         let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
-            return Default::default();
+            return;
         };
 
         let restore_cycle = synchro_cycles.get_slave_cycle_from_master_cycle(cycle);
 
         if restore_cycle >= current_cycle {
-            return Default::default();
+            return;
         }
 
-        log::info!(
-            "rollback from {current_cycle} to {restore_cycle} (diff of {})!",
-            current_cycle - restore_cycle
-        );
-
         let snapshots = core::mem::take(&mut self.slave_snapshots);
-        
+
         let previous_input = *emulator.get_joypad();
 
         if let Some((snap_emulator, snap_mbc)) = snapshots
@@ -222,35 +201,7 @@ impl RollbackSerial {
             panic!("big delay");
         };
 
-        let inputs_history: Vec<_> = self
-            .inputs_history
-            .iter()
-            .filter(|(cycle, _)| *cycle > emulator.get_cycles())
-            .copied()
-            .collect();
-        let mut inputs_history = inputs_history.as_slice();
-
-        let last_correction = self.last_correction;
-
-        let mut prout = Vec::new();
-
-        for _ in emulator.get_cycles()..current_cycle {
-            let messages = self.execute_and_take_snapshot(emulator, mbc.as_mut());
-            if let Some((cycle, input)) = inputs_history.first()
-                && *cycle == emulator.get_cycles()
-            {
-                emulator.set_joypad(*input);
-                inputs_history = &inputs_history[1..];
-            }
-            prout.extend(messages);
-            if last_correction != self.last_correction {
-                break;
-            }
-        }
-        
         emulator.set_joypad(previous_input);
-
-        prout
     }
 
     #[must_use]
@@ -287,7 +238,6 @@ impl RollbackSerial {
                             .serial
                             .set_msg_from_master(*value, &mut emulator.state);
                         if response != self.last_correction {
-                            log::info!("Sending response 0x{response:02x}");
                             messages.push(
                                 SerialMessage::FromSlave(cycle_to_sync.get_response(response))
                                     .serialize(),
