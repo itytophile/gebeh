@@ -35,18 +35,12 @@ pub struct WebEmulator {
 }
 
 impl WebEmulatorInner {
-    fn set_joypad(&mut self, joypad: JoypadInput, synchro: Option<&mut RollbackSerial>) {
+    fn set_joypad(&mut self, joypad: JoypadInput) {
         if self.emulator.get_joypad() == &joypad {
             return;
         }
 
         self.emulator.set_joypad(joypad);
-
-        let Some(synchro) = synchro else {
-            return;
-        };
-
-        synchro.save_input(self.emulator.get_cycles(), joypad);
     }
 
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
@@ -196,90 +190,66 @@ impl WebEmulator {
 
     pub fn set_a(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    a: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                a: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_b(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    b: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                b: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_start(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    start: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                start: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_select(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    select: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                select: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_left(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    left: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                left: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_right(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    right: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                right: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_down(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    down: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                down: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_up(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    up: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                up: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
 

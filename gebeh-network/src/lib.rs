@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
-use arraydeque::ArrayDeque;
-use gebeh_core::{Emulator, joypad::JoypadInput};
+use gebeh_core::Emulator;
 use gebeh_front_helper::{CloneMbc, EasyMbc};
 
 use crate::{
@@ -29,7 +28,6 @@ const BATCH_PERIOD: u64 = 4194304 / 4 / 100;
 const MAX_SNAPSHOT: usize = (ROLLBACK_TRESHOLD / ROLLBACK_SNAPSHOT_PERIOD) as usize;
 // half of a quantum batch duration
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = 4194304 / 4 * 128 / 48000 / 2;
-const INPUTS_HISTORY_SIZE: usize = 50;
 
 enum MiamMessage {
     FromMaster(CycleToSync, u8),
@@ -41,9 +39,6 @@ pub struct RollbackSerial {
     master_snapshots: Vec<(Emulator, EasyMbc)>,
     slave_snapshots: Snapshots,
     synchro_cycles: Option<SynchroCycles>,
-    // it's not the actual input value at a given cycle, but WHEN the input changes
-    // to avoid saving inputs every cycle
-    inputs_history: Box<ArrayDeque<(u64, JoypadInput), INPUTS_HISTORY_SIZE>>,
     last_correction: u8,
     // Les from master sont fusionnés correctement
     // ceux qui n'ont pas la bonne correction sont ignorées
@@ -59,7 +54,6 @@ impl Default for RollbackSerial {
             master_snapshots: Default::default(),
             slave_snapshots: Default::default(),
             synchro_cycles: Default::default(),
-            inputs_history: Default::default(),
             last_correction: 0xff,
             messages_to_handle: Default::default(),
         }
@@ -157,8 +151,9 @@ impl RollbackSerial {
         let (cycle, _) = match msg {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
-                let (mut snap_emulator, snap_mbc) = core::mem::take(&mut self.master_snapshots)
-                    .into_iter()
+                let (mut snap_emulator, snap_mbc) = self
+                    .master_snapshots
+                    .drain(..)
                     .find(|(emulator, _)| emulator.get_cycles() == *cycle)
                     .expect("desync too big");
                 snap_emulator.set_joypad(*emulator.get_joypad());
@@ -275,16 +270,5 @@ impl RollbackSerial {
         }
 
         messages
-    }
-
-    pub fn save_input(&mut self, cycles: u64, joypad: JoypadInput) {
-        let Err(arraydeque::CapacityError { element }) =
-            self.inputs_history.push_back((cycles, joypad))
-        else {
-            return;
-        };
-
-        self.inputs_history.pop_front();
-        self.inputs_history.push_back(element).unwrap();
     }
 }
