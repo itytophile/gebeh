@@ -35,18 +35,12 @@ pub struct WebEmulator {
 }
 
 impl WebEmulatorInner {
-    fn set_joypad(&mut self, joypad: JoypadInput, synchro: Option<&mut RollbackSerial>) {
+    fn set_joypad(&mut self, joypad: JoypadInput) {
         if self.emulator.get_joypad() == &joypad {
             return;
         }
 
         self.emulator.set_joypad(joypad);
-
-        let Some(synchro) = synchro else {
-            return;
-        };
-
-        synchro.save_input(self.emulator.get_cycles(), joypad);
     }
 
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
@@ -99,14 +93,20 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
+            if let Some((_, synchro)) = serial_mode.as_mut() {
+                synchro.rollback_if_necessary(&mut self.emulator, &mut self.mbc);
+            }
+
             for _ in 0..cycles {
                 if let Some((send, synchro)) = serial_mode.as_mut() {
-                    if let Some(msg) =
+                    for msg in
                         synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut())
-                        && let Err(err) =
-                            send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
                     {
-                        console::error_1(&err);
+                        if let Err(err) =
+                            send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
+                        {
+                            console::error_1(&err);
+                        }
                     }
                 } else {
                     self.emulator.execute(self.mbc.as_mut());
@@ -163,6 +163,7 @@ impl WebEmulator {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
         Default::default()
     }
 
@@ -189,110 +190,79 @@ impl WebEmulator {
 
     pub fn set_a(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    a: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                a: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_b(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    b: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                b: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_start(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    start: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                start: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_select(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    select: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                select: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_left(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    left: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                left: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_right(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    right: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                right: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_down(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    down: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                down: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
     pub fn set_up(&mut self, value: bool) {
         if let Some(inner) = &mut self.inner {
-            inner.set_joypad(
-                JoypadInput {
-                    up: value,
-                    ..*inner.emulator.get_joypad()
-                },
-                self.network.as_mut().map(|(_, synchro)| synchro),
-            );
+            inner.set_joypad(JoypadInput {
+                up: value,
+                ..*inner.emulator.get_joypad()
+            });
         }
     }
 
-    #[must_use]
-    pub fn set_serial_msg(&mut self, msg: &[u8]) -> Box<[js_sys::Uint8Array]> {
+    pub fn add_serial_message(&mut self, message: Box<[u8]>) -> Option<Box<[u8]>> {
         let Some((_, synchro)) = &mut self.network else {
             panic!("No synchro");
         };
 
-        if let Some(inner) = &mut self.inner {
-            synchro
-                .set_serial_msg(msg, &mut inner.emulator, &mut inner.mbc)
-                .into_iter()
-                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
-                .collect()
+        if self.inner.is_some() {
+            synchro.add_message(&message);
+            None
         } else {
-            RollbackSerial::handle_msg_no_emulator(msg)
-                .into_iter()
-                .map(|bytes| js_sys::Uint8Array::new_from_slice(&bytes))
-                .collect()
+            RollbackSerial::handle_msg_no_emulator(&message)
         }
     }
 

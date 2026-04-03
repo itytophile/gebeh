@@ -1,15 +1,17 @@
-use rkyv::{Archive, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
-#[derive(Archive, Serialize, Debug)]
+#[derive(Archive, Serialize, Debug, Deserialize)]
 pub(crate) struct MessageFromMaster {
     pub prediction: u8,
     pub first_message: (u8, u64),
     pub messages: Vec<(u8, u64)>,
-    pub session: bool,
 }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 pub(crate) struct MessageFromSlave {
+    // the prediction field is more used like a session id
+    // if there a bad prediction somewhere then we can easily delete obsolete slave messages
+    pub prediction: u8,
     pub correction: u8,
     pub cycle: u64,
 }

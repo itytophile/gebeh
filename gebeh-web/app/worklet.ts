@@ -32,13 +32,13 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
   emulator?: WebEmulator;
   poor_mans_time = 0;
   isMessagesEnabled = true;
-  serialMessages: Uint8Array[] = [];
 
   constructor() {
     super();
     this.port.addEventListener("message", ({ data }: MessageEvent<FromMainMessage>) => {
       switch (data.type) {
         case "rom": {
+          console.log({ sampleRate });
           this.emulator?.init_emulator(
             new Uint8Array(data.bytes),
             data.save ? new Uint8Array(data.save) : undefined,
@@ -126,7 +126,16 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           if (!this.emulator) {
             throw new Error("Emulator not ready for serial");
           }
-          this.serialMessages.push(data.buffer);
+          const message = this.emulator.add_serial_message(data.buffer);
+          if (message) {
+            this.port.postMessage(
+              {
+                type: "serial",
+                buffer: message,
+              } satisfies FromNodeMessage,
+              [message.buffer],
+            );
+          }
 
           break;
         }
@@ -154,20 +163,6 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
     if (!emulator) {
       return true;
     }
-
-    for (const message of this.serialMessages.flatMap((message) =>
-      emulator.set_serial_msg(message),
-    )) {
-      this.port.postMessage(
-        {
-          type: "serial",
-          buffer: message,
-        } satisfies FromNodeMessage,
-        [message.buffer],
-      );
-    }
-
-    this.serialMessages = [];
 
     emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
       if (!this.isMessagesEnabled) {

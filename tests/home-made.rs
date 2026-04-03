@@ -100,6 +100,10 @@ fn serial_master_overclock() {
 
 #[test]
 fn serial_exchange() {
+    env_logger::builder()
+        .is_test(true)
+        .filter_level(log::LevelFilter::Info)
+        .init();
     let rom = &*std::fs::read("./gebeh-test-roms/serial.gb").unwrap().leak();
     let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut slave_emulator = Emulator::default();
@@ -134,47 +138,32 @@ fn serial_exchange() {
         ..Default::default()
     });
 
-    while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
-        let mut new_messages_from_master = Vec::new();
-        for msg in messages_from_slave.drain(..) {
-            new_messages_from_master.extend(master_rollback.set_serial_msg(
-                &msg,
-                &mut master_emulator,
-                &mut master_mbc,
-            ));
-        }
-        for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
-            messages_from_slave.extend(slave_rollback.set_serial_msg(
-                &msg,
-                &mut slave_emulator,
-                &mut slave_mbc,
-            ));
-        }
+    for msg in messages_from_slave.drain(..) {
+        master_rollback.add_message(&msg);
+    }
+    for msg in messages_from_master.drain(..) {
+        slave_rollback.add_message(&msg);
     }
 
+    log::info!("prout");
+
     while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
+        log::info!("slave");
+        slave_rollback.rollback_if_necessary(&mut slave_emulator, &mut slave_mbc);
+        log::info!("after deviation");
         messages_from_slave.extend(
             slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
         );
+        log::info!("master");
+        master_rollback.rollback_if_necessary(&mut master_emulator, &mut master_mbc);
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        while !messages_from_master.is_empty() || !messages_from_slave.is_empty() {
-            let mut new_messages_from_master = Vec::new();
-            for msg in messages_from_slave.drain(..) {
-                new_messages_from_master.extend(master_rollback.set_serial_msg(
-                    &msg,
-                    &mut master_emulator,
-                    &mut master_mbc,
-                ));
-            }
-            for msg in core::mem::replace(&mut messages_from_master, new_messages_from_master) {
-                messages_from_slave.extend(slave_rollback.set_serial_msg(
-                    &msg,
-                    &mut slave_emulator,
-                    &mut slave_mbc,
-                ));
-            }
+        for msg in messages_from_slave.drain(..) {
+            master_rollback.add_message(&msg);
+        }
+        for msg in messages_from_master.drain(..) {
+            slave_rollback.add_message(&msg);
         }
     }
 
