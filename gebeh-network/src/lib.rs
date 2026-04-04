@@ -5,7 +5,7 @@ use gebeh_core::Emulator;
 use gebeh_front_helper::{CloneMbc, EasyMbc};
 
 use crate::{
-    message::{ SerialMessage},
+    message::SerialMessage,
     synchro_cycles::{CycleToSync, SynchroCycles},
 };
 
@@ -53,14 +53,9 @@ impl RollbackSerial {
     pub fn add_messages(&mut self, msg: &[u8]) {
         let msg = SerialMessage::deserialize(msg);
         self.messages_to_handle.extend(
-            {let lol = msg.get();
-                if !lol.is_empty() {
-                    log::info!("I received {} messages", lol.len());
-                    log::info!("{} {} {} {}", lol[0].is_master, lol[0].cycle, lol[0].prediction, lol[0].value);
-                }
-                lol}
+            msg.get()
                 .iter()
-                .filter(|msg| msg.prediction != self.last_correction)
+                .filter(|msg| msg.prediction == self.last_correction)
                 .map(|msg| {
                     if msg.is_master {
                         MiamMessage::FromMaster(CycleToSync::new(msg.cycle.to_native()), msg.value)
