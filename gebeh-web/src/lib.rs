@@ -74,6 +74,7 @@ impl WebEmulatorInner {
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
+    #[must_use]
     pub fn drive_and_sample(
         &mut self,
         left: &mut [f32],
@@ -176,16 +177,16 @@ impl WebEmulator {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-    ) {
-        if let Some(inner) = &mut self.inner {
+    ) -> Option<Box<[u8]>> {
+        self.inner.as_mut().map(|inner| {
             inner.drive_and_sample(
                 left,
                 right,
                 sample_rate,
                 on_new_frame,
                 self.network.as_mut(),
-            );
-        }
+            )
+        })
     }
 
     pub fn get_save(&self) -> Option<Save> {
