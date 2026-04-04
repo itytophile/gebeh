@@ -209,7 +209,7 @@ impl RollbackSerial {
                 is_master: true,
                 value: byte,
                 cycle: emulator_clone.get_cycles(),
-                prediction: self.last_correction,
+                prediction: emulator.serial.slave_byte,
             });
             self.master_snapshots.push_back((emulator_clone, mbc_clone));
         } else {
