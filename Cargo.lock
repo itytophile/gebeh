@@ -1093,6 +1093,7 @@ dependencies = [
 name = "gebeh-web"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "console_error_panic_hook",
  "gebeh-core",
  "gebeh-front-helper",

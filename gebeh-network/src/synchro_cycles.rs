@@ -1,4 +1,4 @@
-use crate::message::MessageFromSlave;
+use crate::message::SerialMessage;
 
 #[derive(Clone, Copy)]
 pub struct CycleToSync(u64);
@@ -7,9 +7,10 @@ impl CycleToSync {
     pub fn new(cycle: u64) -> Self {
         Self(cycle)
     }
-    pub fn get_response(self, value: u8, prediction: u8) -> MessageFromSlave {
-        MessageFromSlave {
-            correction: value,
+    pub fn get_response(self, value: u8, prediction: u8) -> SerialMessage {
+        SerialMessage {
+            is_master: false,
+            value,
             cycle: self.0,
             prediction,
         }

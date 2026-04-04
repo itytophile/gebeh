@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use arrayvec::ArrayVec;
 use gebeh_core::{
     Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer, joypad::JoypadInput,
 };
@@ -10,7 +11,7 @@ use web_sys::{
     js_sys::{self},
 };
 
-use gebeh_network::RollbackSerial;
+use gebeh_network::{RollbackSerial, message::SerialMessage};
 
 use crate::rtc::NullRtc;
 
@@ -31,7 +32,7 @@ struct WebEmulatorInner {
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Option<WebEmulatorInner>,
-    network: Option<(js_sys::Function, RollbackSerial)>,
+    network: Option<RollbackSerial>,
 }
 
 impl WebEmulatorInner {
@@ -79,8 +80,9 @@ impl WebEmulatorInner {
         right: &mut [f32],
         sample_rate: u32,
         on_new_frame: &js_sys::Function,
-        serial_mode: &mut Option<(js_sys::Function, RollbackSerial)>,
-    ) {
+        mut serial_mode: Option<&mut RollbackSerial>,
+    ) -> Box<[u8]> {
+        let mut messages = ArrayVec::<SerialMessage, 4>::new();
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
 
@@ -93,21 +95,15 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
-            if let Some((_, synchro)) = serial_mode.as_mut() {
+            if let Some(synchro) = serial_mode.as_mut() {
                 synchro.rollback_if_necessary(&mut self.emulator, &mut self.mbc);
             }
 
             for _ in 0..cycles {
-                if let Some((send, synchro)) = serial_mode.as_mut() {
-                    for msg in
-                        synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut())
-                    {
-                        if let Err(err) =
-                            send.call1(&JsValue::null(), &js_sys::Uint8Array::new_from_slice(&msg))
-                        {
-                            console::error_1(&err);
-                        }
-                    }
+                if let Some(synchro) = serial_mode.as_mut() {
+                    messages.extend(
+                        synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut()),
+                    );
                 } else {
                     self.emulator.execute(self.mbc.as_mut());
                 }
@@ -116,6 +112,8 @@ impl WebEmulatorInner {
 
             (*left, *right) = self.handle_sound(sample_rate);
         }
+
+        SerialMessage::serialize(&messages)
     }
 
     fn handle_sound(&mut self, sample_rate: u32) -> (f32, f32) {
@@ -180,7 +178,13 @@ impl WebEmulator {
         on_new_frame: &js_sys::Function,
     ) {
         if let Some(inner) = &mut self.inner {
-            inner.drive_and_sample(left, right, sample_rate, on_new_frame, &mut self.network);
+            inner.drive_and_sample(
+                left,
+                right,
+                sample_rate,
+                on_new_frame,
+                self.network.as_mut(),
+            );
         }
     }
 
@@ -254,21 +258,22 @@ impl WebEmulator {
     }
 
     pub fn add_serial_message(&mut self, message: Box<[u8]>) -> Option<Box<[u8]>> {
-        let Some((_, synchro)) = &mut self.network else {
+        let Some(synchro) = &mut self.network else {
             panic!("No synchro");
         };
 
         if self.inner.is_some() {
-            synchro.add_message(&message);
+            synchro.add_messages(&message);
             None
         } else {
-            RollbackSerial::handle_msg_no_emulator(&message)
+            let msg = RollbackSerial::handle_msg_no_emulator(&message)?;
+            Some(SerialMessage::serialize(&[msg]))
         }
     }
 
-    pub fn set_is_serial_connected(&mut self, on_serial: Option<js_sys::Function>) {
-        if let Some(on_serial) = on_serial {
-            self.network = Some((on_serial.clone(), Default::default()));
+    pub fn set_is_serial_connected(&mut self, is_connected: bool) {
+        if is_connected {
+            self.network = Some(Default::default());
         } else {
             self.network = None;
             if let Some(inner) = &mut self.inner {

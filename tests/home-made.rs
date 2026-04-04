@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader};
 use gebeh::InstantRtc;
 use gebeh_core::{Emulator, HEIGHT, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
-use gebeh_network::RollbackSerial;
+use gebeh_network::{RollbackSerial, message::SerialMessage};
 
 fn home_made(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
@@ -138,33 +138,24 @@ fn serial_exchange() {
         ..Default::default()
     });
 
-    for msg in messages_from_slave.drain(..) {
-        master_rollback.add_message(&msg);
-    }
-    for msg in messages_from_master.drain(..) {
-        slave_rollback.add_message(&msg);
-    }
-
-    log::info!("prout");
+    master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+    messages_from_slave.clear();
+    slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+    messages_from_master.clear();
 
     while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
-        log::info!("slave");
         slave_rollback.rollback_if_necessary(&mut slave_emulator, &mut slave_mbc);
-        log::info!("after deviation");
         messages_from_slave.extend(
             slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
         );
-        log::info!("master");
         master_rollback.rollback_if_necessary(&mut master_emulator, &mut master_mbc);
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        for msg in messages_from_slave.drain(..) {
-            master_rollback.add_message(&msg);
-        }
-        for msg in messages_from_master.drain(..) {
-            slave_rollback.add_message(&msg);
-        }
+        master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+        messages_from_slave.clear();
+        slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+        messages_from_master.clear();
     }
 
     assert_eq!(slave_emulator.get_cpu().b, 7);
