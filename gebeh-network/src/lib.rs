@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use arrayvec::ArrayVec;
 use gebeh_core::Emulator;
 use gebeh_front_helper::{CloneMbc, EasyMbc};
 
@@ -160,6 +161,7 @@ impl RollbackSerial {
                     .drain(..)
                     .find(|(emulator, _)| emulator.get_cycles() == *cycle)
                     .expect("desync too big");
+                self.slave_snapshots.clear();
                 snap_emulator.set_joypad(*emulator.get_joypad());
                 *emulator = snap_emulator;
                 *mbc = snap_mbc;
@@ -200,15 +202,16 @@ impl RollbackSerial {
             panic!("big delay");
         };
 
+        self.master_snapshots.clear();
+
         emulator.set_joypad(previous_input);
     }
 
-    #[must_use]
     pub fn execute_and_take_snapshot(
         &mut self,
         emulator: &mut Emulator,
         mbc: &mut dyn CloneMbc<'static>,
-    ) -> Vec<Box<[u8]>> {
+    ) -> impl Iterator<Item = Box<[u8]>> {
         if emulator
             .get_cycles()
             .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
@@ -216,7 +219,7 @@ impl RollbackSerial {
             self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
         }
 
-        let mut messages = Vec::<Box<[u8]>>::new();
+        let mut messages = ArrayVec::<Box<[u8]>, 2>::new();
 
         if let Some(msg) = self.messages_to_handle.front() {
             match msg {
@@ -260,7 +263,6 @@ impl RollbackSerial {
 
         messages.extend(
             self.execute(emulator.serial.slave_byte, emulator.get_cycles())
-                .into_iter()
                 .map(|msg| SerialMessage::FromMaster(msg).serialize()),
         );
 
@@ -275,6 +277,6 @@ impl RollbackSerial {
             emulator.execute(mbc);
         }
 
-        messages
+        messages.into_iter()
     }
 }
