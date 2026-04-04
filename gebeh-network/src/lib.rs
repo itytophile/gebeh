@@ -41,10 +41,6 @@ pub struct RollbackSerial {
     slave_snapshots: Snapshots,
     synchro_cycles: Option<SynchroCycles>,
     last_correction: u8,
-    // Les from master sont fusionnés correctement
-    // ceux qui n'ont pas la bonne correction sont ignorées
-    // gérer le cas du switch slave <-> master qui peut foutre la merde car ça ignore
-    // le concept de session
     messages_to_handle: VecDeque<MiamMessage>,
 }
 
