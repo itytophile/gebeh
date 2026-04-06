@@ -99,6 +99,11 @@ fn serial_master_overclock() {
 }
 
 #[test]
+fn serial_master_transfer_timing_int() {
+    home_made("serial_master_transfer_timing_int");
+}
+
+#[test]
 fn serial_exchange() {
     env_logger::builder()
         .is_test(true)

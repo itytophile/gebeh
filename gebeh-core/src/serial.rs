@@ -22,6 +22,7 @@ pub struct Serial {
     sc: SerialControlState,
     falling_edge: FallingEdge,
     pub slave_byte: u8,
+    delay_int: bool,
 }
 
 impl Default for Serial {
@@ -31,6 +32,7 @@ impl Default for Serial {
             sc: Default::default(),
             falling_edge: Default::default(),
             slave_byte: 0xff,
+            delay_int: false,
         }
     }
 }
@@ -84,6 +86,10 @@ impl Serial {
 
     #[must_use]
     pub fn execute(&mut self, system_clock: u16, state: &mut State, _: u64) -> Option<u8> {
+        if self.delay_int {
+            state.interrupt_flag.insert(Interruptions::SERIAL);
+            self.delay_int = false;
+        }
         if get_clock_16384_hz(&mut self.falling_edge, system_clock)
             && let SerialControlState::Master { serial_count } = &mut self.sc
             && *serial_count < READY_COUNT
@@ -93,7 +99,7 @@ impl Serial {
             if *serial_count == READY_COUNT {
                 let response = self.sb;
                 self.sc = SerialControlState::NoTransfer { is_master: true };
-                state.interrupt_flag.insert(Interruptions::SERIAL);
+                self.delay_int = true;
                 self.sb = self.slave_byte;
                 return Some(response);
             }
