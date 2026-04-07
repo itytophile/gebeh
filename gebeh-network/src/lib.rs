@@ -35,7 +35,7 @@ pub struct RollbackSerial {
     synchro_cycles: Option<SynchroCycles>,
     last_correction: u8,
     messages_to_handle: VecDeque<MiamMessage>,
-    force_snapshot: bool
+    force_snapshot: bool,
 }
 
 impl Default for RollbackSerial {
@@ -46,7 +46,7 @@ impl Default for RollbackSerial {
             synchro_cycles: Default::default(),
             last_correction: 0xff,
             messages_to_handle: Default::default(),
-            force_snapshot: false
+            force_snapshot: false,
         }
     }
 }
@@ -157,7 +157,8 @@ impl RollbackSerial {
     ) -> ArrayVec<SerialMessage, 2> {
         if emulator
             .get_cycles()
-            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD) || self.force_snapshot
+            .is_multiple_of(ROLLBACK_SNAPSHOT_PERIOD)
+            || self.force_snapshot
         {
             self.add_snapshot((emulator.clone(), mbc.clone_boxed()));
             self.force_snapshot = false;

@@ -157,12 +157,88 @@ fn serial_exchange() {
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
-        messages_from_slave.clear();
-        slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
-        messages_from_master.clear();
+        if !messages_from_slave.is_empty() {
+            master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+            messages_from_slave.clear();
+        }
+        if !messages_from_master.is_empty() {
+            slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+            messages_from_master.clear();
+        }
     }
 
     assert_eq!(slave_emulator.get_cpu().b, 7);
     assert_eq!(master_emulator.get_cpu().b, 7)
+}
+
+#[test]
+fn big_serial() {
+    env_logger::builder()
+        .is_test(true)
+        .filter_level(log::LevelFilter::Info)
+        .init();
+    let rom = &*std::fs::read("./gebeh-test-roms/big_serial.gb")
+        .unwrap()
+        .leak();
+    let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut slave_emulator = Emulator::default();
+    let (_, mut master_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let mut master_emulator = Emulator::default();
+
+    let mut slave_rollback = RollbackSerial::default();
+    let mut master_rollback = RollbackSerial::default();
+
+    let mut messages_from_slave = Vec::new();
+    let mut messages_from_master = Vec::new();
+
+    // wait for ld a, a
+    loop {
+        messages_from_slave.extend(
+            slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
+        if let 0x7f = slave_emulator.get_cpu().current_opcode {
+            break;
+        }
+    }
+    loop {
+        messages_from_master.extend(
+            master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
+        );
+        if let 0x7f = master_emulator.get_cpu().current_opcode {
+            break;
+        }
+    }
+    master_emulator.set_joypad(JoypadInput {
+        start: true,
+        ..Default::default()
+    });
+
+    master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+    messages_from_slave.clear();
+    slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+    messages_from_master.clear();
+
+    while slave_emulator.get_ppu().get_bgp() != 0b00_00_00_11
+        || master_emulator.get_ppu().get_bgp() != 0b00_00_00_11
+    {
+        slave_rollback.rollback_if_necessary(&mut slave_emulator, &mut slave_mbc);
+        messages_from_slave.extend(
+            slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
+        );
+        // log::info!("${:04x}", slave_emulator.get_cpu().pc);
+
+        master_rollback.rollback_if_necessary(&mut master_emulator, &mut master_mbc);
+        messages_from_master.extend(
+            master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
+        );
+
+        if !messages_from_slave.is_empty() {
+            master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+            messages_from_slave.clear();
+        }
+        if !messages_from_master.is_empty() {
+            slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+            messages_from_master.clear();
+        }
+    }
 }

@@ -29,6 +29,7 @@ EntryPoint:
     ld a, IE_SERIAL | IE_JOYPAD
     ei
     ldh [rIE], a
+    ld a, a
 start:
     ; master interrupt triggered here
     ; sync serial transfer interrupt fired by master here
