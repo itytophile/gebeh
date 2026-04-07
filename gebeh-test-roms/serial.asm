@@ -60,10 +60,8 @@ check:
     cp d
     jr nz, .end
     ; success
-    ld b, 7
     ld a, %00_00_00_11
     ldh [rBGP], a
 .end
     ; end of program
-    ld h, 7
     halt
