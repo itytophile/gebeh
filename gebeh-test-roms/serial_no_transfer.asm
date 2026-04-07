@@ -28,15 +28,11 @@ EntryPoint:
     ld a, %11_11_11_00
     ldh [rBGP], a
 
-    ; byte sent by master
-    ld c, 42
-    ; byte sent by slave
-    ld d, 67
     ld a, IE_SERIAL | IE_JOYPAD
     ldh [rIE], a
-    ld a, d
+    ld a, 67
     ldh [rSB], a
-    ld a, SC_START
+    xor a
     ldh [rSC], a
     ei
     ; to tell the emulator that it can inject an input
@@ -45,23 +41,18 @@ EntryPoint:
     halt
 master_mode:
     ; master mode
-    ld a, c
-    ldh [rSB], a
     ld a, SC_START | SC_INTERNAL
     ldh [rSC], a
     halt
 check:
-    ldh a, [rSC]
-    and SC_INTERNAL
     ldh a, [rSB]
-    jr nz, .is_master
-    ld d, c
-.is_master:
-    cp d
+    and a
     jr nz, .end
     ; success
+    ld b, 7
     ld a, %00_00_00_11
     ldh [rBGP], a
 .end
     ; end of program
+    ld h, 7
     halt

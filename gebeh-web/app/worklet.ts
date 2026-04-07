@@ -104,22 +104,14 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           if (!this.emulator) {
             throw new Error("Emulator not ready for serial");
           }
-          this.emulator.set_is_serial_connected((message: Uint8Array) => {
-            this.port.postMessage(
-              {
-                type: "serial",
-                buffer: message,
-              } satisfies FromNodeMessage,
-              [message.buffer],
-            );
-          });
+          this.emulator.set_is_serial_connected(true);
           break;
         }
         case "serialDisconnected": {
           if (!this.emulator) {
             throw new Error("Emulator not ready for serial");
           }
-          this.emulator.set_is_serial_connected();
+          this.emulator.set_is_serial_connected(false);
           break;
         }
         case "serial": {
@@ -164,7 +156,7 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       return true;
     }
 
-    emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
+    const message = emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
       if (!this.isMessagesEnabled) {
         return;
       }
@@ -176,6 +168,16 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
         [frame.buffer],
       );
     });
+
+    if (message) {
+      this.port.postMessage(
+        {
+          type: "serial",
+          buffer: message,
+        } satisfies FromNodeMessage,
+        [message.buffer],
+      );
+    }
 
     // https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletProcessor/process
     // Citation: audio data blocks are always 128 frames long

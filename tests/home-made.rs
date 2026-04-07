@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader};
 use gebeh::InstantRtc;
 use gebeh_core::{Emulator, HEIGHT, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
-use gebeh_network::RollbackSerial;
+use gebeh_network::{RollbackSerial, message::SerialMessage};
 
 fn home_made(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
@@ -68,43 +68,14 @@ fn home_made_ppu(name: &str) {
     }
 }
 
-#[test]
-fn stat_mode_2_palette_screen_edges() {
-    home_made_ppu("stat_mode_2_palette_screen_edges");
-}
-
-#[test]
-fn lyc_palette_screen_edges() {
-    home_made_ppu("lyc_palette_screen_edges");
-}
-
-#[test]
-fn halt_lyc_palette_screen_edges() {
-    home_made_ppu("halt_lyc_palette_screen_edges");
-}
-
-#[test]
-fn halt_stat_mode_2_palette_screen_edges() {
-    home_made_ppu("halt_stat_mode_2_palette_screen_edges");
-}
-
-#[test]
-fn serial_master_transfer_timing() {
-    home_made("serial_master_transfer_timing");
-}
-
-#[test]
-fn serial_master_overclock() {
-    home_made("serial_master_overclock");
-}
-
-#[test]
-fn serial_exchange() {
+fn serial_test(name: &str) {
     env_logger::builder()
         .is_test(true)
         .filter_level(log::LevelFilter::Info)
         .init();
-    let rom = &*std::fs::read("./gebeh-test-roms/serial.gb").unwrap().leak();
+    let rom = &*std::fs::read(format!("./gebeh-test-roms/{name}.gb"))
+        .unwrap()
+        .leak();
     let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
     let mut slave_emulator = Emulator::default();
     let (_, mut master_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
@@ -138,35 +109,77 @@ fn serial_exchange() {
         ..Default::default()
     });
 
-    for msg in messages_from_slave.drain(..) {
-        master_rollback.add_message(&msg);
-    }
-    for msg in messages_from_master.drain(..) {
-        slave_rollback.add_message(&msg);
-    }
+    master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+    messages_from_slave.clear();
+    slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+    messages_from_master.clear();
 
-    log::info!("prout");
-
-    while slave_emulator.get_cpu().h != 7 || master_emulator.get_cpu().h != 7 {
-        log::info!("slave");
+    while slave_emulator.get_ppu().get_bgp() != 0b00_00_00_11
+        || master_emulator.get_ppu().get_bgp() != 0b00_00_00_11
+    {
         slave_rollback.rollback_if_necessary(&mut slave_emulator, &mut slave_mbc);
-        log::info!("after deviation");
         messages_from_slave.extend(
             slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
         );
-        log::info!("master");
+        // log::info!("${:04x}", slave_emulator.get_cpu().pc);
+
         master_rollback.rollback_if_necessary(&mut master_emulator, &mut master_mbc);
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        for msg in messages_from_slave.drain(..) {
-            master_rollback.add_message(&msg);
+
+        if !messages_from_slave.is_empty() {
+            master_rollback.add_messages(&SerialMessage::serialize(&messages_from_slave));
+            messages_from_slave.clear();
         }
-        for msg in messages_from_master.drain(..) {
-            slave_rollback.add_message(&msg);
+        if !messages_from_master.is_empty() {
+            slave_rollback.add_messages(&SerialMessage::serialize(&messages_from_master));
+            messages_from_master.clear();
         }
     }
+}
 
-    assert_eq!(slave_emulator.get_cpu().b, 7);
-    assert_eq!(master_emulator.get_cpu().b, 7)
+#[test]
+fn stat_mode_2_palette_screen_edges() {
+    home_made_ppu("stat_mode_2_palette_screen_edges");
+}
+
+#[test]
+fn lyc_palette_screen_edges() {
+    home_made_ppu("lyc_palette_screen_edges");
+}
+
+#[test]
+fn halt_lyc_palette_screen_edges() {
+    home_made_ppu("halt_lyc_palette_screen_edges");
+}
+
+#[test]
+fn halt_stat_mode_2_palette_screen_edges() {
+    home_made_ppu("halt_stat_mode_2_palette_screen_edges");
+}
+
+#[test]
+fn serial_master_transfer_timing() {
+    home_made("serial_master_transfer_timing");
+}
+
+#[test]
+fn serial_master_overclock() {
+    home_made("serial_master_overclock");
+}
+
+#[test]
+fn serial_master_transfer_timing_int() {
+    home_made("serial_master_transfer_timing_int");
+}
+
+#[test]
+fn serial_exchange() {
+    serial_test("serial");
+}
+
+#[test]
+fn big_serial() {
+    serial_test("big_serial");
 }
