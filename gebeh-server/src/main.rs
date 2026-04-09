@@ -404,12 +404,12 @@ async fn handle_frame_before_guest<T: Unpin + AsyncWrite>(
     tx: &mut WebSocketWrite<T>,
 ) -> color_eyre::Result<()> {
     match frame.opcode {
-        BoundedOpcode::Close => {
+        OpCode::Close => {
             tx.write_frame(Frame::close(CloseCode::Normal.into(), &[]))
                 .await?;
             return Err(color_eyre::Report::msg("Host connection closed"));
         }
-        BoundedOpcode::Ping => {
+        OpCode::Ping => {
             tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
                 &frame.payload,
             )))
@@ -454,7 +454,7 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
     other_tx: &mut WebSocketWrite<U>,
 ) -> color_eyre::Result<()> {
     match frame.opcode {
-        BoundedOpcode::Close => {
+        OpCode::Close => {
             let close_task = future::try_join(
                 current_tx.write_frame(Frame::close(CloseCode::Normal.into(), &[])),
                 other_tx.write_frame(Frame::close(CloseCode::Away.into(), &[])),
@@ -462,7 +462,7 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
             tokio::time::timeout(TIMEOUT_WS, close_task).await??;
             return Err(color_eyre::Report::msg("Host connection closed"));
         }
-        BoundedOpcode::Ping => {
+        OpCode::Ping => {
             tokio::time::timeout(
                 TIMEOUT_WS,
                 current_tx.write_frame(Frame::pong(fastwebsockets::Payload::Borrowed(
@@ -471,10 +471,19 @@ async fn handle_frame<T: Unpin + AsyncWrite, U: Unpin + AsyncWrite>(
             )
             .await??
         }
-        BoundedOpcode::Binary => {
+        OpCode::Binary => {
             tokio::time::timeout(
                 TIMEOUT_WS,
                 other_tx.write_frame(Frame::binary(fastwebsockets::Payload::Borrowed(
+                    &frame.payload,
+                ))),
+            )
+            .await??
+        }
+        OpCode::Text => {
+            tokio::time::timeout(
+                TIMEOUT_WS,
+                other_tx.write_frame(Frame::text(fastwebsockets::Payload::Borrowed(
                     &frame.payload,
                 ))),
             )
@@ -505,14 +514,7 @@ fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
                 payload.try_extend_from_slice(&frame.payload)?;
                 if let Some(frame) = fragments.accumulate(BoundedFrame {
                     fin: frame.fin,
-                    opcode: match frame.opcode {
-                        OpCode::Continuation => BoundedOpcode::Continuation,
-                        OpCode::Text => return Err(color_eyre::Report::msg("No text")),
-                        OpCode::Binary => BoundedOpcode::Binary,
-                        OpCode::Close => BoundedOpcode::Close,
-                        OpCode::Ping => BoundedOpcode::Ping,
-                        OpCode::Pong => BoundedOpcode::Pong,
-                    },
+                    opcode: frame.opcode,
                     payload,
                 })? {
                     return Ok(Some((frame, (read, fragments))));
@@ -522,25 +524,16 @@ fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
     )
 }
 
-#[derive(Clone, Copy)]
-pub enum BoundedOpcode {
-    Continuation = 0x0,
-    Binary = 0x2,
-    Close = 0x8,
-    Ping = 0x9,
-    Pong = 0xA,
-}
-
 const FRAME_MAX_SIZE: usize = 128;
 
 pub struct BoundedFrame {
     pub fin: bool,
-    pub opcode: BoundedOpcode,
+    pub opcode: OpCode,
     pub payload: ArrayVec<u8, FRAME_MAX_SIZE>,
 }
 
 pub struct BoundedFragment {
-    opcode: BoundedOpcode,
+    opcode: OpCode,
     payload: ArrayVec<u8, FRAME_MAX_SIZE>,
 }
 
@@ -552,7 +545,7 @@ struct BoundedFragments {
 impl BoundedFragments {
     pub fn accumulate(&mut self, frame: BoundedFrame) -> color_eyre::Result<Option<BoundedFrame>> {
         match frame.opcode {
-            BoundedOpcode::Binary => {
+            OpCode::Binary | OpCode::Text => {
                 if !frame.fin {
                     self.fragments = Some(BoundedFragment {
                         payload: frame.payload,
@@ -567,7 +560,7 @@ impl BoundedFragments {
 
                 return Ok(Some(frame));
             }
-            BoundedOpcode::Continuation => match self.fragments.as_mut() {
+            OpCode::Continuation => match self.fragments.as_mut() {
                 None => {
                     return Err(WebSocketError::InvalidContinuationFrame.into());
                 }
