@@ -21,17 +21,20 @@ pub enum PpuStep {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
         window_y: Option<u8>,
+        ly: u8,
     }, // <= 80
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
         renderer: Renderer,
+        ly: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
         scanline: Scanline,
+        ly: u8,
     }, // <= 204
     VerticalBlankScanline {
         dots_count: u16,
@@ -53,7 +56,6 @@ pub struct Ppu {
 #[derive(Clone, Default)]
 struct PpuState {
     lcd_control: LcdControl,
-    ly: u8,
     bgp: u8,
     // OR effect on bgp change
     old_bgp: u8,
@@ -150,6 +152,7 @@ impl Default for PpuStep {
         Self::OamScan {
             dots_count: 0,
             window_y: Default::default(),
+            ly: 0,
         }
     }
 }
@@ -234,10 +237,25 @@ impl Ppu {
         self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(value)
     }
 
+    pub fn get_ly(&self) -> u8 {
+        match self.step {
+            PpuStep::OamScan { ly, .. } => ly,
+            PpuStep::Drawing { ly, .. } => ly,
+            PpuStep::HorizontalBlank { ly, .. } => ly,
+            PpuStep::VerticalBlankScanline { dots_count } => {
+                if dots_count >= VERTICAL_BLANK_DURATION - SCANLINE_DURATION + 7 {
+                    0
+                } else {
+                    144 + u8::try_from(dots_count / SCANLINE_DURATION).unwrap()
+                }
+            }
+        }
+    }
+
     pub fn get_lcd_status(&self) -> LcdStatus {
         let mut status =
             (self.interrupt_part_lcd_status & !LcdStatus::READONLY_MASK) | self.get_ppu_mode();
-        status.set(LcdStatus::LYC_EQUAL_TO_LY, self.state.ly == self.lyc);
+        status.set(LcdStatus::LYC_EQUAL_TO_LY, self.get_ly() == self.lyc);
         status
     }
 
@@ -277,9 +295,6 @@ impl Ppu {
     pub fn set_scx(&mut self, value: u8) {
         self.state.scx = value;
     }
-    pub fn get_ly(&self) -> u8 {
-        self.state.ly
-    }
     pub fn get_bgp(&self) -> u8 {
         self.state.bgp
     }
@@ -299,7 +314,6 @@ impl Ppu {
         if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
             && new_control.contains(LcdControl::LCD_PPU_ENABLE)
         {
-            self.state.ly = 0;
             self.step = Default::default();
             self.is_turning_on = true;
         }
@@ -332,6 +346,7 @@ impl Ppu {
             PpuStep::OamScan {
                 window_y,
                 dots_count: OAM_SCAN_DURATION,
+                ly,
             } => {
                 let mut objects_to_sort: ArrayVec<_, 10> = state
                     .oam
@@ -342,8 +357,7 @@ impl Ppu {
                     .map(ObjectAttribute::from)
                     .filter(|obj| {
                         let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
-                        obj.y <= self.state.ly + 16
-                            && self.state.ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+                        obj.y <= *ly + 16 && *ly + 16 < (obj.y + if is_big { 16 } else { 8 })
                     })
                     .take(10)
                     .enumerate()
@@ -363,12 +377,14 @@ impl Ppu {
                     dots_count: 0,
                     renderer,
                     window_y: *window_y,
+                    ly: *ly,
                 }
             }
             PpuStep::Drawing {
                 dots_count,
                 renderer: Renderer { scanline, .. },
                 window_y,
+                ly,
                 ..
             } => {
                 if scanline.len() == WIDTH {
@@ -380,6 +396,7 @@ impl Ppu {
                         window_y: *window_y,
                         dots_count: 0,
                         scanline: *scanline.get_scanline(),
+                        ly: *ly,
                     }
                 }
             }
@@ -387,29 +404,26 @@ impl Ppu {
                 remaining_dots,
                 window_y,
                 dots_count,
+                ly,
                 ..
             } if remaining_dots == dots_count => {
-                // TODO changer toute la gestion de LY
-                self.step = if self.state.ly >= 143 {
+                self.step = if *ly >= 143 {
                     PpuStep::VerticalBlankScanline { dots_count: 0 }
                 } else {
-                    self.state.ly += 1;
                     PpuStep::OamScan {
                         window_y: *window_y,
                         dots_count: 0,
+                        ly: *ly + 1,
                     }
                 };
             }
-            PpuStep::VerticalBlankScanline { dots_count, .. } => {
-                if *dots_count == VERTICAL_BLANK_DURATION - SCANLINE_DURATION + 7 {
-                    self.state.ly = 0;
-                } else if *dots_count == VERTICAL_BLANK_DURATION {
-                    self.step = PpuStep::OamScan {
-                        window_y: Default::default(),
-                        dots_count: 0,
-                    }
-                } else if *dots_count % SCANLINE_DURATION == 0 {
-                    self.state.ly += 1;
+            PpuStep::VerticalBlankScanline { dots_count, .. }
+                if *dots_count == VERTICAL_BLANK_DURATION =>
+            {
+                self.step = PpuStep::OamScan {
+                    window_y: Default::default(),
+                    dots_count: 0,
+                    ly: 0,
                 }
             }
             _ => {}
@@ -422,11 +436,11 @@ impl Ppu {
         }
 
         let stat_mode_irq = match &self.step {
-            PpuStep::OamScan { dots_count, .. } => {
+            PpuStep::OamScan { dots_count, ly, .. } => {
                 // < 4 according to dmg schematics
                 *dots_count < 4
                     && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
-                    && (self.state.ly != 0 || *dots_count >= 2)
+                    && (*ly != 0 || *dots_count >= 2)
             }
             PpuStep::HorizontalBlank {
                 dots_count: 1.., ..
@@ -445,7 +459,7 @@ impl Ppu {
         };
 
         let lyc = self.interrupt_part_lcd_status.contains(LcdStatus::LYC_INT)
-            && self.state.ly == self.lyc;
+            && self.get_ly() == self.lyc;
 
         let old_lyc = self.previous_lyc & 0x04 != 0;
         self.previous_lyc <<= 1;
@@ -478,11 +492,12 @@ impl Ppu {
             PpuStep::OamScan {
                 dots_count,
                 window_y,
+                ly,
                 ..
             } => {
                 // Citation:
                 // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                if window_y.is_none() && *dots_count == 0 && self.state.ly == state.wy {
+                if window_y.is_none() && *dots_count == 0 && *ly == state.wy {
                     *window_y = Some(0);
                 }
                 *dots_count += 1;
@@ -491,9 +506,10 @@ impl Ppu {
                 dots_count,
                 renderer,
                 window_y,
+                ly,
                 ..
             } => {
-                renderer.execute(state, *dots_count, window_y, &self.state, cycles);
+                renderer.execute(state, window_y, &self.state, *ly, cycles);
 
                 *dots_count += 1;
             }
@@ -511,6 +527,8 @@ mod tests {
         ppu::{LcdControl, Ppu, PpuStep, VERTICAL_BLANK_DURATION},
         state::State,
     };
+
+    extern crate std;
 
     #[test]
     fn first_line_duration() {
@@ -548,5 +566,18 @@ mod tests {
             }
         }
         assert_eq!(70224, duration);
+    }
+
+    #[test]
+    fn all_ly() {
+        let mut ppu = Ppu::default();
+        let mut state = State::default();
+        ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
+        let mut lys: std::collections::HashSet<_> = (0..154).collect();
+
+        while !lys.is_empty() {
+            ppu.execute(&mut state, 0, 0);
+            lys.remove(&ppu.get_ly());
+        }
     }
 }

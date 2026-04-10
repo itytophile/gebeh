@@ -32,7 +32,7 @@ impl SpriteFetcher {
         objects: &mut ArrayVec<ObjectAttribute, 10>,
         state: &State,
         ppu_state: &PpuState,
-        _: u16,
+        ly: u8,
     ) {
         use SpriteFetcher::*;
 
@@ -84,7 +84,7 @@ impl SpriteFetcher {
         *self = match *self {
             FetchingTileLow { delay: 3 } => FetchingTileHigh {
                 one_dot_delay: false,
-                tile_low: get_object_tile_line(state, obj, ppu_state)[0],
+                tile_low: get_object_tile_line(state, obj, ppu_state, ly)[0],
             },
             FetchingTileLow { delay } => FetchingTileLow { delay: delay + 1 },
             FetchingTileHigh {
@@ -100,7 +100,7 @@ impl SpriteFetcher {
             } => {
                 // we have to fetch the tile line in two steps because the LcdControl::OBJ_SIZE
                 // can be changed between fetches (don't know if it works exactly like this)
-                Ready([tile_low, get_object_tile_line(state, obj, ppu_state)[1]])
+                Ready([tile_low, get_object_tile_line(state, obj, ppu_state, ly)[1]])
             }
             Ready(_) => unreachable!(),
         };
@@ -108,18 +108,23 @@ impl SpriteFetcher {
 }
 
 #[must_use]
-fn get_object_tile_line(state: &State, obj: &ObjectAttribute, ppu_state: &PpuState) -> [u8; 2] {
+fn get_object_tile_line(
+    state: &State,
+    obj: &ObjectAttribute,
+    ppu_state: &PpuState,
+    ly: u8,
+) -> [u8; 2] {
     let is_big = ppu_state.lcd_control.contains(LcdControl::OBJ_SIZE);
     let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
-        + (is_big && (ppu_state.ly + 8 >= obj.y) != y_flip) as u8;
+        + (is_big && (ly + 8 >= obj.y) != y_flip) as u8;
     let tile = get_object_tile(
         state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
             .try_into()
             .unwrap(),
         tile_index,
     );
-    let mut y = (ppu_state.ly + 16 - obj.y) % 8;
+    let mut y = (ly + 16 - obj.y) % 8;
     y = if y_flip { 7 - y } else { y };
 
     get_line_from_tile(tile, y)
