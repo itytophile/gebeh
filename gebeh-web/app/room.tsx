@@ -6,12 +6,18 @@ import { faRocket, faPlug, faRotateLeft } from "@fortawesome/free-solid-svg-icon
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
     { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
-    >({ type: "input", value: "" });
+  >({ type: "input", value: "" });
   const [isWebRtcEnabled, setIsWebRtcEnabled] = useState(false);
 
   if (room.type === "input") {
     return (
       <>
+        <div className="field">
+          <label className="checkbox">
+            <input type="checkbox" />
+            {" Enable WebRTC"}
+          </label>
+        </div>
         <div className="field">
           <Button
             onClick={() => {
@@ -77,7 +83,7 @@ function Room({ port }: { port: MessagePort }) {
   );
 }
 
-function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort, isWebRtcEnabled: boolean }) {
+function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
@@ -170,7 +176,15 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort, isWebRtcEna
   return <Button label="Connected 🐣🐔" />;
 }
 
-function JoinedRoom({ room, port, isWebRtcEnabled }: { room: string; port: MessagePort, isWebRtcEnabled: boolean }) {
+function JoinedRoom({
+  room,
+  port,
+  isWebRtcEnabled,
+}: {
+  room: string;
+  port: MessagePort;
+  isWebRtcEnabled: boolean;
+}) {
   const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
   useEffect(() => {
     const ws = new WebSocket(
@@ -224,7 +238,7 @@ function JoinedRoom({ room, port, isWebRtcEnabled }: { room: string; port: Messa
 
 export default Room;
 
-function WebRtc({ port, ws }: { port: MessagePort, ws: WebSocket }) {  
+function WebRtc({ port, ws }: { port: MessagePort; ws: WebSocket }) {
   useEffect(() => {
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -233,9 +247,9 @@ function WebRtc({ port, ws }: { port: MessagePort, ws: WebSocket }) {
         },
       ],
     });
-    
+
     pc.createDataChannel("prout");
-    
+
     pc.addEventListener("icecandidate", (event) => {
       if (event.candidate) {
         console.log(event.candidate);
@@ -245,11 +259,14 @@ function WebRtc({ port, ws }: { port: MessagePort, ws: WebSocket }) {
     pc.addEventListener("connectionstatechange", (event) => {
       console.log({ connectionstate: event });
     });
-    
-    void pc.createOffer().then((offer) => { console.log("Offer created:", offer); return pc.setLocalDescription(offer); });
-    
-    return () => { pc.close() };
-    
+
+    void pc.createOffer().then((offer) => {
+      console.log("Offer created:", offer);
+      return pc.setLocalDescription(offer);
+    });
+
+    return () => {
+      pc.close();
+    };
   }, [port, ws]);
-  
 }
