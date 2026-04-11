@@ -6,7 +6,8 @@ import { faRocket, faPlug, faRotateLeft } from "@fortawesome/free-solid-svg-icon
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
     { type: "input"; value: string } | { type: "created" } | { type: "joined"; name: string }
-  >({ type: "input", value: "" });
+    >({ type: "input", value: "" });
+  const [isWebRtcEnabled, setIsWebRtcEnabled] = useState(false);
 
   if (room.type === "input") {
     return (
@@ -54,9 +55,9 @@ function Room({ port }: { port: MessagePort }) {
 
   const button =
     room.type === "created" ? (
-      <CreatedRoom port={port} />
+      <CreatedRoom port={port} isWebRtcEnabled={isWebRtcEnabled} />
     ) : (
-      <JoinedRoom port={port} room={room.name} />
+      <JoinedRoom port={port} room={room.name} isWebRtcEnabled={isWebRtcEnabled} />
     );
 
   return (
@@ -76,7 +77,7 @@ function Room({ port }: { port: MessagePort }) {
   );
 }
 
-function CreatedRoom({ port }: { port: MessagePort }) {
+function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort, isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
@@ -169,7 +170,7 @@ function CreatedRoom({ port }: { port: MessagePort }) {
   return <Button label="Connected 🐣🐔" />;
 }
 
-function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
+function JoinedRoom({ room, port, isWebRtcEnabled }: { room: string; port: MessagePort, isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
   useEffect(() => {
     const ws = new WebSocket(
@@ -222,3 +223,33 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort }) {
 }
 
 export default Room;
+
+function WebRtc({ port, ws }: { port: MessagePort, ws: WebSocket }) {  
+  useEffect(() => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: "stun:localhost:3478",
+        },
+      ],
+    });
+    
+    pc.createDataChannel("prout");
+    
+    pc.addEventListener("icecandidate", (event) => {
+      if (event.candidate) {
+        console.log(event.candidate);
+        ws.send(JSON.stringify(event.candidate));
+      }
+    });
+    pc.addEventListener("connectionstatechange", (event) => {
+      console.log({ connectionstate: event });
+    });
+    
+    void pc.createOffer().then((offer) => { console.log("Offer created:", offer); return pc.setLocalDescription(offer); });
+    
+    return () => { pc.close() };
+    
+  }, [port, ws]);
+  
+}

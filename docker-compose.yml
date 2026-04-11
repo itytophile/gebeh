@@ -1,0 +1,19 @@
+services:
+  coturn:
+    image: docker.io/coturn/coturn:alpine
+    restart: unless-stopped
+    command:
+      - turnserver
+      - -L
+      - 0.0.0.0
+      - --no-auth
+      - --realm=localhost
+      - --no-dtls
+      - --no-tls
+      - --verbose
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+      - "49152-65535:49152-65535/udp"
