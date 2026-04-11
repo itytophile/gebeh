@@ -89,7 +89,7 @@ function Room({ port }: { port: MessagePort }) {
   );
 }
 
-function CreatedRoom({ port }: { port: MessagePort; isWebRtcEnabled: boolean }) {
+function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
@@ -153,10 +153,22 @@ function CreatedRoom({ port }: { port: MessagePort; isWebRtcEnabled: boolean }) 
     );
   }
 
-  return <WebSocketMultiplayer port={port} ws={status.ws} />;
+  return isWebRtcEnabled ? (
+    <WebRtcMultiplayer port={port} ws={status.ws} />
+  ) : (
+    <WebSocketMultiplayer port={port} ws={status.ws} />
+  );
 }
 
-function JoinedRoom({ room, port }: { room: string; port: MessagePort; isWebRtcEnabled: boolean }) {
+function JoinedRoom({
+  room,
+  port,
+  isWebRtcEnabled,
+}: {
+  room: string;
+  port: MessagePort;
+  isWebRtcEnabled: boolean;
+}) {
   const [status, setStatus] = useState<
     { type: "loading" } | { type: "ready"; ws: WebSocket } | { type: "closed" }
   >({ type: "loading" });
@@ -185,7 +197,11 @@ function JoinedRoom({ room, port }: { room: string; port: MessagePort; isWebRtcE
     return <Button label="Room closed 🍗🍗" />;
   }
 
-  return <WebSocketMultiplayer port={port} ws={status.ws} />;
+  return isWebRtcEnabled ? (
+    <WebRtcMultiplayer port={port} ws={status.ws} />
+  ) : (
+    <WebSocketMultiplayer port={port} ws={status.ws} />
+  );
 }
 
 export default Room;
@@ -227,35 +243,37 @@ function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }
   return <Button label="Connected 🐣🐔" />;
 }
 
-// function WebRtc({ port, ws }: { port: MessagePort; ws: WebSocket }) {
-//   useEffect(() => {
-//     const pc = new RTCPeerConnection({
-//       iceServers: [
-//         {
-//           urls: "stun:localhost:3478",
-//         },
-//       ],
-//     });
+function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+  useEffect(() => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: "stun:localhost:3478",
+        },
+      ],
+    });
 
-//     pc.createDataChannel("prout");
+    pc.createDataChannel("prout");
 
-//     pc.addEventListener("icecandidate", (event) => {
-//       if (event.candidate) {
-//         console.log(event.candidate);
-//         ws.send(JSON.stringify(event.candidate));
-//       }
-//     });
-//     pc.addEventListener("connectionstatechange", (event) => {
-//       console.log({ connectionstate: event });
-//     });
+    pc.addEventListener("icecandidate", (event) => {
+      if (event.candidate) {
+        console.log(event.candidate);
+        ws.send(JSON.stringify(event.candidate));
+      }
+    });
+    pc.addEventListener("connectionstatechange", (event) => {
+      console.log({ connectionstate: event });
+    });
 
-//     void pc.createOffer().then((offer) => {
-//       console.log("Offer created:", offer);
-//       return pc.setLocalDescription(offer);
-//     });
+    void pc.createOffer().then((offer) => {
+      console.log("Offer created:", offer);
+      return pc.setLocalDescription(offer);
+    });
 
-//     return () => {
-//       pc.close();
-//     };
-//   }, [port, ws]);
-// }
+    return () => {
+      pc.close();
+    };
+  }, [port, ws]);
+
+  return "rtc";
+}
