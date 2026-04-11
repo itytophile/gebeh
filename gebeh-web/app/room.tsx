@@ -14,7 +14,13 @@ function Room({ port }: { port: MessagePort }) {
       <>
         <div className="field">
           <label className="checkbox">
-            <input type="checkbox" />
+            <input
+              type="checkbox"
+              checked={isWebRtcEnabled}
+              onChange={() => {
+                setIsWebRtcEnabled((a) => !a);
+              }}
+            />
             {" Enable WebRTC"}
           </label>
         </div>
@@ -83,32 +89,23 @@ function Room({ port }: { port: MessagePort }) {
   );
 }
 
-function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEnabled: boolean }) {
+function CreatedRoom({ port }: { port: MessagePort; isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
-    | { type: "ready"; room: string }
+    | { type: "ready"; room: string; ws: WebSocket }
     | { type: "waiting"; room: string }
   >({ type: "loading" });
 
   useEffect(() => {
     const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
     ws.binaryType = "arraybuffer";
-    const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
-      if (data.type === "serial") {
-        ws.send(data.buffer);
-      }
-    };
-    ws.addEventListener("open", () => {
-      console.log("host!");
-      port.addEventListener("message", portListener);
-    });
 
-    let state: { type: "waitName" } | { type: "waitGuest"; room: string } | { type: "done" } = {
+    let state: { type: "waitName" } | { type: "waitGuest"; room: string } = {
       type: "waitName",
     };
 
-    ws.addEventListener("message", (message) => {
+    const onMessageForInitialization = (message: MessageEvent<unknown>) => {
       switch (state.type) {
         case "waitName": {
           if (typeof message.data !== "string") {
@@ -119,40 +116,23 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEna
           break;
         }
         case "waitGuest": {
-          setStatus({ type: "ready", room: state.room });
-          state = { type: "done" };
-          port.postMessage({
-            type: "serialConnected",
-          } satisfies FromMainMessage);
-          break;
-        }
-        case "done": {
-          if (!(message.data instanceof ArrayBuffer)) {
-            throw new TypeError("Only binary messages are accepted");
-          }
-          port.postMessage(
-            {
-              type: "serial",
-              buffer: new Uint8Array(message.data),
-            } satisfies FromMainMessage,
-            [message.data],
-          );
+          ws.removeEventListener("message", onMessageForInitialization);
+          setStatus({ type: "ready", room: state.room, ws });
           break;
         }
       }
-    });
+    };
+
+    ws.addEventListener("message", onMessageForInitialization);
+
     ws.addEventListener("close", () => {
       setStatus({ type: "closed" });
-      port.postMessage({
-        type: "serialDisconnected",
-      } satisfies FromMainMessage);
     });
 
     return () => {
       ws.close();
-      port.removeEventListener("message", portListener);
     };
-  }, [port]);
+  }, []);
 
   if (status.type === "loading") {
     return <Button label="Loading..." />;
@@ -173,100 +153,124 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEna
     );
   }
 
-  return <Button label="Connected 🐣🐔" />;
+  return (
+    <>
+      <WebSocketMultiplayer port={port} ws={status.ws} />
+      <Button label="Connected 🐣🐔" />
+    </>
+  );
 }
 
 function JoinedRoom({
   room,
   port,
-  isWebRtcEnabled,
 }: {
   room: string;
   port: MessagePort;
   isWebRtcEnabled: boolean;
 }) {
-  const [status, setStatus] = useState<"loading" | "ready" | "closed">("loading");
+  const [status, setStatus] = useState<
+    { type: "loading" } | { type: "ready"; ws: WebSocket } | { type: "closed" }
+  >({ type: "loading" });
   useEffect(() => {
     const ws = new WebSocket(
       `${globalThis.location.protocol}//${globalThis.location.host}/ws?room=${room}`,
     );
     ws.binaryType = "arraybuffer";
-    const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
-      if (data.type === "serial") {
-        ws.send(new Uint8Array(data.buffer));
-      }
-    };
     ws.addEventListener("open", () => {
-      setStatus("ready");
-      console.log("guest!");
-      port.postMessage({ type: "serialConnected" } satisfies FromMainMessage);
-      port.addEventListener("message", portListener);
-    });
-    ws.addEventListener("message", (message) => {
-      if (!(message.data instanceof ArrayBuffer)) {
-        console.log(message.data);
-        throw new TypeError("Only binary messages are accepted");
-      }
-      port.postMessage({
-        type: "serial",
-        buffer: new Uint8Array(message.data),
-      } satisfies FromNodeMessage);
+      setStatus({ type: "ready", ws });
     });
     ws.addEventListener("close", () => {
-      setStatus("closed");
-      port.postMessage({
-        type: "serialDisconnected",
-      } satisfies FromMainMessage);
+      setStatus({ type: "closed" });
     });
 
     return () => {
       ws.close();
-      port.removeEventListener("message", portListener);
     };
-  }, [port, room]);
+  }, [room]);
 
-  if (status === "loading") {
+  if (status.type === "loading") {
     return <Button label="Loading..." />;
   }
 
-  if (status === "closed") {
+  if (status.type === "closed") {
     return <Button label="Room closed 🍗🍗" />;
   }
 
-  return <Button label="Connected 🐣🐔" />;
+  return (
+    <>
+      <WebSocketMultiplayer port={port} ws={status.ws} />
+      <Button label="Connected 🐣🐔" />
+    </>
+  );
 }
 
 export default Room;
 
-function WebRtc({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }): undefined {
   useEffect(() => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        {
-          urls: "stun:localhost:3478",
-        },
-      ],
-    });
-
-    pc.createDataChannel("prout");
-
-    pc.addEventListener("icecandidate", (event) => {
-      if (event.candidate) {
-        console.log(event.candidate);
-        ws.send(JSON.stringify(event.candidate));
+    const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
+      if (data.type === "serial") {
+        ws.send(data.buffer);
       }
-    });
-    pc.addEventListener("connectionstatechange", (event) => {
-      console.log({ connectionstate: event });
-    });
-
-    void pc.createOffer().then((offer) => {
-      console.log("Offer created:", offer);
-      return pc.setLocalDescription(offer);
-    });
+    };
+    port.addEventListener("message", portListener);
+    const wsListener = (message: MessageEvent<unknown>) => {
+      if (!(message.data instanceof ArrayBuffer)) {
+        throw new TypeError("Only binary messages are accepted");
+      }
+      port.postMessage(
+        {
+          type: "serial",
+          buffer: new Uint8Array(message.data),
+        } satisfies FromMainMessage,
+        [message.data],
+      );
+    };
+    ws.addEventListener("message", wsListener);
+    port.postMessage({
+      type: "serialConnected",
+    } satisfies FromMainMessage);
 
     return () => {
-      pc.close();
+      port.postMessage({
+        type: "serialDisconnected",
+      } satisfies FromMainMessage);
+      port.removeEventListener("message", portListener);
+      ws.removeEventListener("message", wsListener);
     };
-  }, [port, ws]);
+  }, [ws, port]);
 }
+
+// function WebRtc({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+//   useEffect(() => {
+//     const pc = new RTCPeerConnection({
+//       iceServers: [
+//         {
+//           urls: "stun:localhost:3478",
+//         },
+//       ],
+//     });
+
+//     pc.createDataChannel("prout");
+
+//     pc.addEventListener("icecandidate", (event) => {
+//       if (event.candidate) {
+//         console.log(event.candidate);
+//         ws.send(JSON.stringify(event.candidate));
+//       }
+//     });
+//     pc.addEventListener("connectionstatechange", (event) => {
+//       console.log({ connectionstate: event });
+//     });
+
+//     void pc.createOffer().then((offer) => {
+//       console.log("Offer created:", offer);
+//       return pc.setLocalDescription(offer);
+//     });
+
+//     return () => {
+//       pc.close();
+//     };
+//   }, [port, ws]);
+// }
