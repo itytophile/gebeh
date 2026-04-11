@@ -286,6 +286,19 @@ function WebRtcMultiplayer({
         if (isOffering) {
           throw new Error("The offerer received an offer");
         }
+        pc.ondatachannel = (event) => {
+          const receiveChannel = event.channel;
+
+          receiveChannel.addEventListener("open", () => {
+            console.log("Peer B: Channel is open!");
+          });
+          receiveChannel.addEventListener("message", (event) => {
+            console.log("Peer B received:", event.data);
+          });
+
+          // You can also send data back from here!
+          receiveChannel.send("Hi Peer A, I got the channel!");
+        };
         console.log("offer received");
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.offer));
         const answer = await pc.createAnswer();
@@ -299,6 +312,16 @@ function WebRtcMultiplayer({
         }
         console.log("answer received");
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
+
+        const dataChannel = pc.createDataChannel("prout");
+
+        dataChannel.addEventListener("open", () => {
+          console.log("Peer A: Channel is open!");
+        });
+        dataChannel.addEventListener("message", (event) => {
+          console.log("Peer A received:", event.data);
+        });
+
         return;
       }
       console.log("un candidat!!");
