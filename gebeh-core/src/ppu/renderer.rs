@@ -84,9 +84,9 @@ impl Renderer {
     pub(super) fn execute(
         &mut self,
         state: &State,
-        dots_count: u16,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState,
+        ly: u8,
         _: u64,
     ) {
         let RendererStep::AfterDummy {
@@ -99,7 +99,7 @@ impl Renderer {
                 &state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
-                ppu_state.ly,
+                ly,
                 ppu_state.is_signed_addressing(),
             );
 
@@ -185,7 +185,7 @@ impl Renderer {
                 &state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
-                ppu_state.ly,
+                ly,
                 ppu_state.is_signed_addressing(),
             );
         }
@@ -196,7 +196,7 @@ impl Renderer {
             &mut self.objects,
             state,
             ppu_state,
-            dots_count,
+            ly,
         );
 
         if self.rendering_state.fifos.is_background_empty() || !self.rendering_state.is_shifting {
@@ -243,11 +243,12 @@ mod tests {
         mut window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
         ppu_state: &PpuState,
+        ly: u8,
     ) -> u16 {
         let mut renderer = Renderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
-            renderer.execute(state, dots, &mut window_y, ppu_state, 0);
+            renderer.execute(state, &mut window_y, ppu_state, ly, 0);
             dots += 1;
         }
         dots
@@ -260,7 +261,8 @@ mod tests {
                 &State::default(),
                 None,
                 Default::default(),
-                &Default::default()
+                &Default::default(),
+                0
             ),
             MINIMUM_TIME
         );
@@ -286,7 +288,8 @@ mod tests {
                         wx,
                         old_wx: wx,
                         ..Default::default()
-                    }
+                    },
+                    0
                 ),
                 MINIMUM_TIME + 6,
                 "Bad timing with WX = {wx}"
@@ -304,7 +307,8 @@ mod tests {
                     wx: 167,
                     old_wx: 167,
                     ..Default::default()
-                }
+                },
+                0
             ),
             MINIMUM_TIME,
             "Bad timing with WX = 167"
@@ -330,7 +334,8 @@ mod tests {
                 &PpuState {
                     lcd_control: LcdControl::OBJ_ENABLE,
                     ..Default::default()
-                }
+                },
+                0
             ),
             MINIMUM_TIME + 11
         );
@@ -351,7 +356,8 @@ mod tests {
                     &PpuState {
                         scx,
                         ..Default::default()
-                    }
+                    },
+                    0
                 ),
                 MINIMUM_TIME + u16::from(scx % 8),
                 "Failed with scx {scx}"
