@@ -524,7 +524,7 @@ fn bounded_msg_stream<T: Unpin + AsyncRead + 'static + Send>(
     )
 }
 
-const FRAME_MAX_SIZE: usize = 128;
+const FRAME_MAX_SIZE: usize = 1024;
 
 pub struct BoundedFrame {
     pub fin: bool,

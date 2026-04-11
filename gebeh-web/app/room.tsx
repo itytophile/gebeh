@@ -154,7 +154,7 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEna
   }
 
   return isWebRtcEnabled ? (
-    <WebRtcMultiplayer port={port} ws={status.ws} />
+    <WebRtcMultiplayer port={port} ws={status.ws} isOffering />
   ) : (
     <WebSocketMultiplayer port={port} ws={status.ws} />
   );
@@ -243,7 +243,15 @@ function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }
   return <Button label="Connected 🐣🐔" />;
 }
 
-function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+function WebRtcMultiplayer({
+  port,
+  ws,
+  isOffering,
+}: {
+  port: MessagePort;
+  ws: WebSocket;
+  isOffering?: true;
+}) {
   useEffect(() => {
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -255,25 +263,63 @@ function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
 
     pc.createDataChannel("prout");
 
-    pc.addEventListener("icecandidate", (event) => {
+    const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
-        console.log(event.candidate);
-        ws.send(JSON.stringify(event.candidate));
+        const text = JSON.stringify({ candidate: event.candidate });
+        ws.send(text);
       }
-    });
-    pc.addEventListener("connectionstatechange", (event) => {
-      console.log({ connectionstate: event });
-    });
+    };
 
-    void pc.createOffer().then((offer) => {
-      console.log("Offer created:", offer);
-      return pc.setLocalDescription(offer);
-    });
+    pc.addEventListener("icecandidate", icecandidateListener);
+
+    // TODO faire gaffe à la concurrence pendant la connexion au cas où un des joueurs balance des messages trop tôt
+
+    const wsListener = async (message: MessageEvent<unknown>) => {
+      if (typeof message.data != "string") {
+        throw new TypeError("Only text messages are accepted");
+      }
+      const parsed = JSON.parse(message.data) as
+        | { candidate: RTCIceCandidate }
+        | { offer: RTCSessionDescriptionInit }
+        | { answer: RTCSessionDescriptionInit };
+      if ("offer" in parsed) {
+        if (isOffering) {
+          throw new Error("The offerer received an offer");
+        }
+        console.log("offer received");
+        await pc.setRemoteDescription(new RTCSessionDescription(parsed.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        ws.send(JSON.stringify({ answer }));
+        return;
+      }
+      if ("answer" in parsed) {
+        if (!isOffering) {
+          throw new Error("Received an answer despite not being the offerer");
+        }
+        console.log("answer received");
+        await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
+        return;
+      }
+      console.log("un candidat!!");
+      await pc.addIceCandidate(parsed.candidate);
+    };
+
+    ws.addEventListener("message", wsListener);
+
+    if (isOffering) {
+      void pc.createOffer().then(async (offer) => {
+        console.log("Offer created:", offer);
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ offer }));
+      });
+    }
 
     return () => {
       pc.close();
+      pc.removeEventListener("icecandidate", icecandidateListener);
     };
-  }, [port, ws]);
+  }, [isOffering, ws, port]);
 
   return "rtc";
 }
