@@ -6,7 +6,8 @@ export type FromNodeMessage =
   | { type: "wasm" }
   | { type: "frame"; buffer: Uint8Array }
   | { type: "save"; buffer: Uint8Array; title: string }
-  | { type: "serial"; buffer: Uint8Array };
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-arguments
+  | { type: "serial"; buffer: Uint8Array<ArrayBuffer> };
 export type GebehButton = "a" | "b" | "start" | "select" | "left" | "right" | "up" | "down";
 export type FromMainMessage =
   | {

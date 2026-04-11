@@ -256,7 +256,7 @@ function WebRtcMultiplayer({
     const pc = new RTCPeerConnection({
       iceServers: [
         {
-          urls: "stun:localhost:3478",
+          urls: "stun:stun.l.google.com:19302",
         },
       ],
     });
@@ -274,6 +274,25 @@ function WebRtcMultiplayer({
 
     // TODO faire gaffe à la concurrence pendant la connexion au cas où un des joueurs balance des messages trop tôt
 
+    const onOpen = () => {
+      port.postMessage({
+        type: "serialConnected",
+      } satisfies FromMainMessage);
+    };
+
+    const onWebRtcMessage = (message: MessageEvent<unknown>) => {
+      if (!(message.data instanceof ArrayBuffer)) {
+        throw new TypeError("Only binary messages are accepted");
+      }
+      port.postMessage(
+        {
+          type: "serial",
+          buffer: new Uint8Array(message.data),
+        } satisfies FromMainMessage,
+        [message.data],
+      );
+    };
+
     const wsListener = async (message: MessageEvent<unknown>) => {
       if (typeof message.data != "string") {
         throw new TypeError("Only text messages are accepted");
@@ -288,15 +307,19 @@ function WebRtcMultiplayer({
         }
         pc.ondatachannel = (event) => {
           const receiveChannel = event.channel;
+          receiveChannel.binaryType = "arraybuffer";
 
-          receiveChannel.addEventListener("open", () => {
-            console.log("Peer B: Channel is open!");
-          });
-          receiveChannel.addEventListener("message", (event) => {
-            console.log("Peer B received:", event.data);
-          });
+          const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
+            if (data.type === "serial") {
+              receiveChannel.send(data.buffer);
+            }
+          };
 
-          // You can also send data back from here!
+          port.addEventListener("message", portListener);
+
+          receiveChannel.addEventListener("open", onOpen);
+          receiveChannel.addEventListener("message", onWebRtcMessage);
+
           receiveChannel.send("Hi Peer A, I got the channel!");
         };
         console.log("offer received");
@@ -314,13 +337,18 @@ function WebRtcMultiplayer({
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
 
         const dataChannel = pc.createDataChannel("prout");
+        dataChannel.binaryType = "arraybuffer";
 
-        dataChannel.addEventListener("open", () => {
-          console.log("Peer A: Channel is open!");
-        });
-        dataChannel.addEventListener("message", (event) => {
-          console.log("Peer A received:", event.data);
-        });
+        dataChannel.addEventListener("open", onOpen);
+        dataChannel.addEventListener("message", onWebRtcMessage);
+
+        const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
+          if (data.type === "serial") {
+            dataChannel.send(data.buffer);
+          }
+        };
+
+        port.addEventListener("message", portListener);
 
         return;
       }
