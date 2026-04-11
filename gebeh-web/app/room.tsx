@@ -89,45 +89,53 @@ function Room({ port }: { port: MessagePort }) {
   );
 }
 
+async function getBinaryMessage(messages: AsyncGenerator<MessageEvent<unknown>>): Promise<ArrayBuffer> {
+  const result = await messages.next();
+  if (result.done) {
+    throw new Error("ws closed");
+  }
+  if (!(result.value.data instanceof ArrayBuffer)) {
+    throw new TypeError("First message must be the room name");
+  }
+  return result.value.data;
+}
+
+async function getTextMessage(messages: AsyncGenerator<MessageEvent<unknown>>): Promise<string> {
+  const result = await messages.next();
+  if (result.done) {
+    throw new Error("ws closed");
+  }
+  if (typeof result.value.data !== "string") {
+    throw new TypeError("First message must be the room name");
+  }
+  return result.value.data;
+}
+
 function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
-    | { type: "ready"; room: string; ws: WebSocket }
+    | { type: "ready"; room: string; ws: WebSocket, messages: AsyncGenerator<MessageEvent<unknown>> }
     | { type: "waiting"; room: string }
   >({ type: "loading" });
 
   useEffect(() => {
     const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
     ws.binaryType = "arraybuffer";
-
-    let state: { type: "waitName" } | { type: "waitGuest"; room: string } = {
-      type: "waitName",
-    };
-
-    const onMessageForInitialization = (message: MessageEvent<unknown>) => {
-      switch (state.type) {
-        case "waitName": {
-          if (typeof message.data !== "string") {
-            throw new TypeError("First message must be the room name");
-          }
-          setStatus({ type: "waiting", room: message.data });
-          state = { type: "waitGuest", room: message.data };
-          break;
-        }
-        case "waitGuest": {
-          ws.removeEventListener("message", onMessageForInitialization);
-          setStatus({ type: "ready", room: state.room, ws });
-          break;
-        }
-      }
-    };
-
-    ws.addEventListener("message", onMessageForInitialization);
-
+    
     ws.addEventListener("close", () => {
       setStatus({ type: "closed" });
     });
+    
+    const messages = websocketGenerator(ws);
+    
+    void (async () => {
+      const room = await getTextMessage(messages);
+      setStatus({ type: "waiting", room });
+      await getBinaryMessage(messages);
+      // empty message, it means that guest is here
+      setStatus({ type: "ready", room, ws, messages });
+    })();
 
     return () => {
       ws.close();
@@ -170,15 +178,16 @@ function JoinedRoom({
   isWebRtcEnabled: boolean;
 }) {
   const [status, setStatus] = useState<
-    { type: "loading" } | { type: "ready"; ws: WebSocket } | { type: "closed" }
+    { type: "loading" } | { type: "ready"; ws: WebSocket, messages: AsyncGenerator<MessageEvent<unknown>> } | { type: "closed" }
   >({ type: "loading" });
   useEffect(() => {
     const ws = new WebSocket(
       `${globalThis.location.protocol}//${globalThis.location.host}/ws?room=${room}`,
     );
     ws.binaryType = "arraybuffer";
+    const messages = websocketGenerator(ws);
     ws.addEventListener("open", () => {
-      setStatus({ type: "ready", ws });
+      setStatus({ type: "ready", ws, messages });
     });
     ws.addEventListener("close", () => {
       setStatus({ type: "closed" });
@@ -411,23 +420,38 @@ function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: 
 }
 
 async function* websocketGenerator(ws: WebSocket): AsyncGenerator<MessageEvent<unknown>> {
-  const queue: MessageEvent<unknown>[] = [];
-  let resolve: undefined | ((value: MessageEvent<unknown>) => void);
+  let queue: MessageEvent<unknown>[] | undefined = [];
+  let resolve: undefined | ((value?: MessageEvent<unknown>) => void);
 
   ws.addEventListener("message", (event) => {
     if (resolve) {
       resolve(event);
       resolve = undefined;
     } else {
-      queue.push(event);
+      queue?.push(event);
     }
   });
+  
+  ws.addEventListener('close', () => {
+    if (resolve) {
+      resolve();
+      resolve = undefined;
+    } else {
+      queue = undefined;
+    }
+  })
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  while (true) {
-    yield (
-      queue.shift() ??
-        (await new Promise<MessageEvent<unknown>>((resolve0) => (resolve = resolve0)))
-    );
+  while (queue) {
+    const first = queue.shift();
+    if (first) {
+      yield first;
+      continue;
+    }
+    const value = await new Promise<MessageEvent<unknown> | undefined>((resolve0) => (resolve = resolve0));
+    if (!value) {
+      break;
+    }
+    yield value;
   }
 }
