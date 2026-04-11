@@ -153,22 +153,10 @@ function CreatedRoom({ port }: { port: MessagePort; isWebRtcEnabled: boolean }) 
     );
   }
 
-  return (
-    <>
-      <WebSocketMultiplayer port={port} ws={status.ws} />
-      <Button label="Connected 🐣🐔" />
-    </>
-  );
+  return <WebSocketMultiplayer port={port} ws={status.ws} />;
 }
 
-function JoinedRoom({
-  room,
-  port,
-}: {
-  room: string;
-  port: MessagePort;
-  isWebRtcEnabled: boolean;
-}) {
+function JoinedRoom({ room, port }: { room: string; port: MessagePort; isWebRtcEnabled: boolean }) {
   const [status, setStatus] = useState<
     { type: "loading" } | { type: "ready"; ws: WebSocket } | { type: "closed" }
   >({ type: "loading" });
@@ -197,17 +185,12 @@ function JoinedRoom({
     return <Button label="Room closed 🍗🍗" />;
   }
 
-  return (
-    <>
-      <WebSocketMultiplayer port={port} ws={status.ws} />
-      <Button label="Connected 🐣🐔" />
-    </>
-  );
+  return <WebSocketMultiplayer port={port} ws={status.ws} />;
 }
 
 export default Room;
 
-function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }): undefined {
+function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
   useEffect(() => {
     const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
       if (data.type === "serial") {
@@ -240,6 +223,8 @@ function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }
       ws.removeEventListener("message", wsListener);
     };
   }, [ws, port]);
+
+  return <Button label="Connected 🐣🐔" />;
 }
 
 // function WebRtc({ port, ws }: { port: MessagePort; ws: WebSocket }) {
