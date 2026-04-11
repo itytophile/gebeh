@@ -252,6 +252,8 @@ function WebRtcMultiplayer({
   ws: WebSocket;
   isOffering?: true;
 }) {
+  const [channel, setChannel] = useState<RTCDataChannel>();
+
   useEffect(() => {
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -261,8 +263,6 @@ function WebRtcMultiplayer({
       ],
     });
 
-    pc.createDataChannel("prout");
-
     const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
         const text = JSON.stringify({ candidate: event.candidate });
@@ -271,27 +271,19 @@ function WebRtcMultiplayer({
     };
 
     pc.addEventListener("icecandidate", icecandidateListener);
+    pc.addEventListener("connectionstatechange", console.log);
 
     // TODO faire gaffe à la concurrence pendant la connexion au cas où un des joueurs balance des messages trop tôt
-
-    const onOpen = () => {
-      port.postMessage({
-        type: "serialConnected",
-      } satisfies FromMainMessage);
-    };
-
-    const onWebRtcMessage = (message: MessageEvent<unknown>) => {
-      if (!(message.data instanceof ArrayBuffer)) {
-        throw new TypeError("Only binary messages are accepted");
-      }
-      port.postMessage(
-        {
-          type: "serial",
-          buffer: new Uint8Array(message.data),
-        } satisfies FromMainMessage,
-        [message.data],
-      );
-    };
+    let dataChannel: RTCDataChannel | undefined;
+    if (isOffering) {
+      dataChannel = pc.createDataChannel("prout");
+      dataChannel.binaryType = "arraybuffer";
+      dataChannel.addEventListener("open", () => {
+        port.postMessage({
+          type: "serialConnected",
+        } satisfies FromMainMessage);
+      })
+    }
 
     const wsListener = async (message: MessageEvent<unknown>) => {
       if (typeof message.data != "string") {
@@ -306,21 +298,15 @@ function WebRtcMultiplayer({
           throw new Error("The offerer received an offer");
         }
         pc.ondatachannel = (event) => {
+          console.log("new channel", event.channel.label);
           const receiveChannel = event.channel;
           receiveChannel.binaryType = "arraybuffer";
-
-          const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
-            if (data.type === "serial") {
-              receiveChannel.send(data.buffer);
-            }
-          };
-
-          port.addEventListener("message", portListener);
-
-          receiveChannel.addEventListener("open", onOpen);
-          receiveChannel.addEventListener("message", onWebRtcMessage);
-
-          receiveChannel.send("Hi Peer A, I got the channel!");
+          receiveChannel.addEventListener("open", () => {
+            port.postMessage({
+              type: "serialConnected",
+            } satisfies FromMainMessage);
+          })
+          setChannel(receiveChannel);
         };
         console.log("offer received");
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.offer));
@@ -335,20 +321,7 @@ function WebRtcMultiplayer({
         }
         console.log("answer received");
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
-
-        const dataChannel = pc.createDataChannel("prout");
-        dataChannel.binaryType = "arraybuffer";
-
-        dataChannel.addEventListener("open", onOpen);
-        dataChannel.addEventListener("message", onWebRtcMessage);
-
-        const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
-          if (data.type === "serial") {
-            dataChannel.send(data.buffer);
-          }
-        };
-
-        port.addEventListener("message", portListener);
+        setChannel(dataChannel);
 
         return;
       }
@@ -367,10 +340,48 @@ function WebRtcMultiplayer({
     }
 
     return () => {
+      console.log("ras le bol");
       pc.close();
-      pc.removeEventListener("icecandidate", icecandidateListener);
+      ws.removeEventListener("message", wsListener);
     };
   }, [isOffering, ws, port]);
 
-  return "rtc";
+  return channel ? <DataChannelHandler channel={channel} port={port} /> : "rtc wait";
+}
+
+function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: MessagePort }) {
+  useEffect(() => {
+
+    const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
+      if (data.type === "serial") {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-arguments
+        channel.send(data.buffer as Uint8Array<ArrayBuffer>);
+      }
+    };
+
+    const onWebRtcMessage = (message: MessageEvent<unknown>) => {
+      if (!(message.data instanceof ArrayBuffer)) {
+        throw new TypeError("Only binary messages are accepted");
+      }
+      port.postMessage(
+        {
+          type: "serial",
+          buffer: new Uint8Array(message.data),
+        } satisfies FromMainMessage,
+        [message.data],
+      );
+    };
+
+    port.addEventListener("message", portListener);
+
+    channel.addEventListener("message", onWebRtcMessage);
+
+    return () => {
+      console.log("je close sa mère la chienne");
+      channel.close();
+      port.removeEventListener("message", portListener);
+    };
+  }, [channel, port]);
+
+  return "rtc connected";
 }
