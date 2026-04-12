@@ -12,4 +12,3 @@ services:
       - --no-dtls
       - --stun-only
       - --log-file=stdout
-      - --external-ip=$(detect-external-ip)
