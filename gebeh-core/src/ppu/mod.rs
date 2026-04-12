@@ -49,6 +49,8 @@ pub struct Ppu {
     state: PpuState,
     is_turning_on: bool,
     previous_lyc: u8,
+    // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
+    queued_interrupt_part_lcd_status: Option<LcdStatus>,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
 }
@@ -234,7 +236,9 @@ impl From<[u8; 4]> for ObjectAttribute {
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
-        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(value)
+        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
+        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
+        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
     }
 
     pub fn get_ly(&self) -> u8 {
@@ -487,6 +491,10 @@ impl Ppu {
         }
         self.switch_from_finished_mode(state, cycles);
         self.fire_interrupts(state, cycles);
+
+        if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
+            self.interrupt_part_lcd_status = value;
+        }
 
         match &mut self.step {
             PpuStep::OamScan {
