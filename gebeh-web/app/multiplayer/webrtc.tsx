@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import type { FromMainMessage, FromNodeMessage } from "../common";
 import { getTextMessage, type WsAndMessages } from "./ws-helpers";
+import Button from "../bulma/button";
+
+const RTC_CONFIG = {
+  iceServers: [
+    {
+      urls: "stun:stun.l.google.com:19302",
+    },
+  ],
+};
 
 export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
 
   useEffect(() => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        {
-          urls: "stun:stun.l.google.com:19302",
-        },
-      ],
-    });
+    const pc = new RTCPeerConnection(RTC_CONFIG);
 
     const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
@@ -56,7 +59,11 @@ export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMe
     };
   }, [ws]);
 
-  return channel ? <DataChannelHandler channel={channel} port={port} /> : "rtc wait";
+  return channel ? (
+    <DataChannelHandler channel={channel} port={port} />
+  ) : (
+    <Button label="WebRTC initialization..." />
+  );
 }
 
 export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
@@ -114,7 +121,11 @@ export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: 
     };
   }, [ws]);
 
-  return channel ? <DataChannelHandler channel={channel} port={port} /> : "rtc wait";
+  return channel ? (
+    <DataChannelHandler channel={channel} port={port} />
+  ) : (
+    <Button label="WebRTC initialization..." />
+  );
 }
 
 function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: MessagePort }) {
@@ -156,5 +167,5 @@ function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: 
     };
   }, [channel, port]);
 
-  return "rtc connected";
+  return <Button label="Connected 🐣🐔 (WebRTC)" />;
 }
