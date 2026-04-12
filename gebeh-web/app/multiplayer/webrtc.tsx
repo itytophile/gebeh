@@ -2,14 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FromMainMessage, FromNodeMessage } from "../common";
 import { getTextMessage, type WsAndMessages } from "./ws-helpers";
 import Button from "../bulma/button";
-
-const RTC_CONFIG = {
-  iceServers: [
-    {
-      urls: "stun:localhost:3478",
-    },
-  ],
-};
+import { RTC_CONFIG } from "../environment";
 
 function useRTCPeerConnection(
   onConnection: (pc: RTCPeerConnection) => void,

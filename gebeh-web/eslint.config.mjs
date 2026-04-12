@@ -8,7 +8,7 @@ import reactPlugin from "eslint-plugin-react";
 
 export default defineConfig(
   {
-    ignores: ["./pkg/*", "./static/*", "./src/*", "./dist/*", "./polyfill/*"],
+    ignores: ["./pkg/*", "./static/*", "./src/*", "./dist/*", "./polyfill/*", "./public/*"],
   },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
