@@ -37,7 +37,7 @@ function Room({ port }: { port: MessagePort }) {
               placeholder="Room to join"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  setRoom({ type: "joined", name: room.value });
+                  setRoom({ type: "joined", name: room.value.trim().toLowerCase() });
                 }
               }}
               onChange={(event) => {
