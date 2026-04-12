@@ -89,10 +89,12 @@ function Room({ port }: { port: MessagePort }) {
   );
 }
 
-async function getBinaryMessage(messages: AsyncGenerator<MessageEvent<unknown>>): Promise<ArrayBuffer> {
+async function getBinaryMessage(
+  messages: AsyncGenerator<MessageEvent<unknown>>,
+): Promise<ArrayBuffer | undefined> {
   const result = await messages.next();
   if (result.done) {
-    throw new Error("ws closed");
+    return undefined;
   }
   if (!(result.value.data instanceof ArrayBuffer)) {
     throw new TypeError("First message must be the room name");
@@ -100,10 +102,12 @@ async function getBinaryMessage(messages: AsyncGenerator<MessageEvent<unknown>>)
   return result.value.data;
 }
 
-async function getTextMessage(messages: AsyncGenerator<MessageEvent<unknown>>): Promise<string> {
+async function getTextMessage(
+  messages: AsyncGenerator<MessageEvent<unknown>>,
+): Promise<string | undefined> {
   const result = await messages.next();
   if (result.done) {
-    throw new Error("ws closed");
+    return undefined;
   }
   if (typeof result.value.data !== "string") {
     throw new TypeError("First message must be the room name");
@@ -115,20 +119,25 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEna
   const [status, setStatus] = useState<
     | { type: "loading" }
     | { type: "closed" }
-    | { type: "ready"; room: string; ws: WebSocket, messages: AsyncGenerator<MessageEvent<unknown>> }
+    | {
+        type: "ready";
+        room: string;
+        ws: WebSocket;
+        messages: AsyncGenerator<MessageEvent<unknown>>;
+      }
     | { type: "waiting"; room: string }
   >({ type: "loading" });
 
   useEffect(() => {
     const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
     ws.binaryType = "arraybuffer";
-    
+
     ws.addEventListener("close", () => {
       setStatus({ type: "closed" });
     });
-    
+
     const messages = websocketGenerator(ws);
-    
+
     void (async () => {
       const room = await getTextMessage(messages);
       setStatus({ type: "waiting", room });
@@ -178,7 +187,9 @@ function JoinedRoom({
   isWebRtcEnabled: boolean;
 }) {
   const [status, setStatus] = useState<
-    { type: "loading" } | { type: "ready"; ws: WebSocket, messages: AsyncGenerator<MessageEvent<unknown>> } | { type: "closed" }
+    | { type: "loading" }
+    | { type: "ready"; ws: WebSocket; messages: AsyncGenerator<MessageEvent<unknown>> }
+    | { type: "closed" }
   >({ type: "loading" });
   useEffect(() => {
     const ws = new WebSocket(
@@ -252,7 +263,7 @@ function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }
   return <Button label="Connected 🐣🐔" />;
 }
 
-function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
 
   useEffect(() => {
@@ -267,56 +278,55 @@ function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
     const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
         const text = JSON.stringify({ candidate: event.candidate });
-        ws.send(text);
+        ws.inner.send(text);
       }
     };
 
     pc.addEventListener("icecandidate", icecandidateListener);
-    pc.addEventListener("connectionstatechange", console.log);
 
-    const wsListener = async (message: MessageEvent<unknown>) => {
-      if (typeof message.data != "string") {
-        throw new TypeError("Only text messages are accepted");
-      }
-      const parsed = JSON.parse(message.data) as
-        | { candidate: RTCIceCandidate }
-        | { offer: RTCSessionDescriptionInit };
-      if ("offer" in parsed) {
+    void (async () => {
+      while (true) {
+        const text = await getTextMessage(ws.messages);
+        if (!text) {
+          return;
+        }
+        const parsed = JSON.parse(text) as
+          | { offer: RTCSessionDescriptionInit }
+          | { candidate: RTCIceCandidate };
+        if ("candidate" in parsed) {
+          console.log("un candidat!!");
+          await pc.addIceCandidate(parsed.candidate);
+          continue;
+        }
         pc.ondatachannel = (event) => {
           console.log("new channel", event.channel.label);
           const receiveChannel = event.channel;
           receiveChannel.binaryType = "arraybuffer";
-          receiveChannel.addEventListener("open", () => {
-            port.postMessage({
-              type: "serialConnected",
-            } satisfies FromMainMessage);
-          });
           setChannel(receiveChannel);
         };
         console.log("offer received");
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ answer }));
-        return;
+        ws.inner.send(JSON.stringify({ answer }));
       }
-      console.log("un candidat!!");
-      await pc.addIceCandidate(parsed.candidate);
-    };
-
-    ws.addEventListener("message", wsListener);
+    })();
 
     return () => {
       console.log("ras le bol");
       pc.close();
-      ws.removeEventListener("message", wsListener);
     };
-  }, [ws, port]);
+  }, [ws]);
 
   return channel ? <DataChannelHandler channel={channel} port={port} /> : "rtc wait";
 }
 
-function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+interface WsAndMessages {
+  inner: WebSocket;
+  messages: Messages;
+}
+
+function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
 
   useEffect(() => {
@@ -331,60 +341,55 @@ function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WebSock
     const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
         const text = JSON.stringify({ candidate: event.candidate });
-        ws.send(text);
+        ws.inner.send(text);
       }
     };
 
     pc.addEventListener("icecandidate", icecandidateListener);
-    pc.addEventListener("connectionstatechange", console.log);
 
-    // TODO faire gaffe à la concurrence pendant la connexion au cas où un des joueurs balance des messages trop tôt
     const dataChannel = pc.createDataChannel("prout");
     dataChannel.binaryType = "arraybuffer";
-    dataChannel.addEventListener("open", () => {
-      port.postMessage({
-        type: "serialConnected",
-      } satisfies FromMainMessage);
-    });
 
-    const wsListener = async (message: MessageEvent<unknown>) => {
-      if (typeof message.data != "string") {
-        throw new TypeError("Only text messages are accepted");
-      }
-      const parsed = JSON.parse(message.data) as
-        | { candidate: RTCIceCandidate }
-        | { answer: RTCSessionDescriptionInit };
-      if ("answer" in parsed) {
+    void (async () => {
+      while (true) {
+        const text = await getTextMessage(ws.messages);
+        if (!text) {
+          return;
+        }
+        const parsed = JSON.parse(text) as
+          | { answer: RTCSessionDescriptionInit }
+          | { candidate: RTCIceCandidate };
+        if ("candidate" in parsed) {
+          console.log("un candidat!!");
+          await pc.addIceCandidate(parsed.candidate);
+          continue;
+        }
         console.log("answer received");
         await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
         setChannel(dataChannel);
-
-        return;
       }
-      console.log("un candidat!!");
-      await pc.addIceCandidate(parsed.candidate);
-    };
-
-    ws.addEventListener("message", wsListener);
+    })();
 
     void pc.createOffer().then(async (offer) => {
       console.log("Offer created:", offer);
       await pc.setLocalDescription(offer);
-      ws.send(JSON.stringify({ offer }));
+      ws.inner.send(JSON.stringify({ offer }));
     });
 
     return () => {
-      console.log("ras le bol");
       pc.close();
-      ws.removeEventListener("message", wsListener);
     };
-  }, [ws, port]);
+  }, [ws]);
 
   return channel ? <DataChannelHandler channel={channel} port={port} /> : "rtc wait";
 }
 
 function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: MessagePort }) {
   useEffect(() => {
+    port.postMessage({
+      type: "serialConnected",
+    } satisfies FromMainMessage);
+
     const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
       if (data.type === "serial") {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-arguments
@@ -413,13 +418,18 @@ function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: 
       console.log("je close sa mère la chienne");
       channel.close();
       port.removeEventListener("message", portListener);
+      port.postMessage({
+        type: "serialDisconnected",
+      } satisfies FromMainMessage);
     };
   }, [channel, port]);
 
   return "rtc connected";
 }
 
-async function* websocketGenerator(ws: WebSocket): AsyncGenerator<MessageEvent<unknown>> {
+type Messages = AsyncGenerator<MessageEvent<unknown>>;
+
+async function* websocketGenerator(ws: WebSocket): Messages {
   let queue: MessageEvent<unknown>[] | undefined = [];
   let resolve: undefined | ((value?: MessageEvent<unknown>) => void);
 
@@ -431,15 +441,15 @@ async function* websocketGenerator(ws: WebSocket): AsyncGenerator<MessageEvent<u
       queue?.push(event);
     }
   });
-  
-  ws.addEventListener('close', () => {
+
+  ws.addEventListener("close", () => {
     if (resolve) {
       resolve();
       resolve = undefined;
     } else {
       queue = undefined;
     }
-  })
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (queue) {
@@ -448,7 +458,9 @@ async function* websocketGenerator(ws: WebSocket): AsyncGenerator<MessageEvent<u
       yield first;
       continue;
     }
-    const value = await new Promise<MessageEvent<unknown> | undefined>((resolve0) => (resolve = resolve0));
+    const value = await new Promise<MessageEvent<unknown> | undefined>(
+      (resolve0) => (resolve = resolve0),
+    );
     if (!value) {
       break;
     }
