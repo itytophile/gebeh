@@ -20,18 +20,6 @@ function Room({ port }: { port: MessagePort }) {
     return (
       <>
         <div className="field">
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={isWebRtcEnabled}
-              onChange={() => {
-                setIsWebRtcEnabled((a) => !a);
-              }}
-            />
-            {" Enable WebRTC"}
-          </label>
-        </div>
-        <div className="field">
           <Button
             onClick={() => {
               setRoom({ type: "created" });
@@ -68,6 +56,27 @@ function Room({ port }: { port: MessagePort }) {
             />
           </div>
         </div>
+        <div className="field">
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={isWebRtcEnabled}
+              onChange={() => {
+                setIsWebRtcEnabled((a) => !a);
+              }}
+            />
+            {" Enable WebRTC"}
+          </label>
+        </div>
+        <article className="message">
+          <div className="message-header">
+            <p>About WebRTC</p>
+          </div>
+          <div className="message-body">
+            Reduced latency but can expose your IP address to the other player. Both players have to
+            enable WebRTC. VPNs can prevent WebRTC connections.
+          </div>
+        </article>
       </>
     );
   }
