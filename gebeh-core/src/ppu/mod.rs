@@ -503,9 +503,10 @@ impl Ppu {
                 ly,
                 ..
             } => {
-                // Citation:
-                // at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
-                if window_y.is_none() && *dots_count == 0 && *ly == state.wy {
+                if window_y.is_none()
+                    && self.state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+                    && *ly == state.wy
+                {
                     *window_y = Some(0);
                 }
                 *dots_count += 1;
