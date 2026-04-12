@@ -496,19 +496,27 @@ impl Ppu {
             self.interrupt_part_lcd_status = value;
         }
 
+        // Pandocs says (https://gbdev.io/pandocs/Scrolling.html#window):
+        // WY condition was triggered: i.e. at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
+        //
+        // However, nothing in the schematics https://github.com/msinger/dmg-schematics/blob/2829269ee7cfbb681bc10deab6f3c1ee22c940e0/dmg_cpu_b/win_detect.kicad_sch
+        // shows that the check is done at the start of Mode 2 (if my understanding is correct)
         match &mut self.step {
-            PpuStep::OamScan {
-                dots_count,
-                window_y,
-                ly,
-                ..
-            } => {
+            PpuStep::OamScan { window_y, ly, .. }
+            | PpuStep::Drawing { window_y, ly, .. }
+            | PpuStep::HorizontalBlank { window_y, ly, .. } => {
                 if window_y.is_none()
                     && self.state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
                     && *ly == state.wy
                 {
                     *window_y = Some(0);
                 }
+            }
+            _ => {}
+        }
+
+        match &mut self.step {
+            PpuStep::OamScan { dots_count, .. } => {
                 *dots_count += 1;
             }
             PpuStep::Drawing {
