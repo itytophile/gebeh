@@ -13,18 +13,20 @@ const RTC_CONFIG = {
 
 export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
+  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>("new");
 
   useEffect(() => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
+    pc.addEventListener("iceconnectionstatechange", () => {
+      setIceConnectionState(pc.iceConnectionState);
+    });
+    pc.addEventListener("icecandidate", (event) => {
       if (event.candidate) {
         const text = JSON.stringify({ candidate: event.candidate });
         ws.inner.send(text);
       }
-    };
-
-    pc.addEventListener("icecandidate", icecandidateListener);
+    });
 
     void (async () => {
       while (true) {
@@ -62,12 +64,15 @@ export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMe
   return channel ? (
     <DataChannelHandler channel={channel} port={port} />
   ) : (
-    <Button label="WebRTC initialization..." />
+    <Button
+      label={iceConnectionState === "failed" ? "WebRTC failed" : "WebRTC initialization..."}
+    />
   );
 }
 
 export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
+  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>("new");
 
   useEffect(() => {
     const pc = new RTCPeerConnection({
@@ -77,6 +82,12 @@ export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: 
         },
       ],
     });
+
+    pc.addEventListener("iceconnectionstatechange", () => {
+      setIceConnectionState(pc.iceConnectionState);
+    });
+
+    pc.addEventListener("iceconnectionstatechange", console.log);
 
     const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
@@ -124,7 +135,9 @@ export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: 
   return channel ? (
     <DataChannelHandler channel={channel} port={port} />
   ) : (
-    <Button label="WebRTC initialization..." />
+    <Button
+      label={iceConnectionState === "failed" ? "WebRTC failed" : "WebRTC initialization..."}
+    />
   );
 }
 
