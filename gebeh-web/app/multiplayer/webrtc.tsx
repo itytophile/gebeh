@@ -11,6 +11,37 @@ const RTC_CONFIG = {
   ],
 };
 
+function useRTCPeerConnection(
+  onConnection: (pc: RTCPeerConnection) => void,
+  ws: WebSocket,
+): RTCIceConnectionState {
+  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>("new");
+  useEffect(() => {
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+
+    pc.addEventListener("iceconnectionstatechange", () => {
+      setIceConnectionState(pc.iceConnectionState);
+    });
+
+    const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate) {
+        const text = JSON.stringify({ candidate: event.candidate });
+        ws.send(text);
+      }
+    };
+
+    pc.addEventListener("icecandidate", icecandidateListener);
+
+    onConnection(pc);
+
+    return () => {
+      pc.close();
+    };
+  }, [onConnection, ws]);
+
+  return iceConnectionState;
+}
+
 export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
 
@@ -53,37 +84,6 @@ export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMe
       label={iceConnectionState === "failed" ? "WebRTC failed" : "WebRTC initialization..."}
     />
   );
-}
-
-function useRTCPeerConnection(
-  onConnection: (pc: RTCPeerConnection) => void,
-  ws: WebSocket,
-): RTCIceConnectionState {
-  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>("new");
-  useEffect(() => {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-
-    pc.addEventListener("iceconnectionstatechange", () => {
-      setIceConnectionState(pc.iceConnectionState);
-    });
-
-    const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate) {
-        const text = JSON.stringify({ candidate: event.candidate });
-        ws.send(text);
-      }
-    };
-
-    pc.addEventListener("icecandidate", icecandidateListener);
-
-    onConnection(pc);
-
-    return () => {
-      pc.close();
-    };
-  }, [onConnection, ws]);
-
-  return iceConnectionState;
 }
 
 export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
