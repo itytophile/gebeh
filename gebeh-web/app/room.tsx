@@ -298,7 +298,7 @@ function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages 
           | { offer: RTCSessionDescriptionInit }
           | { candidate: RTCIceCandidate };
         if ("candidate" in parsed) {
-          console.log("un candidat!!");
+          console.log("candidate");
           await pc.addIceCandidate(parsed.candidate);
           continue;
         }
@@ -317,7 +317,6 @@ function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages 
     })();
 
     return () => {
-      console.log("ras le bol");
       pc.close();
     };
   }, [ws]);
@@ -327,6 +326,8 @@ function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages 
 
 interface WsAndMessages {
   inner: WebSocket;
+  // I need to buffer incoming messages because I can miss them when subcomponent begins to read
+  // the messages
   messages: Messages;
 }
 
@@ -364,7 +365,7 @@ function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMe
           | { answer: RTCSessionDescriptionInit }
           | { candidate: RTCIceCandidate };
         if ("candidate" in parsed) {
-          console.log("un candidat!!");
+          console.log("candidate");
           await pc.addIceCandidate(parsed.candidate);
           continue;
         }
@@ -375,7 +376,7 @@ function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMe
     })();
 
     void pc.createOffer().then(async (offer) => {
-      console.log("Offer created:", offer);
+      console.log("offer created");
       await pc.setLocalDescription(offer);
       ws.inner.send(JSON.stringify({ offer }));
     });
@@ -419,7 +420,6 @@ function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: 
     channel.addEventListener("message", onWebRtcMessage);
 
     return () => {
-      console.log("je close sa mère la chienne");
       channel.close();
       port.removeEventListener("message", portListener);
       port.postMessage({
@@ -434,7 +434,7 @@ function DataChannelHandler({ channel, port }: { channel: RTCDataChannel; port: 
 type Messages = AsyncGenerator<MessageEvent<unknown>>;
 
 async function* websocketGenerator(ws: WebSocket): Messages {
-  let queue: MessageEvent<unknown>[] | undefined = [];
+  const queue: ({ value: MessageEvent<unknown>; done: false } | { done: true })[] = [];
   let resolve: undefined | ((value?: MessageEvent<unknown>) => void);
 
   ws.addEventListener("message", (event) => {
@@ -442,7 +442,7 @@ async function* websocketGenerator(ws: WebSocket): Messages {
       resolve(event);
       resolve = undefined;
     } else {
-      queue?.push(event);
+      queue.push({ done: false, value: event });
     }
   });
 
@@ -451,15 +451,17 @@ async function* websocketGenerator(ws: WebSocket): Messages {
       resolve();
       resolve = undefined;
     } else {
-      queue = undefined;
+      queue.push({ done: true });
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  while (queue) {
+  while (true) {
     const first = queue.shift();
     if (first) {
-      yield first;
+      if (first.done) {
+        return;
+      }
+      yield first.value;
       continue;
     }
     const value = await new Promise<MessageEvent<unknown> | undefined>(
