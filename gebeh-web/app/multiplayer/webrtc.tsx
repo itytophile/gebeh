@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FromMainMessage, FromNodeMessage } from "../common";
-import { getTextMessage, type WsAndMessages } from "./ws";
+import { getTextMessage, type WsAndMessages } from "./ws-helpers";
 
 export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();

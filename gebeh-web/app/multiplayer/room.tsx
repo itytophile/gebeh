@@ -1,9 +1,14 @@
 import { useState, useEffect } from "react";
-import type { FromNodeMessage, FromMainMessage } from "../common";
 import Button from "../bulma/button";
 import { faRocket, faPlug, faRotateLeft } from "@fortawesome/free-solid-svg-icons";
 import { WebRtcMultiplayer, WebRtcMultiplayerOfferer } from "./webrtc";
-import { getBinaryMessage, getTextMessage, websocketGenerator, type WsAndMessages } from "./ws";
+import {
+  getBinaryMessage,
+  getTextMessage,
+  websocketGenerator,
+  type WsAndMessages,
+} from "./ws-helpers";
+import WebSocketMultiplayer from "./ws";
 
 function Room({ port }: { port: MessagePort }) {
   const [room, setRoom] = useState<
@@ -202,43 +207,3 @@ function JoinedRoom({
 }
 
 export default Room;
-
-function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
-  useEffect(() => {
-    const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
-      if (data.type === "serial") {
-        ws.inner.send(data.buffer);
-      }
-    };
-
-    void (async () => {
-      for await (const message of ws.messages) {
-        if (!(message.data instanceof ArrayBuffer)) {
-          throw new TypeError("Only binary messages are accepted");
-        }
-        port.postMessage(
-          {
-            type: "serial",
-            buffer: new Uint8Array(message.data),
-          } satisfies FromMainMessage,
-          [message.data],
-        );
-      }
-    })();
-
-    port.addEventListener("message", portListener);
-
-    port.postMessage({
-      type: "serialConnected",
-    } satisfies FromMainMessage);
-
-    return () => {
-      port.postMessage({
-        type: "serialDisconnected",
-      } satisfies FromMainMessage);
-      port.removeEventListener("message", portListener);
-    };
-  }, [ws, port]);
-
-  return <Button label="Connected 🐣🐔" />;
-}
