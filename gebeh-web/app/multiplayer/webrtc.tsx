@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FromMainMessage, FromNodeMessage } from "../common";
 import { getTextMessage, type WsAndMessages } from "./ws-helpers";
 import Button from "../bulma/button";
@@ -13,22 +13,9 @@ const RTC_CONFIG = {
 
 export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   const [channel, setChannel] = useState<RTCDataChannel>();
-  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>("new");
 
-  useEffect(() => {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-
-    pc.addEventListener("iceconnectionstatechange", () => {
-      setIceConnectionState(pc.iceConnectionState);
-    });
-    pc.addEventListener("icecandidate", (event) => {
-      if (event.candidate) {
-        const text = JSON.stringify({ candidate: event.candidate });
-        ws.inner.send(text);
-      }
-    });
-
-    void (async () => {
+  const onConnection = useCallback(
+    async (pc: RTCPeerConnection) => {
       while (true) {
         const text = await getTextMessage(ws.messages);
         if (!text) {
@@ -54,13 +41,11 @@ export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMe
         await pc.setLocalDescription(answer);
         ws.inner.send(JSON.stringify({ answer }));
       }
-    })();
+    },
+    [ws],
+  );
 
-    return () => {
-      pc.close();
-    };
-  }, [ws]);
-
+  const iceConnectionState = useRTCPeerConnection(onConnection, ws.inner);
   return channel ? (
     <DataChannelHandler channel={channel} port={port} />
   ) : (
@@ -70,67 +55,75 @@ export function WebRtcMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMe
   );
 }
 
-export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
-  const [channel, setChannel] = useState<RTCDataChannel>();
+function useRTCPeerConnection(
+  onConnection: (pc: RTCPeerConnection) => void,
+  ws: WebSocket,
+): RTCIceConnectionState {
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>("new");
-
   useEffect(() => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        {
-          urls: "stun:stun.l.google.com:19302",
-        },
-      ],
-    });
+    const pc = new RTCPeerConnection(RTC_CONFIG);
 
     pc.addEventListener("iceconnectionstatechange", () => {
       setIceConnectionState(pc.iceConnectionState);
     });
 
-    pc.addEventListener("iceconnectionstatechange", console.log);
-
     const icecandidateListener = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
         const text = JSON.stringify({ candidate: event.candidate });
-        ws.inner.send(text);
+        ws.send(text);
       }
     };
 
     pc.addEventListener("icecandidate", icecandidateListener);
 
-    const dataChannel = pc.createDataChannel("prout");
-    dataChannel.binaryType = "arraybuffer";
-
-    void (async () => {
-      while (true) {
-        const text = await getTextMessage(ws.messages);
-        if (!text) {
-          return;
-        }
-        const parsed = JSON.parse(text) as
-          | { answer: RTCSessionDescriptionInit }
-          | { candidate: RTCIceCandidate };
-        if ("candidate" in parsed) {
-          console.log("candidate");
-          await pc.addIceCandidate(parsed.candidate);
-          continue;
-        }
-        console.log("answer received");
-        await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
-        setChannel(dataChannel);
-      }
-    })();
-
-    void pc.createOffer().then(async (offer) => {
-      console.log("offer created");
-      await pc.setLocalDescription(offer);
-      ws.inner.send(JSON.stringify({ offer }));
-    });
+    onConnection(pc);
 
     return () => {
       pc.close();
     };
-  }, [ws]);
+  }, [onConnection, ws]);
+
+  return iceConnectionState;
+}
+
+export function WebRtcMultiplayerOfferer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
+  const [channel, setChannel] = useState<RTCDataChannel>();
+
+  const onConnection = useCallback(
+    (pc: RTCPeerConnection) => {
+      const dataChannel = pc.createDataChannel("prout");
+      dataChannel.binaryType = "arraybuffer";
+
+      void (async () => {
+        while (true) {
+          const text = await getTextMessage(ws.messages);
+          if (!text) {
+            return;
+          }
+          const parsed = JSON.parse(text) as
+            | { answer: RTCSessionDescriptionInit }
+            | { candidate: RTCIceCandidate };
+          if ("candidate" in parsed) {
+            console.log("candidate");
+            await pc.addIceCandidate(parsed.candidate);
+            continue;
+          }
+          console.log("answer received");
+          await pc.setRemoteDescription(new RTCSessionDescription(parsed.answer));
+          setChannel(dataChannel);
+        }
+      })();
+
+      void pc.createOffer().then(async (offer) => {
+        console.log("offer created");
+        await pc.setLocalDescription(offer);
+        ws.inner.send(JSON.stringify({ offer }));
+      });
+    },
+    [ws],
+  );
+
+  const iceConnectionState = useRTCPeerConnection(onConnection, ws.inner);
 
   return channel ? (
     <DataChannelHandler channel={channel} port={port} />
