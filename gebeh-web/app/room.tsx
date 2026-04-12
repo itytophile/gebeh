@@ -122,8 +122,7 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEna
     | {
         type: "ready";
         room: string;
-        ws: WebSocket;
-        messages: AsyncGenerator<MessageEvent<unknown>>;
+        ws: WsAndMessages;
       }
     | { type: "waiting"; room: string }
   >({ type: "loading" });
@@ -131,19 +130,23 @@ function CreatedRoom({ port, isWebRtcEnabled }: { port: MessagePort; isWebRtcEna
   useEffect(() => {
     const ws = new WebSocket(`${globalThis.location.protocol}//${globalThis.location.host}/ws`);
     ws.binaryType = "arraybuffer";
+    const messages = websocketGenerator(ws);
 
     ws.addEventListener("close", () => {
       setStatus({ type: "closed" });
     });
 
-    const messages = websocketGenerator(ws);
-
     void (async () => {
       const room = await getTextMessage(messages);
+      if (!room) {
+        return;
+      }
       setStatus({ type: "waiting", room });
-      await getBinaryMessage(messages);
+      if (!(await getBinaryMessage(messages))) {
+        return;
+      }
       // empty message, it means that guest is here
-      setStatus({ type: "ready", room, ws, messages });
+      setStatus({ type: "ready", room, ws: { inner: ws, messages } });
     })();
 
     return () => {
@@ -187,9 +190,7 @@ function JoinedRoom({
   isWebRtcEnabled: boolean;
 }) {
   const [status, setStatus] = useState<
-    | { type: "loading" }
-    | { type: "ready"; ws: WebSocket; messages: AsyncGenerator<MessageEvent<unknown>> }
-    | { type: "closed" }
+    { type: "loading" } | { type: "ready"; ws: WsAndMessages } | { type: "closed" }
   >({ type: "loading" });
   useEffect(() => {
     const ws = new WebSocket(
@@ -198,7 +199,7 @@ function JoinedRoom({
     ws.binaryType = "arraybuffer";
     const messages = websocketGenerator(ws);
     ws.addEventListener("open", () => {
-      setStatus({ type: "ready", ws, messages });
+      setStatus({ type: "ready", ws: { inner: ws, messages } });
     });
     ws.addEventListener("close", () => {
       setStatus({ type: "closed" });
@@ -226,27 +227,31 @@ function JoinedRoom({
 
 export default Room;
 
-function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }) {
+function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WsAndMessages }) {
   useEffect(() => {
     const portListener = ({ data }: MessageEvent<FromNodeMessage>) => {
       if (data.type === "serial") {
-        ws.send(data.buffer);
+        ws.inner.send(data.buffer);
       }
     };
+
+    void (async () => {
+      for await (const message of ws.messages) {
+        if (!(message.data instanceof ArrayBuffer)) {
+          throw new TypeError("Only binary messages are accepted");
+        }
+        port.postMessage(
+          {
+            type: "serial",
+            buffer: new Uint8Array(message.data),
+          } satisfies FromMainMessage,
+          [message.data],
+        );
+      }
+    })();
+
     port.addEventListener("message", portListener);
-    const wsListener = (message: MessageEvent<unknown>) => {
-      if (!(message.data instanceof ArrayBuffer)) {
-        throw new TypeError("Only binary messages are accepted");
-      }
-      port.postMessage(
-        {
-          type: "serial",
-          buffer: new Uint8Array(message.data),
-        } satisfies FromMainMessage,
-        [message.data],
-      );
-    };
-    ws.addEventListener("message", wsListener);
+
     port.postMessage({
       type: "serialConnected",
     } satisfies FromMainMessage);
@@ -256,7 +261,6 @@ function WebSocketMultiplayer({ port, ws }: { port: MessagePort; ws: WebSocket }
         type: "serialDisconnected",
       } satisfies FromMainMessage);
       port.removeEventListener("message", portListener);
-      ws.removeEventListener("message", wsListener);
     };
   }, [ws, port]);
 
