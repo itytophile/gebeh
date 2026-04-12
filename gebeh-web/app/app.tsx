@@ -6,13 +6,13 @@ import buttonB from "./assets/buttonB.svg";
 import startSelect from "./assets/startSelect.svg";
 import GamepadButton from "./gamepad-button.tsx";
 import Dpad from "./dpad";
-import Room from "./room";
 import initNode from "./init-node.ts";
 import RomInput from "./rom-input.tsx";
 import "./bulma.scss";
 import Button from "./bulma/button.tsx";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
 import SaveSettings from "./save-settings.tsx";
+import Room from "./multiplayer/room.tsx";
 
 type Page = "game" | "settings";
 

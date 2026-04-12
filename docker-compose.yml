@@ -1,0 +1,14 @@
+services:
+  coturn:
+    image: docker.io/coturn/coturn:alpine
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+    command:
+      - -n
+      - --no-auth
+      - --no-tls
+      - --no-dtls
+      - --stun-only
+      - --log-file=stdout
