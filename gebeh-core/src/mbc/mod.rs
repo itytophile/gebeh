@@ -1,10 +1,12 @@
 mod mbc1;
+mod mbc1m;
 mod mbc3;
 mod mbc5;
 
 use core::ops::Deref;
 
 pub use mbc1::*;
+pub use mbc1m::*;
 pub use mbc3::*;
 pub use mbc5::*;
 
@@ -97,8 +99,10 @@ impl TryFrom<u8> for CartridgeType {
 pub const ROM_BANK_SIZE: u16 = 16384;
 pub const RAM_BANK_SIZE: u16 = 8192;
 
+pub const ROM_SIZE_HEADER: usize = 0x148;
+
 pub fn get_factor_32_kib_rom(rom: &[u8]) -> u16 {
-    1 << rom[0x148]
+    1 << rom[ROM_SIZE_HEADER]
 }
 
 // https://gbdev.io/pandocs/The_Cartridge_Header.html#0149--ram-size

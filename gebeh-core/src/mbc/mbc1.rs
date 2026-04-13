@@ -1,28 +1,28 @@
 use crate::{mbc::*, state::*};
-use core::ops::Deref;
+use core::{num::NonZeroU8, ops::Deref};
 
 #[derive(Clone)]
-enum BankingMode {
+pub(crate) enum BankingMode {
     Simple,
     Advanced,
 }
 
 #[derive(Clone)]
 pub struct Mbc1<T> {
-    rom: T,
-    rom_bank: u8,
-    advanced_bank: u8,
+    pub(crate) rom: T,
+    pub(crate) rom_bank: NonZeroU8,
+    pub(crate) advanced_bank: u8,
     // 32 KiB
-    ram: [u8; 0x8000],
-    ram_enabled: bool,
-    banking_mode: BankingMode,
+    pub(crate) ram: [u8; 0x8000],
+    pub(crate) ram_enabled: bool,
+    pub(crate) banking_mode: BankingMode,
 }
 
 impl<T: Deref<Target = [u8]>> Mbc1<T> {
     pub fn new(rom: T) -> Self {
         Self {
             rom,
-            rom_bank: 0,
+            rom_bank: NonZeroU8::MIN,
             advanced_bank: 0,
             ram: [0; 0x8000],
             ram_enabled: false,
@@ -54,7 +54,7 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
         // [...] As a result if the ROM is 256 KiB or smaller, it is possible to map bank 0
         // to the 4000–7FFF region — by setting the 5th bit to 1 it will prevent the 00→01 translation
         let rom_bank_number = (self.get_rom_bank_upper_bits() << 5)
-            | (self.rom_bank.max(1) & (self.get_rom_bank_count() - 1));
+            | (self.rom_bank.get() & (self.get_rom_bank_count() - 1));
         usize::from(rom_bank_number) * usize::from(ROM_BANK_SIZE)
     }
 
@@ -75,6 +75,28 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
             BankingMode::Simple => 0,
         }
     }
+
+    pub(crate) fn write_banking_mode(&mut self, value: u8) {
+        self.banking_mode = if value & 1 == 0 {
+            BankingMode::Simple
+        } else {
+            BankingMode::Advanced
+        }
+    }
+
+    pub(crate) fn read_external_ram(&self, index: u16) -> u8 {
+        if !self.ram_enabled {
+            return 0xff;
+        }
+        self.ram[self.get_ram_offset() + usize::from(index) - usize::from(EXTERNAL_RAM)]
+    }
+
+    pub(crate) fn write_external_ram(&mut self, index: u16, value: u8) {
+        if !self.ram_enabled {
+            return;
+        }
+        self.ram[self.get_ram_offset() + usize::from(index) - usize::from(EXTERNAL_RAM)] = value;
+    }
 }
 
 const LIMIT_ROM_BANK_COUNT_BEFORE_ADVANCED: u8 = 32;
@@ -87,19 +109,17 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
                 self.rom[self.get_switchable_rom_offset() + usize::from(index)
                     - usize::from(SWITCHABLE_ROM_BANK)]
             }
-            EXTERNAL_RAM..WORK_RAM => {
-                if !self.ram_enabled {
-                    return 0xff;
-                }
-                self.ram[self.get_ram_offset() + usize::from(index) - usize::from(EXTERNAL_RAM)]
-            }
+            EXTERNAL_RAM..WORK_RAM => self.read_external_ram(index),
             _ => panic!(),
         }
     }
+
     fn write(&mut self, index: u16, value: u8) {
         match index {
             0x0000..0x2000 => self.ram_enabled = (value & 0x0f) == 0x0a,
-            0x2000..0x4000 => self.rom_bank = value & 0x1f,
+            0x2000..0x4000 => {
+                self.rom_bank = NonZeroU8::new(value & 0x1f).unwrap_or(NonZeroU8::MIN)
+            }
             0x4000..0x6000 => self.advanced_bank = value & 0x03,
             0x6000..0x8000 => {
                 // https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
@@ -110,19 +130,9 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
                 {
                     return;
                 }
-                self.banking_mode = if value & 1 == 0 {
-                    BankingMode::Simple
-                } else {
-                    BankingMode::Advanced
-                }
+                self.write_banking_mode(value);
             }
-            EXTERNAL_RAM..WORK_RAM => {
-                if !self.ram_enabled {
-                    return;
-                }
-                self.ram[self.get_ram_offset() + usize::from(index) - usize::from(EXTERNAL_RAM)] =
-                    value;
-            }
+            EXTERNAL_RAM..WORK_RAM => self.write_external_ram(index, value),
             _ => panic!(),
         }
     }

@@ -49,7 +49,6 @@ fn mbc1_bits_ramg() {
 }
 
 #[test]
-#[ignore]
 fn mbc1_multicart_rom_8mb() {
     test_mooneye("mbc1/multicart_rom_8Mb.gb");
 }

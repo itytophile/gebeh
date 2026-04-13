@@ -1,6 +1,6 @@
 use std::{collections::HashSet, ops::Deref};
 
-use gebeh_core::mbc::{CartridgeType, Mbc, Mbc1, Mbc3, Mbc5, Rtc};
+use gebeh_core::mbc::{CartridgeType, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc};
 
 pub type EasyMbc = Box<dyn CloneMbc<'static>>;
 
@@ -14,6 +14,29 @@ impl<'a, T: Mbc + Clone + 'a> CloneMbc<'a> for T {
     }
 }
 
+const LOGO: [u8; 0x30] = [
+    0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
+    0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99,
+    0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E,
+];
+
+fn get_logo(rom: &[u8]) -> Option<&[u8; 0x30]> {
+    rom[0x0104..0x0134].try_into().ok()
+}
+
+const MINIMUM_GAMES_COUNT_IN_MULTICART: usize = 3;
+
+fn is_multicart(rom: &[u8]) -> bool {
+    // copied from gameroy and adapted
+    rom[ROM_SIZE_HEADER] == 5
+        && (0..4)
+            .filter_map(|i| get_logo(&rom[i * 0x40000..]))
+            .filter(|logo| *logo == &LOGO)
+            .take(MINIMUM_GAMES_COUNT_IN_MULTICART)
+            .count()
+            >= MINIMUM_GAMES_COUNT_IN_MULTICART
+}
+
 pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clone + 'a>(
     rom: T,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a>)> {
@@ -21,7 +44,11 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
     let mbc: Box<dyn CloneMbc<'a>> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            Box::new(Mbc1::new(rom))
+            if is_multicart(rom.deref()) {
+                Box::new(Mbc1M::new(rom))
+            } else {
+                Box::new(Mbc1::new(rom))
+            }
         }
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
@@ -44,7 +71,11 @@ pub fn get_mbc_send<
     let mbc: Box<dyn CloneMbc<'a> + Send> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            Box::new(Mbc1::new(rom))
+            if is_multicart(rom.deref()) {
+                Box::new(Mbc1M::new(rom))
+            } else {
+                Box::new(Mbc1::new(rom))
+            }
         }
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
