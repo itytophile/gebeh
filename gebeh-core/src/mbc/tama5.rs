@@ -57,7 +57,7 @@ static TAMA6_RTC_MASK: [u8; 32] = [
     0x7, 0xF, 0x3, 0x7, 0xF, 0x3, 0x0, 0x1, 0x3, 0x0, 0x0, 0x0, 0x0,
 ];
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Tama5State {
     pub registers: [u8; GBTAMA5_MAX as usize],
     pub reg: u8,
@@ -70,11 +70,33 @@ pub struct Tama5State {
     pub rtc_last_latch: i64,
 }
 
+impl Default for Tama5State {
+    fn default() -> Self {
+        let mut rtc_alarm_page: [u8; _] = Default::default();
+        let mut rtc_free_page0: [u8; _] = Default::default();
+        let mut rtc_free_page1: [u8; _] = Default::default();
+        rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] = 1;
+        rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] = 2;
+        rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] = 3;
+
+        Self {
+            registers: Default::default(),
+            reg: Default::default(),
+            rom_bank: Default::default(),
+            rtc_timer_page: Default::default(),
+            rtc_alarm_page,
+            rtc_free_page0,
+            rtc_free_page1,
+            disabled: Default::default(),
+            rtc_last_latch: Default::default(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Tama5<T> {
     rom: T,
-    // 32 KiB RAM
-    ram: [u8; 0x8000],
+    ram: [u8; 0x20],
     state: Tama5State,
 }
 
@@ -82,7 +104,7 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
     pub fn new(rom: T) -> Self {
         Self {
             rom,
-            ram: [0; 0x8000],
+            ram: [0; 0x20],
             state: Tama5State::default(),
         }
     }
