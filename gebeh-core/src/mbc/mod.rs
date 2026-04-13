@@ -3,6 +3,7 @@ mod mbc1;
 mod mbc1m;
 mod mbc3;
 mod mbc5;
+mod tama5;
 
 use core::ops::Deref;
 
@@ -11,6 +12,7 @@ pub use mbc1::*;
 pub use mbc1m::*;
 pub use mbc3::*;
 pub use mbc5::*;
+pub use tama5::*;
 
 // this trait will make people able to build alien MBCs.
 // Be careful about monomorphization
