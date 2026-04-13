@@ -1,10 +1,10 @@
 // originally from https://github.com/mgba-emu/mgba/blob/79fa503d63a2ebb56487d02a9e0d74d455d0149a/src/gb/mbc/tama5.c
 // original license: https://www.mozilla.org/en-US/MPL/2.0/
+// used GLM 5 to first convert the C code into Rust
 
 use crate::{mbc::*, state::*};
 use core::ops::Deref;
 
-// TAMA5 register indices
 const GBTAMA5_BANK_LO: u8 = 0x0;
 const GBTAMA5_BANK_HI: u8 = 0x1;
 const GBTAMA5_WRITE_LO: u8 = 0x4;
@@ -16,32 +16,32 @@ const GBTAMA5_ACTIVE: u8 = 0xA;
 const GBTAMA5_READ_LO: u8 = 0xC;
 const GBTAMA5_READ_HI: u8 = 0xD;
 
-// RTC Page 0 registers (timer page)
 const GBTAMA6_RTC_PA0_SECOND_1: u8 = 0x0;
 const GBTAMA6_RTC_PA0_SECOND_10: u8 = 0x1;
 const GBTAMA6_RTC_PA0_MINUTE_1: u8 = 0x2;
 const GBTAMA6_RTC_PA0_MINUTE_10: u8 = 0x3;
 const GBTAMA6_RTC_PA0_HOUR_1: u8 = 0x4;
 const GBTAMA6_RTC_PA0_HOUR_10: u8 = 0x5;
-const GBTAMA6_RTC_PA0_WEEK: u8 = 0x6;
-const GBTAMA6_RTC_PA0_DAY_1: u8 = 0x7;
-const GBTAMA6_RTC_PA0_DAY_10: u8 = 0x8;
-const GBTAMA6_RTC_PA0_MONTH_1: u8 = 0x9;
-const GBTAMA6_RTC_PA0_MONTH_10: u8 = 0xA;
-const GBTAMA6_RTC_PA0_YEAR_1: u8 = 0xB;
-const GBTAMA6_RTC_PA0_YEAR_10: u8 = 0xC;
-const GBTAMA6_RTC_PA1_MINUTE_1: u8 = 0x2;
-const GBTAMA6_RTC_PA1_MINUTE_10: u8 = 0x3;
-const GBTAMA6_RTC_PA1_HOUR_1: u8 = 0x4;
-const GBTAMA6_RTC_PA1_HOUR_10: u8 = 0x5;
-const GBTAMA6_RTC_PA1_WEEK: u8 = 0x6;
-const GBTAMA6_RTC_PA1_DAY_1: u8 = 0x7;
-const GBTAMA6_RTC_PA1_DAY_10: u8 = 0x8;
-const GBTAMA6_RTC_PA1_24_HOUR: u8 = 0xA;
-const GBTAMA6_RTC_PA1_LEAP_YEAR: u8 = 0xB;
+// const GBTAMA6_RTC_PA0_WEEK: u8 = 0x6;
+// const GBTAMA6_RTC_PA0_DAY_1: u8 = 0x7;
+// const GBTAMA6_RTC_PA0_DAY_10: u8 = 0x8;
+// const GBTAMA6_RTC_PA0_MONTH_1: u8 = 0x9;
+// const GBTAMA6_RTC_PA0_MONTH_10: u8 = 0xA;
+// const GBTAMA6_RTC_PA0_YEAR_1: u8 = 0xB;
+// const GBTAMA6_RTC_PA0_YEAR_10: u8 = 0xC;
+// const GBTAMA6_RTC_PA1_MINUTE_1: u8 = 0x2;
+// const GBTAMA6_RTC_PA1_MINUTE_10: u8 = 0x3;
+// const GBTAMA6_RTC_PA1_HOUR_1: u8 = 0x4;
+// const GBTAMA6_RTC_PA1_HOUR_10: u8 = 0x5;
+// const GBTAMA6_RTC_PA1_WEEK: u8 = 0x6;
+// const GBTAMA6_RTC_PA1_DAY_1: u8 = 0x7;
+// const GBTAMA6_RTC_PA1_DAY_10: u8 = 0x8;
+// const GBTAMA6_RTC_PA1_24_HOUR: u8 = 0xA;
+// const GBTAMA6_RTC_PA1_LEAP_YEAR: u8 = 0xB;
 const GBTAMA6_RTC_PAGE: u8 = 0xD;
-const GBTAMA6_RTC_TEST: u8 = 0xE;
-const GBTAMA6_RTC_RESET: u8 = 0xF;
+// const GBTAMA6_RTC_TEST: u8 = 0xE;
+// const GBTAMA6_RTC_RESET: u8 = 0xF;
+const GBTAMA6_RTC_MAX: u8 = 0x10;
 
 const GBTAMA6_DISABLE_TIMER: u8 = 0x0;
 const GBTAMA6_ENABLE_TIMER: u8 = 0x1;
@@ -62,10 +62,10 @@ pub struct Tama5State {
     pub registers: [u8; GBTAMA5_MAX as usize],
     pub reg: u8,
     pub rom_bank: u8,
-    pub rtc_timer_page: [u8; 0x8],
-    pub rtc_alarm_page: [u8; 0x8],
-    pub rtc_free_page0: [u8; 0x8],
-    pub rtc_free_page1: [u8; 0x8],
+    pub rtc_timer_page: [u8; GBTAMA6_RTC_MAX as usize],
+    pub rtc_alarm_page: [u8; GBTAMA6_RTC_MAX as usize],
+    pub rtc_free_page0: [u8; GBTAMA6_RTC_MAX as usize],
+    pub rtc_free_page1: [u8; GBTAMA6_RTC_MAX as usize],
     pub disabled: bool,
     pub rtc_last_latch: i64,
 }
