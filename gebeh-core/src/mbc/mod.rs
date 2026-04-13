@@ -1,3 +1,4 @@
+mod huc1;
 mod mbc1;
 mod mbc1m;
 mod mbc3;
@@ -5,6 +6,7 @@ mod mbc5;
 
 use core::ops::Deref;
 
+pub use huc1::*;
 pub use mbc1::*;
 pub use mbc1m::*;
 pub use mbc3::*;
@@ -58,6 +60,7 @@ pub enum CartridgeType {
     Mbc3RamBattery,
     Mbc5,
     Mbc5RamBattery,
+    Huc1,
 }
 
 impl CartridgeType {
@@ -91,6 +94,7 @@ impl TryFrom<u8> for CartridgeType {
             0x13 => Ok(Self::Mbc3RamBattery),
             0x19 => Ok(Self::Mbc5),
             0x1b => Ok(Self::Mbc5RamBattery),
+            0xff => Ok(Self::Huc1),
             _ => Err(value),
         }
     }
