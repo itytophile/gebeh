@@ -16,10 +16,11 @@ pub struct Mbc1<T> {
     ram: [u8; 0x8000],
     ram_enabled: bool,
     banking_mode: BankingMode,
+    is_multi_cart: bool,
 }
 
 impl<T: Deref<Target = [u8]>> Mbc1<T> {
-    pub fn new(rom: T) -> Self {
+    pub fn new(rom: T, is_multi_cart: bool) -> Self {
         Self {
             rom,
             rom_bank: NonZeroU8::MIN,
@@ -27,6 +28,7 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
             ram: [0; 0x8000],
             ram_enabled: false,
             banking_mode: BankingMode::Simple,
+            is_multi_cart,
         }
     }
 
@@ -82,10 +84,27 @@ const LIMIT_ROM_BANK_COUNT_BEFORE_ADVANCED: u8 = 32;
 impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
     fn read(&self, index: u16) -> u8 {
         match index {
-            ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index) + self.get_rom_offset()],
+            ROM_BANK..SWITCHABLE_ROM_BANK => {
+                if self.is_multi_cart {
+                    match self.banking_mode {
+                        BankingMode::Simple => self.rom[usize::from(index)],
+                        BankingMode::Advanced => {
+                            self.rom[(usize::from(self.advanced_bank) << 18) | usize::from(index)]
+                        }
+                    }
+                } else {
+                    self.rom[usize::from(index) + self.get_rom_offset()]
+                }
+            }
             SWITCHABLE_ROM_BANK..VIDEO_RAM => {
-                self.rom[self.get_switchable_rom_offset() + usize::from(index)
-                    - usize::from(SWITCHABLE_ROM_BANK)]
+                if self.is_multi_cart {
+                    self.rom[(usize::from(self.advanced_bank) << 18)
+                        | (usize::from(self.rom_bank.get() & 0x0f) << 14)
+                        | (usize::from(index) - usize::from(SWITCHABLE_ROM_BANK))]
+                } else {
+                    self.rom[self.get_switchable_rom_offset() + usize::from(index)
+                        - usize::from(SWITCHABLE_ROM_BANK)]
+                }
             }
             EXTERNAL_RAM..WORK_RAM => {
                 if !self.ram_enabled {
@@ -104,6 +123,8 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
             }
             0x4000..0x6000 => self.advanced_bank = value & 0x03,
             0x6000..0x8000 => {
+                log::info!("banking modo");
+
                 // https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
                 // Citation: If the cart is not large enough to use the 2-bit register (≤ 8 KiB RAM and ≤ 512 KiB ROM)
                 // this mode select has no observable effect

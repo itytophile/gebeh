@@ -44,8 +44,8 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
     let mbc: Box<dyn CloneMbc<'a>> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-
-            Box::new(Mbc1::new(rom))
+            let is_multicart = is_multicart(rom.deref());
+            Box::new(Mbc1::new(rom, is_multicart))
         }
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
@@ -68,10 +68,8 @@ pub fn get_mbc_send<
     let mbc: Box<dyn CloneMbc<'a> + Send> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            if is_multicart(rom.deref()) {
-                println!("multicart là")
-            }
-            Box::new(Mbc1::new(rom))
+            let is_multicart = is_multicart(rom.deref());
+            Box::new(Mbc1::new(rom, is_multicart))
         }
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
