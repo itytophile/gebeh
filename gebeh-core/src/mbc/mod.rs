@@ -1,10 +1,12 @@
 mod mbc1;
+mod mbc1m;
 mod mbc3;
 mod mbc5;
 
 use core::ops::Deref;
 
 pub use mbc1::*;
+pub use mbc1m::*;
 pub use mbc3::*;
 pub use mbc5::*;
 

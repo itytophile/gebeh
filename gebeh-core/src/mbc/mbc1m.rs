@@ -8,7 +8,7 @@ enum BankingMode {
 }
 
 #[derive(Clone)]
-pub struct Mbc1<T> {
+pub struct Mbc1M<T> {
     rom: T,
     rom_bank: NonZeroU8,
     advanced_bank: u8,
@@ -18,7 +18,7 @@ pub struct Mbc1<T> {
     banking_mode: BankingMode,
 }
 
-impl<T: Deref<Target = [u8]>> Mbc1<T> {
+impl<T: Deref<Target = [u8]>> Mbc1M<T> {
     pub fn new(rom: T) -> Self {
         Self {
             rom,
@@ -34,30 +34,6 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
         get_factor_8_kib_ram(self.rom.deref())
     }
 
-    fn get_rom_bank_count(&self) -> u8 {
-        u8::try_from(get_factor_32_kib_rom(self.rom.deref())).unwrap() << 1
-    }
-
-    fn get_rom_bank_upper_bits(&self) -> u8 {
-        match self.get_rom_bank_count() {
-            128 => self.advanced_bank,
-            64 => self.advanced_bank & 1,
-            _ => 0,
-        }
-    }
-
-    fn get_switchable_rom_offset(&self) -> usize {
-        // https://gbdev.io/pandocs/MBC1.html#20003fff--rom-bank-number-write-only
-        // Citation: If this register is set to $00, it behaves as if it is set to $01
-        // [...] If the ROM Bank Number is set to a higher value than the number of banks in the cart,
-        // the bank number is masked to the required number of bits.
-        // [...] As a result if the ROM is 256 KiB or smaller, it is possible to map bank 0
-        // to the 4000–7FFF region — by setting the 5th bit to 1 it will prevent the 00→01 translation
-        let rom_bank_number = (self.get_rom_bank_upper_bits() << 5)
-            | (self.rom_bank.get() & (self.get_rom_bank_count() - 1));
-        usize::from(rom_bank_number) * usize::from(ROM_BANK_SIZE)
-    }
-
     fn get_ram_offset(&self) -> usize {
         match self.banking_mode {
             BankingMode::Advanced if self.get_ram_bank_count() == 4 => {
@@ -66,26 +42,21 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
             _ => 0,
         }
     }
-
-    fn get_rom_offset(&self) -> usize {
-        match self.banking_mode {
-            BankingMode::Advanced => {
-                (usize::from(self.get_rom_bank_upper_bits()) << 5) * usize::from(ROM_BANK_SIZE)
-            }
-            BankingMode::Simple => 0,
-        }
-    }
 }
 
-const LIMIT_ROM_BANK_COUNT_BEFORE_ADVANCED: u8 = 32;
-
-impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
+impl<T: Deref<Target = [u8]>> Mbc for Mbc1M<T> {
     fn read(&self, index: u16) -> u8 {
         match index {
-            ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index) + self.get_rom_offset()],
+            ROM_BANK..SWITCHABLE_ROM_BANK => match self.banking_mode {
+                BankingMode::Simple => self.rom[usize::from(index)],
+                BankingMode::Advanced => {
+                    self.rom[(usize::from(self.advanced_bank) << 18) | usize::from(index)]
+                }
+            },
             SWITCHABLE_ROM_BANK..VIDEO_RAM => {
-                self.rom[self.get_switchable_rom_offset() + usize::from(index)
-                    - usize::from(SWITCHABLE_ROM_BANK)]
+                self.rom[(usize::from(self.advanced_bank) << 18)
+                    | (usize::from(self.rom_bank.get() & 0x0f) << 14)
+                    | (usize::from(index) - usize::from(SWITCHABLE_ROM_BANK))]
             }
             EXTERNAL_RAM..WORK_RAM => {
                 if !self.ram_enabled {
@@ -104,14 +75,6 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
             }
             0x4000..0x6000 => self.advanced_bank = value & 0x03,
             0x6000..0x8000 => {
-                // https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
-                // Citation: If the cart is not large enough to use the 2-bit register (≤ 8 KiB RAM and ≤ 512 KiB ROM)
-                // this mode select has no observable effect
-                if self.get_rom_bank_count() <= LIMIT_ROM_BANK_COUNT_BEFORE_ADVANCED
-                    && self.get_ram_bank_count() <= 1
-                {
-                    return;
-                }
                 self.banking_mode = if value & 1 == 0 {
                     BankingMode::Simple
                 } else {

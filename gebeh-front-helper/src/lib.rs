@@ -1,6 +1,6 @@
 use std::{collections::HashSet, ops::Deref};
 
-use gebeh_core::mbc::{CartridgeType, Mbc, Mbc1, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc};
+use gebeh_core::mbc::{CartridgeType, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc};
 
 pub type EasyMbc = Box<dyn CloneMbc<'static>>;
 
@@ -44,8 +44,11 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
     let mbc: Box<dyn CloneMbc<'a>> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            let is_multicart = is_multicart(rom.deref());
-            Box::new(Mbc1::new(rom, is_multicart))
+            if is_multicart(rom.deref()) {
+                Box::new(Mbc1M::new(rom))
+            } else {
+                Box::new(Mbc1::new(rom))
+            }
         }
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
@@ -68,8 +71,11 @@ pub fn get_mbc_send<
     let mbc: Box<dyn CloneMbc<'a> + Send> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            let is_multicart = is_multicart(rom.deref());
-            Box::new(Mbc1::new(rom, is_multicart))
+            if is_multicart(rom.deref()) {
+                Box::new(Mbc1M::new(rom))
+            } else {
+                Box::new(Mbc1::new(rom))
+            }
         }
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
