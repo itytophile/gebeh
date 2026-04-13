@@ -1,6 +1,8 @@
 use std::{collections::HashSet, ops::Deref};
 
-use gebeh_core::mbc::{CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc};
+use gebeh_core::mbc::{
+    CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc, Tama5,
+};
 
 pub type EasyMbc = Box<dyn CloneMbc<'static>>;
 
@@ -56,6 +58,7 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
         | CartridgeType::Mbc3TimerBattery
         | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, U::default())),
         CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
+        CartridgeType::Tama5 => Box::new(Tama5::new(rom)),
         CartridgeType::Huc1 => Box::new(Huc1::new(rom)),
     };
     Some((cartridge_type, mbc))
@@ -84,6 +87,7 @@ pub fn get_mbc_send<
         | CartridgeType::Mbc3TimerBattery
         | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, U::default())),
         CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
+        CartridgeType::Tama5 => Box::new(Tama5::new(rom)),
         CartridgeType::Huc1 => Box::new(Huc1::new(rom)),
     };
     Some((cartridge_type, mbc))
