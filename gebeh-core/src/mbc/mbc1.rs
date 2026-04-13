@@ -1,5 +1,5 @@
 use crate::{mbc::*, state::*};
-use core::ops::Deref;
+use core::{num::NonZeroU8, ops::Deref};
 
 #[derive(Clone)]
 enum BankingMode {
@@ -10,7 +10,7 @@ enum BankingMode {
 #[derive(Clone)]
 pub struct Mbc1<T> {
     rom: T,
-    rom_bank: u8,
+    rom_bank: NonZeroU8,
     advanced_bank: u8,
     // 32 KiB
     ram: [u8; 0x8000],
@@ -22,7 +22,7 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
     pub fn new(rom: T) -> Self {
         Self {
             rom,
-            rom_bank: 0,
+            rom_bank: NonZeroU8::MIN,
             advanced_bank: 0,
             ram: [0; 0x8000],
             ram_enabled: false,
@@ -54,7 +54,7 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
         // [...] As a result if the ROM is 256 KiB or smaller, it is possible to map bank 0
         // to the 4000–7FFF region — by setting the 5th bit to 1 it will prevent the 00→01 translation
         let rom_bank_number = (self.get_rom_bank_upper_bits() << 5)
-            | (self.rom_bank.max(1) & (self.get_rom_bank_count() - 1));
+            | (self.rom_bank.get() & (self.get_rom_bank_count() - 1));
         usize::from(rom_bank_number) * usize::from(ROM_BANK_SIZE)
     }
 
@@ -99,7 +99,9 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
     fn write(&mut self, index: u16, value: u8) {
         match index {
             0x0000..0x2000 => self.ram_enabled = (value & 0x0f) == 0x0a,
-            0x2000..0x4000 => self.rom_bank = value & 0x1f,
+            0x2000..0x4000 => {
+                self.rom_bank = NonZeroU8::new(value & 0x1f).unwrap_or(NonZeroU8::MIN)
+            }
             0x4000..0x6000 => self.advanced_bank = value & 0x03,
             0x6000..0x8000 => {
                 // https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
