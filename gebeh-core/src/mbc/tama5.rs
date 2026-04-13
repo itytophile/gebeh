@@ -5,36 +5,52 @@ use crate::{mbc::*, state::*};
 use core::ops::Deref;
 
 // TAMA5 register indices
-const GBTAMA5_BANK_LO: u8 = 0;
-const GBTAMA5_BANK_HI: u8 = 1;
-const GBTAMA5_ADDR_LO: u8 = 2;
-const GBTAMA5_ADDR_HI: u8 = 3;
-const GBTAMA5_WRITE_LO: u8 = 4;
-const GBTAMA5_WRITE_HI: u8 = 5;
-const GBTAMA5_READ_LO: u8 = 6;
-const GBTAMA5_READ_HI: u8 = 7;
-const GBTAMA5_ACTIVE: u8 = 8;
-const GBTAMA5_MAX: u8 = 9;
+const GBTAMA5_BANK_LO: u8 = 0x0;
+const GBTAMA5_BANK_HI: u8 = 0x1;
+const GBTAMA5_WRITE_LO: u8 = 0x4;
+const GBTAMA5_WRITE_HI: u8 = 0x5;
+const GBTAMA5_ADDR_HI: u8 = 0x6;
+const GBTAMA5_ADDR_LO: u8 = 0x7;
+const GBTAMA5_MAX: u8 = 0x8;
+const GBTAMA5_ACTIVE: u8 = 0xA;
+const GBTAMA5_READ_LO: u8 = 0xC;
+const GBTAMA5_READ_HI: u8 = 0xD;
 
 // RTC Page 0 registers (timer page)
-const GBTAMA6_RTC_PA0_SECOND_1: u8 = 0;
-const GBTAMA6_RTC_PA0_SECOND_10: u8 = 1;
-const GBTAMA6_RTC_PA0_MINUTE_1: u8 = 2;
-const GBTAMA6_RTC_PA0_MINUTE_10: u8 = 3;
-const GBTAMA6_RTC_PA0_HOUR_1: u8 = 4;
-const GBTAMA6_RTC_PA0_HOUR_10: u8 = 5;
+const GBTAMA6_RTC_PA0_SECOND_1: u8 = 0x0;
+const GBTAMA6_RTC_PA0_SECOND_10: u8 = 0x1;
+const GBTAMA6_RTC_PA0_MINUTE_1: u8 = 0x2;
+const GBTAMA6_RTC_PA0_MINUTE_10: u8 = 0x3;
+const GBTAMA6_RTC_PA0_HOUR_1: u8 = 0x4;
+const GBTAMA6_RTC_PA0_HOUR_10: u8 = 0x5;
+const GBTAMA6_RTC_PA0_WEEK: u8 = 0x6;
+const GBTAMA6_RTC_PA0_DAY_1: u8 = 0x7;
+const GBTAMA6_RTC_PA0_DAY_10: u8 = 0x8;
+const GBTAMA6_RTC_PA0_MONTH_1: u8 = 0x9;
+const GBTAMA6_RTC_PA0_MONTH_10: u8 = 0xA;
+const GBTAMA6_RTC_PA0_YEAR_1: u8 = 0xB;
+const GBTAMA6_RTC_PA0_YEAR_10: u8 = 0xC;
+const GBTAMA6_RTC_PA1_MINUTE_1: u8 = 0x2;
+const GBTAMA6_RTC_PA1_MINUTE_10: u8 = 0x3;
+const GBTAMA6_RTC_PA1_HOUR_1: u8 = 0x4;
+const GBTAMA6_RTC_PA1_HOUR_10: u8 = 0x5;
+const GBTAMA6_RTC_PA1_WEEK: u8 = 0x6;
+const GBTAMA6_RTC_PA1_DAY_1: u8 = 0x7;
+const GBTAMA6_RTC_PA1_DAY_10: u8 = 0x8;
+const GBTAMA6_RTC_PA1_24_HOUR: u8 = 0xA;
+const GBTAMA6_RTC_PA1_LEAP_YEAR: u8 = 0xB;
+const GBTAMA6_RTC_PAGE: u8 = 0xD;
+const GBTAMA6_RTC_TEST: u8 = 0xE;
+const GBTAMA6_RTC_RESET: u8 = 0xF;
 
-const GBTAMA6_RTC_PAGE: u8 = 0x0F;
-
-// TAMA6 commands
-const GBTAMA6_DISABLE_TIMER: u8 = 0;
-const GBTAMA6_ENABLE_TIMER: u8 = 1;
-const GBTAMA6_MINUTE_WRITE: u8 = 2;
-const GBTAMA6_HOUR_WRITE: u8 = 3;
-const GBTAMA6_DISABLE_ALARM: u8 = 4;
-const GBTAMA6_ENABLE_ALARM: u8 = 5;
-const GBTAMA6_MINUTE_READ: u8 = 2;
-const GBTAMA6_HOUR_READ: u8 = 3;
+const GBTAMA6_DISABLE_TIMER: u8 = 0x0;
+const GBTAMA6_ENABLE_TIMER: u8 = 0x1;
+const GBTAMA6_MINUTE_WRITE: u8 = 0x4;
+const GBTAMA6_HOUR_WRITE: u8 = 0x5;
+const GBTAMA6_MINUTE_READ: u8 = 0x6;
+const GBTAMA6_HOUR_READ: u8 = 0x7;
+const GBTAMA6_DISABLE_ALARM: u8 = 0x10;
+const GBTAMA6_ENABLE_ALARM: u8 = 0x11;
 
 static TAMA6_RTC_MASK: [u8; 32] = [
     0xF, 0x7, 0xF, 0x7, 0xF, 0x3, 0x7, 0xF, 0x3, 0xF, 0x1, 0xF, 0xF, 0x0, 0x0, 0x0, 0x0, 0x0, 0xF,
@@ -46,10 +62,10 @@ pub struct Tama5State {
     pub registers: [u8; GBTAMA5_MAX as usize],
     pub reg: u8,
     pub rom_bank: u8,
-    pub rtc_timer_page: [u8; 16],
-    pub rtc_alarm_page: [u8; 16],
-    pub rtc_free_page0: [u8; 16],
-    pub rtc_free_page1: [u8; 16],
+    pub rtc_timer_page: [u8; 0x8],
+    pub rtc_alarm_page: [u8; 0x8],
+    pub rtc_free_page0: [u8; 0x8],
+    pub rtc_free_page1: [u8; 0x8],
     pub disabled: bool,
     pub rtc_last_latch: i64,
 }
