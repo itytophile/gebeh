@@ -5,26 +5,26 @@ use crate::{mbc::*, state::*};
 use core::ops::Deref;
 
 // TAMA5 register indices
-const GBTAMA5_BANK_LO: usize = 0;
-const GBTAMA5_BANK_HI: usize = 1;
-const GBTAMA5_ADDR_LO: usize = 2;
-const GBTAMA5_ADDR_HI: usize = 3;
-const GBTAMA5_WRITE_LO: usize = 4;
-const GBTAMA5_WRITE_HI: usize = 5;
-const GBTAMA5_READ_LO: usize = 6;
-const GBTAMA5_READ_HI: usize = 7;
-const GBTAMA5_ACTIVE: usize = 8;
-const GBTAMA5_MAX: usize = 9;
+const GBTAMA5_BANK_LO: u8 = 0;
+const GBTAMA5_BANK_HI: u8 = 1;
+const GBTAMA5_ADDR_LO: u8 = 2;
+const GBTAMA5_ADDR_HI: u8 = 3;
+const GBTAMA5_WRITE_LO: u8 = 4;
+const GBTAMA5_WRITE_HI: u8 = 5;
+const GBTAMA5_READ_LO: u8 = 6;
+const GBTAMA5_READ_HI: u8 = 7;
+const GBTAMA5_ACTIVE: u8 = 8;
+const GBTAMA5_MAX: u8 = 9;
 
 // RTC Page 0 registers (timer page)
-const GBTAMA6_RTC_PA0_SECOND_1: usize = 0;
-const GBTAMA6_RTC_PA0_SECOND_10: usize = 1;
-const GBTAMA6_RTC_PA0_MINUTE_1: usize = 2;
-const GBTAMA6_RTC_PA0_MINUTE_10: usize = 3;
-const GBTAMA6_RTC_PA0_HOUR_1: usize = 4;
-const GBTAMA6_RTC_PA0_HOUR_10: usize = 5;
+const GBTAMA6_RTC_PA0_SECOND_1: u8 = 0;
+const GBTAMA6_RTC_PA0_SECOND_10: u8 = 1;
+const GBTAMA6_RTC_PA0_MINUTE_1: u8 = 2;
+const GBTAMA6_RTC_PA0_MINUTE_10: u8 = 3;
+const GBTAMA6_RTC_PA0_HOUR_1: u8 = 4;
+const GBTAMA6_RTC_PA0_HOUR_10: u8 = 5;
 
-const GBTAMA6_RTC_PAGE: usize = 0x0F;
+const GBTAMA6_RTC_PAGE: u8 = 0x0F;
 
 // TAMA6 commands
 const GBTAMA6_DISABLE_TIMER: u8 = 0;
@@ -43,8 +43,8 @@ static TAMA6_RTC_MASK: [u8; 32] = [
 
 #[derive(Clone, Default)]
 pub struct Tama5State {
-    pub registers: [u8; GBTAMA5_MAX],
-    pub reg: usize,
+    pub registers: [u8; GBTAMA5_MAX as usize],
+    pub reg: u8,
     pub rom_bank: u8,
     pub rtc_timer_page: [u8; 16],
     pub rtc_alarm_page: [u8; 16],
@@ -72,12 +72,13 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
     }
 
     fn get_rtc_address(&self) -> u8 {
-        ((self.state.registers[GBTAMA5_ADDR_HI] << 4) & 0x10)
-            | self.state.registers[GBTAMA5_ADDR_LO]
+        ((self.state.registers[usize::from(GBTAMA5_ADDR_HI)] << 4) & 0x10)
+            | self.state.registers[usize::from(GBTAMA5_ADDR_LO)]
     }
 
     fn get_write_value(&self) -> u8 {
-        (self.state.registers[GBTAMA5_WRITE_HI] << 4) | self.state.registers[GBTAMA5_WRITE_LO]
+        (self.state.registers[usize::from(GBTAMA5_WRITE_HI)] << 4)
+            | self.state.registers[usize::from(GBTAMA5_WRITE_LO)]
     }
 
     fn handle_write(&mut self, value: u8) {
@@ -86,18 +87,18 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
             return;
         }
 
-        self.state.registers[self.state.reg] = value;
+        self.state.registers[usize::from(self.state.reg)] = value;
         let address = self.get_rtc_address();
         let out = self.get_write_value();
 
         match self.state.reg {
             GBTAMA5_BANK_LO | GBTAMA5_BANK_HI => {
-                self.state.rom_bank = self.state.registers[GBTAMA5_BANK_LO]
-                    | (self.state.registers[GBTAMA5_BANK_HI] << 4);
+                self.state.rom_bank = self.state.registers[usize::from(GBTAMA5_BANK_LO)]
+                    | (self.state.registers[usize::from(GBTAMA5_BANK_HI)] << 4);
             }
             GBTAMA5_WRITE_LO | GBTAMA5_WRITE_HI | GBTAMA5_ADDR_HI => {}
             GBTAMA5_ADDR_LO => {
-                match self.state.registers[GBTAMA5_ADDR_HI] >> 1 {
+                match self.state.registers[usize::from(GBTAMA5_ADDR_HI)] >> 1 {
                     0x0 => {
                         // RAM write
                         self.ram[usize::from(address)] = out;
@@ -110,51 +111,57 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
                         match address {
                             GBTAMA6_DISABLE_TIMER => {
                                 self.state.disabled = true;
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PAGE] &= 0x7;
-                                self.state.rtc_alarm_page[GBTAMA6_RTC_PAGE] &= 0x7;
-                                self.state.rtc_free_page0[GBTAMA6_RTC_PAGE] &= 0x7;
-                                self.state.rtc_free_page1[GBTAMA6_RTC_PAGE] &= 0x7;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0x7;
+                                self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0x7;
+                                self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] &= 0x7;
+                                self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] &= 0x7;
                             }
                             GBTAMA6_ENABLE_TIMER => {
                                 self.state.disabled = false;
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PA0_SECOND_1] = 0;
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PA0_SECOND_10] = 0;
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PAGE] |= 0x8;
-                                self.state.rtc_alarm_page[GBTAMA6_RTC_PAGE] |= 0x8;
-                                self.state.rtc_free_page0[GBTAMA6_RTC_PAGE] |= 0x8;
-                                self.state.rtc_free_page1[GBTAMA6_RTC_PAGE] |= 0x8;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_SECOND_1)] =
+                                    0;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_SECOND_10)] =
+                                    0;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] |= 0x8;
+                                self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] |= 0x8;
+                                self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] |= 0x8;
+                                self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] |= 0x8;
                             }
                             GBTAMA6_MINUTE_WRITE => {
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PA0_MINUTE_1] = out & 0xF;
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PA0_MINUTE_10] = out >> 4;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_MINUTE_1)] =
+                                    out & 0xF;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_MINUTE_10)] =
+                                    out >> 4;
                             }
                             GBTAMA6_HOUR_WRITE => {
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PA0_HOUR_1] = out & 0xF;
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PA0_HOUR_10] = out >> 4;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_HOUR_1)] =
+                                    out & 0xF;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_HOUR_10)] =
+                                    out >> 4;
                             }
                             GBTAMA6_DISABLE_ALARM => {
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PAGE] &= 0xB;
-                                self.state.rtc_alarm_page[GBTAMA6_RTC_PAGE] &= 0xB;
-                                self.state.rtc_free_page0[GBTAMA6_RTC_PAGE] &= 0xB;
-                                self.state.rtc_free_page1[GBTAMA6_RTC_PAGE] &= 0xB;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0xB;
+                                self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0xB;
+                                self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] &= 0xB;
+                                self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] &= 0xB;
                             }
                             GBTAMA6_ENABLE_ALARM => {
-                                self.state.rtc_timer_page[GBTAMA6_RTC_PAGE] |= 0x4;
-                                self.state.rtc_alarm_page[GBTAMA6_RTC_PAGE] |= 0x4;
-                                self.state.rtc_free_page0[GBTAMA6_RTC_PAGE] |= 0x4;
-                                self.state.rtc_free_page1[GBTAMA6_RTC_PAGE] |= 0x4;
+                                self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] |= 0x4;
+                                self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] |= 0x4;
+                                self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] |= 0x4;
+                                self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] |= 0x4;
                             }
                             _ => {}
                         }
                     }
                     0x4 => {
                         // RTC access
-                        let rtc_addr = self.state.registers[GBTAMA5_WRITE_LO];
-                        if usize::from(rtc_addr) >= GBTAMA6_RTC_PAGE {
+                        let rtc_addr = self.state.registers[usize::from(GBTAMA5_WRITE_LO)];
+                        if rtc_addr >= GBTAMA6_RTC_PAGE {
                             return;
                         }
-                        let out = self.state.registers[GBTAMA5_WRITE_HI];
-                        match self.state.registers[GBTAMA5_ADDR_LO] {
+                        let out = self.state.registers[usize::from(GBTAMA5_WRITE_HI)];
+                        match self.state.registers[usize::from(GBTAMA5_ADDR_LO)] {
                             0 => {
                                 let masked = out & TAMA6_RTC_MASK[usize::from(rtc_addr)];
                                 self.state.rtc_timer_page[usize::from(rtc_addr)] = masked;
@@ -196,80 +203,65 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
                     .copied()
                     .unwrap_or(0)
             }
-            EXTERNAL_RAM..WORK_RAM => {
-                // TAMA5 uses A000-A001 for register access
-                if (0xA000..0xA002).contains(&index) {
-                    // Register read - this requires mutable access for RTC latching
-                    // We need to handle this through interior mutability or a different approach
-                    // For now, return based on the current register state
-                    if index & 1 != 0 {
-                        // A001 - always returns 0xFF
-                        0xFF
-                    } else {
-                        // A000 - register read
-                        match self.state.reg {
-                            GBTAMA5_ACTIVE => 0xF1,
-                            GBTAMA5_READ_LO | GBTAMA5_READ_HI => {
-                                let address = self.get_rtc_address();
-                                let mut value: u8 = 0xF0;
+            0xA000 => match self.state.reg {
+                GBTAMA5_ACTIVE => 0xF1,
+                GBTAMA5_READ_LO | GBTAMA5_READ_HI => {
+                    let address = self.get_rtc_address();
+                    let mut value: u8 = 0xF0;
 
-                                match self.state.registers[GBTAMA5_ADDR_HI] >> 1 {
-                                    0x1 => {
-                                        value = self.ram[usize::from(address)];
-                                    }
-                                    0x2 => {
-                                        // RTC read - would need to latch here
-                                        match address {
-                                            GBTAMA6_MINUTE_READ => {
-                                                value = (self.state.rtc_timer_page
-                                                    [GBTAMA6_RTC_PA0_MINUTE_10]
-                                                    << 4)
-                                                    | self.state.rtc_timer_page
-                                                        [GBTAMA6_RTC_PA0_MINUTE_1];
-                                            }
-                                            GBTAMA6_HOUR_READ => {
-                                                value = (self.state.rtc_timer_page
-                                                    [GBTAMA6_RTC_PA0_HOUR_10]
-                                                    << 4)
-                                                    | self.state.rtc_timer_page
-                                                        [GBTAMA6_RTC_PA0_HOUR_1];
-                                            }
-                                            _ => {
-                                                value = address;
-                                            }
-                                        }
-                                    }
-                                    0x4 => {
-                                        if self.state.reg == GBTAMA5_READ_HI {
-                                            return 0xF1;
-                                        }
-                                        let rtc_addr = self.state.registers[GBTAMA5_WRITE_LO];
-                                        if rtc_addr > GBTAMA6_RTC_PAGE as u8 {
-                                            return 0xF0;
-                                        }
-                                        match self.state.registers[GBTAMA5_ADDR_LO] {
-                                            1 | 3 | 5 | 7 => {
-                                                value = self.state.rtc_timer_page
-                                                    [usize::from(rtc_addr)];
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                    _ => {}
-                                }
-
-                                if self.state.reg == GBTAMA5_READ_HI {
-                                    value >>= 4;
-                                }
-                                value | 0xF0
-                            }
-                            _ => 0xF1,
+                    match self.state.registers[usize::from(GBTAMA5_ADDR_HI)] >> 1 {
+                        0x1 => {
+                            value = self.ram[usize::from(address)];
                         }
+                        0x2 => {
+                            // RTC read - would need to latch here
+                            match address {
+                                GBTAMA6_MINUTE_READ => {
+                                    value = (self.state.rtc_timer_page
+                                        [usize::from(GBTAMA6_RTC_PA0_MINUTE_10)]
+                                        << 4)
+                                        | self.state.rtc_timer_page
+                                            [usize::from(GBTAMA6_RTC_PA0_MINUTE_1)];
+                                }
+                                GBTAMA6_HOUR_READ => {
+                                    value = (self.state.rtc_timer_page
+                                        [usize::from(GBTAMA6_RTC_PA0_HOUR_10)]
+                                        << 4)
+                                        | self.state.rtc_timer_page
+                                            [usize::from(GBTAMA6_RTC_PA0_HOUR_1)];
+                                }
+                                _ => {
+                                    value = address;
+                                }
+                            }
+                        }
+                        0x4 => {
+                            if self.state.reg == GBTAMA5_READ_HI {
+                                return 0xF1;
+                            }
+                            let rtc_addr = self.state.registers[usize::from(GBTAMA5_WRITE_LO)];
+                            if rtc_addr > GBTAMA6_RTC_PAGE {
+                                return 0xF0;
+                            }
+                            if core::matches!(
+                                self.state.registers[usize::from(GBTAMA5_ADDR_LO)],
+                                1 | 3 | 5 | 7
+                            ) {
+                                value = self.state.rtc_timer_page[usize::from(rtc_addr)];
+                            }
+                        }
+                        _ => {}
                     }
-                } else {
-                    self.ram[usize::from(index) - usize::from(EXTERNAL_RAM)]
+
+                    if self.state.reg == GBTAMA5_READ_HI {
+                        value >>= 4;
+                    }
+                    value | 0xF0
                 }
-            }
+                _ => 0xF1,
+            },
+            0xA001 => 0xff,
+            0xA002..WORK_RAM => self.ram[usize::from(index) - usize::from(EXTERNAL_RAM)],
             _ => panic!(),
         }
     }
@@ -279,7 +271,7 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
             0xA000..0xA002 => {
                 if index & 1 != 0 {
                     // A001 - Register select
-                    self.state.reg = usize::from(value);
+                    self.state.reg = value;
                 } else {
                     // A000 - Register write
                     self.handle_write(value);
@@ -318,15 +310,15 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
         self.state.rtc_last_latch =
             i64::from_le_bytes(additional_data[32..40].try_into().unwrap_or([0; 8]));
 
-        self.state.disabled = (self.state.rtc_timer_page[GBTAMA6_RTC_PAGE] & 0x8) == 0;
+        self.state.disabled = (self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] & 0x8) == 0;
 
-        self.state.rtc_timer_page[GBTAMA6_RTC_PAGE] &= 0xC;
-        self.state.rtc_alarm_page[GBTAMA6_RTC_PAGE] &= 0xC;
-        self.state.rtc_alarm_page[GBTAMA6_RTC_PAGE] |= 1;
-        self.state.rtc_free_page0[GBTAMA6_RTC_PAGE] &= 0xC;
-        self.state.rtc_free_page0[GBTAMA6_RTC_PAGE] |= 2;
-        self.state.rtc_free_page1[GBTAMA6_RTC_PAGE] &= 0xC;
-        self.state.rtc_free_page1[GBTAMA6_RTC_PAGE] |= 3;
+        self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
+        self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
+        self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] |= 1;
+        self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
+        self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] |= 2;
+        self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
+        self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] |= 3;
     }
 
     fn get_ram_to_save(&self) -> Option<&[u8]> {
