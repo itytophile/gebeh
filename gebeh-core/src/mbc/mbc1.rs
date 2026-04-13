@@ -123,8 +123,6 @@ impl<T: Deref<Target = [u8]>> Mbc for Mbc1<T> {
             }
             0x4000..0x6000 => self.advanced_bank = value & 0x03,
             0x6000..0x8000 => {
-                log::info!("banking modo");
-
                 // https://gbdev.io/pandocs/MBC1.html#60007fff--banking-mode-select-write-only
                 // Citation: If the cart is not large enough to use the 2-bit register (≤ 8 KiB RAM and ≤ 512 KiB ROM)
                 // this mode select has no observable effect
