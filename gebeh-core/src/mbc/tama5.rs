@@ -109,7 +109,7 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
         }
     }
 
-    fn get_rtc_address(&self) -> u8 {
+    fn get_tama5_address(&self) -> u8 {
         ((self.state.registers[usize::from(GBTAMA5_ADDR_HI)] << 4) & 0x10)
             | self.state.registers[usize::from(GBTAMA5_ADDR_LO)]
     }
@@ -126,7 +126,7 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
         }
 
         self.state.registers[usize::from(self.state.reg)] = value;
-        let address = self.get_rtc_address();
+        let address = self.get_tama5_address();
         let out = self.get_write_value();
 
         match self.state.reg {
@@ -225,7 +225,7 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
     }
 
     fn handle_read(&self) -> u8 {
-        let address = self.get_rtc_address();
+        let address = self.get_tama5_address();
         let mut value: u8 = 0xF0;
 
         match self.state.registers[usize::from(GBTAMA5_ADDR_HI)] >> 1 {
