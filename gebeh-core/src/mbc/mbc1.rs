@@ -24,7 +24,8 @@ impl<T: Deref<Target = [u8]>> Mbc1<T> {
             rom,
             rom_bank: NonZeroU8::MIN,
             advanced_bank: 0,
-            ram: [0; 0x8000],
+            // Initial D Gaiden assumes that the ram is filled with 0xff
+            ram: [0xff; 0x8000],
             ram_enabled: false,
             banking_mode: BankingMode::Simple,
         }

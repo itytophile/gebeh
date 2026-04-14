@@ -11,6 +11,8 @@ fn dmg_sound(name: &str) {
     .unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    // we have to clear the ram to have a 0 terminated string in ram...
+    mbc.load_saved_ram(&[0; 0x8000]);
     let mut machine = Emulator::default();
 
     while mbc.get_ram_to_save().unwrap()[0] == 0x80

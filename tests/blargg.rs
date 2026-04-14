@@ -49,6 +49,8 @@ fn mem_timing_2() {
     let rom = std::fs::read("./downloads/gb-test-roms-master/mem_timing-2/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    // we have to clear the ram to have a 0 terminated string in ram...
+    mbc.load_saved_ram(&[0; 0x8000]);
     let mut machine = Emulator::default();
 
     let output = loop {
