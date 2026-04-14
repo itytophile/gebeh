@@ -230,18 +230,13 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
         match index {
             ROM_BANK..SWITCHABLE_ROM_BANK => self.rom[usize::from(index)],
             SWITCHABLE_ROM_BANK..VIDEO_RAM => {
-                let bank = if self.state.rom_bank == 0 {
-                    1
-                } else {
-                    self.state.rom_bank
-                };
-                let offset = usize::from(bank) * usize::from(ROM_BANK_SIZE);
+                let offset = usize::from(self.state.rom_bank) * usize::from(ROM_BANK_SIZE);
                 self.rom
-                    .get(offset + (index - 0x4000) as usize)
+                    .get(offset + usize::from(index - 0x4000))
                     .copied()
-                    .unwrap_or(0)
+                    .unwrap_or(0xff)
             }
-            0xA000 => match self.state.reg {
+            EXTERNAL_RAM => match self.state.reg {
                 GBTAMA5_ACTIVE => 0xF1,
                 GBTAMA5_READ_LO | GBTAMA5_READ_HI => {
                     let address = self.get_rtc_address();
@@ -305,20 +300,15 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
     }
 
     fn write(&mut self, index: u16, value: u8) {
-        match index {
-            0xA000..0xA002 => {
-                if index & 1 != 0 {
-                    // A001 - Register select
-                    self.state.reg = value;
-                } else {
-                    // A000 - Register write
-                    self.handle_write(value);
-                }
-            }
-            0xA002..WORK_RAM => {
-                self.ram[usize::from(index) - usize::from(EXTERNAL_RAM)] = value;
-            }
-            _ => {}
+        // we only handle addresses in A000..B000?
+        if index >> 13 != 0x5 {
+            return;
+        }
+        
+        if index & 1 == 1 {
+            self.state.reg = value
+        } else {
+            self.handle_write(value)
         }
     }
 
