@@ -1,6 +1,6 @@
 // originally from https://github.com/mgba-emu/mgba/blob/79fa503d63a2ebb56487d02a9e0d74d455d0149a/src/gb/mbc/tama5.c
 // original license: https://www.mozilla.org/en-US/MPL/2.0/
-// used GLM 5 to first convert the C code into Rust
+// used GLM 5 to first convert the C code into Rust before fixing hallucinated shenanigans
 
 use crate::{mbc::*, state::*};
 use core::ops::Deref;
@@ -12,7 +12,7 @@ const GBTAMA5_WRITE_HI: u8 = 0x5;
 const GBTAMA5_ADDR_HI: u8 = 0x6;
 const GBTAMA5_ADDR_LO: u8 = 0x7;
 const GBTAMA5_MAX: u8 = 0x8;
-const GBTAMA5_ACTIVE: u8 = 0xA;
+// const GBTAMA5_ACTIVE: u8 = 0xA;
 const GBTAMA5_READ_LO: u8 = 0xC;
 const GBTAMA5_READ_HI: u8 = 0xD;
 
@@ -223,6 +223,54 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
             _ => {}
         }
     }
+
+    fn handle_read(&self) -> u8 {
+        let address = self.get_rtc_address();
+        let mut value: u8 = 0xF0;
+
+        match self.state.registers[usize::from(GBTAMA5_ADDR_HI)] >> 1 {
+            0x1 => {
+                value = self.ram[usize::from(address)];
+            }
+            0x2 => {
+                // RTC read - would need to latch here
+                match address {
+                    GBTAMA6_MINUTE_READ => {
+                        value = (self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_MINUTE_10)]
+                            << 4)
+                            | self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_MINUTE_1)];
+                    }
+                    GBTAMA6_HOUR_READ => {
+                        value = (self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_HOUR_10)]
+                            << 4)
+                            | self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PA0_HOUR_1)];
+                    }
+                    _ => {
+                        value = address;
+                    }
+                }
+            }
+            0x4 => {
+                if self.state.reg != GBTAMA5_READ_HI {
+                    let rtc_addr = self.state.registers[usize::from(GBTAMA5_WRITE_LO)];
+                    if rtc_addr > GBTAMA6_RTC_PAGE {
+                        value = 0
+                    } else if core::matches!(
+                        self.state.registers[usize::from(GBTAMA5_ADDR_LO)],
+                        1 | 3 | 5 | 7
+                    ) {
+                        value = self.state.rtc_timer_page[usize::from(rtc_addr)];
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if self.state.reg == GBTAMA5_READ_HI {
+            value >>= 4;
+        }
+        value | 0xF0
+    }
 }
 
 impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
@@ -236,66 +284,16 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
                     .copied()
                     .unwrap_or(0xff)
             }
-            EXTERNAL_RAM => match self.state.reg {
-                GBTAMA5_ACTIVE => 0xF1,
-                GBTAMA5_READ_LO | GBTAMA5_READ_HI => {
-                    let address = self.get_rtc_address();
-                    let mut value: u8 = 0xF0;
-
-                    match self.state.registers[usize::from(GBTAMA5_ADDR_HI)] >> 1 {
-                        0x1 => {
-                            value = self.ram[usize::from(address)];
-                        }
-                        0x2 => {
-                            // RTC read - would need to latch here
-                            match address {
-                                GBTAMA6_MINUTE_READ => {
-                                    value = (self.state.rtc_timer_page
-                                        [usize::from(GBTAMA6_RTC_PA0_MINUTE_10)]
-                                        << 4)
-                                        | self.state.rtc_timer_page
-                                            [usize::from(GBTAMA6_RTC_PA0_MINUTE_1)];
-                                }
-                                GBTAMA6_HOUR_READ => {
-                                    value = (self.state.rtc_timer_page
-                                        [usize::from(GBTAMA6_RTC_PA0_HOUR_10)]
-                                        << 4)
-                                        | self.state.rtc_timer_page
-                                            [usize::from(GBTAMA6_RTC_PA0_HOUR_1)];
-                                }
-                                _ => {
-                                    value = address;
-                                }
-                            }
-                        }
-                        0x4 => {
-                            if self.state.reg == GBTAMA5_READ_HI {
-                                return 0xF1;
-                            }
-                            let rtc_addr = self.state.registers[usize::from(GBTAMA5_WRITE_LO)];
-                            if rtc_addr > GBTAMA6_RTC_PAGE {
-                                return 0xF0;
-                            }
-                            if core::matches!(
-                                self.state.registers[usize::from(GBTAMA5_ADDR_LO)],
-                                1 | 3 | 5 | 7
-                            ) {
-                                value = self.state.rtc_timer_page[usize::from(rtc_addr)];
-                            }
-                        }
-                        _ => {}
-                    }
-
-                    if self.state.reg == GBTAMA5_READ_HI {
-                        value >>= 4;
-                    }
-                    value | 0xF0
+            VIDEO_RAM..EXTERNAL_RAM => panic!(),
+            EXTERNAL_RAM.. => {
+                if index & 1 == 1 {
+                    return 0xff;
                 }
-                _ => 0xF1,
-            },
-            0xA001 => 0xff,
-            0xA002..WORK_RAM => self.ram[usize::from(index) - usize::from(EXTERNAL_RAM)],
-            _ => panic!(),
+                match self.state.reg {
+                    GBTAMA5_READ_LO | GBTAMA5_READ_HI => self.handle_read(),
+                    _ => 0xF1,
+                }
+            }
         }
     }
 
