@@ -3,6 +3,7 @@ mod mbc1;
 mod mbc1m;
 mod mbc3;
 mod mbc5;
+mod tama5;
 
 use core::ops::Deref;
 
@@ -11,6 +12,7 @@ pub use mbc1::*;
 pub use mbc1m::*;
 pub use mbc3::*;
 pub use mbc5::*;
+pub use tama5::*;
 
 // this trait will make people able to build alien MBCs.
 // Be careful about monomorphization
@@ -60,6 +62,7 @@ pub enum CartridgeType {
     Mbc3RamBattery,
     Mbc5,
     Mbc5RamBattery,
+    Tama5,
     Huc1,
 }
 
@@ -73,6 +76,8 @@ impl CartridgeType {
                 | Mbc3TimerRamBattery
                 | Mbc3RamBattery
                 | Mbc5RamBattery
+                | Tama5
+                | Huc1
         )
     }
 }
@@ -94,6 +99,7 @@ impl TryFrom<u8> for CartridgeType {
             0x13 => Ok(Self::Mbc3RamBattery),
             0x19 => Ok(Self::Mbc5),
             0x1b => Ok(Self::Mbc5RamBattery),
+            0xfd => Ok(Self::Tama5),
             0xff => Ok(Self::Huc1),
             _ => Err(value),
         }
