@@ -304,7 +304,7 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
         if index >> 13 != 0x5 {
             return;
         }
-        
+
         if index & 1 == 1 {
             self.state.reg = value
         } else {
@@ -317,61 +317,16 @@ impl<T: Deref<Target = [u8]>> Mbc for Tama5<T> {
         self.ram[..min].copy_from_slice(&save[..min]);
     }
 
-    fn load_additional_data(&mut self, additional_data: &[u8]) {
-        // Expected format: 32 bytes (4 pages * 8 bytes each) + 8 bytes for latched time
-        if additional_data.len() < 40 {
-            return;
-        }
-
-        for i in 0..8 {
-            self.state.rtc_timer_page[i * 2] = additional_data[i] & 0xF;
-            self.state.rtc_timer_page[i * 2 + 1] = additional_data[i] >> 4;
-            self.state.rtc_alarm_page[i * 2] = additional_data[i + 8] & 0xF;
-            self.state.rtc_alarm_page[i * 2 + 1] = additional_data[i + 8] >> 4;
-            self.state.rtc_free_page0[i * 2] = additional_data[i + 16] & 0xF;
-            self.state.rtc_free_page0[i * 2 + 1] = additional_data[i + 16] >> 4;
-            self.state.rtc_free_page1[i * 2] = additional_data[i + 24] & 0xF;
-            self.state.rtc_free_page1[i * 2 + 1] = additional_data[i + 24] >> 4;
-        }
-
-        // Load latched Unix time (little-endian 64-bit)
-        self.state.rtc_last_latch =
-            i64::from_le_bytes(additional_data[32..40].try_into().unwrap_or([0; 8]));
-
-        self.state.disabled = (self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] & 0x8) == 0;
-
-        self.state.rtc_timer_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
-        self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
-        self.state.rtc_alarm_page[usize::from(GBTAMA6_RTC_PAGE)] |= 1;
-        self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
-        self.state.rtc_free_page0[usize::from(GBTAMA6_RTC_PAGE)] |= 2;
-        self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] &= 0xC;
-        self.state.rtc_free_page1[usize::from(GBTAMA6_RTC_PAGE)] |= 3;
+    fn load_additional_data(&mut self, _: &[u8]) {
+        todo!()
     }
 
     fn get_ram_to_save(&self) -> Option<&[u8]> {
         Some(&self.ram)
     }
 
-    fn get_additional_data_to_save(&self, buffer: &mut [u8]) -> usize {
-        if buffer.len() < 40 {
-            panic!("Buffer too small for TAMA5 save data");
-        }
-
-        for i in 0..8 {
-            buffer[i] = self.state.rtc_timer_page[i * 2] & 0xF
-                | (self.state.rtc_timer_page[i * 2 + 1] << 4);
-            buffer[i + 8] = self.state.rtc_alarm_page[i * 2] & 0xF
-                | (self.state.rtc_alarm_page[i * 2 + 1] << 4);
-            buffer[i + 16] = self.state.rtc_free_page0[i * 2] & 0xF
-                | (self.state.rtc_free_page0[i * 2 + 1] << 4);
-            buffer[i + 24] = self.state.rtc_free_page1[i * 2] & 0xF
-                | (self.state.rtc_free_page1[i * 2 + 1] << 4);
-        }
-
-        buffer[32..40].copy_from_slice(&self.state.rtc_last_latch.to_le_bytes());
-
-        40
+    fn get_additional_data_to_save(&self, _: &mut [u8]) -> usize {
+        todo!()
     }
 
     fn get_rom(&self) -> &[u8] {
