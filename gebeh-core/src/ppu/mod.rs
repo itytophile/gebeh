@@ -323,7 +323,7 @@ impl Ppu {
             && !matches!(self.step, PpuStep::VerticalBlankScanline { .. })
         {
             // https://gbdev.io/pandocs/LCDC.html#lcdc7--lcd-enable
-            panic!("LCD turned off outside of VBLANK (may damage hardware irl)")
+            log::warn!("LCD turned off outside of VBLANK (may damage hardware irl)")
         }
         // if off -> on
         if !self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
