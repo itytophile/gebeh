@@ -4,6 +4,7 @@ mod mbc1m;
 mod mbc3;
 mod mbc5;
 mod tama5;
+mod wisdom_tree;
 
 use core::ops::Deref;
 
@@ -13,6 +14,7 @@ pub use mbc1m::*;
 pub use mbc3::*;
 pub use mbc5::*;
 pub use tama5::*;
+pub use wisdom_tree::*;
 
 // this trait will make people able to build alien MBCs.
 // Be careful about monomorphization
