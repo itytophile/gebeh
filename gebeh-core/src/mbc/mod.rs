@@ -51,7 +51,7 @@ impl<T: Deref<Target = [u8]>> Mbc for T {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CartridgeType {
     RomOnly,
     Mbc1,

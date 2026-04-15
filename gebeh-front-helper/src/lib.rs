@@ -52,7 +52,7 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
 
-    if is_wisdom_tree(rom.deref()) {
+    if cartridge_type == CartridgeType::RomOnly && is_wisdom_tree(rom.deref()) {
         return Some((cartridge_type, Box::new(WisdomTree::new(rom))));
     }
 
@@ -86,7 +86,7 @@ pub fn get_mbc_send<
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + Send + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
 
-    if is_wisdom_tree(rom.deref()) {
+    if cartridge_type == CartridgeType::RomOnly && is_wisdom_tree(rom.deref()) {
         return Some((cartridge_type, Box::new(WisdomTree::new(rom))));
     }
 
