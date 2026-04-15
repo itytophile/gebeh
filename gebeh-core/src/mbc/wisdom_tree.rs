@@ -3,7 +3,7 @@ use crate::{mbc::*, state::*};
 use core::ops::Deref;
 
 #[derive(Clone)]
-struct WisdomTree<T> {
+pub struct WisdomTree<T> {
     pub(crate) rom: T,
     pub(crate) rom_bank: u8,
 }
@@ -30,9 +30,9 @@ impl<T: Deref<Target = [u8]>> Mbc for WisdomTree<T> {
     fn write(&mut self, index: u16, _: u8) {
         // Citation: use the A7-A0 address lines for selecting a bank instead of the data lines
         // Thus, the value you write is ignored, and the lower 8 bits of the address is used.
-        // For example, to select bank $XX, you would write any value to address $YYXX, where $YY is in the range $00-$7F. 
+        // For example, to select bank $XX, you would write any value to address $YYXX, where $YY is in the range $00-$7F.
         match index {
-            ROM_BANK..VIDEO_RAM => self.rom_bank = u8::try_from(index >> 8).unwrap(),
+            ROM_BANK..VIDEO_RAM => self.rom_bank = index as u8,
             EXTERNAL_RAM..WORK_RAM => {}
             _ => panic!(),
         }

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, ops::Deref};
 
 use gebeh_core::mbc::{
-    CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc, Tama5,
+    CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_SIZE_HEADER, Rtc, Tama5, WisdomTree,
 };
 
 pub type EasyMbc = Box<dyn CloneMbc<'static>>;
@@ -39,10 +39,23 @@ fn is_multicart(rom: &[u8]) -> bool {
             >= MINIMUM_GAMES_COUNT_IN_MULTICART
 }
 
+pub fn is_wisdom_tree(rom: &[u8]) -> bool {
+    // https://gbdev.gg8.se/wiki/articles/Memory_Bank_Controllers#Wisdom_Tree
+    const NEEDLES: [&[u8]; 2] = [b"WISDOM TREE", b"WISDOM\0TREE"];
+    NEEDLES
+        .iter()
+        .any(|needle| rom.windows(needle.len()).any(|w| w == *needle))
+}
+
 pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clone + 'a>(
     rom: T,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
+
+    if is_wisdom_tree(rom.deref()) {
+        return Some((cartridge_type, Box::new(WisdomTree::new(rom))));
+    }
+
     let mbc: Box<dyn CloneMbc<'a>> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
@@ -72,6 +85,11 @@ pub fn get_mbc_send<
     rom: T,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + Send + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
+
+    if is_wisdom_tree(rom.deref()) {
+        return Some((cartridge_type, Box::new(WisdomTree::new(rom))));
+    }
+
     let mbc: Box<dyn CloneMbc<'a> + Send> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
