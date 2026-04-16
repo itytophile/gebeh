@@ -12,7 +12,7 @@ enum RtcSelect {
 
 pub const MAX_RTC_SECONDS: u32 = 511 * 24 * 60 * 60 + 23 * 60 * 60 + 59 * 60 + 59;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct RtcRegisters {
     pub seconds: u8,
     pub minutes: u8,
@@ -112,7 +112,9 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                         self.ram[usize::from(u16::from(bank) * RAM_BANK_SIZE)
                             + (index - 0xa000) as usize]
                     }
-                    RamRtcSelect::Rtc(rtc_select) => match rtc_select {
+                    RamRtcSelect::Rtc(rtc_select) => {
+                        log::info!("Reading RTC {:?}", self.rtc_registers);
+                        match rtc_select {
                         Seconds => self.rtc_registers.seconds,
                         Minutes => self.rtc_registers.minutes,
                         Hours => self.rtc_registers.hours,
@@ -120,7 +122,7 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                         Upper1bitDayCounterCarryHalt => {
                             self.rtc_registers.upper_1bit_day_counter_carry_halt | 0b01111100
                         }
-                    },
+                    }},
                 }
             }
             _ => panic!(),
@@ -156,6 +158,7 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
             }
             0x6000..VIDEO_RAM => {
                 if self.latch_reg == 0 && value == 1 {
+                    log::info!("Latch");
                     self.rtc_registers = self.rtc.get_clock_data()
                 }
                 self.latch_reg = value;
@@ -197,7 +200,6 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
     // u16 -> days, u8 -> hours, u8 -> minutes
     fn load_additional_data(&mut self, additional_data: &[u8]) {
         self.rtc.deserialize(additional_data);
-        self.rtc_registers = self.rtc.get_clock_data();
     }
 
     fn get_ram_to_save(&self) -> Option<&[u8]> {
