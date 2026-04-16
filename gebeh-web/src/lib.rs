@@ -47,8 +47,9 @@ impl WebEmulatorInner {
     }
 
     pub fn new(
-        rom: Vec<u8>,
-        save: Option<Vec<u8>>,
+        rom: Box<[u8]>,
+        save: Option<Box<[u8]>>,
+        extra: Option<Box<[u8]>>,
         sample_rate: f32,
         seconds_since_epoch: u32,
         audio_time: u32,
@@ -57,16 +58,19 @@ impl WebEmulatorInner {
         let start_time = seconds_since_epoch - audio_time;
         let seconds_since_epoch = Rc::new(Cell::new(u64::from(seconds_since_epoch)));
         // rc to easily clone the mbc for the rollback netcode
-        let Some((cartridge_type, mut mbc)) = get_mbc(
-            Rc::from(rom.into_boxed_slice()),
-            AudioRtc::new(seconds_since_epoch.clone()),
-        ) else {
+        let Some((cartridge_type, mut mbc)) =
+            get_mbc(Rc::from(rom), AudioRtc::new(seconds_since_epoch.clone()))
+        else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return None;
         };
         if let Some(save) = save {
             console::log_1(&JsValue::from_str("Loading save"));
             mbc.load_saved_ram(&save);
+        }
+        if let Some(extra) = extra {
+            console::log_1(&JsValue::from_str("Loading extra"));
+            mbc.load_additional_data(&extra);
         }
         console::log_1(&JsValue::from_str("Rom loaded!"));
 
@@ -101,7 +105,8 @@ impl WebEmulatorInner {
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
 
-        self.seconds_since_epoch.set(self.start_time + u64::from(audio_time));
+        self.seconds_since_epoch
+            .set(self.start_time + u64::from(audio_time));
 
         for (left, right) in left.iter_mut().zip(right.iter_mut()) {
             let mut cycles = base;
@@ -166,8 +171,16 @@ impl WebEmulatorInner {
             return None;
         }
 
+        let mut extra_buffer = [0; 64];
+        let count = self.mbc.get_additional_data_to_save(&mut extra_buffer);
+
         Some(Save {
             ram: self.mbc.get_ram_to_save()?.into(),
+            extra: if count > 0 {
+                Some(extra_buffer[0..count].into())
+            } else {
+                None
+            },
             game_title: get_title_from_rom(self.mbc.get_rom()).to_owned(),
         })
     }
@@ -184,13 +197,21 @@ impl WebEmulator {
 
     pub fn init_emulator(
         &mut self,
-        rom: Vec<u8>,
-        save: Option<Vec<u8>>,
+        rom: Box<[u8]>,
+        save: Option<Box<[u8]>>,
+        extra: Option<Box<[u8]>>,
         sample_rate: f32,
         seconds_since_epoch: u32,
         audio_time: u32,
     ) {
-        self.inner = WebEmulatorInner::new(rom, save, sample_rate, seconds_since_epoch, audio_time)
+        self.inner = WebEmulatorInner::new(
+            rom,
+            save,
+            extra,
+            sample_rate,
+            seconds_since_epoch,
+            audio_time,
+        )
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
@@ -318,6 +339,7 @@ impl WebEmulator {
 #[wasm_bindgen]
 pub struct Save {
     ram: Box<[u8]>,
+    extra: Option<Box<[u8]>>,
     game_title: String,
 }
 
@@ -325,6 +347,10 @@ pub struct Save {
 impl Save {
     pub fn get_ram(&self) -> Box<[u8]> {
         self.ram.clone()
+    }
+
+    pub fn get_extra(&self) -> Option<Box<[u8]>> {
+        self.extra.clone()
     }
 
     pub fn get_game_title(&self) -> String {

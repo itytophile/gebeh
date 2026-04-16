@@ -1,5 +1,5 @@
 import { AUDIO_PROCESSOR_NAME, type FromMainMessage, type FromNodeMessage } from "./common.ts";
-import { writeSave } from "./saves";
+import { writeExtra, writeSave } from "./saves";
 import workletURL from "./worklet.ts?worker&url";
 import wasm from "../pkg/gebeh_web_bg.wasm?url";
 
@@ -31,6 +31,9 @@ async function initNode(): Promise<AudioWorkletNode> {
         }
         case "save": {
           await writeSave(data.title, data.buffer);
+          if (data.extra) {
+            await writeExtra(data.title, data.extra);
+          }
         }
       }
     });

@@ -1,5 +1,5 @@
 import type { FromMainMessage } from "./common";
-import { getSave } from "./saves";
+import { getExtra, getSave } from "./saves";
 import { useState } from "react";
 import FileInput from "./bulma/file-input";
 
@@ -23,15 +23,26 @@ function RomInput({ port, onLoad }: { port: MessagePort; onLoad?: () => void }) 
       setFileName(file.name);
       const bytes = new Uint8Array(await file.arrayBuffer());
 
-      const save = await getSave(getTitleFromRom(new Uint8Array(bytes)));
+      const title = getTitleFromRom(bytes);
+      const save = await getSave(title);
+      const extra = await getExtra(title);
+      const transfer: ArrayBufferLike[] = [bytes.buffer];
+      if (save) {
+        transfer.push(save.buffer);
+      }
+      if (extra) {
+        transfer.push(extra.buffer);
+      }
+
       port.postMessage(
         {
           type: "rom",
           bytes,
           save,
+          extra,
           seconds_since_epoch: Date.now() / 1000,
         } satisfies FromMainMessage,
-        save ? [bytes.buffer, save.buffer] : [bytes.buffer],
+        transfer,
       );
       onLoad?.();
     } else {

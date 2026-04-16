@@ -42,7 +42,8 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           console.log({ sampleRate });
           this.emulator?.init_emulator(
             new Uint8Array(data.bytes),
-            data.save ? new Uint8Array(data.save) : undefined,
+            data.save,
+            data.extra,
             sampleRate,
             data.seconds_since_epoch,
             currentTime,
@@ -197,13 +198,19 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       const save = emulator.get_save();
       if (save) {
         const ram = save.get_ram();
+        const extra = save.get_extra();
+        const transfer = [ram.buffer];
+        if (extra) {
+          transfer.push(extra.buffer);
+        }
         this.port.postMessage(
           {
             type: "save",
             buffer: ram,
+            extra,
             title: save.get_game_title(),
           } satisfies FromNodeMessage,
-          [ram.buffer],
+          transfer,
         );
       }
     }

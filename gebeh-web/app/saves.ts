@@ -25,6 +25,10 @@ export async function writeSave(title: string, buffer: Uint8Array) {
   await waitRequest(request);
 }
 
+export function writeExtra(title: string, buffer: Uint8Array) {
+  return writeSave(title + "_EXTRA", buffer);
+}
+
 export async function deleteSave(title: string) {
   const database = await DATABASE;
   const request = database
@@ -44,7 +48,7 @@ export async function getKeys(): Promise<IDBValidKey[]> {
   return request.result;
 }
 
-export async function getSave(title: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
+export async function getSave(title: string): Promise<Uint8Array | undefined> {
   const database = await DATABASE;
   const request = database
     .transaction(OBJECT_STORE_NAME, "readonly")
@@ -62,6 +66,10 @@ export async function getSave(title: string): Promise<Uint8Array<ArrayBuffer> | 
   }
 
   throw new Error("Unknown object from db for title " + title);
+}
+
+export function getExtra(title: string): Promise<Uint8Array | undefined> {
+  return getSave(title + "_EXTRA");
 }
 
 function waitRequest(request: IDBRequest): Promise<void> {
