@@ -8,7 +8,7 @@ use gebeh_network::{RollbackSerial, message::SerialMessage};
 fn home_made(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
     let rom = rom.as_slice();
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut emulator = Emulator::default();
 
     loop {
@@ -32,7 +32,7 @@ fn home_made_ppu(name: &str) {
     reader.next_frame(&mut buf).unwrap();
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
     let rom = rom.as_slice();
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
@@ -76,9 +76,9 @@ fn serial_test(name: &str) {
     let rom = &*std::fs::read(format!("./gebeh-test-roms/{name}.gb"))
         .unwrap()
         .leak();
-    let (_, mut slave_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut slave_mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut slave_emulator = Emulator::default();
-    let (_, mut master_mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut master_mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut master_emulator = Emulator::default();
 
     let mut slave_rollback = RollbackSerial::default();

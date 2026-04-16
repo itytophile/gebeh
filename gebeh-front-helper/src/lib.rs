@@ -50,8 +50,9 @@ pub fn is_wisdom_tree(cartridge_type: CartridgeType, rom: &[u8]) -> bool {
             .any(|needle| rom.windows(needle.len()).any(|w| w == *needle))
 }
 
-pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clone + 'a>(
+pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Clone + 'a>(
     rom: T,
+    rtc: U,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
 
@@ -72,7 +73,7 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
         | CartridgeType::Mbc3Ram
         | CartridgeType::Mbc3RamBattery
         | CartridgeType::Mbc3TimerBattery
-        | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, U::default())),
+        | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, rtc)),
         CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
         CartridgeType::Tama5 => Box::new(Tama5::new(rom)),
         CartridgeType::Huc1 => Box::new(Huc1::new(rom)),
@@ -80,12 +81,9 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Default + Clon
     Some((cartridge_type, mbc))
 }
 
-pub fn get_mbc_send<
-    'a,
-    T: Deref<Target = [u8]> + Clone + Send + 'a,
-    U: Rtc + Default + Send + Clone + 'a,
->(
+pub fn get_mbc_send<'a, T: Deref<Target = [u8]> + Clone + Send + 'a, U: Rtc + Send + Clone + 'a>(
     rom: T,
+    rtc: U,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + Send + 'a>)> {
     let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
 
@@ -106,7 +104,7 @@ pub fn get_mbc_send<
         | CartridgeType::Mbc3Ram
         | CartridgeType::Mbc3RamBattery
         | CartridgeType::Mbc3TimerBattery
-        | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, U::default())),
+        | CartridgeType::Mbc3TimerRamBattery => Box::new(Mbc3::new(rom, rtc)),
         CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
         CartridgeType::Tama5 => Box::new(Tama5::new(rom)),
         CartridgeType::Huc1 => Box::new(Huc1::new(rom)),

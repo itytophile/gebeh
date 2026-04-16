@@ -16,7 +16,7 @@ fn instr_timing() {
     let rom =
         std::fs::read("./downloads/gb-test-roms-master/instr_timing/instr_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut machine = Emulator::default();
 
     let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, mbc.as_mut())
@@ -33,7 +33,7 @@ fn mem_timing() {
 
     let rom = std::fs::read("./downloads/gb-test-roms-master/mem_timing/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut machine = Emulator::default();
 
     let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, mbc.as_mut())
@@ -48,7 +48,7 @@ fn mem_timing_2() {
     const EXPECTED: &str = "mem_timing\n\n01:ok  02:ok  03:ok  \n\nPassed\n";
     let rom = std::fs::read("./downloads/gb-test-roms-master/mem_timing-2/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     // we have to clear the ram to have a 0 terminated string in ram...
     mbc.load_saved_ram(&[0; 0x8000]);
     let mut machine = Emulator::default();

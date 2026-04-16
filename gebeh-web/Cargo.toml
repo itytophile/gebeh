@@ -17,7 +17,6 @@ wasm-bindgen = "0.2.45"
 gebeh-core = { path = "../gebeh-core" }
 gebeh-front-helper = { path = "../gebeh-front-helper" }
 gebeh-network = { path = "../gebeh-network" }
-web-time = "1.1.0"
 console_error_panic_hook = "0.1.7"
 wasm-logger = "0.2.0"
 log = "0.4.29"

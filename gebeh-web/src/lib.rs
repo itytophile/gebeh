@@ -47,8 +47,7 @@ impl WebEmulatorInner {
     pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
         // rc to easily clone the mbc for the rollback netcode
-        let Some((cartridge_type, mut mbc)) =
-            get_mbc::<Rc<[u8]>, NullRtc>(Rc::from(rom.into_boxed_slice()))
+        let Some((cartridge_type, mut mbc)) = get_mbc(Rc::from(rom.into_boxed_slice()), NullRtc)
         else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return None;
