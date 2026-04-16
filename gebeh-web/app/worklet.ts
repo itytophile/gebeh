@@ -6,6 +6,7 @@ import { AUDIO_PROCESSOR_NAME, type FromMainMessage, type FromNodeMessage } from
 // I copied the declarations because doing something clean with multiple tsconfig files or whatever is too difficult
 declare global {
   var sampleRate: number;
+  var currentTime: number;
 
   interface AudioWorkletProcessor {
     readonly port: MessagePort;
@@ -43,6 +44,8 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
             new Uint8Array(data.bytes),
             data.save ? new Uint8Array(data.save) : undefined,
             sampleRate,
+            data.seconds_since_epoch,
+            currentTime,
           );
           break;
         }
@@ -156,18 +159,24 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       return true;
     }
 
-    const message = emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
-      if (!this.isMessagesEnabled) {
-        return;
-      }
-      this.port.postMessage(
-        {
-          type: "frame",
-          buffer: frame,
-        } satisfies FromNodeMessage,
-        [frame.buffer],
-      );
-    });
+    const message = emulator.drive_and_sample(
+      left,
+      right,
+      sampleRate,
+      currentTime,
+      (frame: Uint8Array) => {
+        if (!this.isMessagesEnabled) {
+          return;
+        }
+        this.port.postMessage(
+          {
+            type: "frame",
+            buffer: frame,
+          } satisfies FromNodeMessage,
+          [frame.buffer],
+        );
+      },
+    );
 
     if (message) {
       this.port.postMessage(

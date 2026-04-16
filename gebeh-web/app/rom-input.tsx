@@ -29,6 +29,7 @@ function RomInput({ port, onLoad }: { port: MessagePort; onLoad?: () => void }) 
           type: "rom",
           bytes,
           save,
+          seconds_since_epoch: Date.now() / 1000,
         } satisfies FromMainMessage,
         save ? [bytes.buffer, save.buffer] : [bytes.buffer],
       );

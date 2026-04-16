@@ -2,33 +2,16 @@ use std::{cell::Cell, rc::Rc};
 
 use gebeh_core::mbc::*;
 
-#[derive(Default, Clone)]
-pub struct NullRtc;
-
-impl Rtc for NullRtc {
-    fn get_clock_data(&mut self) -> RtcRegisters {
-        Default::default()
-    }
-
-    fn set_clock_data(&mut self, _: RtcRegisters) {}
-
-    fn deserialize(&mut self, _: &[u8]) {}
-
-    fn serialize(&self, _: &mut [u8]) -> usize {
-        0
-    }
-}
-
 // web-time doesn't work in AudioWorklet according to https://github.com/daxpedda/web-time/issues/45
 #[derive(Clone)]
-pub struct InstantRtc {
+pub struct AudioRtc {
     last_seen: u64,
     last_halt: Option<u64>,
     registers: RtcRegisters,
     now: Rc<Cell<u64>>,
 }
 
-impl InstantRtc {
+impl AudioRtc {
     pub fn new(now: Rc<Cell<u64>>) -> Self {
         Self {
             last_seen: now.get(),
@@ -39,7 +22,7 @@ impl InstantRtc {
     }
 }
 
-impl Rtc for InstantRtc {
+impl Rtc for AudioRtc {
     fn get_clock_data(&mut self) -> RtcRegisters {
         let now = self.last_halt.unwrap_or(self.now.get());
         let elapsed = now - self.last_seen;

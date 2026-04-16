@@ -13,6 +13,7 @@ export type FromMainMessage =
       type: "rom";
       bytes: Uint8Array;
       save?: Uint8Array;
+      seconds_since_epoch: number;
     }
   | { type: "wasm"; bytes: Uint8Array }
   | {
