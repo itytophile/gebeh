@@ -61,6 +61,10 @@ impl VolumeAndEnvelope {
 
     pub fn write_register(&mut self, value: u8) {
         self.register = value;
+
+        if self.register & 0x07 == 0 {
+            self.timer.value = self.timer.value.wrapping_add(1) & 0x0f;
+        }
     }
 
     pub fn trigger(&mut self) {
