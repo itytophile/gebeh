@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::Cell, rc::Rc};
 
 use arrayvec::ArrayVec;
 use gebeh_core::{
@@ -13,7 +13,7 @@ use web_sys::{
 
 use gebeh_network::{RollbackSerial, message::SerialMessage};
 
-use crate::rtc::NullRtc;
+use crate::rtc::AudioRtc;
 
 mod rtc;
 
@@ -26,6 +26,8 @@ struct WebEmulatorInner {
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
     current_frame: [u8; WIDTH as usize * HEIGHT as usize],
+    start_time: u64,
+    seconds_since_epoch: Rc<Cell<u64>>,
 }
 
 #[wasm_bindgen]
@@ -44,11 +46,20 @@ impl WebEmulatorInner {
         self.emulator.set_joypad(joypad);
     }
 
-    pub fn new(rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) -> Option<Self> {
+    pub fn new(
+        rom: Box<[u8]>,
+        save: Option<Box<[u8]>>,
+        extra: Option<Box<[u8]>>,
+        sample_rate: f32,
+        seconds_since_epoch: u32,
+        audio_time: u32,
+    ) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
+        let start_time = seconds_since_epoch - audio_time;
+        let seconds_since_epoch = Rc::new(Cell::new(u64::from(seconds_since_epoch)));
         // rc to easily clone the mbc for the rollback netcode
         let Some((cartridge_type, mut mbc)) =
-            get_mbc::<Rc<[u8]>, NullRtc>(Rc::from(rom.into_boxed_slice()))
+            get_mbc(Rc::from(rom), AudioRtc::new(seconds_since_epoch.clone()))
         else {
             console::error_1(&JsValue::from_str("MBC type not recognized"));
             return None;
@@ -56,6 +67,10 @@ impl WebEmulatorInner {
         if let Some(save) = save {
             console::log_1(&JsValue::from_str("Loading save"));
             mbc.load_saved_ram(&save);
+        }
+        if let Some(extra) = extra {
+            console::log_1(&JsValue::from_str("Loading extra"));
+            mbc.load_additional_data(&extra);
         }
         console::log_1(&JsValue::from_str("Rom loaded!"));
 
@@ -70,6 +85,8 @@ impl WebEmulatorInner {
             error: 0,
             mixer: Mixer::new(sample_rate, get_noise(false), get_noise(true)),
             current_frame: [0; _],
+            start_time: u64::from(start_time),
+            seconds_since_epoch,
         })
     }
 
@@ -80,12 +97,16 @@ impl WebEmulatorInner {
         left: &mut [f32],
         right: &mut [f32],
         sample_rate: u32,
+        audio_time: u32,
         on_new_frame: &js_sys::Function,
         mut serial_mode: Option<&mut RollbackSerial>,
     ) -> Box<[u8]> {
         let mut messages = ArrayVec::<SerialMessage, 4>::new();
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
         let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
+
+        self.seconds_since_epoch
+            .set(self.start_time + u64::from(audio_time));
 
         for (left, right) in left.iter_mut().zip(right.iter_mut()) {
             let mut cycles = base;
@@ -150,8 +171,16 @@ impl WebEmulatorInner {
             return None;
         }
 
+        let mut extra_buffer = [0; 64];
+        let count = self.mbc.get_additional_data_to_save(&mut extra_buffer);
+
         Some(Save {
             ram: self.mbc.get_ram_to_save()?.into(),
+            extra: if count > 0 {
+                Some(extra_buffer[0..count].into())
+            } else {
+                None
+            },
             game_title: get_title_from_rom(self.mbc.get_rom()).to_owned(),
         })
     }
@@ -166,8 +195,23 @@ impl WebEmulator {
         Default::default()
     }
 
-    pub fn init_emulator(&mut self, rom: Vec<u8>, save: Option<Vec<u8>>, sample_rate: f32) {
-        self.inner = WebEmulatorInner::new(rom, save, sample_rate)
+    pub fn init_emulator(
+        &mut self,
+        rom: Box<[u8]>,
+        save: Option<Box<[u8]>>,
+        extra: Option<Box<[u8]>>,
+        sample_rate: f32,
+        seconds_since_epoch: u32,
+        audio_time: u32,
+    ) {
+        self.inner = WebEmulatorInner::new(
+            rom,
+            save,
+            extra,
+            sample_rate,
+            seconds_since_epoch,
+            audio_time,
+        )
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
@@ -176,6 +220,7 @@ impl WebEmulator {
         left: &mut [f32],
         right: &mut [f32],
         sample_rate: u32,
+        audio_time: u32,
         on_new_frame: &js_sys::Function,
     ) -> Option<Box<[u8]>> {
         self.inner.as_mut().map(|inner| {
@@ -183,6 +228,7 @@ impl WebEmulator {
                 left,
                 right,
                 sample_rate,
+                audio_time,
                 on_new_frame,
                 self.network.as_mut(),
             )
@@ -293,6 +339,7 @@ impl WebEmulator {
 #[wasm_bindgen]
 pub struct Save {
     ram: Box<[u8]>,
+    extra: Option<Box<[u8]>>,
     game_title: String,
 }
 
@@ -300,6 +347,10 @@ pub struct Save {
 impl Save {
     pub fn get_ram(&self) -> Box<[u8]> {
         self.ram.clone()
+    }
+
+    pub fn get_extra(&self) -> Option<Box<[u8]>> {
+        self.extra.clone()
     }
 
     pub fn get_game_title(&self) -> String {

@@ -6,6 +6,7 @@ import { AUDIO_PROCESSOR_NAME, type FromMainMessage, type FromNodeMessage } from
 // I copied the declarations because doing something clean with multiple tsconfig files or whatever is too difficult
 declare global {
   var sampleRate: number;
+  var currentTime: number;
 
   interface AudioWorkletProcessor {
     readonly port: MessagePort;
@@ -41,8 +42,11 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
           console.log({ sampleRate });
           this.emulator?.init_emulator(
             new Uint8Array(data.bytes),
-            data.save ? new Uint8Array(data.save) : undefined,
+            data.save,
+            data.extra,
             sampleRate,
+            data.seconds_since_epoch,
+            currentTime,
           );
           break;
         }
@@ -156,18 +160,24 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       return true;
     }
 
-    const message = emulator.drive_and_sample(left, right, sampleRate, (frame: Uint8Array) => {
-      if (!this.isMessagesEnabled) {
-        return;
-      }
-      this.port.postMessage(
-        {
-          type: "frame",
-          buffer: frame,
-        } satisfies FromNodeMessage,
-        [frame.buffer],
-      );
-    });
+    const message = emulator.drive_and_sample(
+      left,
+      right,
+      sampleRate,
+      currentTime,
+      (frame: Uint8Array) => {
+        if (!this.isMessagesEnabled) {
+          return;
+        }
+        this.port.postMessage(
+          {
+            type: "frame",
+            buffer: frame,
+          } satisfies FromNodeMessage,
+          [frame.buffer],
+        );
+      },
+    );
 
     if (message) {
       this.port.postMessage(
@@ -188,13 +198,19 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       const save = emulator.get_save();
       if (save) {
         const ram = save.get_ram();
+        const extra = save.get_extra();
+        const transfer = [ram.buffer];
+        if (extra) {
+          transfer.push(extra.buffer);
+        }
         this.port.postMessage(
           {
             type: "save",
             buffer: ram,
+            extra,
             title: save.get_game_title(),
           } satisfies FromNodeMessage,
-          [ram.buffer],
+          transfer,
         );
       }
     }

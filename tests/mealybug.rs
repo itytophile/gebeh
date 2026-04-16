@@ -40,7 +40,7 @@ fn mealybug_inner(rom: &str, expected: &str) {
     reader.next_frame(&mut buf).unwrap();
     let rom = std::fs::read(rom).unwrap();
     let rom = rom.as_slice();
-    let (_, mut mbc) = get_mbc::<_, InstantRtc>(rom).unwrap();
+    let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     let mut emulator = Emulator::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];

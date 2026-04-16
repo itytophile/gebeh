@@ -5,14 +5,16 @@ export type FromNodeMessage =
     }
   | { type: "wasm" }
   | { type: "frame"; buffer: Uint8Array }
-  | { type: "save"; buffer: Uint8Array; title: string }
+  | { type: "save"; buffer: Uint8Array; extra: Uint8Array | undefined; title: string }
   | { type: "serial"; buffer: Uint8Array };
 export type GebehButton = "a" | "b" | "start" | "select" | "left" | "right" | "up" | "down";
 export type FromMainMessage =
   | {
       type: "rom";
       bytes: Uint8Array;
-      save?: Uint8Array;
+      save: Uint8Array | undefined;
+      extra: Uint8Array | undefined;
+      seconds_since_epoch: number;
     }
   | { type: "wasm"; bytes: Uint8Array }
   | {
