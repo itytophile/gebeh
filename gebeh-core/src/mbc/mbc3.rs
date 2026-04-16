@@ -29,7 +29,7 @@ impl RtcRegisters {
             + u32::from(self.get_day_counter()) * 24 * 60 * 60
     }
     pub fn get_day_counter(&self) -> u16 {
-        (u16::from(self.upper_1bit_day_counter_carry_halt) << 1) & 0x100
+        ((u16::from(self.upper_1bit_day_counter_carry_halt & 0x01)) << 8)
             | u16::from(self.lower_8bits_day_counter)
     }
     pub fn from_seconds(seconds: u32, carry: bool, halt: bool) -> Self {
@@ -39,9 +39,9 @@ impl RtcRegisters {
             minutes: u8::try_from((seconds / 60) % 60).unwrap(),
             hours: u8::try_from((seconds / 3600) % 24).unwrap(),
             lower_8bits_day_counter: new_days as u8,
-            upper_1bit_day_counter_carry_halt: ((new_days >> 1) as u8) & 0x80
-                | (halt as u8) << 1
-                | carry as u8,
+            upper_1bit_day_counter_carry_halt: ((new_days >> 8) as u8 & 0x01)
+                | ((halt as u8) << 6)
+                | ((carry as u8) << 7),
         }
     }
 }
@@ -115,14 +115,15 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                     RamRtcSelect::Rtc(rtc_select) => {
                         log::info!("Reading RTC {:?}", self.rtc_registers);
                         match rtc_select {
-                        Seconds => self.rtc_registers.seconds,
-                        Minutes => self.rtc_registers.minutes,
-                        Hours => self.rtc_registers.hours,
-                        Lower8bitsDayCounter => self.rtc_registers.lower_8bits_day_counter,
-                        Upper1bitDayCounterCarryHalt => {
-                            self.rtc_registers.upper_1bit_day_counter_carry_halt | 0b01111100
+                            Seconds => self.rtc_registers.seconds,
+                            Minutes => self.rtc_registers.minutes,
+                            Hours => self.rtc_registers.hours,
+                            Lower8bitsDayCounter => self.rtc_registers.lower_8bits_day_counter,
+                            Upper1bitDayCounterCarryHalt => {
+                                self.rtc_registers.upper_1bit_day_counter_carry_halt | 0b01111100
+                            }
                         }
-                    }},
+                    }
                 }
             }
             _ => panic!(),
