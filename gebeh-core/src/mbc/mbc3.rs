@@ -112,18 +112,15 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                         self.ram[usize::from(u16::from(bank) * RAM_BANK_SIZE)
                             + (index - 0xa000) as usize]
                     }
-                    RamRtcSelect::Rtc(rtc_select) => {
-                        log::info!("Reading RTC {:?}", self.rtc_registers);
-                        match rtc_select {
-                            Seconds => self.rtc_registers.seconds,
-                            Minutes => self.rtc_registers.minutes,
-                            Hours => self.rtc_registers.hours,
-                            Lower8bitsDayCounter => self.rtc_registers.lower_8bits_day_counter,
-                            Upper1bitDayCounterCarryHalt => {
-                                self.rtc_registers.upper_1bit_day_counter_carry_halt | 0b01111100
-                            }
+                    RamRtcSelect::Rtc(rtc_select) => match rtc_select {
+                        Seconds => self.rtc_registers.seconds,
+                        Minutes => self.rtc_registers.minutes,
+                        Hours => self.rtc_registers.hours,
+                        Lower8bitsDayCounter => self.rtc_registers.lower_8bits_day_counter,
+                        Upper1bitDayCounterCarryHalt => {
+                            self.rtc_registers.upper_1bit_day_counter_carry_halt
                         }
-                    }
+                    },
                 }
             }
             _ => panic!(),
@@ -159,7 +156,6 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
             }
             0x6000..VIDEO_RAM => {
                 if self.latch_reg == 0 && value == 1 {
-                    log::info!("Latch");
                     self.rtc_registers = self.rtc.get_clock_data()
                 }
                 self.latch_reg = value;
