@@ -26,6 +26,7 @@ export async function writeSave(title: string, buffer: Uint8Array) {
 }
 
 export function writeExtra(title: string, buffer: Uint8Array) {
+  // yeah that's called a hack
   return writeSave(title + "_EXTRA", buffer);
 }
 
