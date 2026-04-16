@@ -61,9 +61,9 @@ pub struct Mbc3<T, U> {
     ram_rtc_select: RamRtcSelect,
     ram_enabled: bool,
     rom_bank_count: u8,
-    ram_bank_count: u8,
     rtc: U,
     rtc_registers: RtcRegisters,
+    latch_reg: u8,
 }
 
 pub trait Rtc {
@@ -76,7 +76,6 @@ pub trait Rtc {
 impl<T: Deref<Target = [u8]>, U> Mbc3<T, U> {
     pub fn new(rom: T, rtc: U) -> Self {
         Self {
-            ram_bank_count: get_factor_8_kib_ram(rom.deref()),
             rom_bank_count: u8::try_from(get_factor_32_kib_rom(rom.deref())).unwrap() * 2,
             rom,
             rom_offset: usize::from(ROM_BANK_SIZE),
@@ -85,6 +84,8 @@ impl<T: Deref<Target = [u8]>, U> Mbc3<T, U> {
             ram_enabled: false,
             rtc,
             rtc_registers: Default::default(),
+            // Citation: When writing $00, and then $01 to this register, the current time becomes latched into the RTC registers
+            latch_reg: 2,
         }
     }
 
@@ -127,11 +128,13 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
     }
     fn write(&mut self, index: u16, value: u8) {
         match index {
-            // 0x0000-0x1FFF - RAM enabled flag
             0x0000..=0x1fff => {
-                self.ram_enabled = (value & 0x0f) == 0x0a;
+                if value == 0x0a {
+                    self.ram_enabled = true
+                } else if value == 0 {
+                    self.ram_enabled = false;
+                }
             }
-            // 0x2000-0x3FFF - ROM bank selection 5 lower bits
             0x2000..=0x3fff => {
                 let mut rom_bank = value as u16 & 0x7f;
                 rom_bank &= u16::from(self.rom_bank_count) * 2 - 1;
@@ -142,14 +145,20 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
             }
             0x4000..=0x5fff => {
                 self.ram_rtc_select = match value {
+                    0..0x08 => RamRtcSelect::Ram(value),
                     0x08 => RamRtcSelect::Rtc(RtcSelect::Seconds),
                     0x09 => RamRtcSelect::Rtc(RtcSelect::Minutes),
                     0x0a => RamRtcSelect::Rtc(RtcSelect::Hours),
                     0x0b => RamRtcSelect::Rtc(RtcSelect::Lower8bitsDayCounter),
                     0x0c => RamRtcSelect::Rtc(RtcSelect::Upper1bitDayCounterCarryHalt),
-                    bank if bank <= self.ram_bank_count => RamRtcSelect::Ram(bank),
                     _ => self.ram_rtc_select,
                 };
+            }
+            0x6000..VIDEO_RAM => {
+                if self.latch_reg == 0 && value == 1 {
+                    self.rtc_registers = self.rtc.get_clock_data()
+                }
+                self.latch_reg = value;
             }
             EXTERNAL_RAM..WORK_RAM => {
                 if !self.ram_enabled {
@@ -158,7 +167,7 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                 match self.ram_rtc_select {
                     RamRtcSelect::Ram(bank) => {
                         self.ram[usize::from(u16::from(bank) * RAM_BANK_SIZE)
-                            + (index - 0xa000) as usize] = value
+                            + usize::from(index - EXTERNAL_RAM)] = value
                     }
                     RamRtcSelect::Rtc(rtc_select) => {
                         match rtc_select {
@@ -176,7 +185,6 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
                     }
                 }
             }
-            0x6000 => self.rtc_registers = self.rtc.get_clock_data(),
             _ => panic!("Writing 0x{value:02x} to ${index:04x}"),
         }
     }
@@ -189,6 +197,7 @@ impl<T: Deref<Target = [u8]>, U: Rtc> Mbc for Mbc3<T, U> {
     // u16 -> days, u8 -> hours, u8 -> minutes
     fn load_additional_data(&mut self, additional_data: &[u8]) {
         self.rtc.deserialize(additional_data);
+        self.rtc_registers = self.rtc.get_clock_data();
     }
 
     fn get_ram_to_save(&self) -> Option<&[u8]> {
