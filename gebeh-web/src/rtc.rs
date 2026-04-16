@@ -47,10 +47,10 @@ impl Rtc for AudioRtc {
     // u64 seconds since epoch, u32 seconds of mbc3 clock data, big endian
     fn deserialize(&mut self, save: &[u8]) {
         self.last_seen = u64::from_be_bytes(save[..8].try_into().unwrap());
-        let saved_rtc_seconds = u64::from(u32::from_be_bytes(save[8..12].try_into().unwrap()));
+        let saved_rtc_seconds = u32::from_be_bytes(save[8..12].try_into().unwrap());
         self.registers = RtcRegisters::from_seconds(
-            u32::try_from(saved_rtc_seconds % u64::from(MAX_RTC_SECONDS)).unwrap(),
-            saved_rtc_seconds > u64::from(MAX_RTC_SECONDS),
+            saved_rtc_seconds % MAX_RTC_SECONDS,
+            saved_rtc_seconds > MAX_RTC_SECONDS,
             (self.registers.upper_1bit_day_counter_carry_halt & 0b10) != 0,
         );
     }
