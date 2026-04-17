@@ -401,18 +401,16 @@ impl Ppu {
                 window_y,
                 ly,
                 ..
-            } => {
-                if scanline.len() == WIDTH {
-                    self.step = PpuStep::HorizontalBlank {
-                        remaining_dots: u8::try_from(
-                            SCANLINE_DURATION - u16::from(OAM_SCAN_DURATION) - *dots_count,
-                        )
-                        .unwrap(),
-                        window_y: *window_y,
-                        dots_count: 0,
-                        scanline: *scanline.get_scanline(),
-                        ly: *ly,
-                    }
+            } if scanline.len() == WIDTH => {
+                self.step = PpuStep::HorizontalBlank {
+                    remaining_dots: u8::try_from(
+                        SCANLINE_DURATION - u16::from(OAM_SCAN_DURATION) - *dots_count,
+                    )
+                    .unwrap(),
+                    window_y: *window_y,
+                    dots_count: 0,
+                    scanline: *scanline.get_scanline(),
+                    ly: *ly,
                 }
             }
             PpuStep::HorizontalBlank {
@@ -515,13 +513,12 @@ impl Ppu {
         match &mut self.step {
             PpuStep::OamScan { window_y, ly, .. }
             | PpuStep::Drawing { window_y, ly, .. }
-            | PpuStep::HorizontalBlank { window_y, ly, .. } => {
+            | PpuStep::HorizontalBlank { window_y, ly, .. }
                 if window_y.is_none()
                     && self.state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                    && *ly == state.wy
-                {
-                    *window_y = Some(0);
-                }
+                    && *ly == state.wy =>
+            {
+                *window_y = Some(0);
             }
             _ => {}
         }

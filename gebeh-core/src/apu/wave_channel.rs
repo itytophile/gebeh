@@ -129,7 +129,7 @@ impl WaveSampler {
             &self.ram,
             ((((sample - self.sample_shift) * Self::get_tone_frequency(self.period)) % 1.) * 32.)
                 as usize,
-        ) as f32) as f32
+        ) as f32)
             / MAX_VOLUME as f32
             * 2.
     }
