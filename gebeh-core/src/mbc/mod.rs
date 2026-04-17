@@ -1,6 +1,7 @@
 mod huc1;
 mod mbc1;
 mod mbc1m;
+mod mbc2;
 mod mbc3;
 mod mbc5;
 mod tama5;
@@ -11,6 +12,7 @@ use core::ops::Deref;
 pub use huc1::*;
 pub use mbc1::*;
 pub use mbc1m::*;
+pub use mbc2::*;
 pub use mbc3::*;
 pub use mbc5::*;
 pub use tama5::*;

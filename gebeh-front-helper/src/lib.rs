@@ -1,8 +1,8 @@
 use std::{collections::HashSet, ops::Deref};
 
 use gebeh_core::mbc::{
-    CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc3, Mbc5, ROM_BANK_SIZE, ROM_SIZE_HEADER, Rtc, Tama5,
-    WisdomTree,
+    CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc2, Mbc3, Mbc5, ROM_BANK_SIZE, ROM_SIZE_HEADER, Rtc,
+    Tama5, WisdomTree,
 };
 
 pub type EasyMbc = Box<dyn CloneMbc<'static>>;
@@ -69,6 +69,7 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Clone + 'a>(
                 Box::new(Mbc1::new(rom))
             }
         }
+        CartridgeType::Mbc2 | CartridgeType::Mbc2Battery => Box::new(Mbc2::new(rom)),
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
         | CartridgeType::Mbc3RamBattery
@@ -100,6 +101,7 @@ pub fn get_mbc_send<'a, T: Deref<Target = [u8]> + Clone + Send + 'a, U: Rtc + Se
                 Box::new(Mbc1::new(rom))
             }
         }
+        CartridgeType::Mbc2 | CartridgeType::Mbc2Battery => Box::new(Mbc2::new(rom)),
         CartridgeType::Mbc3
         | CartridgeType::Mbc3Ram
         | CartridgeType::Mbc3RamBattery
