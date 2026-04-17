@@ -194,7 +194,7 @@ impl MmuCpuExt for State {
             0xff4d => {}
             0xff4e => {}
             0xff4f => {}
-            BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control = value & 0b1 != 0,
+            BOOT_ROM_MAPPING_CONTROL => cpu.boot_rom_mapping_control |= value != 0,
             0xff51..HRAM => {}
             HRAM..INTERRUPT_ENABLE => cpu.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => {
