@@ -9,8 +9,7 @@ pub struct WaveChannel {
     is_dac_on: bool,
     length: Length<MASK_8_BITS>,
     output_level: u8, // 2 bits
-    effective_output_level: u8,
-    period: u16, // 11 bits
+    period: u16,      // 11 bits
     ram: [u8; 16],
 }
 
@@ -62,7 +61,6 @@ impl WaveChannel {
             return;
         }
         self.is_enabled = true;
-        self.effective_output_level = self.output_level;
     }
     pub fn is_on(&self) -> bool {
         self.is_enabled
@@ -85,7 +83,7 @@ impl WaveChannel {
     pub fn get_sampler(&self) -> WaveSampler {
         WaveSampler {
             is_on: self.is_on(),
-            effective_output_level: self.effective_output_level,
+            output_level: self.output_level,
             ram: self.ram,
             period: self.period,
             is_dac_on: self.is_dac_on,
@@ -106,7 +104,7 @@ impl WaveChannel {
 #[derive(Clone, PartialEq, Default)]
 pub struct WaveSampler {
     is_on: bool,
-    effective_output_level: u8,
+    output_level: u8,
     ram: [u8; 16],
     pub period: u16,
     is_dac_on: bool,
@@ -121,7 +119,7 @@ impl WaveSampler {
             return 0.;
         }
         // About output level https://gbdev.io/pandocs/Audio_Registers.html#ff1c--nr32-channel-3-output-level
-        if !self.is_on || self.effective_output_level == 0 {
+        if !self.is_on || self.output_level == 0 {
             return 1.;
         }
 
@@ -129,7 +127,7 @@ impl WaveSampler {
             &self.ram,
             ((((sample - self.sample_shift) * Self::get_tone_frequency(self.period)) % 1.) * 32.)
                 as usize,
-        ) as f32) as f32
+        ) as f32)
             / MAX_VOLUME as f32
             * 2.
     }

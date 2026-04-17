@@ -250,17 +250,15 @@ impl<T: Deref<Target = [u8]>> Tama5<T> {
                     }
                 }
             }
-            0x4 => {
-                if self.state.reg != GBTAMA5_READ_HI {
-                    let rtc_addr = self.state.registers[usize::from(GBTAMA5_WRITE_LO)];
-                    if rtc_addr > GBTAMA6_RTC_PAGE {
-                        value = 0
-                    } else if core::matches!(
-                        self.state.registers[usize::from(GBTAMA5_ADDR_LO)],
-                        1 | 3 | 5 | 7
-                    ) {
-                        value = self.state.rtc_timer_page[usize::from(rtc_addr)];
-                    }
+            0x4 if self.state.reg != GBTAMA5_READ_HI => {
+                let rtc_addr = self.state.registers[usize::from(GBTAMA5_WRITE_LO)];
+                if rtc_addr > GBTAMA6_RTC_PAGE {
+                    value = 0
+                } else if core::matches!(
+                    self.state.registers[usize::from(GBTAMA5_ADDR_LO)],
+                    1 | 3 | 5 | 7
+                ) {
+                    value = self.state.rtc_timer_page[usize::from(rtc_addr)];
                 }
             }
             _ => {}

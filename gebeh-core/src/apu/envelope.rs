@@ -6,6 +6,7 @@ struct EnvelopeTimer {
     is_increasing: bool,
     sweep_pace: u8, // 3 bits
     pace_count: u8,
+    stopped: bool,
 }
 
 impl EnvelopeTimer {
@@ -14,6 +15,7 @@ impl EnvelopeTimer {
         self.value = (volume_and_envelope >> 4) & 0x0f;
         self.sweep_pace = volume_and_envelope & 0x07;
         self.pace_count = 0;
+        self.stopped = false;
     }
     fn tick(&mut self) {
         // https://gbdev.io/pandocs/Audio_Registers.html#ff12--nr12-channel-1-volume--envelope
@@ -32,7 +34,7 @@ impl EnvelopeTimer {
         self.pace_count = 0;
 
         match (self.is_increasing, self.value) {
-            (true, MAX_VOLUME) | (false, 0) => {}
+            (true, MAX_VOLUME) | (false, 0) => self.stopped = true,
             (true, _) => self.value += 1,
             (false, _) => self.value -= 1,
         }
@@ -60,7 +62,30 @@ impl VolumeAndEnvelope {
     }
 
     pub fn write_register(&mut self, value: u8) {
+        self.zombie_mode_glitch(value);
         self.register = value;
+    }
+
+    // https://gbdev.io/pandocs/Audio_details.html#obscure-behavior
+    // useful for Prehistorik Man intro
+    fn zombie_mode_glitch(&mut self, value: u8) {
+        let old_pace = self.register & 0x07;
+
+        let is_increasing = self.register & 0x08 != 0;
+
+        if old_pace == 0 && !self.timer.stopped {
+            self.timer.value = self.timer.value.wrapping_add(1);
+        } else if !is_increasing {
+            self.timer.value = self.timer.value.wrapping_add(2);
+        }
+
+        let will_increase = value & 0x08 != 0;
+
+        if is_increasing != will_increase {
+            self.timer.value = 16u8.wrapping_sub(self.timer.value);
+        }
+
+        self.timer.value &= 0x0f;
     }
 
     pub fn trigger(&mut self) {

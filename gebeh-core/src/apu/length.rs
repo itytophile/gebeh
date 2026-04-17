@@ -26,11 +26,10 @@ impl<const MASK: u8> Length<MASK> {
         self.is_enabled = is_enabled;
 
         // according to blargg "Enabling in first half of length period should clock length"
-        if !previous_is_length_enabled && self.is_enabled && is_length_extra_clock(div_apu) {
-            return self.tick();
-        }
-
-        false
+        !previous_is_length_enabled
+            && self.is_enabled
+            && is_length_extra_clock(div_apu)
+            && self.tick()
     }
     pub fn is_enabled(&self) -> bool {
         self.is_enabled
