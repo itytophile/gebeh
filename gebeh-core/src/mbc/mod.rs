@@ -1,6 +1,7 @@
 mod huc1;
 mod mbc1;
 mod mbc1m;
+mod mbc2;
 mod mbc3;
 mod mbc5;
 mod tama5;
@@ -11,6 +12,7 @@ use core::ops::Deref;
 pub use huc1::*;
 pub use mbc1::*;
 pub use mbc1m::*;
+pub use mbc2::*;
 pub use mbc3::*;
 pub use mbc5::*;
 pub use tama5::*;
@@ -57,6 +59,8 @@ pub enum CartridgeType {
     Mbc1,
     Mbc1Ram,
     Mbc1RamBattery,
+    Mbc2,
+    Mbc2Battery,
     Mbc3TimerBattery,
     Mbc3TimerRamBattery,
     Mbc3,
@@ -74,6 +78,7 @@ impl CartridgeType {
         matches!(
             self,
             Mbc1RamBattery
+                | Mbc2Battery
                 | Mbc3TimerBattery
                 | Mbc3TimerRamBattery
                 | Mbc3RamBattery
@@ -94,6 +99,8 @@ impl TryFrom<u8> for CartridgeType {
             1 => Ok(Self::Mbc1),
             2 => Ok(Self::Mbc1Ram),
             3 => Ok(Self::Mbc1RamBattery),
+            5 => Ok(Self::Mbc2),
+            6 => Ok(Self::Mbc2Battery),
             0x0f => Ok(Self::Mbc3TimerBattery),
             0x10 => Ok(Self::Mbc3TimerRamBattery),
             0x11 => Ok(Self::Mbc3),
