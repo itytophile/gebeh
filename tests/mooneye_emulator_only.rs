@@ -93,6 +93,43 @@ fn mbc1_rom_8mb() {
     test_mooneye("mbc1/rom_8Mb.gb");
 }
 
+// mbc2
+
+#[test]
+fn mbc2_bits_ramg() {
+    test_mooneye("mbc2/bits_ramg.gb");
+}
+
+#[test]
+fn mbc2_bits_romb() {
+    test_mooneye("mbc2/bits_romb.gb");
+}
+
+#[test]
+fn mbc2_bits_unused() {
+    test_mooneye("mbc2/bits_unused.gb");
+}
+
+#[test]
+fn mbc2_ram() {
+    test_mooneye("mbc2/ram.gb");
+}
+
+#[test]
+fn mbc2_rom_1_mb() {
+    test_mooneye("mbc2/rom_1Mb.gb");
+}
+
+#[test]
+fn mbc2_rom_2_mb() {
+    test_mooneye("mbc2/rom_2Mb.gb");
+}
+
+#[test]
+fn mbc2_rom_512kb() {
+    test_mooneye("mbc2/rom_512kb.gb");
+}
+
 // mbc5
 
 #[test]
