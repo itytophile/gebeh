@@ -123,13 +123,21 @@ impl WaveSampler {
             return 1.;
         }
 
-        1. - (index_ram(
-            &self.ram,
-            ((((sample - self.sample_shift) * Self::get_tone_frequency(self.period)) % 1.) * 32.)
-                as usize,
-        ) as f32)
-            / MAX_VOLUME as f32
-            * 2.
+        let sample = 1.
+            - (index_ram(
+                &self.ram,
+                ((((sample - self.sample_shift) * Self::get_tone_frequency(self.period)) % 1.)
+                    * 32.) as usize,
+            ) as f32)
+                / MAX_VOLUME as f32
+                * 2.;
+
+        match self.output_level {
+            1 => sample,
+            2 => sample / 2.,
+            3 => sample / 4.,
+            _ => unreachable!(),
+        }
     }
 
     // https://gbdev.io/pandocs/Audio_Registers.html#ff1d--nr33-channel-3-period-low-write-only
