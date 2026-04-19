@@ -2,6 +2,7 @@ use core::ops::Range;
 
 use crate::{
     mbc::Mbc,
+    ppu::ObjectAttribute,
     state::{MmuExt, State},
 };
 
@@ -29,11 +30,26 @@ impl Dma {
     }
 
     pub fn execute<M: Mbc + ?Sized>(&mut self, state: &mut State, mbc: &M, _: u64) {
+        let old = self.is_active;
         if let Some(address) = self.range.next() {
             state.oam[usize::from(address as u8)] = state.read(address, mbc);
             self.is_active = true;
         } else {
             self.is_active = false;
+        }
+
+        if old && !self.is_active {
+            log::info!("DMA done");
+            for obj in state
+                .oam
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .copied()
+                .map(ObjectAttribute::from)
+            {
+                log::info!("{obj:?}");
+            }
         }
 
         if state.dma_request {

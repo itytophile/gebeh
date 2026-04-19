@@ -13,7 +13,9 @@ use crate::{
     state::{Interruptions, LcdStatus, State},
 };
 
+pub use background_fetcher::get_bg_win_tile;
 pub use scanline::Scanline;
+pub use sprite_fetcher::get_line_from_tile;
 
 #[derive(Clone)]
 pub enum PpuStep {
@@ -177,7 +179,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ObjectAttribute {
     y: u8,
     x: u8,
