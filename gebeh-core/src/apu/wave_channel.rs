@@ -3,7 +3,7 @@ use crate::apu::{
     length::{Length, MASK_8_BITS},
 };
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct WaveChannel {
     is_enabled: bool,
     is_dac_on: bool,
@@ -11,6 +11,25 @@ pub struct WaveChannel {
     output_level: u8, // 2 bits
     period: u16,      // 11 bits
     ram: [u8; 16],
+}
+
+impl Default for WaveChannel {
+    fn default() -> Self {
+        Self {
+            is_enabled: Default::default(),
+            is_dac_on: Default::default(),
+            length: Default::default(),
+            output_level: Default::default(),
+            period: Default::default(),
+            // Altered Space - A 3-D Alien Adventure is using the wave channel without initializing
+            // the wave ram. On a real Game Boy, the sound depends on what garbage is inside the wave ram at boot.
+            // So let's init the wave ram with a pretty square wave.
+            // https://xkcd.com/221/
+            ram: [
+                255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+        }
+    }
 }
 
 impl WaveChannel {
