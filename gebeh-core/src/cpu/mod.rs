@@ -5,7 +5,7 @@ pub use mmu::Peripherals;
 use crate::{
     cpu::mmu::MmuCpuExt,
     mbc::Mbc,
-    state::{BOOTIX_BOOT_ROM, Interruptions, State},
+    state::{BOOTIX_BOOT_ROM, Interruptions, LcdStatus, State},
 };
 use arrayvec::ArrayVec;
 use instructions::{
@@ -41,6 +41,7 @@ pub struct Cpu {
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
     pub boot_rom: &'static [u8; 256],
+    is_debug: bool,
 }
 
 impl Default for Cpu {
@@ -72,6 +73,7 @@ impl Default for Cpu {
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
             boot_rom: &BOOTIX_BOOT_ROM,
+            is_debug: false,
         }
     }
 }
@@ -170,6 +172,7 @@ impl Cpu {
     }
 
     fn enable_ime(&mut self) {
+        self.is_debug = false;
         self.ime = true;
     }
 
@@ -518,7 +521,15 @@ impl Cpu {
                 cycle_count,
             ),
             // doesn't halt if there are interrupts https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#halt
-            NoRead(Halt) => self.is_halted = interrupts_to_execute.is_empty(),
+            NoRead(Halt) => {
+                self.is_halted = interrupts_to_execute.is_empty();
+
+                if self.is_halted {
+                    log::info!("{cycle_count} halt!");
+                } else {
+                    log::info!("{cycle_count} halt skip");
+                }
+            }
             NoRead(Swap8Bit(register)) => {
                 let result = self.swap(self.get_8bit_register(register));
                 self.set_8bit_register(register, result);
@@ -591,6 +602,7 @@ impl Cpu {
             NoRead(Reti) => {
                 self.pc = u16::from_be_bytes([self.msb, self.lsb]);
                 self.enable_ime();
+                log::info!("{cycle_count} IME = true");
             }
             NoRead(Cpl) => {
                 self.f.insert(Flags::N | Flags::H);
@@ -912,6 +924,24 @@ impl Cpu {
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst
         } else if self.is_dispatching_interrupt {
+            if interrupts_to_execute == Interruptions::LCD
+                && (peripherals.ppu.get_lcd_status()
+                    == LcdStatus::OAM_INT
+                        | LcdStatus::VBLANK_INT
+                        | LcdStatus::HBLANK_INT
+                        | LcdStatus::LYC_EQUAL_TO_LY
+                        | LcdStatus::OAM_SCAN
+                    || peripherals.ppu.get_lcd_status()
+                        == LcdStatus::LYC_INT | LcdStatus::LYC_EQUAL_TO_LY | LcdStatus::VBLANK)
+            {
+                self.is_debug = true;
+            }
+            log::info!(
+                "{cycle_count} Interrupt {:?} {:?}",
+                interrupts_to_execute,
+                peripherals.ppu.get_lcd_status()
+            );
+
             self.ime = false;
             // no need to set is_dispatching_interrupt to false
             use NoReadInstruction::*;
@@ -931,6 +961,10 @@ impl Cpu {
             self.instruction_register.1 = set_pc;
             head
         };
+
+        if self.is_debug {
+            log::info!("{cycle_count} {inst:?}");
+        }
 
         // todo revoir la logique de lecture
         let inst = match inst {

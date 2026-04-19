@@ -1,3 +1,5 @@
+use bitflags::Flags;
+
 use crate::{
     apu::Apu,
     cpu::Cpu,
@@ -132,7 +134,7 @@ impl MmuCpuExt for State {
         value: u8,
         cpu: &mut Cpu,
         peripherals: &mut Peripherals<M>,
-        _: u64,
+        cycles: u64,
     ) {
         if peripherals.dma.is_active() && (OAM..NOT_USABLE).contains(&index) {
             return;
@@ -143,10 +145,23 @@ impl MmuCpuExt for State {
             VIDEO_RAM..EXTERNAL_RAM => {
                 if peripherals.ppu.get_ppu_mode() != LcdStatus::DRAWING {
                     self.video_ram[usize::from(index - VIDEO_RAM)] = value
+                } else {
+                    log::info!(
+                        "{cycles} woups (draw at {}) {:?} LY = {} LYC = {}",
+                        peripherals.ppu.draw_time,
+                        peripherals.ppu.step.debug(),
+                        peripherals.ppu.get_ly(),
+                        peripherals.ppu.lyc
+                    );
                 }
             }
             EXTERNAL_RAM..WORK_RAM => peripherals.mbc.write(index, value),
-            WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)] = value,
+            WORK_RAM..ECHO_RAM => {
+                if index == 0xc0ad || index == 0xc0ae {
+                    log::info!("{cycles} writing 0x{value:02x} to ${index:04x}");
+                }
+                self.wram[usize::from(index - WORK_RAM)] = value
+            }
             ECHO_RAM..OAM => self.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
                 let ppu = peripherals.ppu.get_ppu_mode();
@@ -174,7 +189,13 @@ impl MmuCpuExt for State {
                 .ppu
                 .set_lcd_control(LcdControl::from_bits_truncate(value)),
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status 3 last bits readonly
-            LCD_STATUS => peripherals.ppu.set_interrupt_part_lcd_status(value),
+            LCD_STATUS => {
+                log::info!(
+                    "{cycles} set lcd status {:?}",
+                    LcdStatus::from_bits_truncate(value)
+                );
+                peripherals.ppu.set_interrupt_part_lcd_status(value)
+            }
             SCY => peripherals.ppu.set_scy(value),
             SCX => peripherals.ppu.set_scx(value),
             LY => {} // read only
