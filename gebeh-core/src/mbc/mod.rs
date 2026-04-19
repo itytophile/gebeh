@@ -72,6 +72,8 @@ pub enum CartridgeType {
     Mbc5RamBattery,
     Tama5,
     Huc1,
+    WisdomTree,
+    M161,
 }
 
 impl CartridgeType {
