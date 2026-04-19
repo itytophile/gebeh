@@ -1,8 +1,8 @@
 use std::{collections::HashSet, ops::Deref};
 
 use gebeh_core::mbc::{
-    CartridgeType, Huc1, Mbc, Mbc1, Mbc1M, Mbc2, Mbc3, Mbc5, ROM_BANK_SIZE, ROM_SIZE_HEADER, Rtc,
-    Tama5, WisdomTree,
+    CartridgeType, Huc1, M161, Mbc, Mbc1, Mbc1M, Mbc2, Mbc3, Mbc5, ROM_BANK_SIZE, ROM_SIZE_HEADER,
+    Rtc, Tama5, WisdomTree,
 };
 
 pub type EasyMbc = Box<dyn CloneMbc<'static>>;
@@ -50,20 +50,28 @@ pub fn is_wisdom_tree(cartridge_type: CartridgeType, rom: &[u8]) -> bool {
             .any(|needle| rom.windows(needle.len()).any(|w| w == *needle))
 }
 
+pub fn is_m161(cartridge_type: CartridgeType, rom: &[u8]) -> bool {
+    // https://gbdev.io/pandocs/M161.html
+    // Citation: This mapper is only known to be used in a single cartridge: Mani’s 4 in 1 cartridge
+    cartridge_type == CartridgeType::Mbc3TimerRamBattery && get_title_from_rom(rom) == "TETRIS SET"
+}
+
 pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Clone + 'a>(
     rom: T,
     rtc: U,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + 'a>)> {
-    let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
+    let mut cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
 
-    if is_wisdom_tree(cartridge_type, rom.deref()) {
-        return Some((cartridge_type, Box::new(WisdomTree::new(rom))));
+    if is_wisdom_tree(cartridge_type, &rom) {
+        cartridge_type = CartridgeType::WisdomTree;
+    } else if is_m161(cartridge_type, &rom) {
+        cartridge_type = CartridgeType::M161;
     }
 
     let mbc: Box<dyn CloneMbc<'a>> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            if is_multicart(rom.deref()) {
+            if is_multicart(&rom) {
                 Box::new(Mbc1M::new(rom))
             } else {
                 Box::new(Mbc1::new(rom))
@@ -78,6 +86,8 @@ pub fn get_mbc<'a, T: Deref<Target = [u8]> + Clone + 'a, U: Rtc + Clone + 'a>(
         CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
         CartridgeType::Tama5 => Box::new(Tama5::new(rom)),
         CartridgeType::Huc1 => Box::new(Huc1::new(rom)),
+        CartridgeType::WisdomTree => Box::new(WisdomTree::new(rom)),
+        CartridgeType::M161 => Box::new(M161::new(rom)),
     };
     Some((cartridge_type, mbc))
 }
@@ -86,16 +96,18 @@ pub fn get_mbc_send<'a, T: Deref<Target = [u8]> + Clone + Send + 'a, U: Rtc + Se
     rom: T,
     rtc: U,
 ) -> Option<(CartridgeType, Box<dyn CloneMbc<'a> + Send + 'a>)> {
-    let cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
+    let mut cartridge_type = CartridgeType::try_from(rom.get(0x147).copied().unwrap_or(0)).ok()?;
 
-    if is_wisdom_tree(cartridge_type, rom.deref()) {
-        return Some((cartridge_type, Box::new(WisdomTree::new(rom))));
+    if is_wisdom_tree(cartridge_type, &rom) {
+        cartridge_type = CartridgeType::WisdomTree;
+    } else if is_m161(cartridge_type, &rom) {
+        cartridge_type = CartridgeType::M161;
     }
 
     let mbc: Box<dyn CloneMbc<'a> + Send> = match cartridge_type {
         CartridgeType::RomOnly => Box::new(rom),
         CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
-            if is_multicart(rom.deref()) {
+            if is_multicart(&rom) {
                 Box::new(Mbc1M::new(rom))
             } else {
                 Box::new(Mbc1::new(rom))
@@ -110,6 +122,8 @@ pub fn get_mbc_send<'a, T: Deref<Target = [u8]> + Clone + Send + 'a, U: Rtc + Se
         CartridgeType::Mbc5 | CartridgeType::Mbc5RamBattery => Box::new(Mbc5::new(rom)),
         CartridgeType::Tama5 => Box::new(Tama5::new(rom)),
         CartridgeType::Huc1 => Box::new(Huc1::new(rom)),
+        CartridgeType::WisdomTree => Box::new(WisdomTree::new(rom)),
+        CartridgeType::M161 => Box::new(M161::new(rom)),
     };
     Some((cartridge_type, mbc))
 }
