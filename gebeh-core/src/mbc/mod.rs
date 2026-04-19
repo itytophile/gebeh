@@ -1,4 +1,5 @@
 mod huc1;
+mod m161;
 mod mbc1;
 mod mbc1m;
 mod mbc2;
@@ -10,6 +11,7 @@ mod wisdom_tree;
 use core::ops::Deref;
 
 pub use huc1::*;
+pub use m161::*;
 pub use mbc1::*;
 pub use mbc1m::*;
 pub use mbc2::*;
