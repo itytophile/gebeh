@@ -40,6 +40,7 @@ impl<T: Deref<Target = [u8]>> Mbc for M161<T> {
                     return;
                 }
                 self.rom_bank = value & 0x07;
+                self.disable_bank_switch = true;
             }
             EXTERNAL_RAM..WORK_RAM => {}
             _ => panic!(),
