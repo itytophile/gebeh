@@ -3,6 +3,7 @@ name = "gebeh-native"
 version = "0.1.0"
 edition = "2024"
 publish = false
+default-run = "gebeh-native"
 
 [dependencies]
 color-eyre = "0.6.5"
@@ -13,3 +14,7 @@ env_logger = "0.11.8"
 winit = "0.29"
 pixels = "0.15.0"
 cpal = "0.17.0"
+log = "0.4.29"
+
+[[bin]]
+name = "debug"

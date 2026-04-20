@@ -13,7 +13,9 @@ use crate::{
     state::{Interruptions, LcdStatus, State},
 };
 
+pub use background_fetcher::get_bg_win_tile;
 pub use scanline::Scanline;
+pub use sprite_fetcher::get_line_from_tile;
 
 #[derive(Clone)]
 pub enum PpuStep {
@@ -450,10 +452,16 @@ impl Ppu {
 
         let stat_mode_irq = match &self.step {
             PpuStep::OamScan { dots_count, ly, .. } => {
-                // < 4 according to dmg schematics
-                *dots_count < 4
-                    && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
-                    && (*ly != 0 || *dots_count >= 2)
+                // according to dmg schematics, mode 1 is "leaking" at the start of mode 2
+                // on the first line
+                let is_mode_1 = *ly == 0 && *dots_count < 2;
+                is_mode_1
+                    && self
+                        .interrupt_part_lcd_status
+                        .contains(LcdStatus::VBLANK_INT)
+                    || !is_mode_1
+                        && *dots_count < 4
+                        && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
             }
             PpuStep::HorizontalBlank {
                 dots_count: 1.., ..
