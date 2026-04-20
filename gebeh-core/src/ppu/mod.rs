@@ -44,17 +44,6 @@ pub enum PpuStep {
     }, // <= 456
 }
 
-impl PpuStep {
-    pub fn debug(&self) -> (&'static str, u16) {
-        match self {
-            PpuStep::OamScan { dots_count, .. } => ("oam", u16::from(*dots_count)),
-            PpuStep::Drawing { dots_count, window_y, renderer, ly } => ("oam", u16::from(*dots_count)),
-            PpuStep::HorizontalBlank { remaining_dots, dots_count, window_y, scanline, ly } => ("oam", u16::from(*dots_count)),
-            PpuStep::VerticalBlankScanline { dots_count } => ("oam", u16::from(*dots_count)),
-        }
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct Ppu {
     pub step: PpuStep,
@@ -66,7 +55,6 @@ pub struct Ppu {
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
-    pub draw_time: u64,
 }
 
 #[derive(Clone, Default)]
@@ -191,7 +179,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct ObjectAttribute {
     y: u8,
     x: u8,
@@ -370,7 +358,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, cycles: u64) {
+    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
         match &mut self.step {
             PpuStep::OamScan {
                 window_y,
@@ -402,7 +390,6 @@ impl Ppu {
                         .map(|(_, object)| object)
                         .collect(),
                 );
-                self.draw_time = cycles;
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
                     renderer,
@@ -458,17 +445,23 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State, cycles: u64) {
+    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
         if let PpuStep::VerticalBlankScanline { dots_count: 2 } = self.step {
             state.interrupt_flag.insert(Interruptions::VBLANK);
         }
 
         let stat_mode_irq = match &self.step {
             PpuStep::OamScan { dots_count, ly, .. } => {
-                // < 4 according to dmg schematics
-                *dots_count < 4
-                    && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
-                    && (*ly != 0 || *dots_count >= 2)
+                // according to dmg schematics, mode 1 is "leaking" at the start of mode 2
+                // on the first line
+                let is_mode_1 = *ly == 0 && *dots_count < 2;
+                is_mode_1
+                    && self
+                        .interrupt_part_lcd_status
+                        .contains(LcdStatus::VBLANK_INT)
+                    || !is_mode_1
+                        && *dots_count < 4
+                        && self.interrupt_part_lcd_status.contains(LcdStatus::OAM_INT)
             }
             PpuStep::HorizontalBlank {
                 dots_count: 1.., ..
@@ -503,9 +496,6 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            if old_lyc && !stat_mode_irq {
-                log::info!("{cycles} god damn thanks lyc LY = {}, LYC = {}", self.get_ly(), self.lyc);
-            }
             state.interrupt_flag.insert(Interruptions::LCD);
         }
     }
