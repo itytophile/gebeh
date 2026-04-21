@@ -19,6 +19,10 @@ pub use sprite_fetcher::get_line_from_tile;
 
 #[derive(Clone)]
 pub enum PpuStep {
+    // only used on line 0 when the lcd has just turned on
+    SkippedOamScan {
+        dots_count: u8,
+    },
     OamScan {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
@@ -152,11 +156,7 @@ const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
 impl Default for PpuStep {
     fn default() -> Self {
-        Self::OamScan {
-            dots_count: 6,
-            window_y: Default::default(),
-            ly: 0,
-        }
+        Self::SkippedOamScan { dots_count: 6 }
     }
 }
 
@@ -248,6 +248,7 @@ impl Ppu {
 
     pub fn get_ly(&self) -> u8 {
         match self.step {
+            PpuStep::SkippedOamScan { .. } => 0,
             PpuStep::OamScan { ly, .. } => ly,
             PpuStep::Drawing { ly, .. } => ly,
             PpuStep::HorizontalBlank { ly, .. } => ly,
@@ -277,6 +278,7 @@ impl Ppu {
 
         use PpuStep::*;
         match self.step {
+            PpuStep::SkippedOamScan { .. } => LcdStatus::HBLANK,
             OamScan { .. } => LcdStatus::OAM_SCAN,
             Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
@@ -351,6 +353,16 @@ impl Ppu {
 
     fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
         match &mut self.step {
+            PpuStep::SkippedOamScan {
+                dots_count: OAM_SCAN_DURATION,
+            } => {
+                self.step = PpuStep::Drawing {
+                    dots_count: 0,
+                    renderer: Renderer::new(Default::default()),
+                    window_y: None,
+                    ly: 0,
+                }
+            }
             PpuStep::OamScan {
                 window_y,
                 dots_count: OAM_SCAN_DURATION,
@@ -522,7 +534,9 @@ impl Ppu {
         }
 
         match &mut self.step {
-            PpuStep::OamScan { dots_count, .. } => {
+            PpuStep::SkippedOamScan { dots_count }
+            | PpuStep::OamScan { dots_count, .. }
+            | PpuStep::HorizontalBlank { dots_count, .. } => {
                 *dots_count += 1;
             }
             PpuStep::Drawing {
@@ -536,7 +550,6 @@ impl Ppu {
 
                 *dots_count += 1;
             }
-            PpuStep::HorizontalBlank { dots_count, .. } => *dots_count += 1,
             PpuStep::VerticalBlankScanline { dots_count } => *dots_count += 1,
         };
 

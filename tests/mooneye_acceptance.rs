@@ -257,7 +257,6 @@ fn intr_2_oam_ok_timing() {
 }
 
 #[test]
-#[ignore]
 fn lcdon_timing_gs() {
     test_mooneye("ppu/lcdon_timing-GS.gb");
 }
