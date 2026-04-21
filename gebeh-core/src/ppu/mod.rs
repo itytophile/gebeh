@@ -49,7 +49,6 @@ pub struct Ppu {
     pub step: PpuStep,
     stat_irq: bool,
     state: PpuState,
-    is_turning_on: bool,
     previous_lyc: u8,
     // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
@@ -154,7 +153,7 @@ const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 impl Default for PpuStep {
     fn default() -> Self {
         Self::OamScan {
-            dots_count: 0,
+            dots_count: 6,
             window_y: Default::default(),
             ly: 0,
         }
@@ -242,16 +241,9 @@ impl Ppu {
         // Citation: As far as has been figured out, the bug happens everytime
         // ANYTHING (including 00) is written to the STAT register ($ff41) while
         // the gameboy is either in HBLANK or VBLANK mode
-        if core::matches!(
-            self.step,
-            PpuStep::HorizontalBlank { .. } | PpuStep::VerticalBlankScanline { .. }
-        ) {
-            self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
-            // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
-            self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
-        } else {
-            self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(value)
-        }
+        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
+        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
+        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
     }
 
     pub fn get_ly(&self) -> u8 {
@@ -292,7 +284,7 @@ impl Ppu {
         }
     }
     pub fn is_ppu_enabled(&self) -> bool {
-        self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) && !self.is_turning_on
+        self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
     }
     pub fn get_wx(&self) -> u8 {
         self.state.wx
@@ -332,7 +324,6 @@ impl Ppu {
             && new_control.contains(LcdControl::LCD_PPU_ENABLE)
         {
             self.step = Default::default();
-            self.is_turning_on = true;
         }
         self.state.lcd_control = new_control;
     }
@@ -500,8 +491,7 @@ impl Ppu {
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, cycles: u64, dot_index_within_m_cycle: u8) {
-        self.is_turning_on &= dot_index_within_m_cycle != 0;
+    pub fn execute(&mut self, state: &mut State, cycles: u64) {
         if !self.is_ppu_enabled() {
             self.state.refresh_old();
             return;
@@ -570,9 +560,9 @@ mod tests {
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
         // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
-        ppu.execute(&mut state, 0, 0);
+        ppu.execute(&mut state, 0);
         loop {
-            ppu.execute(&mut state, 0, 0);
+            ppu.execute(&mut state, 0);
             duration += 1;
             if let PpuStep::OamScan { dots_count: 1, .. } = ppu.step {
                 break;
@@ -588,7 +578,7 @@ mod tests {
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut duration = 0;
         loop {
-            ppu.execute(&mut state, 0, 0);
+            ppu.execute(&mut state, 0);
             duration += 1;
             if let PpuStep::VerticalBlankScanline {
                 dots_count: VERTICAL_BLANK_DURATION,
@@ -609,7 +599,7 @@ mod tests {
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
 
         while !lys.is_empty() {
-            ppu.execute(&mut state, 0, 0);
+            ppu.execute(&mut state, 0);
             lys.remove(&ppu.get_ly());
         }
     }

@@ -87,8 +87,8 @@ impl Emulator {
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
         let interrupts_from_previous_cycle = self.state.interrupt_flag;
-        for i in 0..2 {
-            self.ppu.execute(&mut self.state, self.cycles, i);
+        for _ in 0..2 {
+            self.ppu.execute(&mut self.state, self.cycles);
         }
         // I don't understand halt timings https://gekkio.fi/blog/2016/game-boy-research-status
         let mut slowed_interrupts_in_halt_mode = None;
@@ -112,8 +112,8 @@ impl Emulator {
         if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
             self.state.interrupt_flag = interrupt_flag;
         }
-        for i in 2..4 {
-            self.ppu.execute(&mut self.state, self.cycles, i);
+        for _ in 2..4 {
+            self.ppu.execute(&mut self.state, self.cycles);
         }
 
         if must_increment_div_apu {
