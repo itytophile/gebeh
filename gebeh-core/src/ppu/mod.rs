@@ -19,6 +19,10 @@ pub use sprite_fetcher::get_line_from_tile;
 
 #[derive(Clone)]
 pub enum PpuStep {
+    // only used on line 0 when the lcd has just turned on
+    SkippedOamScan {
+        dots_count: u8,
+    },
     OamScan {
         dots_count: u8,
         // https://gbdev.io/pandocs/Scrolling.html#window
@@ -49,7 +53,6 @@ pub struct Ppu {
     pub step: PpuStep,
     stat_irq: bool,
     state: PpuState,
-    is_turning_on: bool,
     previous_lyc: u8,
     // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
@@ -153,11 +156,7 @@ const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
 impl Default for PpuStep {
     fn default() -> Self {
-        Self::OamScan {
-            dots_count: 0,
-            window_y: Default::default(),
-            ly: 0,
-        }
+        Self::SkippedOamScan { dots_count: 2 }
     }
 }
 
@@ -242,20 +241,14 @@ impl Ppu {
         // Citation: As far as has been figured out, the bug happens everytime
         // ANYTHING (including 00) is written to the STAT register ($ff41) while
         // the gameboy is either in HBLANK or VBLANK mode
-        if core::matches!(
-            self.step,
-            PpuStep::HorizontalBlank { .. } | PpuStep::VerticalBlankScanline { .. }
-        ) {
-            self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
-            // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
-            self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
-        } else {
-            self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(value)
-        }
+        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
+        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
+        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
     }
 
     pub fn get_ly(&self) -> u8 {
         match self.step {
+            PpuStep::SkippedOamScan { .. } => 0,
             PpuStep::OamScan { ly, .. } => ly,
             PpuStep::Drawing { ly, .. } => ly,
             PpuStep::HorizontalBlank { ly, .. } => ly,
@@ -285,6 +278,7 @@ impl Ppu {
 
         use PpuStep::*;
         match self.step {
+            PpuStep::SkippedOamScan { .. } => LcdStatus::HBLANK,
             OamScan { .. } => LcdStatus::OAM_SCAN,
             Drawing { .. } => LcdStatus::DRAWING,
             HorizontalBlank { .. } => LcdStatus::HBLANK,
@@ -292,7 +286,7 @@ impl Ppu {
         }
     }
     pub fn is_ppu_enabled(&self) -> bool {
-        self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE) && !self.is_turning_on
+        self.state.lcd_control.contains(LcdControl::LCD_PPU_ENABLE)
     }
     pub fn get_wx(&self) -> u8 {
         self.state.wx
@@ -332,7 +326,6 @@ impl Ppu {
             && new_control.contains(LcdControl::LCD_PPU_ENABLE)
         {
             self.step = Default::default();
-            self.is_turning_on = true;
         }
         self.state.lcd_control = new_control;
     }
@@ -360,6 +353,16 @@ impl Ppu {
 
     fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
         match &mut self.step {
+            PpuStep::SkippedOamScan {
+                dots_count: OAM_SCAN_DURATION,
+            } => {
+                self.step = PpuStep::Drawing {
+                    dots_count: 0,
+                    renderer: Renderer::new(Default::default()),
+                    window_y: None,
+                    ly: 0,
+                }
+            }
             PpuStep::OamScan {
                 window_y,
                 dots_count: OAM_SCAN_DURATION,
@@ -500,8 +503,7 @@ impl Ppu {
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, cycles: u64, dot_index_within_m_cycle: u8) {
-        self.is_turning_on &= dot_index_within_m_cycle != 0;
+    pub fn execute(&mut self, state: &mut State, cycles: u64) {
         if !self.is_ppu_enabled() {
             self.state.refresh_old();
             return;
@@ -532,7 +534,9 @@ impl Ppu {
         }
 
         match &mut self.step {
-            PpuStep::OamScan { dots_count, .. } => {
+            PpuStep::SkippedOamScan { dots_count }
+            | PpuStep::OamScan { dots_count, .. }
+            | PpuStep::HorizontalBlank { dots_count, .. } => {
                 *dots_count += 1;
             }
             PpuStep::Drawing {
@@ -546,7 +550,6 @@ impl Ppu {
 
                 *dots_count += 1;
             }
-            PpuStep::HorizontalBlank { dots_count, .. } => *dots_count += 1,
             PpuStep::VerticalBlankScanline { dots_count } => *dots_count += 1,
         };
 
@@ -557,26 +560,29 @@ impl Ppu {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ppu::{LcdControl, Ppu, PpuStep, VERTICAL_BLANK_DURATION},
+        ppu::{LcdControl, Ppu, PpuStep},
         state::State,
     };
 
     extern crate std;
 
     #[test]
-    fn first_line_duration() {
+    fn line_duration() {
         let mut ppu = Ppu::default();
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
-        let mut duration = 0;
-        // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
-        ppu.execute(&mut state, 0, 0);
+        // to ignore SkippedOamScan when the ppu is turning on
         loop {
-            ppu.execute(&mut state, 0, 0);
-            duration += 1;
-            if let PpuStep::OamScan { dots_count: 1, .. } = ppu.step {
+            if let PpuStep::OamScan { .. } = ppu.step {
                 break;
             }
+            ppu.execute(&mut state, 0);
+        }
+        let mut duration = 0;
+        let current_ly = ppu.get_ly();
+        while ppu.get_ly() <= current_ly {
+            duration += 1;
+            ppu.execute(&mut state, 0);
         }
         assert_eq!(456, duration);
     }
@@ -586,17 +592,31 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
-        let mut duration = 0;
+        // to ignore SkippedOamScan when the ppu is turning on
         loop {
-            ppu.execute(&mut state, 0, 0);
-            duration += 1;
-            if let PpuStep::VerticalBlankScanline {
-                dots_count: VERTICAL_BLANK_DURATION,
+            if let PpuStep::OamScan {
+                ly: 0,
+                dots_count: 1,
                 ..
             } = ppu.step
             {
                 break;
             }
+            ppu.execute(&mut state, 0);
+        }
+        let mut duration = 1;
+        ppu.execute(&mut state, 0);
+        loop {
+            if let PpuStep::OamScan {
+                ly: 0,
+                dots_count: 1,
+                ..
+            } = ppu.step
+            {
+                break;
+            }
+            ppu.execute(&mut state, 0);
+            duration += 1;
         }
         assert_eq!(70224, duration);
     }
@@ -609,7 +629,7 @@ mod tests {
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
 
         while !lys.is_empty() {
-            ppu.execute(&mut state, 0, 0);
+            ppu.execute(&mut state, 0);
             lys.remove(&ppu.get_ly());
         }
     }
