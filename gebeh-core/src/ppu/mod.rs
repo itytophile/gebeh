@@ -156,7 +156,7 @@ const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
 impl Default for PpuStep {
     fn default() -> Self {
-        Self::SkippedOamScan { dots_count: 6 }
+        Self::SkippedOamScan { dots_count: 2 }
     }
 }
 
@@ -560,26 +560,29 @@ impl Ppu {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ppu::{LcdControl, Ppu, PpuStep, VERTICAL_BLANK_DURATION},
+        ppu::{LcdControl, Ppu, PpuStep},
         state::State,
     };
 
     extern crate std;
 
     #[test]
-    fn first_line_duration() {
+    fn line_duration() {
         let mut ppu = Ppu::default();
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
-        let mut duration = 0;
-        // we don't count this iteration, it's to skip the first Ppu::OamScan { dots_count: 1 }
-        ppu.execute(&mut state, 0);
+        // to ignore SkippedOamScan when the ppu is turning on
         loop {
-            ppu.execute(&mut state, 0);
-            duration += 1;
-            if let PpuStep::OamScan { dots_count: 1, .. } = ppu.step {
+            if let PpuStep::OamScan { .. } = ppu.step {
                 break;
             }
+            ppu.execute(&mut state, 0);
+        }
+        let mut duration = 0;
+        let current_ly = ppu.get_ly();
+        while ppu.get_ly() <= current_ly {
+            duration += 1;
+            ppu.execute(&mut state, 0);
         }
         assert_eq!(456, duration);
     }
@@ -589,17 +592,31 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut state = State::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
-        let mut duration = 0;
+        // to ignore SkippedOamScan when the ppu is turning on
         loop {
-            ppu.execute(&mut state, 0);
-            duration += 1;
-            if let PpuStep::VerticalBlankScanline {
-                dots_count: VERTICAL_BLANK_DURATION,
+            if let PpuStep::OamScan {
+                ly: 0,
+                dots_count: 1,
                 ..
             } = ppu.step
             {
                 break;
             }
+            ppu.execute(&mut state, 0);
+        }
+        let mut duration = 1;
+        ppu.execute(&mut state, 0);
+        loop {
+            if let PpuStep::OamScan {
+                ly: 0,
+                dots_count: 1,
+                ..
+            } = ppu.step
+            {
+                break;
+            }
+            ppu.execute(&mut state, 0);
+            duration += 1;
         }
         assert_eq!(70224, duration);
     }
