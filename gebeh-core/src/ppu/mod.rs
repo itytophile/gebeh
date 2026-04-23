@@ -4,6 +4,7 @@ mod fifos;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
+mod prout;
 
 use arrayvec::ArrayVec;
 
