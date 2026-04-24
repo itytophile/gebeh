@@ -6,9 +6,13 @@ fn wy_match(lcd_control: LcdControl, wy: u8, ly: u8) -> bool {
     lcd_control.contains(LcdControl::WINDOW_ENABLE) && wy == ly
 }
 
+fn wxy_match(wy_latch: bool, bg_win_counter: u8, wx: u8) -> bool {
+    wy_latch && bg_win_counter == wx
+}
+
 struct WyLatch {
     match_ff: bool,
-    latch: bool
+    latch: bool,
 }
 
 impl WyLatch {
@@ -18,20 +22,20 @@ impl WyLatch {
             self.latch = false;
             return false;
         }
-        
+
         let old_match_ff = self.match_ff;
-        
+
         if hclk {
             self.match_ff = wy_match;
         }
-        
+
         if is_mode1 {
             self.latch = false;
             return false;
         }
-        
+
         self.latch |= !old_match_ff && self.match_ff;
-        
+
         self.latch
     }
 }
@@ -39,7 +43,5 @@ impl WyLatch {
 struct WyRegister(u8);
 
 impl WyRegister {
-    fn execute(&mut self) {
-        
-    }
+    fn execute(&mut self) {}
 }
