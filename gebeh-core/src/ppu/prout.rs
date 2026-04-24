@@ -2,36 +2,61 @@
 
 use crate::ppu::LcdControl;
 
-fn wy_match(lcd_control: LcdControl, wy: u8, ly: u8) -> bool {
-    lcd_control.contains(LcdControl::WINDOW_ENABLE) && wy == ly
+fn wy_match(lcd_control: LcdControl, wy: u8, ly: u8) -> WyMatch {
+    WyMatch(lcd_control.contains(LcdControl::WINDOW_ENABLE) && wy == ly)
 }
 
-fn wxy_match(wy_latch: bool, bg_win_counter: u8, wx: u8) -> bool {
-    wy_latch && bg_win_counter == wx
+fn wxy_match(wy_latch: WyLatch, bg_win_counter: u8, wx: u8) -> WxyMatch {
+    WxyMatch(wy_latch.0 && bg_win_counter == wx)
 }
 
-struct WyLatch {
-    match_ff: bool,
-    latch: bool,
+struct WyLatchState {
+    match_ff: FlipFlop,
+    latch: Latch,
 }
+
+struct WyMatch(bool);
+
+struct WyLatch(bool);
+
+struct WxyMatch(bool);
 
 // ignore ppu_reset because it resets everything so whatever
-impl WyLatch {
-    fn execute(&mut self, wy_match: bool, hclk: bool, is_mode1: bool) -> bool {
-        let old_match_ff = self.match_ff;
+impl WyLatchState {
+    fn update(&mut self, wy_match: WyMatch, hclk: bool, is_mode1: bool) -> WyLatch {
+        let match_ff = self.match_ff.update(hclk, wy_match.0);
+        WyLatch(self.latch.update(match_ff, is_mode1))
+    }
+}
 
-        if hclk {
-            self.match_ff = wy_match;
+struct WxyMatchLatch {
+
+}
+
+struct FlipFlop(bool);
+
+impl FlipFlop {
+    fn update(&mut self, clk: bool, d: bool) -> bool {
+        if clk {
+            self.0 = d;
         }
+        self.0
+    }
+}
 
-        if is_mode1 {
-            self.latch = false;
-            return false;
+struct Latch(bool);
+
+impl Latch {
+    fn update(&mut self, set: bool, reset: bool) -> bool {
+        if set && reset {
+            panic!("Invalid state latch");
         }
-
-        self.latch |= !old_match_ff && self.match_ff;
-
-        self.latch
+        if set {
+            self.0 = true;
+        } else if reset {
+            self.0 = false;
+        }
+        self.0
     }
 }
 
