@@ -15,14 +15,9 @@ struct WyLatch {
     latch: bool,
 }
 
+// ignore ppu_reset because it resets everything so whatever
 impl WyLatch {
-    fn execute(&mut self, wy_match: bool, hclk: bool, ppu_reset: bool, is_mode1: bool) -> bool {
-        if ppu_reset {
-            self.match_ff = false;
-            self.latch = false;
-            return false;
-        }
-
+    fn execute(&mut self, wy_match: bool, hclk: bool, is_mode1: bool) -> bool {
         let old_match_ff = self.match_ff;
 
         if hclk {
