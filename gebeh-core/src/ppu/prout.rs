@@ -10,6 +10,24 @@ fn wxy_match(wy_latch: WyLatch, bg_win_counter: u8, wx: u8) -> WxyMatch {
     WxyMatch(wy_latch.0 && bg_win_counter == wx)
 }
 
+struct WxRst(bool);
+
+fn wx_rst(atej: bool, lcd_control: LcdControl, ppu_reset: bool) -> WxRst {
+    WxRst(atej || ppu_reset || !lcd_control.contains(LcdControl::WINDOW_ENABLE))
+}
+
+struct SyncedInWindowState {
+    nopa: FlipFlop,
+}
+
+struct SyncedInWindow(bool);
+
+impl SyncedInWindowState {
+    fn update(&mut self, in_window: InWindow, ppu_4mhz: bool) -> SyncedInWindow {
+        SyncedInWindow(self.nopa.update(!ppu_4mhz, in_window.0) && in_window.0)
+    }
+}
+
 struct WyLatchState {
     match_ff: FlipFlop,
     latch: Latch,
