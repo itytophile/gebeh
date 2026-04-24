@@ -1,10 +1,10 @@
 mod background_fetcher;
 pub mod color;
 mod fifos;
+mod prout;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
-mod prout;
 
 use arrayvec::ArrayVec;
 

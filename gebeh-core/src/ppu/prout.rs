@@ -29,19 +29,29 @@ impl WyLatchState {
     }
 }
 
-struct WxyMatchLatchState {
+struct InWindowState {
     pyco: FlipFlop,
     nunu: FlipFlop,
-    pynu: Latch
+    pynu: Latch,
 }
 
-struct WxyMatchLatch(bool);
+struct InWindow(bool);
 
-impl WxyMatchLatchState {
-    fn update(&mut self, wxy_match: WxyMatch, segu: bool, ppu_4mhz: bool, atej: bool, lcd_control: LcdControl) -> WxyMatchLatch {
+impl InWindowState {
+    fn update(
+        &mut self,
+        wxy_match: WxyMatch,
+        segu: bool,
+        ppu_4mhz: bool,
+        atej: bool,
+        lcd_control: LcdControl,
+    ) -> InWindow {
         let pyco = self.pyco.update(!segu, wxy_match.0);
         let nunu = self.nunu.update(ppu_4mhz, pyco);
-        WxyMatchLatch(self.pynu.update(nunu, atej || !lcd_control.contains(LcdControl::WINDOW_ENABLE)))
+        InWindow(self.pynu.update(
+            nunu,
+            atej || !lcd_control.contains(LcdControl::WINDOW_ENABLE),
+        ))
     }
 }
 
