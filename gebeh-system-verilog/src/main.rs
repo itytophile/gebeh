@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use sv_parser::{
-    Expression, InstanceIdentifier, ListOfPortConnections, NamedPortConnection, Primary, RefNode,
-    parse_sv,
+    Expression, Identifier, InstanceIdentifier, ListOfPortConnections, Locate, NamedPortConnection,
+    Primary, RefNode, SyntaxTree, parse_sv,
 };
 
 fn main() {
@@ -29,12 +29,7 @@ fn main() {
 
         let (name, connections) = &instance.nodes;
         let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
-        let (locate, _) = match id {
-            sv_parser::Identifier::SimpleIdentifier(simple_identifier) => &simple_identifier.nodes,
-            sv_parser::Identifier::EscapedIdentifier(escaped_identifier) => {
-                &escaped_identifier.nodes
-            }
-        };
+        let locate = get_locate_from_identifier(id);
         let id = syntax_tree.get_str(locate).unwrap();
         println!("{} {id}", locate.line);
         let ListOfPortConnections::Named(named) = connections.nodes.1.as_ref().unwrap() else {
@@ -54,26 +49,23 @@ fn main() {
                 };
                 let (_, id, _) = &expr.nodes;
                 let (_, _, id) = &id.nodes;
-                let (locate, _) = match id {
-                    sv_parser::Identifier::SimpleIdentifier(simple_identifier) => {
-                        &simple_identifier.nodes
-                    }
-                    sv_parser::Identifier::EscapedIdentifier(escaped_identifier) => {
-                        &escaped_identifier.nodes
-                    }
-                };
-                syntax_tree.get_str(locate).unwrap()
+                get_name_from_identifier(&syntax_tree, id)
             });
-            let (locate, _) = match &id.nodes.0 {
-                sv_parser::Identifier::SimpleIdentifier(simple_identifier) => {
-                    &simple_identifier.nodes
-                }
-                sv_parser::Identifier::EscapedIdentifier(escaped_identifier) => {
-                    &escaped_identifier.nodes
-                }
-            };
+            let locate = get_locate_from_identifier(&id.nodes.0);
             let id = syntax_tree.get_str(locate).unwrap();
             println!("=> {} {id} {expression:?}", locate.line);
         }
     }
+}
+
+fn get_locate_from_identifier(id: &Identifier) -> &Locate {
+    &match id {
+        Identifier::SimpleIdentifier(simple_identifier) => &simple_identifier.nodes,
+        Identifier::EscapedIdentifier(escaped_identifier) => &escaped_identifier.nodes,
+    }
+    .0
+}
+
+fn get_name_from_identifier<'a>(syntax_tree: &'a SyntaxTree, id: &Identifier) -> &'a str {
+    syntax_tree.get_str(get_locate_from_identifier(id)).unwrap()
 }
