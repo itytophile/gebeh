@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use sv_parser::{
-    EscapedIdentifier, InstanceIdentifier, Locate, RefNode, SimpleIdentifier, SyntaxTree, parse_sv,
-    unwrap_node,
+    Expression, InstanceIdentifier, ListOfPortConnections, NamedPortConnection, Primary, RefNode,
+    parse_sv,
 };
 
 fn main() {
@@ -23,11 +23,48 @@ fn main() {
 
     // &SyntaxTree is iterable
     for node in &syntax_tree {
-        if let RefNode::HierarchicalInstance(instance) = node {
+        let RefNode::HierarchicalInstance(instance) = node else {
+            continue;
+        };
 
-            let (name, connections) = &instance.nodes;
-            let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
-            let (locate, _) = match id {
+        let (name, connections) = &instance.nodes;
+        let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
+        let (locate, _) = match id {
+            sv_parser::Identifier::SimpleIdentifier(simple_identifier) => &simple_identifier.nodes,
+            sv_parser::Identifier::EscapedIdentifier(escaped_identifier) => {
+                &escaped_identifier.nodes
+            }
+        };
+        let id = syntax_tree.get_str(locate).unwrap();
+        println!("{} {id}", locate.line);
+        let ListOfPortConnections::Named(named) = connections.nodes.1.as_ref().unwrap() else {
+            continue;
+        };
+        for a in named.nodes.0.contents() {
+            let NamedPortConnection::Identifier(a) = a else {
+                panic!()
+            };
+            let (_, _, id, expression) = &a.nodes;
+            let expression = &expression.as_ref().unwrap().nodes.1.as_ref().map(|expr| {
+                let Expression::Primary(expr) = expr else {
+                    panic!()
+                };
+                let Primary::Hierarchical(expr) = expr.as_ref() else {
+                    panic!()
+                };
+                let (_, id, _) = &expr.nodes;
+                let (_, _, id) = &id.nodes;
+                let (locate, _) = match id {
+                    sv_parser::Identifier::SimpleIdentifier(simple_identifier) => {
+                        &simple_identifier.nodes
+                    }
+                    sv_parser::Identifier::EscapedIdentifier(escaped_identifier) => {
+                        &escaped_identifier.nodes
+                    }
+                };
+                syntax_tree.get_str(locate).unwrap()
+            });
+            let (locate, _) = match &id.nodes.0 {
                 sv_parser::Identifier::SimpleIdentifier(simple_identifier) => {
                     &simple_identifier.nodes
                 }
@@ -36,18 +73,7 @@ fn main() {
                 }
             };
             let id = syntax_tree.get_str(locate).unwrap();
-            println!("{} {id}", locate.line);
+            println!("=> {} {id} {expression:?}", locate.line);
         }
-    }
-}
-
-fn get_identifier(node: RefNode) -> Option<Locate> {
-    // unwrap_node! can take multiple types
-    match unwrap_node!(node, SimpleIdentifier, EscapedIdentifier) {
-        Some(
-            RefNode::SimpleIdentifier(SimpleIdentifier { nodes: (locate, _) })
-            | RefNode::EscapedIdentifier(EscapedIdentifier { nodes: (locate, _) }),
-        ) => Some(*locate),
-        _ => None,
     }
 }
