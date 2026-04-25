@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use sv_parser::{
-    Description, Expression, Identifier, InstanceIdentifier, ListOfPortConnections, Locate,
-    ModuleDeclaration, ModuleOrGenerateItem, NamedPortConnection, NonPortModuleItem, Primary,
-    RefNode, SyntaxTree, parse_sv,
+    Description, Expression, HierarchicalInstance, Identifier, InstanceIdentifier,
+    ListOfPortConnections, Locate, ModuleDeclaration, ModuleOrGenerateItem, NamedPortConnection,
+    NonPortModuleItem, Primary, RefNode, SyntaxTree, parse_sv,
 };
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
     }
 }
 
-fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Dffr<'a>> {
+fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instance<'a>> {
     let a = syntax_tree.into_iter().next().unwrap();
     let RefNode::SourceText(a) = a else { panic!() };
     let Description::ModuleDeclaration(a) = &a.nodes.2[0] else {
@@ -36,77 +36,82 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Dffr<'
     let ModuleDeclaration::Ansi(a) = a.as_ref() else {
         panic!()
     };
-    a.nodes
-        .2
-        .iter()
-        .filter_map(move |a| {
-            let NonPortModuleItem::ModuleOrGenerateItem(a) = a else {
+    a.nodes.2.iter().filter_map(move |a| {
+        let NonPortModuleItem::ModuleOrGenerateItem(a) = a else {
+            panic!()
+        };
+        let ModuleOrGenerateItem::Module(a) = a.as_ref() else {
+            return None;
+        };
+        let (module_id, _, instances, _) = &a.nodes.1.nodes;
+        let name = get_name_from_identifier(syntax_tree, &module_id.nodes.0);
+        let instance = &instances.nodes.0;
+
+        match name {
+            "dmg_dffr" => Some(Instance::Dffr(parse_dffr(syntax_tree, instance))),
+            _ => None,
+        }
+    })
+}
+
+fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstance) -> Dffr<'a> {
+    let (name, connections) = &instance.nodes;
+    let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
+    let locate = get_locate_from_identifier(id);
+    let id = syntax_tree.get_str(locate).unwrap();
+    let ListOfPortConnections::Named(named) = connections.nodes.1.as_ref().unwrap() else {
+        panic!();
+    };
+
+    let mut d = None;
+    let mut clk = None;
+    let mut r_n = None;
+    let mut q = None;
+    let mut q_n = None;
+
+    for a in named.nodes.0.contents() {
+        let NamedPortConnection::Identifier(a) = a else {
+            panic!()
+        };
+        let (_, _, id, expression) = &a.nodes;
+        let expression = &expression.as_ref().unwrap().nodes.1.as_ref().map(|expr| {
+            let Expression::Primary(expr) = expr else {
                 panic!()
             };
-            let ModuleOrGenerateItem::Module(a) = a.as_ref() else {
-                return None;
+            let Primary::Hierarchical(expr) = expr.as_ref() else {
+                panic!()
             };
-            let (module_id, _, instances, _) = &a.nodes.1.nodes;
-            let name = get_name_from_identifier(syntax_tree, &module_id.nodes.0);
-            if name != "dmg_dffr" {
-                return None;
-            }
-            println!("{name}");
-            let instance = &instances.nodes.0;
-            let (name, connections) = &instance.nodes;
-            let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
-            let locate = get_locate_from_identifier(id);
-            let id = syntax_tree.get_str(locate).unwrap();
-            let ListOfPortConnections::Named(named) = connections.nodes.1.as_ref().unwrap() else {
-                panic!();
-            };
-            Some((id, named))
-        })
-        .map(move |(id, named)| {
-            let mut d = None;
-            let mut clk = None;
-            let mut r_n = None;
-            let mut q = None;
-            let mut q_n = None;
+            let (_, id, _) = &expr.nodes;
+            let (_, _, id) = &id.nodes;
+            get_name_from_identifier(syntax_tree, id)
+        });
+        let locate = get_locate_from_identifier(&id.nodes.0);
+        let id = syntax_tree.get_str(locate).unwrap();
 
-            for a in named.nodes.0.contents() {
-                let NamedPortConnection::Identifier(a) = a else {
-                    panic!()
-                };
-                let (_, _, id, expression) = &a.nodes;
-                let expression = &expression.as_ref().unwrap().nodes.1.as_ref().map(|expr| {
-                    let Expression::Primary(expr) = expr else {
-                        panic!()
-                    };
-                    let Primary::Hierarchical(expr) = expr.as_ref() else {
-                        panic!()
-                    };
-                    let (_, id, _) = &expr.nodes;
-                    let (_, _, id) = &id.nodes;
-                    get_name_from_identifier(syntax_tree, id)
-                });
-                let locate = get_locate_from_identifier(&id.nodes.0);
-                let id = syntax_tree.get_str(locate).unwrap();
+        match id {
+            "d" => d = *expression,
+            "clk" => clk = *expression,
+            "r_n" => r_n = *expression,
+            "q" => q = *expression,
+            "q_n" => q_n = *expression,
+            _ => panic!(),
+        }
+    }
 
-                match id {
-                    "d" => d = *expression,
-                    "clk" => clk = *expression,
-                    "r_n" => r_n = *expression,
-                    "q" => q = *expression,
-                    "q_n" => q_n = *expression,
-                    _ => panic!(),
-                }
-            }
+    Dffr {
+        d: d.unwrap(),
+        name: id,
+        clk: clk.unwrap(),
+        q,
+        q_n,
+        r_n: r_n.unwrap(),
+    }
+}
 
-            Dffr {
-                d: d.unwrap(),
-                name: id,
-                clk: clk.unwrap(),
-                q,
-                q_n,
-                r_n: r_n.unwrap(),
-            }
-        })
+#[derive(Debug)]
+enum Instance<'a> {
+    Dffr(Dffr<'a>),
+    Not(Not<'a>),
 }
 
 #[derive(Debug)]
@@ -117,6 +122,12 @@ struct Dffr<'a> {
     r_n: &'a str,
     q: Option<&'a str>,
     q_n: Option<&'a str>,
+}
+
+#[derive(Debug)]
+struct Not<'a> {
+    input: &'a str,
+    y: &'a str,
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {
