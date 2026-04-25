@@ -23,9 +23,64 @@ fn main() {
 
     let (syntax_tree, _) = result.unwrap();
 
-    for dffr in get_instances(&syntax_tree) {
+    let instances: Vec<_> = get_instances(&syntax_tree).collect();
+
+    let nots_by_ouput: HashMap<_, _> = instances
+        .iter()
+        .filter_map(|instance| {
+            if let Instance::Not(not) = instance {
+                Some(not)
+            } else {
+                None
+            }
+        })
+        .map(|not| (not.y, not.input))
+        .collect();
+
+    for dffr in instances
+        .iter()
+        .filter_map(|instance| {
+            if let Instance::Dffr(dffr) = instance {
+                Some(dffr)
+            } else {
+                None
+            }
+        })
+        .map(|dffr| canonicalize_dffr(dffr, &nots_by_ouput))
+    {
         println!("{dffr:?}");
     }
+}
+
+/// To ignore not gates
+fn canonicalize_dffr<'a>(
+    dffr: &Dffr<'a>,
+    nots_by_output: &HashMap<&'a str, &'a str>,
+) -> CanonicalDffr<'a> {
+    CanonicalDffr {
+        name: dffr.name,
+        clk: canonicalize_input(dffr.clk, nots_by_output),
+        d: canonicalize_input(dffr.d, nots_by_output),
+        r_n: canonicalize_input(dffr.r_n, nots_by_output),
+        q: dffr.q,
+        q_n: dffr.q_n,
+    }
+}
+
+fn canonicalize_input<'a>(input: &'a str, nots_by_output: &HashMap<&'a str, &'a str>) -> Input<'a> {
+    let mut input = Input {
+        name: input,
+        is_inverted: false,
+    };
+
+    while let Some(inverted) = nots_by_output.get(input.name) {
+        input = Input {
+            name: inverted,
+            is_inverted: !input.is_inverted,
+        };
+    }
+
+    input
 }
 
 fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instance<'a>> {
@@ -67,7 +122,7 @@ fn parse_not<'a>(
     let mut input = None;
     let mut y = None;
 
-    for (id, expression) in get_port_ids(syntax_tree, named) {
+    for (id, expression) in get_ports(syntax_tree, named) {
         match id {
             "y" => y = expression,
             "in" => input = expression,
@@ -96,7 +151,7 @@ fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstanc
     let mut q = None;
     let mut q_n = None;
 
-    for (id, expression) in get_port_ids(syntax_tree, named) {
+    for (id, expression) in get_ports(syntax_tree, named) {
         match id {
             "d" => d = expression,
             "clk" => clk = expression,
@@ -117,7 +172,7 @@ fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstanc
     }
 }
 
-fn get_port_ids<'a>(
+fn get_ports<'a>(
     syntax_tree: &'a SyntaxTree,
     ports: &'a ListOfPortConnectionsNamed,
 ) -> impl Iterator<Item = (&'a str, Option<&'a str>)> {
@@ -175,6 +230,16 @@ struct Dffr<'a> {
 }
 
 #[derive(Debug)]
+struct CanonicalDffr<'a> {
+    name: &'a str,
+    d: Input<'a>,
+    clk: Input<'a>,
+    r_n: Input<'a>,
+    q: Option<&'a str>,
+    q_n: Option<&'a str>,
+}
+
+#[derive(Debug)]
 struct Not<'a> {
     name: &'a str,
     input: &'a str,
@@ -191,4 +256,19 @@ fn get_locate_from_identifier(id: &Identifier) -> &Locate {
 
 fn get_name_from_identifier<'a>(syntax_tree: &'a SyntaxTree, id: &Identifier) -> &'a str {
     syntax_tree.get_str(get_locate_from_identifier(id)).unwrap()
+}
+
+impl<'a> Instance<'a> {
+    fn get_name(&self) -> &'a str {
+        match self {
+            Instance::Dffr(dffr) => dffr.name,
+            Instance::Not(not) => not.name,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Input<'a> {
+    name: &'a str,
+    is_inverted: bool,
 }
