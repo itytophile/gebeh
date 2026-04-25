@@ -3,8 +3,9 @@ use std::env;
 use std::path::PathBuf;
 use sv_parser::{
     Description, Expression, HierarchicalInstance, Identifier, InstanceIdentifier,
-    ListOfPortConnections, Locate, ModuleDeclaration, ModuleOrGenerateItem, NamedPortConnection,
-    NonPortModuleItem, Primary, RefNode, SyntaxTree, parse_sv,
+    ListOfPortConnections, ListOfPortConnectionsNamed, Locate, ModuleDeclaration,
+    ModuleOrGenerateItem, NamedPortConnection, NonPortModuleItem, Primary, RefNode, SyntaxTree,
+    parse_sv,
 };
 
 fn main() {
@@ -47,21 +48,47 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
         let name = get_name_from_identifier(syntax_tree, &module_id.nodes.0);
         let instance = &instances.nodes.0;
 
-        match name {
-            "dmg_dffr" => Some(Instance::Dffr(parse_dffr(syntax_tree, instance))),
-            _ => None,
+        if name == "dmg_dffr" {
+            Some(Instance::Dffr(parse_dffr(syntax_tree, instance)))
+        } else if name.starts_with("dmg_not_x") {
+            Some(Instance::Not(parse_not(syntax_tree, instance)?))
+        } else {
+            None
         }
     })
 }
 
-fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstance) -> Dffr<'a> {
-    let (name, connections) = &instance.nodes;
-    let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
-    let locate = get_locate_from_identifier(id);
-    let id = syntax_tree.get_str(locate).unwrap();
-    let ListOfPortConnections::Named(named) = connections.nodes.1.as_ref().unwrap() else {
-        panic!();
+fn parse_not<'a>(
+    syntax_tree: &'a SyntaxTree,
+    instance: &'a HierarchicalInstance,
+) -> Option<Not<'a>> {
+    let (id, named) = extract_id_and_ports(syntax_tree, instance);
+
+    let mut input = None;
+    let mut y = None;
+
+    for (id, expression) in get_port_ids(syntax_tree, named) {
+        match id {
+            "y" => y = expression,
+            "in" => input = expression,
+            _ => panic!(),
+        }
+    }
+
+    let Some(y) = y else {
+        eprintln!("No y for {id}");
+        return None;
     };
+
+    Some(Not {
+        name: id,
+        input: input.unwrap(),
+        y,
+    })
+}
+
+fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstance) -> Dffr<'a> {
+    let (id, named) = extract_id_and_ports(syntax_tree, instance);
 
     let mut d = None;
     let mut clk = None;
@@ -69,31 +96,13 @@ fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstanc
     let mut q = None;
     let mut q_n = None;
 
-    for a in named.nodes.0.contents() {
-        let NamedPortConnection::Identifier(a) = a else {
-            panic!()
-        };
-        let (_, _, id, expression) = &a.nodes;
-        let expression = &expression.as_ref().unwrap().nodes.1.as_ref().map(|expr| {
-            let Expression::Primary(expr) = expr else {
-                panic!()
-            };
-            let Primary::Hierarchical(expr) = expr.as_ref() else {
-                panic!()
-            };
-            let (_, id, _) = &expr.nodes;
-            let (_, _, id) = &id.nodes;
-            get_name_from_identifier(syntax_tree, id)
-        });
-        let locate = get_locate_from_identifier(&id.nodes.0);
-        let id = syntax_tree.get_str(locate).unwrap();
-
+    for (id, expression) in get_port_ids(syntax_tree, named) {
         match id {
-            "d" => d = *expression,
-            "clk" => clk = *expression,
-            "r_n" => r_n = *expression,
-            "q" => q = *expression,
-            "q_n" => q_n = *expression,
+            "d" => d = expression,
+            "clk" => clk = expression,
+            "r_n" => r_n = expression,
+            "q" => q = expression,
+            "q_n" => q_n = expression,
             _ => panic!(),
         }
     }
@@ -106,6 +115,47 @@ fn parse_dffr<'a>(syntax_tree: &'a SyntaxTree, instance: &'a HierarchicalInstanc
         q_n,
         r_n: r_n.unwrap(),
     }
+}
+
+fn get_port_ids<'a>(
+    syntax_tree: &'a SyntaxTree,
+    ports: &'a ListOfPortConnectionsNamed,
+) -> impl Iterator<Item = (&'a str, Option<&'a str>)> {
+    core::iter::once(&ports.nodes.0.nodes.0)
+        .chain(ports.nodes.0.nodes.1.iter().map(|(_, port)| port))
+        .map(|a| {
+            let NamedPortConnection::Identifier(a) = a else {
+                panic!()
+            };
+            let (_, _, id, expression) = &a.nodes;
+            let expression = expression.as_ref().unwrap().nodes.1.as_ref().map(|expr| {
+                let Expression::Primary(expr) = expr else {
+                    panic!()
+                };
+                let Primary::Hierarchical(expr) = expr.as_ref() else {
+                    panic!()
+                };
+                let (_, id, _) = &expr.nodes;
+                let (_, _, id) = &id.nodes;
+                get_name_from_identifier(syntax_tree, id)
+            });
+            let locate = get_locate_from_identifier(&id.nodes.0);
+            (syntax_tree.get_str(locate).unwrap(), expression)
+        })
+}
+
+fn extract_id_and_ports<'a>(
+    syntax_tree: &'a SyntaxTree,
+    instance: &'a HierarchicalInstance,
+) -> (&'a str, &'a sv_parser::ListOfPortConnectionsNamed) {
+    let (name, connections) = &instance.nodes;
+    let (InstanceIdentifier { nodes: (id,) }, _) = &name.nodes;
+    let locate = get_locate_from_identifier(id);
+    let id = syntax_tree.get_str(locate).unwrap();
+    let ListOfPortConnections::Named(named) = connections.nodes.1.as_ref().unwrap() else {
+        panic!();
+    };
+    (id, named)
 }
 
 #[derive(Debug)]
@@ -126,6 +176,7 @@ struct Dffr<'a> {
 
 #[derive(Debug)]
 struct Not<'a> {
+    name: &'a str,
     input: &'a str,
     y: &'a str,
 }
