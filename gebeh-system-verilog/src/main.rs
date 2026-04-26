@@ -9,7 +9,8 @@ use sv_parser::{
 };
 
 use crate::{
-    dffr::{Dffr, canonicalize_dffr, parse_dffr},
+    dffr::{CanonicalDffr, Dffr, canonicalize_dffr, parse_dffr},
+    nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
     not::{Not, parse_not},
 };
 
@@ -34,7 +35,7 @@ fn main() {
 
     let instances: Vec<_> = get_instances(&syntax_tree).collect();
 
-    let nots_by_ouput: HashMap<_, _> = instances
+    let nots_by_output: HashMap<_, _> = instances
         .iter()
         .filter_map(|instance| {
             if let Instance::Not(not) = instance {
@@ -46,18 +47,18 @@ fn main() {
         .map(|not| (not.y, not.input))
         .collect();
 
-    for dffr in instances
-        .iter()
-        .filter_map(|instance| {
-            if let Instance::Dffr(dffr) = instance {
-                Some(dffr)
-            } else {
-                None
-            }
-        })
-        .map(|dffr| canonicalize_dffr(dffr, &nots_by_ouput))
-    {
-        println!("{dffr:?}");
+    for canonical in instances.iter().filter_map(|instance| match instance {
+        Instance::Dffr(dffr) => Some(CanonicalInstance::Dffr(canonicalize_dffr(
+            dffr,
+            &nots_by_output,
+        ))),
+        Instance::Not(_) => None,
+        Instance::NorLatch(nor_latch) => Some(CanonicalInstance::NorLatch(canonicalize_nor_latch(
+            nor_latch,
+            &nots_by_output,
+        ))),
+    }) {
+        println!("{canonical:?}");
     }
 }
 
@@ -99,6 +100,8 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
 
         if name == "dmg_dffr" {
             Some(Instance::Dffr(parse_dffr(syntax_tree, instance)))
+        } else if name == "dmg_nor_latch" {
+            Some(Instance::NorLatch(parse_nor_latch(syntax_tree, instance)))
         } else if name.starts_with("dmg_not_x") {
             Some(Instance::Not(parse_not(syntax_tree, instance)?))
         } else {
@@ -152,6 +155,13 @@ fn extract_id_and_ports<'a>(
 enum Instance<'a> {
     Dffr(Dffr<'a>),
     Not(Not<'a>),
+    NorLatch(NorLatch<'a>),
+}
+
+#[derive(Debug)]
+enum CanonicalInstance<'a> {
+    Dffr(CanonicalDffr<'a>),
+    NorLatch(CanonicalNorLatch<'a>),
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {

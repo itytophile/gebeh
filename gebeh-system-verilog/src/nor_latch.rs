@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use sv_parser::{HierarchicalInstance, SyntaxTree};
 
-use crate::{extract_id_and_ports, get_ports};
+use crate::{Input, canonicalize_input, extract_id_and_ports, get_ports};
 
 #[derive(Debug)]
 pub struct NorLatch<'a> {
@@ -38,5 +40,28 @@ pub fn parse_nor_latch<'a>(
         r: r.unwrap(),
         q,
         q_n,
+    }
+}
+
+#[derive(Debug)]
+pub struct CanonicalNorLatch<'a> {
+    name: &'a str,
+    s: Input<'a>,
+    r: Input<'a>,
+    q: Option<&'a str>,
+    q_n: Option<&'a str>,
+}
+
+/// To ignore not gates
+pub fn canonicalize_nor_latch<'a>(
+    nor_latch: &NorLatch<'a>,
+    nots_by_output: &HashMap<&'a str, &'a str>,
+) -> CanonicalNorLatch<'a> {
+    CanonicalNorLatch {
+        name: nor_latch.name,
+        s: canonicalize_input(nor_latch.s, nots_by_output),
+        r: canonicalize_input(nor_latch.r, nots_by_output),
+        q: nor_latch.q,
+        q_n: nor_latch.q_n,
     }
 }
