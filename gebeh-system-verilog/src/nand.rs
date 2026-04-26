@@ -64,3 +64,18 @@ pub fn canonicalize_nand<'a>(
         y: nand.y,
     }
 }
+
+impl CanonicalNand<'_> {
+    pub fn generate_code(&self) -> String {
+        let name = self.y;
+
+        let mut inputs = self.inputs.iter();
+        let mut output = format!("let {name} = !({}", inputs.next().unwrap().generate_code());
+
+        for input in inputs {
+            output += &format!(" && {}", input.generate_code());
+        }
+
+        output + ");\n"
+    }
+}
