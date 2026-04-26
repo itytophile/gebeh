@@ -104,8 +104,8 @@ fn main() {
         &mut already_seen,
     );
 
-    for instance in already_seen {
-        println!("{}", instance.0.get_name())
+    for instance in already_seen.iter().rev() {
+        println!("{}", instance.0.generate_code())
     }
 }
 
@@ -304,6 +304,14 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.name,
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
             CanonicalInstance::Nand(canonical_nand) => canonical_nand.name,
+        }
+    }
+
+    fn generate_code(&self) -> String {
+        match self {
+            CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.generate_code(),
+            CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.generate_code(),
+            CanonicalInstance::Nand(canonical_nand) => canonical_nand.generate_code(),
         }
     }
 }

@@ -84,11 +84,11 @@ impl CanonicalDffr<'_> {
         let mut output = format!("let {name}_output = self.{name}.update({d}, {clk}, {r_n});\n");
 
         if let Some(q) = self.q {
-            output += &format!("let {q} = name_output;\n");
+            output += &format!("let {q} = {name}_output;\n");
         }
 
         if let Some(q_n) = self.q_n {
-            output += &format!("let {q_n} = !name_output;\n");
+            output += &format!("let {q_n} = !{name}_output;\n");
         }
 
         output
