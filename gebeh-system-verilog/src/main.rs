@@ -10,11 +10,13 @@ use sv_parser::{
 
 use crate::{
     dffr::{CanonicalDffr, Dffr, canonicalize_dffr, parse_dffr},
+    nand::{CanonicalNand, Nand, canonicalize_nand, parse_nand},
     nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
     not::{Not, parse_not},
 };
 
 mod dffr;
+mod nand;
 mod nor_latch;
 mod not;
 
@@ -55,6 +57,10 @@ fn main() {
         Instance::Not(_) => None,
         Instance::NorLatch(nor_latch) => Some(CanonicalInstance::NorLatch(canonicalize_nor_latch(
             nor_latch,
+            &nots_by_output,
+        ))),
+        Instance::Nand(nand) => Some(CanonicalInstance::Nand(canonicalize_nand(
+            nand,
             &nots_by_output,
         ))),
     }) {
@@ -104,6 +110,10 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
             Some(Instance::NorLatch(parse_nor_latch(syntax_tree, instance)))
         } else if name.starts_with("dmg_not_x") {
             Some(Instance::Not(parse_not(syntax_tree, instance)?))
+        } else if name == "dmg_nand_latch" {
+            None
+        } else if name.starts_with("dmg_nand") {
+            Some(Instance::Nand(parse_nand(syntax_tree, instance)?))
         } else {
             None
         }
@@ -156,12 +166,14 @@ enum Instance<'a> {
     Dffr(Dffr<'a>),
     Not(Not<'a>),
     NorLatch(NorLatch<'a>),
+    Nand(Nand<'a>),
 }
 
 #[derive(Debug)]
 enum CanonicalInstance<'a> {
     Dffr(CanonicalDffr<'a>),
     NorLatch(CanonicalNorLatch<'a>),
+    Nand(CanonicalNand<'a>),
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {

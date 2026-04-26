@@ -1100,6 +1100,7 @@ dependencies = [
 name = "gebeh-system-verilog"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "sv-parser",
 ]
 
