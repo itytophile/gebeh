@@ -1,6 +1,7 @@
 use arrayvec::ArrayVec;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
+use std::hash::Hash;
 use std::path::PathBuf;
 use sv_parser::{
     Description, Expression, HierarchicalInstance, Identifier, InstanceIdentifier,
@@ -94,7 +95,33 @@ fn main() {
 
     let input = canonicalize_input(input, &nots_by_output);
 
-    dbg!(input);
+    let mut already_seen = HashSet::new();
+
+    dfs(
+        input.name,
+        &canonical_instances_by_output,
+        &mut already_seen,
+    );
+
+    for instance in already_seen {
+        println!("{:?}", instance.0)
+    }
+}
+
+fn dfs<'a>(
+    current: &'a str,
+    canonical_instances_by_output: &HashMap<&'a str, &'a CanonicalInstance>,
+    already_seen: &mut HashSet<RefEquality<CanonicalInstance<'a>>>,
+) {
+    let Some(instance) = canonical_instances_by_output.get(current) else {
+        return;
+    };
+
+    if already_seen.insert(RefEquality(*instance)) {
+        for input in instance.get_inputs() {
+            dfs(input, canonical_instances_by_output, already_seen);
+        }
+    }
 }
 
 fn canonicalize_input<'a>(input: &'a str, nots_by_output: &HashMap<&'a str, &'a str>) -> Input<'a> {
@@ -221,4 +248,47 @@ fn get_name_from_identifier<'a>(syntax_tree: &'a SyntaxTree, id: &Identifier) ->
 struct Input<'a> {
     name: &'a str,
     is_inverted: bool,
+}
+
+struct RefEquality<'a, T>(&'a T);
+
+impl<'a, T> Hash for RefEquality<'a, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let ptr: *const T = self.0;
+        ptr.hash(state);
+    }
+}
+
+impl<'a, T> PartialEq for RefEquality<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        let this: *const T = self.0;
+        let other: *const T = other.0;
+        this == other
+    }
+}
+
+impl<'a, T> Eq for RefEquality<'a, T> {}
+
+impl<'a> CanonicalInstance<'a> {
+    fn get_inputs(&self) -> ArrayVec<&'a str, 7> {
+        match self {
+            CanonicalInstance::Dffr(canonical_dffr) => [
+                canonical_dffr.clk.name,
+                canonical_dffr.d.name,
+                canonical_dffr.r_n.name,
+            ]
+            .into_iter()
+            .collect(),
+            CanonicalInstance::NorLatch(canonical_nor_latch) => {
+                [canonical_nor_latch.r.name, canonical_nor_latch.s.name]
+                    .into_iter()
+                    .collect()
+            }
+            CanonicalInstance::Nand(canonical_nand) => canonical_nand
+                .inputs
+                .iter()
+                .map(|input| input.name)
+                .collect(),
+        }
+    }
 }
