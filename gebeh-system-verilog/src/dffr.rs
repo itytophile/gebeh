@@ -93,4 +93,8 @@ impl CanonicalDffr<'_> {
 
         output
     }
+
+    pub fn generate_declaration(&self) -> String {
+        format!("{}: Dffr,", self.name)
+    }
 }

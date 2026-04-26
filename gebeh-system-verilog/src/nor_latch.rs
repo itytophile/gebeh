@@ -89,4 +89,8 @@ impl CanonicalNorLatch<'_> {
 
         output
     }
+
+    pub fn generate_declaration(&self) -> String {
+        format!("{}: NorLatch,", self.name)
+    }
 }

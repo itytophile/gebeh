@@ -104,6 +104,14 @@ fn main() {
         &mut already_seen,
     );
 
+    for declaration in already_seen
+        .iter()
+        .rev()
+        .filter_map(|instance| instance.0.generate_declaration())
+    {
+        println!("{declaration}")
+    }
+
     for instance in already_seen.iter().rev() {
         println!("{}", instance.0.generate_code())
     }
@@ -312,6 +320,16 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.generate_code(),
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.generate_code(),
             CanonicalInstance::Nand(canonical_nand) => canonical_nand.generate_code(),
+        }
+    }
+
+    fn generate_declaration(&self) -> Option<String> {
+        match self {
+            CanonicalInstance::Dffr(canonical_dffr) => Some(canonical_dffr.generate_declaration()),
+            CanonicalInstance::NorLatch(canonical_nor_latch) => {
+                Some(canonical_nor_latch.generate_declaration())
+            }
+            _ => None,
         }
     }
 }
