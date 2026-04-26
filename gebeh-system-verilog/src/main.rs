@@ -251,6 +251,12 @@ struct Input<'a> {
     is_inverted: bool,
 }
 
+impl Input<'_> {
+    pub fn generate_code(&self) -> String {
+        format!("{}{}", if self.is_inverted { "!" } else { "" }, self.name)
+    }
+}
+
 struct RefEquality<'a, T>(&'a T);
 
 impl<'a, T> Hash for RefEquality<'a, T> {

@@ -68,3 +68,29 @@ pub fn canonicalize_dffr<'a>(
         q_n: dffr.q_n,
     }
 }
+
+impl CanonicalDffr<'_> {
+    pub fn generate_code(&self) -> String {
+        let name = self.name;
+
+        if self.q.is_none() && self.q_n.is_none() {
+            return String::new();
+        }
+
+        let d = self.d.generate_code();
+        let clk = self.clk.generate_code();
+        let r_n = self.r_n.generate_code();
+
+        let mut output = format!("let {name}_output = self.{name}.update({d}, {clk}, {r_n});\n");
+
+        if let Some(q) = self.q {
+            output += &format!("let {q} = name_output;\n");
+        }
+
+        if let Some(q_n) = self.q_n {
+            output += &format!("let {q_n} = !name_output;\n");
+        }
+
+        output
+    }
+}
