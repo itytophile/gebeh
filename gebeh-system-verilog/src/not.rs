@@ -19,15 +19,10 @@ pub fn parse_not<'a>(
         }
     }
 
-    let Some(y) = y else {
-        eprintln!("No y for {id}");
-        return None;
-    };
-
     Some(Not {
         name: id,
         input: input.unwrap(),
-        y,
+        y: y?,
     })
 }
 

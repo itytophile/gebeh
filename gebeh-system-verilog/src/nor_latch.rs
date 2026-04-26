@@ -45,11 +45,11 @@ pub fn parse_nor_latch<'a>(
 
 #[derive(Debug)]
 pub struct CanonicalNorLatch<'a> {
-    name: &'a str,
-    s: Input<'a>,
-    r: Input<'a>,
-    q: Option<&'a str>,
-    q_n: Option<&'a str>,
+    pub name: &'a str,
+    pub s: Input<'a>,
+    pub r: Input<'a>,
+    pub q: Option<&'a str>,
+    pub q_n: Option<&'a str>,
 }
 
 /// To ignore not gates

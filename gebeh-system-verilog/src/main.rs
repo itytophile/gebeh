@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -37,6 +38,9 @@ fn main() {
 
     let instances: Vec<_> = get_instances(&syntax_tree).collect();
 
+    // the end of what's interesting (yeah it's called input it's strange)
+    let input = &args[2];
+
     let nots_by_output: HashMap<_, _> = instances
         .iter()
         .filter_map(|instance| {
@@ -49,23 +53,48 @@ fn main() {
         .map(|not| (not.y, not.input))
         .collect();
 
-    for canonical in instances.iter().filter_map(|instance| match instance {
-        Instance::Dffr(dffr) => Some(CanonicalInstance::Dffr(canonicalize_dffr(
-            dffr,
-            &nots_by_output,
-        ))),
-        Instance::Not(_) => None,
-        Instance::NorLatch(nor_latch) => Some(CanonicalInstance::NorLatch(canonicalize_nor_latch(
-            nor_latch,
-            &nots_by_output,
-        ))),
-        Instance::Nand(nand) => Some(CanonicalInstance::Nand(canonicalize_nand(
-            nand,
-            &nots_by_output,
-        ))),
-    }) {
-        println!("{canonical:?}");
-    }
+    let canonical_instances: Vec<_> = instances
+        .iter()
+        .filter_map(|instance| match instance {
+            Instance::Dffr(dffr) => Some(CanonicalInstance::Dffr(canonicalize_dffr(
+                dffr,
+                &nots_by_output,
+            ))),
+            Instance::Not(_) => None,
+            Instance::NorLatch(nor_latch) => Some(CanonicalInstance::NorLatch(
+                canonicalize_nor_latch(nor_latch, &nots_by_output),
+            )),
+            Instance::Nand(nand) => Some(CanonicalInstance::Nand(canonicalize_nand(
+                nand,
+                &nots_by_output,
+            ))),
+        })
+        .collect();
+
+    let canonical_instances_by_output: HashMap<_, _> = canonical_instances
+        .iter()
+        .flat_map(|instance| match instance {
+            CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr
+                .q
+                .into_iter()
+                .chain(canonical_dffr.q_n)
+                .map(|output| (output, instance))
+                .collect::<ArrayVec<_, 2>>(),
+            CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch
+                .q
+                .into_iter()
+                .chain(canonical_nor_latch.q_n)
+                .map(|output| (output, instance))
+                .collect(),
+            CanonicalInstance::Nand(canonical_nand) => {
+                core::iter::once((canonical_nand.y, instance)).collect()
+            }
+        })
+        .collect();
+
+    let input = canonicalize_input(input, &nots_by_output);
+
+    dbg!(input);
 }
 
 fn canonicalize_input<'a>(input: &'a str, nots_by_output: &HashMap<&'a str, &'a str>) -> Input<'a> {

@@ -44,9 +44,9 @@ pub fn parse_nand<'a>(
 
 #[derive(Debug)]
 pub struct CanonicalNand<'a> {
-    name: &'a str,
-    inputs: ArrayVec<Input<'a>, 7>,
-    y: &'a str,
+    pub name: &'a str,
+    pub inputs: ArrayVec<Input<'a>, 7>,
+    pub y: &'a str,
 }
 
 /// To ignore not gates
