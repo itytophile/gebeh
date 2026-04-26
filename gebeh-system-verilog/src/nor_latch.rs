@@ -65,3 +65,28 @@ pub fn canonicalize_nor_latch<'a>(
         q_n: nor_latch.q_n,
     }
 }
+
+impl CanonicalNorLatch<'_> {
+    pub fn generate_code(&self) -> String {
+        let name = self.name;
+
+        if self.q.is_none() && self.q_n.is_none() {
+            return String::new();
+        }
+
+        let s = self.s.generate_code();
+        let r = self.r.generate_code();
+
+        let mut output = format!("let {name}_output = self.{name}.update({s}, {r});\n");
+
+        if let Some(q) = self.q {
+            output += &format!("let {q} = name_output;\n");
+        }
+
+        if let Some(q_n) = self.q_n {
+            output += &format!("let {q_n} = !name_output;\n");
+        }
+
+        output
+    }
+}
