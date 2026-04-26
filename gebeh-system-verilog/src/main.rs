@@ -1,5 +1,6 @@
 use arrayvec::ArrayVec;
-use std::collections::{HashMap, HashSet};
+use indexmap::IndexSet;
+use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -95,7 +96,7 @@ fn main() {
 
     let input = canonicalize_input(input, &nots_by_output);
 
-    let mut already_seen = HashSet::new();
+    let mut already_seen = IndexSet::new();
 
     dfs(
         input.name,
@@ -104,14 +105,14 @@ fn main() {
     );
 
     for instance in already_seen {
-        println!("{:?}", instance.0)
+        println!("{}", instance.0.get_name())
     }
 }
 
 fn dfs<'a>(
     current: &'a str,
     canonical_instances_by_output: &HashMap<&'a str, &'a CanonicalInstance>,
-    already_seen: &mut HashSet<RefEquality<CanonicalInstance<'a>>>,
+    already_seen: &mut IndexSet<RefEquality<CanonicalInstance<'a>>>,
 ) {
     let Some(instance) = canonical_instances_by_output.get(current) else {
         return;
@@ -289,6 +290,14 @@ impl<'a> CanonicalInstance<'a> {
                 .iter()
                 .map(|input| input.name)
                 .collect(),
+        }
+    }
+
+    fn get_name(&self) -> &'a str {
+        match self {
+            CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.name,
+            CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
+            CanonicalInstance::Nand(canonical_nand) => canonical_nand.name,
         }
     }
 }
