@@ -12,12 +12,14 @@ use sv_parser::{
 };
 
 use crate::{
+    and::{And, CanonicalAnd, canonicalize_and, parse_and},
     dffr::{CanonicalDffr, Dffr, canonicalize_dffr, parse_dffr},
     nand::{CanonicalNand, Nand, canonicalize_nand, parse_nand},
     nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
     not::{Not, parse_not},
 };
 
+mod and;
 mod dffr;
 mod nand;
 mod nor_latch;
@@ -70,6 +72,10 @@ fn main() {
                 nand,
                 &nots_by_output,
             ))),
+            Instance::And(and) => Some(CanonicalInstance::And(canonicalize_and(
+                and,
+                &nots_by_output,
+            ))),
         })
         .collect();
 
@@ -90,6 +96,9 @@ fn main() {
                 .collect(),
             CanonicalInstance::Nand(canonical_nand) => {
                 core::iter::once((canonical_nand.y, instance)).collect()
+            }
+            CanonicalInstance::And(canonical_and) => {
+                core::iter::once((canonical_and.y, instance)).collect()
             }
         })
         .collect();
@@ -179,6 +188,8 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
             None
         } else if name.starts_with("dmg_nand") {
             Some(Instance::Nand(parse_nand(syntax_tree, instance)?))
+        } else if name.starts_with("dmg_and") {
+            Some(Instance::And(parse_and(syntax_tree, instance)?))
         } else {
             None
         }
@@ -232,6 +243,7 @@ enum Instance<'a> {
     Not(Not<'a>),
     NorLatch(NorLatch<'a>),
     Nand(Nand<'a>),
+    And(And<'a>),
 }
 
 #[derive(Debug)]
@@ -239,6 +251,7 @@ enum CanonicalInstance<'a> {
     Dffr(CanonicalDffr<'a>),
     NorLatch(CanonicalNorLatch<'a>),
     Nand(CanonicalNand<'a>),
+    And(CanonicalAnd<'a>),
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {
@@ -304,6 +317,11 @@ impl<'a> CanonicalInstance<'a> {
                 .iter()
                 .map(|input| input.name)
                 .collect(),
+            CanonicalInstance::And(canonical_and) => canonical_and
+                .inputs
+                .iter()
+                .map(|input| input.name)
+                .collect(),
         }
     }
 
@@ -312,6 +330,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.name,
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
             CanonicalInstance::Nand(canonical_nand) => canonical_nand.name,
+            CanonicalInstance::And(canonical_and) => canonical_and.name,
         }
     }
 
@@ -320,6 +339,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.generate_code(),
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.generate_code(),
             CanonicalInstance::Nand(canonical_nand) => canonical_nand.generate_code(),
+            CanonicalInstance::And(canonical_and) => canonical_and.generate_code(),
         }
     }
 
@@ -329,7 +349,8 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::NorLatch(canonical_nor_latch) => {
                 Some(canonical_nor_latch.generate_declaration())
             }
-            _ => None,
+            CanonicalInstance::Nand(_) => None,
+            CanonicalInstance::And(_) => None,
         }
     }
 }

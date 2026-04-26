@@ -1,0 +1,81 @@
+use std::collections::HashMap;
+
+use arrayvec::ArrayVec;
+use sv_parser::{HierarchicalInstance, SyntaxTree};
+
+use crate::{Input, canonicalize_input, extract_id_and_ports, get_ports};
+
+#[derive(Debug)]
+pub struct And<'a> {
+    name: &'a str,
+    inputs: ArrayVec<&'a str, 7>,
+    y: &'a str,
+}
+
+pub fn parse_and<'a>(
+    syntax_tree: &'a SyntaxTree,
+    instance: &'a HierarchicalInstance,
+) -> Option<And<'a>> {
+    let (name, named) = extract_id_and_ports(syntax_tree, instance);
+    let mut inputs = ArrayVec::new();
+
+    let mut y = None;
+
+    for (id, expression) in get_ports(syntax_tree, named) {
+        if id.starts_with("in") {
+            inputs.push(expression.unwrap());
+        } else if id == "y" {
+            y = expression
+        } else {
+            panic!("{name} {id}")
+        }
+    }
+
+    if inputs.len() < 2 {
+        panic!("inputs smaller than 2 for nand")
+    }
+
+    Some(And {
+        name,
+        inputs,
+        y: y?,
+    })
+}
+
+#[derive(Debug)]
+pub struct CanonicalAnd<'a> {
+    pub name: &'a str,
+    pub inputs: ArrayVec<Input<'a>, 7>,
+    pub y: &'a str,
+}
+
+/// To ignore not gates
+pub fn canonicalize_and<'a>(
+    nand: &And<'a>,
+    nots_by_output: &HashMap<&'a str, &'a str>,
+) -> CanonicalAnd<'a> {
+    CanonicalAnd {
+        name: nand.name,
+        inputs: nand
+            .inputs
+            .iter()
+            .map(|input| canonicalize_input(input, nots_by_output))
+            .collect(),
+        y: nand.y,
+    }
+}
+
+impl CanonicalAnd<'_> {
+    pub fn generate_code(&self) -> String {
+        let name = self.y;
+
+        let mut inputs = self.inputs.iter();
+        let mut output = format!("let {name} = {}", inputs.next().unwrap().generate_code());
+
+        for input in inputs {
+            output += &format!(" && {}", input.generate_code());
+        }
+
+        output + ";\n"
+    }
+}
