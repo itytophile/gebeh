@@ -26,12 +26,9 @@ mod nor_latch;
 mod not;
 mod or;
 
-// If we find a notable port, then no need to continue exploring
-const NOTABLE_PORTS: &[&str] = &[
-    // !wy_match
-    "pafu", // !hclk, one of the main ppu clock signal
-    "vena_n",
-];
+// pafu = !wy_match
+// vena_n = !hclk
+// wx_clk pafu,vena_n,sprite_x_match,vbl,mode3,lcd_x0,lcd_x1,lcd_x2,lcd_x3,lcd_x4,lcd_x5,lcd_x6
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -52,6 +49,11 @@ fn main() {
 
     // the end of what's interesting (yeah it's called input it's strange)
     let input = &args[2];
+
+    let notable_ports: Vec<&str> = args
+        .get(3)
+        .map(|arg| arg.split(',').collect())
+        .unwrap_or_default();
 
     let nots_by_output: HashMap<_, _> = instances
         .iter()
@@ -120,6 +122,7 @@ fn main() {
         input.name,
         &canonical_instances_by_output,
         &mut already_seen,
+        &notable_ports,
     );
 
     for declaration in already_seen
@@ -139,6 +142,7 @@ fn dfs<'a>(
     current: &'a str,
     canonical_instances_by_output: &HashMap<&'a str, &'a CanonicalInstance>,
     already_seen: &mut IndexSet<RefEquality<CanonicalInstance<'a>>>,
+    notable_ports: &[&str],
 ) {
     let Some(instance) = canonical_instances_by_output.get(current) else {
         return;
@@ -146,10 +150,15 @@ fn dfs<'a>(
 
     if already_seen.insert(RefEquality(*instance)) {
         for input in instance.get_inputs() {
-            if NOTABLE_PORTS.contains(&input) {
+            if notable_ports.contains(&input) {
                 continue;
             }
-            dfs(input, canonical_instances_by_output, already_seen);
+            dfs(
+                input,
+                canonical_instances_by_output,
+                already_seen,
+                notable_ports,
+            );
         }
     }
 }
