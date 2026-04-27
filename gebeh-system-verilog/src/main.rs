@@ -13,6 +13,7 @@ use sv_parser::{
 
 use crate::{
     dffr::{CanonicalDffr, Dffr, canonicalize_dffr, parse_dffr},
+    dffr_cc::{CanonicalDffrCc, DffrCc, canonicalize_dffr_cc, parse_dffr_cc},
     gate::{CanonicalGate, Gate, canonicalize_gate, parse_gate},
     nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
     not::{Not, parse_not},
@@ -20,6 +21,7 @@ use crate::{
 
 mod and;
 mod dffr;
+mod dffr_cc;
 mod gate;
 mod nand;
 mod nor_latch;
@@ -90,6 +92,10 @@ fn main() {
                 or,
                 &nots_by_output,
             ))),
+            Instance::DffrCc(dffr_cc) => Some(CanonicalInstance::DffrCc(canonicalize_dffr_cc(
+                dffr_cc,
+                &nots_by_output,
+            ))),
         })
         .collect();
 
@@ -100,6 +106,12 @@ fn main() {
                 .q
                 .into_iter()
                 .chain(canonical_dffr.q_n)
+                .map(|output| (output, instance))
+                .collect::<ArrayVec<_, 2>>(),
+            CanonicalInstance::DffrCc(dffr_cc) => dffr_cc
+                .q
+                .into_iter()
+                .chain(dffr_cc.q_n)
                 .map(|output| (output, instance))
                 .collect::<ArrayVec<_, 2>>(),
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch
@@ -201,6 +213,8 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
 
         if name == "dmg_dffr" {
             Some(Instance::Dffr(parse_dffr(syntax_tree, instance)))
+        } else if name == "dmg_dffr_cc" {
+            Some(Instance::DffrCc(parse_dffr_cc(syntax_tree, instance)))
         } else if name == "dmg_nor_latch" {
             Some(Instance::NorLatch(parse_nor_latch(syntax_tree, instance)))
         } else if name.starts_with("dmg_not_x") {
@@ -263,6 +277,7 @@ fn extract_id_and_ports<'a>(
 #[derive(Debug)]
 enum Instance<'a> {
     Dffr(Dffr<'a>),
+    DffrCc(DffrCc<'a>),
     Not(Not<'a>),
     NorLatch(NorLatch<'a>),
     Nand(Gate<'a>),
@@ -273,6 +288,7 @@ enum Instance<'a> {
 #[derive(Debug)]
 enum CanonicalInstance<'a> {
     Dffr(CanonicalDffr<'a>),
+    DffrCc(CanonicalDffrCc<'a>),
     NorLatch(CanonicalNorLatch<'a>),
     Nand(CanonicalGate<'a>),
     And(CanonicalGate<'a>),
@@ -332,6 +348,14 @@ impl<'a> CanonicalInstance<'a> {
             ]
             .into_iter()
             .collect(),
+            CanonicalInstance::DffrCc(canonical_dffr) => [
+                canonical_dffr.clk.name,
+                canonical_dffr.clk_n.name,
+                canonical_dffr.d.name,
+                canonical_dffr.r_n.name,
+            ]
+            .into_iter()
+            .collect(),
             CanonicalInstance::NorLatch(canonical_nor_latch) => {
                 [canonical_nor_latch.r.name, canonical_nor_latch.s.name]
                     .into_iter()
@@ -346,6 +370,7 @@ impl<'a> CanonicalInstance<'a> {
     fn get_name(&self) -> &'a str {
         match self {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.name,
+            CanonicalInstance::DffrCc(dffr_cc) => dffr_cc.name,
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
@@ -360,12 +385,14 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Nand(gate) => nand::generate_code(gate),
             CanonicalInstance::And(gate) => and::generate_code(gate),
             CanonicalInstance::Or(gate) => or::generate_code(gate),
+            CanonicalInstance::DffrCc(dffr_cc) => dffr_cc.generate_code(),
         }
     }
 
     fn generate_declaration(&self) -> Option<String> {
         match self {
             CanonicalInstance::Dffr(canonical_dffr) => Some(canonical_dffr.generate_declaration()),
+            CanonicalInstance::DffrCc(dffr_cc) => Some(dffr_cc.generate_declaration()),
             CanonicalInstance::NorLatch(canonical_nor_latch) => {
                 Some(canonical_nor_latch.generate_declaration())
             }
