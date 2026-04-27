@@ -25,6 +25,14 @@ mod nand;
 mod nor_latch;
 mod not;
 
+// If we find a notable port, then no need to continue exploring
+const NOTABLE_PORTS: &[&str] = &[
+    // !wy_match
+    "pafu",
+    // !hclk, one of the main ppu clock signal
+    "vena_n"
+];
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -137,6 +145,9 @@ fn dfs<'a>(
 
     if already_seen.insert(RefEquality(*instance)) {
         for input in instance.get_inputs() {
+            if NOTABLE_PORTS.contains(&input) {
+                continue;
+            }
             dfs(input, canonical_instances_by_output, already_seen);
         }
     }
