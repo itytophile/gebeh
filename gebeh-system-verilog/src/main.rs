@@ -12,25 +12,25 @@ use sv_parser::{
 };
 
 use crate::{
-    and::{And, CanonicalAnd, canonicalize_and, parse_and},
     dffr::{CanonicalDffr, Dffr, canonicalize_dffr, parse_dffr},
-    nand::{CanonicalNand, Nand, canonicalize_nand, parse_nand},
+    gate::{CanonicalGate, Gate, canonicalize_gate, parse_gate},
     nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
     not::{Not, parse_not},
 };
 
 mod and;
 mod dffr;
+mod gate;
 mod nand;
 mod nor_latch;
 mod not;
+mod or;
 
 // If we find a notable port, then no need to continue exploring
 const NOTABLE_PORTS: &[&str] = &[
     // !wy_match
-    "pafu",
-    // !hclk, one of the main ppu clock signal
-    "vena_n"
+    "pafu", // !hclk, one of the main ppu clock signal
+    "vena_n",
 ];
 
 fn main() {
@@ -76,12 +76,16 @@ fn main() {
             Instance::NorLatch(nor_latch) => Some(CanonicalInstance::NorLatch(
                 canonicalize_nor_latch(nor_latch, &nots_by_output),
             )),
-            Instance::Nand(nand) => Some(CanonicalInstance::Nand(canonicalize_nand(
+            Instance::Nand(nand) => Some(CanonicalInstance::Nand(canonicalize_gate(
                 nand,
                 &nots_by_output,
             ))),
-            Instance::And(and) => Some(CanonicalInstance::And(canonicalize_and(
+            Instance::And(and) => Some(CanonicalInstance::And(canonicalize_gate(
                 and,
+                &nots_by_output,
+            ))),
+            Instance::Or(or) => Some(CanonicalInstance::Or(canonicalize_gate(
+                or,
                 &nots_by_output,
             ))),
         })
@@ -102,12 +106,9 @@ fn main() {
                 .chain(canonical_nor_latch.q_n)
                 .map(|output| (output, instance))
                 .collect(),
-            CanonicalInstance::Nand(canonical_nand) => {
-                core::iter::once((canonical_nand.y, instance)).collect()
-            }
-            CanonicalInstance::And(canonical_and) => {
-                core::iter::once((canonical_and.y, instance)).collect()
-            }
+            CanonicalInstance::Nand(gate)
+            | CanonicalInstance::And(gate)
+            | CanonicalInstance::Or(gate) => core::iter::once((gate.y, instance)).collect(),
         })
         .collect();
 
@@ -198,9 +199,11 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
         } else if name == "dmg_nand_latch" {
             None
         } else if name.starts_with("dmg_nand") {
-            Some(Instance::Nand(parse_nand(syntax_tree, instance)?))
+            Some(Instance::Nand(parse_gate(syntax_tree, instance)?))
         } else if name.starts_with("dmg_and") {
-            Some(Instance::And(parse_and(syntax_tree, instance)?))
+            Some(Instance::And(parse_gate(syntax_tree, instance)?))
+        } else if name.starts_with("dmg_or") {
+            Some(Instance::Or(parse_gate(syntax_tree, instance)?))
         } else {
             None
         }
@@ -253,16 +256,18 @@ enum Instance<'a> {
     Dffr(Dffr<'a>),
     Not(Not<'a>),
     NorLatch(NorLatch<'a>),
-    Nand(Nand<'a>),
-    And(And<'a>),
+    Nand(Gate<'a>),
+    And(Gate<'a>),
+    Or(Gate<'a>),
 }
 
 #[derive(Debug)]
 enum CanonicalInstance<'a> {
     Dffr(CanonicalDffr<'a>),
     NorLatch(CanonicalNorLatch<'a>),
-    Nand(CanonicalNand<'a>),
-    And(CanonicalAnd<'a>),
+    Nand(CanonicalGate<'a>),
+    And(CanonicalGate<'a>),
+    Or(CanonicalGate<'a>),
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {
@@ -323,16 +328,9 @@ impl<'a> CanonicalInstance<'a> {
                     .into_iter()
                     .collect()
             }
-            CanonicalInstance::Nand(canonical_nand) => canonical_nand
-                .inputs
-                .iter()
-                .map(|input| input.name)
-                .collect(),
-            CanonicalInstance::And(canonical_and) => canonical_and
-                .inputs
-                .iter()
-                .map(|input| input.name)
-                .collect(),
+            CanonicalInstance::Nand(gate)
+            | CanonicalInstance::And(gate)
+            | CanonicalInstance::Or(gate) => gate.inputs.iter().map(|input| input.name).collect(),
         }
     }
 
@@ -340,8 +338,9 @@ impl<'a> CanonicalInstance<'a> {
         match self {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.name,
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
-            CanonicalInstance::Nand(canonical_nand) => canonical_nand.name,
-            CanonicalInstance::And(canonical_and) => canonical_and.name,
+            CanonicalInstance::Nand(gate)
+            | CanonicalInstance::And(gate)
+            | CanonicalInstance::Or(gate) => gate.name,
         }
     }
 
@@ -349,8 +348,9 @@ impl<'a> CanonicalInstance<'a> {
         match self {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr.generate_code(),
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.generate_code(),
-            CanonicalInstance::Nand(canonical_nand) => canonical_nand.generate_code(),
-            CanonicalInstance::And(canonical_and) => canonical_and.generate_code(),
+            CanonicalInstance::Nand(gate) => nand::generate_code(gate),
+            CanonicalInstance::And(gate) => and::generate_code(gate),
+            CanonicalInstance::Or(gate) => or::generate_code(gate),
         }
     }
 
@@ -360,8 +360,9 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::NorLatch(canonical_nor_latch) => {
                 Some(canonical_nor_latch.generate_declaration())
             }
-            CanonicalInstance::Nand(_) => None,
-            CanonicalInstance::And(_) => None,
+            CanonicalInstance::Nand(_) | CanonicalInstance::And(_) | CanonicalInstance::Or(_) => {
+                None
+            }
         }
     }
 }
