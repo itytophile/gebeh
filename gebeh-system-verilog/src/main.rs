@@ -1,9 +1,9 @@
 use arrayvec::ArrayVec;
 use indexmap::IndexSet;
-use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
 use std::path::PathBuf;
+use std::{collections::HashMap};
 use sv_parser::{
     Description, Expression, HierarchicalInstance, Identifier, InstanceIdentifier,
     ListOfPortConnections, ListOfPortConnectionsNamed, Locate, ModuleDeclaration,
@@ -101,28 +101,11 @@ fn main() {
 
     let canonical_instances_by_output: HashMap<_, _> = canonical_instances
         .iter()
-        .flat_map(|instance| match instance {
-            CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr
-                .q
+        .flat_map(|instance| {
+            instance
+                .get_outputs()
                 .into_iter()
-                .chain(canonical_dffr.q_n)
-                .map(|output| (output, instance))
-                .collect::<ArrayVec<_, 2>>(),
-            CanonicalInstance::DffrCc(dffr_cc) => dffr_cc
-                .q
-                .into_iter()
-                .chain(dffr_cc.q_n)
-                .map(|output| (output, instance))
-                .collect::<ArrayVec<_, 2>>(),
-            CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch
-                .q
-                .into_iter()
-                .chain(canonical_nor_latch.q_n)
-                .map(|output| (output, instance))
-                .collect(),
-            CanonicalInstance::Nand(gate)
-            | CanonicalInstance::And(gate)
-            | CanonicalInstance::Or(gate) => core::iter::once((gate.y, instance)).collect(),
+                .map(move |output| (output, instance))
         })
         .collect();
 
@@ -338,8 +321,11 @@ impl<'a, T> PartialEq for RefEquality<'a, T> {
 
 impl<'a, T> Eq for RefEquality<'a, T> {}
 
+type Inputs<'a> = ArrayVec<&'a str, 7>;
+type Outputs<'a> = ArrayVec<&'a str, 2>;
+
 impl<'a> CanonicalInstance<'a> {
-    fn get_inputs(&self) -> ArrayVec<&'a str, 7> {
+    fn get_inputs(&self) -> Inputs<'_> {
         match self {
             CanonicalInstance::Dffr(canonical_dffr) => [
                 canonical_dffr.clk.name,
@@ -364,6 +350,27 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
             | CanonicalInstance::Or(gate) => gate.inputs.iter().map(|input| input.name).collect(),
+        }
+    }
+
+    fn get_outputs(&self) -> Outputs<'_> {
+        match self {
+            CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr
+                .q
+                .into_iter()
+                .chain(canonical_dffr.q_n)
+                .collect(),
+            CanonicalInstance::DffrCc(dffr_cc) => {
+                dffr_cc.q.into_iter().chain(dffr_cc.q_n).collect()
+            }
+            CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch
+                .q
+                .into_iter()
+                .chain(canonical_nor_latch.q_n)
+                .collect(),
+            CanonicalInstance::Nand(gate)
+            | CanonicalInstance::And(gate)
+            | CanonicalInstance::Or(gate) => core::iter::once(gate.y).collect(),
         }
     }
 
