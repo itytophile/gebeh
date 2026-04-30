@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use indexmap::IndexSet;
-use petgraph::{algo::toposort, graph::DiGraph};
+use petgraph::{algo::toposort, graph::DiGraph, visit::NodeRef};
 use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
@@ -144,24 +144,23 @@ fn main() {
 
     println!("edges: {}", digraph.edge_count());
 
-    if let Err(err) = toposort(&digraph, None) {
-        println!(
-            "cycle: {:?}",
-            digraph.node_weight(err.node_id()).unwrap()
-        );
-        return;
-    }
+    let indexes = match toposort(&digraph, None) {
+        Ok(lol) => lol,
+        Err(err) => {
+            println!("cycle: {:?}", digraph.node_weight(err.node_id()).unwrap());
+            return;
+        }
+    };
 
-    for declaration in already_seen
+    for declaration in indexes
         .iter()
-        .rev()
-        .filter_map(|instance| instance.0.generate_declaration())
+        .filter_map(|index| digraph.node_weight(*index).unwrap().generate_declaration())
     {
         println!("{declaration}")
     }
 
-    for instance in already_seen.iter().rev() {
-        println!("{}", instance.0.generate_code())
+    for index in indexes {
+        println!("{}", digraph.node_weight(index).unwrap().generate_code())
     }
 }
 
