@@ -1,6 +1,9 @@
 use arrayvec::ArrayVec;
 use indexmap::IndexSet;
-use petgraph::{algo::toposort, graph::DiGraph};
+use petgraph::{
+    algo::{condensation, toposort},
+    graph::DiGraph,
+};
 use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
@@ -129,12 +132,12 @@ fn main() {
         &notable_ports,
     );
 
-    let mut digraph = DiGraph::<&CanonicalInstance, ()>::new();
+    let mut graph = DiGraph::<&CanonicalInstance, ()>::new();
 
     let mut indexes = HashMap::new();
 
     for node in &already_seen {
-        indexes.insert(node.0.get_name(), digraph.add_node(node.0));
+        indexes.insert(node.0.get_name(), graph.add_node(node.0));
     }
 
     for node in &already_seen {
@@ -142,30 +145,52 @@ fn main() {
             if let Some(input) = canonical_instances_by_output.get(input)
                 && let Some(index_input) = indexes.get(input.get_name())
             {
-                digraph.add_edge(*index_input, indexes[node.0.get_name()], ());
+                graph.add_edge(*index_input, indexes[node.0.get_name()], ());
             }
         }
     }
 
-    println!("edges: {}", digraph.edge_count());
+    println!("edges: {}", graph.edge_count());
 
-    let indexes = match toposort(&digraph, None) {
+    let graph = condensation(graph, true);
+
+    let indexes = match toposort(&graph, None) {
         Ok(lol) => lol,
         Err(err) => {
-            println!("cycle: {:?}", digraph.node_weight(err.node_id()).unwrap());
+            println!("cycle: {:?}", graph.node_weight(err.node_id()).unwrap());
             return;
         }
     };
 
-    for declaration in indexes
+    for component in indexes
         .iter()
-        .filter_map(|index| digraph.node_weight(*index).unwrap().generate_declaration())
+        .map(|index| graph.node_weight(*index).unwrap())
     {
-        println!("{declaration}")
+        if component.len() != 1 {
+            let nodes: String = component
+                .iter()
+                .flat_map(|instance| [instance.get_name(), ", "])
+                .collect();
+            println!("// cycle {nodes}")
+        }
+        if let Some(declaration) = component[0].generate_declaration() {
+            println!("{declaration}")
+        }
     }
 
-    for index in indexes {
-        println!("{}", digraph.node_weight(index).unwrap().generate_code())
+    for component in indexes
+        .iter()
+        .map(|index| graph.node_weight(*index).unwrap())
+    {
+        if component.len() != 1 {
+            let nodes: String = component
+                .iter()
+                .flat_map(|instance| [instance.get_name(), ", "])
+                .collect();
+            println!("// cycle {nodes}")
+        }
+
+        println!("{}", component[0].generate_code());
     }
 }
 
