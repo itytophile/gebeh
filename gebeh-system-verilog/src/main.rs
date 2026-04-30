@@ -13,7 +13,7 @@ use sv_parser::{
 };
 
 use crate::{
-    dffr::{CanonicalDffr, Dffr, canonicalize_dffr, parse_dffr},
+    dffr::{CanonicalDffr, CanonicalDffrType, Dffr, canonicalize_dffr, parse_dffr},
     dffr_cc::{CanonicalDffrCc, DffrCc, canonicalize_dffr_cc, parse_dffr_cc},
     gate::{CanonicalGate, Gate, canonicalize_gate, parse_gate},
     nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
@@ -121,12 +121,12 @@ fn main() {
         &notable_ports,
     );
 
-    let mut digraph = DiGraph::<RefEquality<CanonicalInstance>, ()>::new();
+    let mut digraph = DiGraph::<&CanonicalInstance, ()>::new();
 
     let mut indexes = HashMap::new();
 
     for node in &already_seen {
-        indexes.insert(node.0.get_name(), digraph.add_node(*node));
+        indexes.insert(node.0.get_name(), digraph.add_node(node.0));
     }
 
     for node in &already_seen {
@@ -141,7 +141,13 @@ fn main() {
 
     println!("edges: {}", digraph.edge_count());
 
-    toposort(&digraph, None).unwrap();
+    if let Err(err) = toposort(&digraph, None) {
+        println!(
+            "cycle: {}",
+            digraph.node_weight(err.node_id()).unwrap().get_name()
+        );
+        return;
+    }
 
     for declaration in already_seen
         .iter()
@@ -358,13 +364,17 @@ type Outputs<'a> = ArrayVec<&'a str, 2>;
 impl<'a> CanonicalInstance<'a> {
     fn get_inputs(&self) -> Inputs<'_> {
         match self {
-            CanonicalInstance::Dffr(canonical_dffr) => [
-                canonical_dffr.clk.name,
-                canonical_dffr.d.name,
-                canonical_dffr.r_n.name,
-            ]
-            .into_iter()
-            .collect(),
+            CanonicalInstance::Dffr(canonical_dffr) => {
+                let mut inputs: Inputs = [canonical_dffr.clk.name, canonical_dffr.r_n.name]
+                    .into_iter()
+                    .collect();
+
+                if let CanonicalDffrType::Normal { d, .. } = &canonical_dffr.inner_type {
+                    inputs.push(d.name);
+                }
+
+                inputs
+            }
             CanonicalInstance::DffrCc(canonical_dffr) => [
                 canonical_dffr.clk.name,
                 canonical_dffr.clk_n.name,
@@ -389,7 +399,10 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Dffr(canonical_dffr) => canonical_dffr
                 .q
                 .into_iter()
-                .chain(canonical_dffr.q_n)
+                .chain(match &canonical_dffr.inner_type {
+                    CanonicalDffrType::Normal { q_n, .. } => *q_n,
+                    CanonicalDffrType::Toggle { q_n } => Some(*q_n),
+                })
                 .collect(),
             CanonicalInstance::DffrCc(dffr_cc) => {
                 dffr_cc.q.into_iter().chain(dffr_cc.q_n).collect()
