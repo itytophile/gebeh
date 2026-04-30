@@ -35,7 +35,7 @@ mod or;
 // avet = ppu_4mhz
 // nyva = bg/win cycle counter (3 bits) third bit
 // laxu = bg/win cycle counter (3 bits) first bit
-// wx_clk pafu,vena_n,sprite_x_match,vbl,mode3,lcd_x0,lcd_x1,lcd_x2,lcd_x3,lcd_x4,lcd_x5,lcd_x6,avet,nyva,laxu
+// wx_clk pafu,vena_n,sprite_x_match,vbl,mode3,lcd_x0,lcd_x1,lcd_x2,lcd_x3,lcd_x4,lcd_x5,lcd_x6,avet,nyva,laxu,last_sprite,seko,tuxy,suvu,win_start,puku,stop_mode3
 
 fn main() {
     let args: Vec<String> = env::args().collect();
