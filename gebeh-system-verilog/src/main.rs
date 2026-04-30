@@ -31,7 +31,10 @@ mod or;
 
 // pafu = !wy_match
 // vena_n = !hclk
-// wx_clk pafu,vena_n,sprite_x_match,vbl,mode3,lcd_x0,lcd_x1,lcd_x2,lcd_x3,lcd_x4,lcd_x5,lcd_x6
+// avet = ppu_4mhz
+// nyva = bg/win cycle counter (3 bits) third bit
+// laxu = bg/win cycle counter (3 bits) first bit
+// wx_clk pafu,vena_n,sprite_x_match,vbl,mode3,lcd_x0,lcd_x1,lcd_x2,lcd_x3,lcd_x4,lcd_x5,lcd_x6,avet,nyva,laxu
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -143,8 +146,8 @@ fn main() {
 
     if let Err(err) = toposort(&digraph, None) {
         println!(
-            "cycle: {}",
-            digraph.node_weight(err.node_id()).unwrap().get_name()
+            "cycle: {:?}",
+            digraph.node_weight(err.node_id()).unwrap()
         );
         return;
     }
