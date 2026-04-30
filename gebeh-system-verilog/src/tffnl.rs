@@ -66,7 +66,7 @@ pub fn canonicalize_tffnl<'a>(
         name: tffnl.name,
         d: canonicalize_input(tffnl.d, nots_by_output),
         l: canonicalize_input(tffnl.l, nots_by_output),
-        tclk_n: canonicalize_input(tffnl.d, nots_by_output),
+        tclk_n: canonicalize_input(tffnl.tclk_n, nots_by_output),
         q: tffnl.q,
         q_n: tffnl.q_n,
     }

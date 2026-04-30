@@ -26,6 +26,7 @@ use crate::{
 };
 
 mod and;
+mod ao22;
 mod dffr;
 mod dffr_cc;
 mod drlatch_ee;
@@ -264,6 +265,11 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
             Some(Instance::DrlatchEe(parse_drlatch_ee(syntax_tree, instance)))
         } else if name == "dmg_tffnl" {
             Some(Instance::Tffnl(parse_tffnl(syntax_tree, instance)))
+        } else if name == "dmg_ao22" {
+            Some(Instance::Gate(
+                GateType::Ao22,
+                parse_gate(syntax_tree, instance)?,
+            ))
         } else if name.starts_with("dmg_not_x") {
             Some(Instance::Not(parse_not(syntax_tree, instance)?))
         } else if name == "dmg_nand_latch" {
@@ -341,6 +347,7 @@ enum GateType {
     And,
     Or,
     Nor,
+    Ao22,
 }
 
 #[derive(Debug)]
@@ -507,6 +514,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::Gate(GateType::Nor, gate) => nor::generate_code(gate),
             CanonicalInstance::DrlatchEe(drlatch_ee) => drlatch_ee.generate_code(),
             CanonicalInstance::Tffnl(tffnl) => tffnl.generate_code(),
+            CanonicalInstance::Gate(GateType::Ao22, gate) => ao22::generate_code(gate),
         }
     }
 
