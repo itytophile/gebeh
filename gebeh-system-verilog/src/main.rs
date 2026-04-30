@@ -22,6 +22,7 @@ use crate::{
     gate::{CanonicalGate, Gate, canonicalize_gate, parse_gate},
     nor_latch::{CanonicalNorLatch, NorLatch, canonicalize_nor_latch, parse_nor_latch},
     not::{Not, parse_not},
+    tffnl::{CanonicalTffnl, Tffnl, canonicalize_tffnl, parse_tffnl},
 };
 
 mod and;
@@ -34,6 +35,7 @@ mod nor;
 mod nor_latch;
 mod not;
 mod or;
+mod tffnl;
 
 // pafu = !wy_match
 // vena_n = !hclk
@@ -113,6 +115,10 @@ fn main() {
             Instance::DrlatchEe(drlatch_ee) => Some(CanonicalInstance::DrlatchEe(
                 canonicalize_drlatch_ee(drlatch_ee, &nots_by_output),
             )),
+            Instance::Tffnl(tffnl) => Some(CanonicalInstance::Tffnl(canonicalize_tffnl(
+                tffnl,
+                &nots_by_output,
+            ))),
         })
         .collect();
 
@@ -268,6 +274,8 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
             Some(Instance::NorLatch(parse_nor_latch(syntax_tree, instance)))
         } else if name == "dmg_drlatch_ee" {
             Some(Instance::DrlatchEe(parse_drlatch_ee(syntax_tree, instance)))
+        } else if name == "dmg_tffnl" {
+            Some(Instance::Tffnl(parse_tffnl(syntax_tree, instance)))
         } else if name.starts_with("dmg_not_x") {
             Some(Instance::Not(parse_not(syntax_tree, instance)?))
         } else if name == "dmg_nand_latch" {
@@ -338,6 +346,7 @@ enum Instance<'a> {
     And(Gate<'a>),
     Or(Gate<'a>),
     Nor(Gate<'a>),
+    Tffnl(Tffnl<'a>),
 }
 
 #[derive(Debug)]
@@ -350,6 +359,7 @@ enum CanonicalInstance<'a> {
     And(CanonicalGate<'a>),
     Or(CanonicalGate<'a>),
     Nor(CanonicalGate<'a>),
+    Tffnl(CanonicalTffnl<'a>),
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {
@@ -438,6 +448,9 @@ impl<'a> CanonicalInstance<'a> {
                     .into_iter()
                     .collect()
             }
+            CanonicalInstance::Tffnl(tffnl) => [tffnl.d.name, tffnl.l.name, tffnl.tclk_n.name]
+                .into_iter()
+                .collect(),
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
             | CanonicalInstance::Or(gate)
@@ -466,6 +479,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::DrlatchEe(drlatch_ee) => {
                 drlatch_ee.q.into_iter().chain(drlatch_ee.q_n).collect()
             }
+            CanonicalInstance::Tffnl(tffnl) => tffnl.q.into_iter().chain(tffnl.q_n).collect(),
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
             | CanonicalInstance::Or(gate)
@@ -479,6 +493,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::DffrCc(dffr_cc) => dffr_cc.name,
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
             CanonicalInstance::DrlatchEe(drlatch_ee) => drlatch_ee.name,
+            CanonicalInstance::Tffnl(tffnl) => tffnl.name,
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
             | CanonicalInstance::Or(gate)
@@ -496,6 +511,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::DffrCc(dffr_cc) => dffr_cc.generate_code(),
             CanonicalInstance::Nor(gate) => nor::generate_code(gate),
             CanonicalInstance::DrlatchEe(drlatch_ee) => drlatch_ee.generate_code(),
+            CanonicalInstance::Tffnl(tffnl) => tffnl.generate_code(),
         }
     }
 
@@ -507,6 +523,7 @@ impl<'a> CanonicalInstance<'a> {
                 Some(canonical_nor_latch.generate_declaration())
             }
             CanonicalInstance::DrlatchEe(drlatch_ee) => Some(drlatch_ee.generate_declaration()),
+            CanonicalInstance::Tffnl(tffnl) => Some(tffnl.generate_declaration()),
             CanonicalInstance::Nand(_)
             | CanonicalInstance::And(_)
             | CanonicalInstance::Or(_)
