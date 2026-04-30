@@ -1,4 +1,7 @@
-use crate::apu::MAX_VOLUME;
+use crate::{
+    apu::MAX_VOLUME,
+    cells::{Dffr, NorLatch},
+};
 
 #[derive(Clone, Default)]
 struct EnvelopeTimer {
@@ -94,5 +97,39 @@ impl VolumeAndEnvelope {
 
     pub fn tick(&mut self) {
         self.timer.tick();
+    }
+}
+
+// ch2_eg_stop ch2_restart,jyro,ch2_env0,ch2_env1,ch2_env2,ch2_env3,ff17_d3,jopa
+struct EgStop {
+    dffr: Dffr,
+    nor_latch: NorLatch,
+}
+
+impl EgStop {
+    fn update(
+        &mut self,
+        channel_restart: bool,
+        channel_env: SmallByte<4>,
+        is_increasing: bool,
+        apu_reset: bool,
+        // jopa for ch2
+        pace_clk: bool,
+    ) -> bool {
+        let should_reset = apu_reset || channel_restart;
+        let should_stop = !is_increasing && channel_env.get() == 0 || is_increasing && channel_env.get() == 0x0f;
+
+        let is_stopped = self.dffr.update(should_stop, pace_clk, !should_reset);
+
+        self.nor_latch.update(is_stopped, should_reset)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SmallByte<const SIZE: u8>(u8);
+
+impl<const SIZE: u8> SmallByte<SIZE> {
+    fn get(self) -> u8 {
+        self.0 & ((1 << SIZE) - 1)
     }
 }
