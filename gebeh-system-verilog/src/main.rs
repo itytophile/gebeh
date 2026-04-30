@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use indexmap::IndexSet;
-use petgraph::{algo::toposort, graph::DiGraph, visit::NodeRef};
+use petgraph::{algo::toposort, graph::DiGraph};
 use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
@@ -25,6 +25,7 @@ mod dffr;
 mod dffr_cc;
 mod gate;
 mod nand;
+mod nor;
 mod nor_latch;
 mod not;
 mod or;
@@ -94,6 +95,10 @@ fn main() {
             ))),
             Instance::Or(or) => Some(CanonicalInstance::Or(canonicalize_gate(
                 or,
+                &nots_by_output,
+            ))),
+            Instance::Nor(nor) => Some(CanonicalInstance::Nor(canonicalize_gate(
+                nor,
                 &nots_by_output,
             ))),
             Instance::DffrCc(dffr_cc) => Some(CanonicalInstance::DffrCc(canonicalize_dffr_cc(
@@ -241,6 +246,8 @@ fn get_instances<'a>(syntax_tree: &'a SyntaxTree) -> impl Iterator<Item = Instan
             Some(Instance::And(parse_gate(syntax_tree, instance)?))
         } else if name.starts_with("dmg_or") {
             Some(Instance::Or(parse_gate(syntax_tree, instance)?))
+        } else if name.starts_with("dmg_nor") {
+            Some(Instance::Nor(parse_gate(syntax_tree, instance)?))
         } else {
             None
         }
@@ -297,6 +304,7 @@ enum Instance<'a> {
     Nand(Gate<'a>),
     And(Gate<'a>),
     Or(Gate<'a>),
+    Nor(Gate<'a>),
 }
 
 #[derive(Debug)]
@@ -307,6 +315,7 @@ enum CanonicalInstance<'a> {
     Nand(CanonicalGate<'a>),
     And(CanonicalGate<'a>),
     Or(CanonicalGate<'a>),
+    Nor(CanonicalGate<'a>),
 }
 
 fn get_locate_from_identifier(id: &Identifier) -> &Locate {
@@ -392,7 +401,8 @@ impl<'a> CanonicalInstance<'a> {
             }
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
-            | CanonicalInstance::Or(gate) => gate.inputs.iter().map(|input| input.name).collect(),
+            | CanonicalInstance::Or(gate)
+            | CanonicalInstance::Nor(gate) => gate.inputs.iter().map(|input| input.name).collect(),
         }
     }
 
@@ -416,7 +426,8 @@ impl<'a> CanonicalInstance<'a> {
                 .collect(),
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
-            | CanonicalInstance::Or(gate) => core::iter::once(gate.y).collect(),
+            | CanonicalInstance::Or(gate)
+            | CanonicalInstance::Nor(gate) => core::iter::once(gate.y).collect(),
         }
     }
 
@@ -427,7 +438,8 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::NorLatch(canonical_nor_latch) => canonical_nor_latch.name,
             CanonicalInstance::Nand(gate)
             | CanonicalInstance::And(gate)
-            | CanonicalInstance::Or(gate) => gate.name,
+            | CanonicalInstance::Or(gate)
+            | CanonicalInstance::Nor(gate) => gate.name,
         }
     }
 
@@ -439,6 +451,7 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::And(gate) => and::generate_code(gate),
             CanonicalInstance::Or(gate) => or::generate_code(gate),
             CanonicalInstance::DffrCc(dffr_cc) => dffr_cc.generate_code(),
+            CanonicalInstance::Nor(gate) => nor::generate_code(gate),
         }
     }
 
@@ -449,9 +462,10 @@ impl<'a> CanonicalInstance<'a> {
             CanonicalInstance::NorLatch(canonical_nor_latch) => {
                 Some(canonical_nor_latch.generate_declaration())
             }
-            CanonicalInstance::Nand(_) | CanonicalInstance::And(_) | CanonicalInstance::Or(_) => {
-                None
-            }
+            CanonicalInstance::Nand(_)
+            | CanonicalInstance::And(_)
+            | CanonicalInstance::Or(_)
+            | CanonicalInstance::Nor(_) => None,
         }
     }
 }
