@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use indexmap::IndexSet;
-use petgraph::graph::DiGraph;
+use petgraph::{algo::toposort, graph::DiGraph};
 use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
@@ -140,6 +140,8 @@ fn main() {
     }
 
     println!("edges: {}", digraph.edge_count());
+
+    toposort(&digraph, None).unwrap();
 
     for declaration in already_seen
         .iter()
