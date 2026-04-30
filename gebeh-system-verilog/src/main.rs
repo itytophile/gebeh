@@ -1,9 +1,10 @@
 use arrayvec::ArrayVec;
 use indexmap::IndexSet;
+use petgraph::graph::DiGraph;
+use std::collections::HashMap;
 use std::env;
 use std::hash::Hash;
 use std::path::PathBuf;
-use std::{collections::HashMap};
 use sv_parser::{
     Description, Expression, HierarchicalInstance, Identifier, InstanceIdentifier,
     ListOfPortConnections, ListOfPortConnectionsNamed, Locate, ModuleDeclaration,
@@ -119,6 +120,26 @@ fn main() {
         &mut already_seen,
         &notable_ports,
     );
+
+    let mut digraph = DiGraph::<RefEquality<CanonicalInstance>, ()>::new();
+
+    let mut indexes = HashMap::new();
+
+    for node in &already_seen {
+        indexes.insert(node.0.get_name(), digraph.add_node(*node));
+    }
+
+    for node in &already_seen {
+        for input in node.0.get_inputs() {
+            if let Some(input) = canonical_instances_by_output.get(input)
+                && let Some(index_input) = indexes.get(input.get_name())
+            {
+                digraph.add_edge(*index_input, indexes[node.0.get_name()], ());
+            }
+        }
+    }
+
+    println!("edges: {}", digraph.edge_count());
 
     for declaration in already_seen
         .iter()
@@ -303,6 +324,14 @@ impl Input<'_> {
 }
 
 struct RefEquality<'a, T>(&'a T);
+
+impl<'a, T> Clone for RefEquality<'a, T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<'a, T> Copy for RefEquality<'a, T> {}
 
 impl<'a, T> Hash for RefEquality<'a, T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
