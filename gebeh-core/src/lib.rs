@@ -22,6 +22,7 @@ pub mod ppu;
 pub mod serial;
 pub mod state;
 pub mod timer;
+mod cells;
 
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;
