@@ -8,7 +8,7 @@ use crate::{Input, canonicalize_input, extract_id_and_ports, get_ports};
 #[derive(Debug)]
 pub struct Gate<'a> {
     name: &'a str,
-    inputs: ArrayVec<&'a str, 7>,
+    inputs: ArrayVec<&'a str, 8>,
     y: &'a str,
 }
 
@@ -45,7 +45,7 @@ pub fn parse_gate<'a>(
 #[derive(Debug)]
 pub struct CanonicalGate<'a> {
     pub name: &'a str,
-    pub inputs: ArrayVec<Input<'a>, 7>,
+    pub inputs: ArrayVec<Input<'a>, 8>,
     pub y: &'a str,
 }
 

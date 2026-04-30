@@ -369,7 +369,7 @@ impl<'a, T> PartialEq for RefEquality<'a, T> {
 
 impl<'a, T> Eq for RefEquality<'a, T> {}
 
-type Inputs<'a> = ArrayVec<&'a str, 7>;
+type Inputs<'a> = ArrayVec<&'a str, 8>;
 type Outputs<'a> = ArrayVec<&'a str, 2>;
 
 impl<'a> CanonicalInstance<'a> {
