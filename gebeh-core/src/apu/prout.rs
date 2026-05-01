@@ -93,6 +93,20 @@ impl Channel1Mhz {
     }
 }
 
+struct ApuReset {
+    is_audio_on: Dffr,
+}
+
+impl ApuReset {
+    fn update(&mut self, reset: bool, apu_wr: bool, ff26: bool, is_audio_on: bool) -> bool {
+        let is_audio_on = self
+            .is_audio_on
+            .update(is_audio_on, !(ff26 && apu_wr), !reset);
+
+        !is_audio_on || reset
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::apu::prout::ApuPhi;
