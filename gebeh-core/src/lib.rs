@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub mod apu;
+mod cells;
 pub mod cpu;
 pub mod dma;
 pub mod joypad;
@@ -22,7 +23,6 @@ pub mod ppu;
 pub mod serial;
 pub mod state;
 pub mod timer;
-mod cells;
 
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;

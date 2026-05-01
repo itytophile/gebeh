@@ -9,4 +9,8 @@ impl DrlatchEe {
         self.0 &= r_n;
         self.0
     }
+
+    pub fn get_state(&self) -> bool {
+        self.0
+    }
 }

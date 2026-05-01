@@ -7,14 +7,14 @@ struct ChannelRestart {
 }
 
 impl ChannelRestart {
-    pub fn update(&mut self, ch2_1mhz: bool, apu_reset: bool, ch2_start: bool) {
+    pub fn update(&mut self, ch2_1mhz: bool, apu_reset: bool, is_channel_starting: bool) {
         let is_restarting_synced =
             self.syncer_1mhz
                 .update(self.syncer_1mhz_has_started.state, ch2_1mhz, !apu_reset);
 
         let should_reset = apu_reset || is_restarting_synced;
 
-        let has_started = !self.has_started.update(should_reset, ch2_start);
+        let has_started = !self.has_started.update(should_reset, is_channel_starting);
         self.syncer_1mhz_has_started
             .update(has_started, ch2_1mhz, !should_reset);
     }
@@ -50,5 +50,31 @@ impl ChannelStart {
 
     fn get_state(&self) -> bool {
         self.is_starting_synced.state
+    }
+}
+
+// apu_phi test_reset_n
+// alef test_reset_n,adyk,apuk
+// I don't really understand the "sort of" clock divider with drlatch_ee so let's brute copy the thing
+struct ApuPhi {
+    adyk_inst: DrlatchEe,
+    afur_inst: DrlatchEe,
+    alef_inst: DrlatchEe,
+    apuk_inst: DrlatchEe,
+}
+
+impl ApuPhi {
+    fn update(&mut self, apu_4mhz: bool) -> bool {
+        let adyk_n = !self
+            .adyk_inst
+            .update(self.apuk_inst.get_state(), apu_4mhz, true);
+
+        let afur = self.afur_inst.update(adyk_n, !apu_4mhz, true);
+
+        let alef = self.alef_inst.update(afur, apu_4mhz, true);
+
+        self.apuk_inst.update(alef, !apu_4mhz, true);
+
+        !afur
     }
 }
