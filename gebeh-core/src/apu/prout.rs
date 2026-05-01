@@ -1,4 +1,4 @@
-use crate::cells::{Dffr, DrlatchEe, NorLatch};
+use crate::cells::{Dffr, DffrToggle, DrlatchEe, NorLatch};
 
 struct ChannelRestart {
     syncer_1mhz: Dffr,
@@ -78,6 +78,18 @@ impl ApuPhi {
         self.apuk_inst.update(alef, !apu_4mhz, true);
 
         !afur
+    }
+}
+
+struct Channel1Mhz {
+    first_divider: DffrToggle,
+    second_divider: DffrToggle,
+}
+
+impl Channel1Mhz {
+    fn update(&mut self, apu_reset: bool, apu_4mhz: bool) -> bool {
+        let divided = self.first_divider.update(!apu_4mhz, !apu_reset);
+        self.second_divider.update(!divided, !apu_reset)
     }
 }
 
