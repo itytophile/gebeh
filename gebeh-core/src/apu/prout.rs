@@ -56,6 +56,8 @@ impl ChannelStart {
 // apu_phi test_reset_n
 // alef test_reset_n,adyk,apuk
 // I don't really understand the "sort of" clock divider with drlatch_ee so let's brute copy the thing
+// PS: according to the test below, it's dividing the clock by 4
+#[derive(Default)]
 struct ApuPhi {
     adyk_inst: DrlatchEe,
     afur_inst: DrlatchEe,
@@ -76,5 +78,34 @@ impl ApuPhi {
         self.apuk_inst.update(alef, !apu_4mhz, true);
 
         !afur
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::apu::prout::ApuPhi;
+    extern crate std;
+
+    #[test]
+    fn apu_phi() {
+        let mut apu_phi = ApuPhi::default();
+
+        let mut apu_4mhz = false;
+
+        let apu_phi_wave: std::vec::Vec<_> = (0..16)
+            .map(|_| {
+                let apu_phi = apu_phi.update(apu_4mhz);
+                apu_4mhz = !apu_4mhz;
+                apu_phi
+            })
+            .collect();
+
+        assert_eq!(
+            &[
+                false, false, false, false, true, true, true, true, false, false, false, false,
+                true, true, true, true
+            ],
+            apu_phi_wave.as_slice()
+        )
     }
 }
