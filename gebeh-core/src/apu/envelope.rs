@@ -1,6 +1,6 @@
 use crate::{
     apu::MAX_VOLUME,
-    cells::{Dffr, DffrToggle, NegativeEdge, NorLatch},
+    cells::{Dffr, DffrToggle, NegativeEdge, NorLatch, Tffnl},
 };
 
 #[derive(Clone, Default)]
@@ -196,8 +196,10 @@ impl PaceIsFinishedSynced {
 
 // ch2_env0 ff17_d0,ff17_d1,ff17_d2,ff17_d3,ff17_d3_n,ff17_d4,ff17_d5,ff17_d6,ff17_d7,jopa,ch2_eg_stop,ch2_restart
 struct EnvelopeValue {
-    state: SmallByte<4>,
-    negative_edge: NegativeEdge,
+    feno_inst: Tffnl,
+    fete_inst: Tffnl,
+    fomy_inst: Tffnl,
+    fena_inst: Tffnl,
 }
 
 impl EnvelopeValue {
@@ -210,22 +212,34 @@ impl EnvelopeValue {
         ch2_restart: bool,
         volume_reg: SmallByte<4>,
     ) {
-        if ch2_restart {
-            self.state = volume_reg
-        }
+        let jupu = pace_reg.get() == 0;
 
-        if !self
-            .negative_edge
-            .update(pace_finished_synced || pace_reg.get() == 0 || is_envelope_stopped)
-        {
-            return;
-        }
+        let hofo = pace_finished_synced || jupu || is_envelope_stopped;
 
-        self.state = if is_increasing {
-            self.state.increment()
-        } else {
-            self.state.decrement()
-        }
+        let gafa = hofo;
+        let feno_inst_output = self
+            .feno_inst
+            .update(volume_reg.get() & 1 != 0, ch2_restart, gafa);
+        let ch2_env0 = feno_inst_output;
+        let feno_n = !feno_inst_output;
+
+        let faru = is_increasing && ch2_env0 || feno_n && !is_increasing;
+        let fete_inst_output =
+            self.fete_inst
+                .update(volume_reg.get() & 0b10 != 0, ch2_restart, faru);
+        let ch2_env1 = fete_inst_output;
+        let fete_n = !fete_inst_output;
+
+        let etup = is_increasing && ch2_env1 || fete_n && !is_increasing;
+        let fomy_inst_output =
+            self.fomy_inst
+                .update(volume_reg.get() & 0b100 != 0, ch2_restart, etup);
+        let ch2_env2 = fomy_inst_output;
+        let fomy_n = !fomy_inst_output;
+
+        let fopy = is_increasing && ch2_env2 || fomy_n && !is_increasing;
+        self.fena_inst
+            .update(volume_reg.get() & 0b1000 != 0, ch2_restart, fopy);
     }
 }
 
