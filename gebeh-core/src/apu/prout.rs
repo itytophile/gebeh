@@ -133,7 +133,7 @@ impl ApuReset {
 
 #[cfg(test)]
 mod tests {
-    use crate::apu::prout::ApuPhi;
+    use crate::apu::prout::{ApuPhi, CpuWr};
     extern crate std;
 
     #[test]
@@ -154,6 +154,30 @@ mod tests {
             &[
                 false, false, false, false, true, true, true, true, false, false, false, false,
                 true, true, true, true
+            ],
+            apu_phi_wave.as_slice()
+        )
+    }
+
+    #[test]
+    fn cpu_wr() {
+        let mut apu_phi = CpuWr::default();
+
+        let mut avet = false;
+
+        let apu_phi_wave: std::vec::Vec<_> = (0..31)
+            .map(|_| {
+                let apu_phi = apu_phi.update(avet, true);
+                avet = !avet;
+                apu_phi
+            })
+            .collect();
+
+        assert_eq!(
+            &[
+                false, false, false, false, true, true, true, false, false, false, false, false,
+                true, true, true, false, false, false, false, false, true, true, true, false,
+                false, false, false, false, true, true, true
             ],
             apu_phi_wave.as_slice()
         )
