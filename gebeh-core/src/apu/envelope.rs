@@ -101,12 +101,12 @@ impl VolumeAndEnvelope {
 }
 
 // ch2_eg_stop ch2_restart,jyro,ch2_env0,ch2_env1,ch2_env2,ch2_env3,ff17_d3,jopa
-struct EgStop {
+struct EnvelopeIsStopped {
     dffr: Dffr,
     nor_latch: NorLatch,
 }
 
-impl EgStop {
+impl EnvelopeIsStopped {
     fn update(
         &mut self,
         channel_restart: bool,
@@ -194,6 +194,41 @@ impl PaceIsFinishedSynced {
     }
 }
 
+// ch2_env0 ff17_d0,ff17_d1,ff17_d2,ff17_d3,ff17_d3_n,ff17_d4,ff17_d5,ff17_d6,ff17_d7,jopa,ch2_eg_stop,ch2_restart
+struct ChannelEnvelope {
+    state: SmallByte<4>,
+    negative_edge: NegativeEdge,
+}
+
+impl ChannelEnvelope {
+    fn update(
+        &mut self,
+        pace_reg: SmallByte<3>,
+        pace_finished_synced: bool,
+        is_envelope_stopped: bool,
+        is_increasing: bool,
+        ch2_restart: bool,
+        volume_reg: SmallByte<4>,
+    ) {
+        if ch2_restart {
+            self.state = volume_reg
+        }
+
+        if !self
+            .negative_edge
+            .update(pace_finished_synced || pace_reg.get() == 0 || is_envelope_stopped)
+        {
+            return;
+        }
+
+        self.state = if is_increasing {
+            self.state.increment()
+        } else {
+            self.state.decrement()
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct SmallByte<const SIZE: u8>(u8);
 
@@ -203,5 +238,8 @@ impl<const SIZE: u8> SmallByte<SIZE> {
     }
     fn increment(self) -> Self {
         Self(self.0.wrapping_add(1))
+    }
+    fn decrement(self) -> Self {
+        Self(self.0.wrapping_sub(1))
     }
 }
