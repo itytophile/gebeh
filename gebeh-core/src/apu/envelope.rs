@@ -271,13 +271,13 @@ impl EnvelopeComponent {
     pub fn update(
         &mut self,
         horu_512hz: bool,
-        clock_128hz: bool,
+        byfe_128hz: bool,
         apu_reset: bool,
         channel_restart: bool,
     ) {
         let pace_is_finished_synced = self.pace_is_finished_synced.update(
             horu_512hz,
-            clock_128hz,
+            byfe_128hz,
             apu_reset,
             channel_restart,
             SmallByte(self.register),

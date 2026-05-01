@@ -141,7 +141,7 @@ struct Channel {
     chanel_restart: ChannelRestart,
     envelope: EnvelopeComponent,
     apu_reset: ApuReset,
-    horu_512hz: Horu512Hz,
+    apu_clocks: ApuClocks,
 }
 
 impl Channel {
@@ -162,29 +162,44 @@ impl Channel {
             .update(apu_reset, is_triggering, is_writing_to_nrx4, apu_phi);
         self.chanel_restart
             .update(channel_1mhz, apu_reset, self.channel_start.get_state());
-        let horu_512hz = self
-            .horu_512hz
+        self.apu_clocks
             .update(apu_4mhz, apu_reset, system_clock & (1 << 10) == 0);
         self.envelope.update(
-            horu_512hz,
-            clock_128hz,
+            self.apu_clocks.get_horu_512hz(),
+            self.apu_clocks.get_byfe_128hz(),
             apu_reset,
             self.chanel_restart.get_state(),
         );
     }
 }
 
-struct Horu512Hz {
+struct ApuClocks {
     ajer_inst: DffrToggle,
     bara_inst: Dffr,
+    caru_inst: DffrToggle,
+    bylu_inst: DffrToggle,
 }
 
-impl Horu512Hz {
-    fn update(&mut self, apu_4mhz: bool, apu_reset: bool, clock_512hz: bool) -> bool {
+impl ApuClocks {
+    fn update(&mut self, apu_4mhz: bool, apu_reset: bool, clock_512hz: bool) {
         let ajer_inst_output = self.ajer_inst.update(!apu_4mhz, !apu_reset);
         let ajer = ajer_inst_output;
+
         let bara_inst_output = self.bara_inst.update(clock_512hz, !ajer, !apu_reset);
-        !bara_inst_output
+        let bara_n = !bara_inst_output;
+
+        let caru_inst_output = self.caru_inst.update(!bara_n, !apu_reset);
+        let caru_n = !caru_inst_output;
+
+        self.bylu_inst.update(caru_n, !apu_reset);
+    }
+
+    fn get_horu_512hz(&self) -> bool {
+        !self.bara_inst.state
+    }
+
+    fn get_byfe_128hz(&self) -> bool {
+        self.bylu_inst.state
     }
 }
 
