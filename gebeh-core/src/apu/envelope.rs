@@ -114,13 +114,15 @@ impl EgStop {
         is_increasing: bool,
         apu_reset: bool,
         // jopa for ch2
-        pace_clk: bool,
+        pace_finished_synced: bool,
     ) -> bool {
         let should_reset = apu_reset || channel_restart;
         let should_stop =
             !is_increasing && channel_env.get() == 0 || is_increasing && channel_env.get() == 0x0f;
 
-        let is_stopped = self.dffr.update(should_stop, pace_clk, !should_reset);
+        let is_stopped = self
+            .dffr
+            .update(should_stop, pace_finished_synced, !should_reset);
 
         self.nor_latch.update(is_stopped, should_reset)
     }
@@ -140,10 +142,10 @@ impl PaceIsFinished {
         apu_reset: bool,
         ch2_restart: bool,
         // jopa for ch2
-        pace_clk: bool,
-        pace_reg: SmallByte<3>
+        pace_finished_synced: bool,
+        pace_reg: SmallByte<3>,
     ) -> bool {
-        let should_load = ch2_restart || pace_clk;
+        let should_load = ch2_restart || pace_finished_synced;
 
         let counter_clk = self.clock_divider.update(!clock_128hz, !apu_reset);
 
@@ -156,6 +158,39 @@ impl PaceIsFinished {
         }
 
         self.pace_counter.get() == 0x07
+    }
+}
+
+// jopa kyvo,horu_512hz,ff17_d0,ff17_d1,ff17_d2,ch2_restart,apu_reset
+struct PaceIsFinishedSynced {
+    syncer_512hz: Dffr,
+    pace_is_finished: PaceIsFinished,
+}
+
+impl PaceIsFinishedSynced {
+    fn update(
+        &mut self,
+        clock_512hz: bool,
+        clock_128hz: bool,
+        apu_reset: bool,
+        ch2_restart: bool,
+        pace_reg: SmallByte<3>,
+    ) -> bool {
+        let pace_is_finished = self.pace_is_finished.update(
+            clock_128hz,
+            apu_reset,
+            ch2_restart,
+            self.syncer_512hz.state,
+            pace_reg,
+        );
+
+        let should_reset = !clock_512hz && self.syncer_512hz.state
+            || pace_reg.get() == 0
+            || ch2_restart
+            || apu_reset;
+
+        self.syncer_512hz
+            .update(pace_is_finished, clock_512hz, !should_reset)
     }
 }
 
