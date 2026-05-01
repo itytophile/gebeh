@@ -1,4 +1,4 @@
-use crate::cells::{Dffr, NorLatch};
+use crate::cells::{Dffr, DrlatchEe, NorLatch};
 
 struct ChannelRestart {
     syncer_1mhz: Dffr,
@@ -21,5 +21,34 @@ impl ChannelRestart {
 
     pub fn get_state(&self) -> bool {
         self.syncer_1mhz_has_started.state
+    }
+}
+
+// ch2_start apu_phi,apu_reset,ff19,apu_wr
+// etap ch2_start,apu_phi,apu_reset,ff19,apu_wr
+struct ChannelStart {
+    is_starting: DrlatchEe,
+    is_starting_synced: Dffr,
+}
+
+impl ChannelStart {
+    fn update(
+        &mut self,
+        apu_reset: bool,
+        is_triggering: bool,
+        is_writing_to_nrx4: bool,
+        apu_phi: bool,
+    ) {
+        let is_starting = self.is_starting.update(
+            is_triggering,
+            is_writing_to_nrx4,
+            !(apu_reset || self.is_starting_synced.state),
+        );
+        self.is_starting_synced
+            .update(is_starting, apu_phi, !apu_reset);
+    }
+
+    fn get_state(&self) -> bool {
+        self.is_starting_synced.state
     }
 }

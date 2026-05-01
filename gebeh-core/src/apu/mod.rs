@@ -16,6 +16,7 @@ mod noise_channel;
 mod pulse_channel;
 mod sweep;
 mod wave_channel;
+mod prout;
 
 // https://gbdev.io/pandocs/Audio_details.html#dacs
 // Citation: If a DAC is enabled, the digital range $0 to $F is linearly translated to the analog range -1 to 1

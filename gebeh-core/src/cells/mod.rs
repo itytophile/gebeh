@@ -1,10 +1,12 @@
 mod tffnl;
 mod dffr;
 mod nor_latch;
+mod drlatch_ee;
 
 pub use tffnl::*;
 pub use dffr::*;
 pub use nor_latch::*;
+pub use drlatch_ee::*;
 
 pub struct NegativeEdge(bool);
 
