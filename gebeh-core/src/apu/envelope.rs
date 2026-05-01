@@ -195,12 +195,12 @@ impl PaceIsFinishedSynced {
 }
 
 // ch2_env0 ff17_d0,ff17_d1,ff17_d2,ff17_d3,ff17_d3_n,ff17_d4,ff17_d5,ff17_d6,ff17_d7,jopa,ch2_eg_stop,ch2_restart
-struct ChannelEnvelope {
+struct EnvelopeValue {
     state: SmallByte<4>,
     negative_edge: NegativeEdge,
 }
 
-impl ChannelEnvelope {
+impl EnvelopeValue {
     fn update(
         &mut self,
         pace_reg: SmallByte<3>,
@@ -241,5 +241,40 @@ impl<const SIZE: u8> SmallByte<SIZE> {
     }
     fn decrement(self) -> Self {
         Self(self.0.wrapping_sub(1))
+    }
+}
+
+struct EnvelopeComponent {
+    register: u8,
+    envelope_value: EnvelopeValue,
+    pace_is_finished_synced: PaceIsFinishedSynced,
+    envelope_is_stopped: EnvelopeIsStopped,
+}
+
+impl EnvelopeComponent {
+    fn update(&mut self, clock_512hz: bool, clock_128hz: bool, apu_reset: bool, ch2_restart: bool) {
+        let pace_is_finished_synced = self.pace_is_finished_synced.update(
+            clock_512hz,
+            clock_128hz,
+            apu_reset,
+            ch2_restart,
+            SmallByte(self.register),
+        );
+        let is_increasing = self.register & 0b1000 != 0;
+        let is_envelope_stopped = self.envelope_is_stopped.update(
+            ch2_restart,
+            self.envelope_value.state,
+            is_increasing,
+            apu_reset,
+            pace_is_finished_synced,
+        );
+        self.envelope_value.update(
+            SmallByte(self.register),
+            pace_is_finished_synced,
+            is_envelope_stopped,
+            is_increasing,
+            ch2_restart,
+            SmallByte(self.register >> 4),
+        );
     }
 }
