@@ -1,4 +1,7 @@
-use crate::cells::{Dffr, DffrToggle, DrlatchEe, NorLatch};
+use crate::{
+    apu::envelope::EnvelopeComponent,
+    cells::{Dffr, DffrToggle, DrlatchEe, NorLatch},
+};
 
 struct ChannelRestart {
     syncer_1mhz: Dffr,
@@ -7,16 +10,16 @@ struct ChannelRestart {
 }
 
 impl ChannelRestart {
-    pub fn update(&mut self, ch2_1mhz: bool, apu_reset: bool, is_channel_starting: bool) {
+    pub fn update(&mut self, channel_1mhz: bool, apu_reset: bool, is_channel_starting: bool) {
         let is_restarting_synced =
             self.syncer_1mhz
-                .update(self.syncer_1mhz_has_started.state, ch2_1mhz, !apu_reset);
+                .update(self.syncer_1mhz_has_started.state, channel_1mhz, !apu_reset);
 
         let should_reset = apu_reset || is_restarting_synced;
 
         let has_started = !self.has_started.update(should_reset, is_channel_starting);
         self.syncer_1mhz_has_started
-            .update(has_started, ch2_1mhz, !should_reset);
+            .update(has_started, channel_1mhz, !should_reset);
     }
 
     pub fn get_state(&self) -> bool {
@@ -128,6 +131,55 @@ impl ApuReset {
             .update(is_audio_on, !(ff26 && apu_wr), !reset);
 
         !is_audio_on || reset
+    }
+}
+
+struct Channel {
+    apu_phi: ApuPhi,
+    channel_1mhz: Channel1Mhz,
+    channel_start: ChannelStart,
+    chanel_restart: ChannelRestart,
+    envelope: EnvelopeComponent,
+    apu_reset: ApuReset,
+}
+
+impl Channel {
+    fn update(
+        &mut self,
+        apu_wr: bool,
+        ff26: bool,
+        is_audio_on: bool,
+        apu_4mhz: bool,
+        is_triggering: bool,
+        is_writing_to_nrx4: bool,
+    ) {
+        let apu_reset = self.apu_reset.update(false, apu_wr, ff26, is_audio_on);
+        let channel_1mhz = self.channel_1mhz.update(apu_reset, apu_4mhz);
+        let apu_phi = self.apu_phi.update(apu_4mhz);
+        self.channel_start
+            .update(apu_reset, is_triggering, is_writing_to_nrx4, apu_phi);
+        self.chanel_restart
+            .update(channel_1mhz, apu_reset, self.channel_start.get_state());
+        self.envelope.update(
+            clock_512hz,
+            clock_128hz,
+            apu_reset,
+            self.chanel_restart.get_state(),
+        );
+    }
+}
+
+struct Horu512Hz {
+    ajer_inst: DffrToggle,
+    bara_inst: Dffr,
+}
+
+impl Horu512Hz {
+    fn update(&mut self, apu_4mhz: bool, apu_reset: bool, clock_512hz: bool) -> bool {
+        let ajer_inst_output = self.ajer_inst.update(!apu_4mhz, !apu_reset);
+        let ajer = ajer_inst_output;
+        let bara_inst_output = self.bara_inst.update(clock_512hz, !ajer, !apu_reset);
+        !bara_inst_output
     }
 }
 

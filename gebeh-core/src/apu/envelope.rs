@@ -273,18 +273,18 @@ impl EnvelopeComponent {
         clock_512hz: bool,
         clock_128hz: bool,
         apu_reset: bool,
-        ch2_restart: bool,
+        channel_restart: bool,
     ) {
         let pace_is_finished_synced = self.pace_is_finished_synced.update(
             clock_512hz,
             clock_128hz,
             apu_reset,
-            ch2_restart,
+            channel_restart,
             SmallByte(self.register),
         );
         let is_increasing = self.register & 0b1000 != 0;
         let is_envelope_stopped = self.envelope_is_stopped.update(
-            ch2_restart,
+            channel_restart,
             self.envelope_value.get_value(),
             is_increasing,
             apu_reset,
@@ -295,7 +295,7 @@ impl EnvelopeComponent {
             pace_is_finished_synced,
             is_envelope_stopped,
             is_increasing,
-            ch2_restart,
+            channel_restart,
             SmallByte(self.register >> 4),
         );
     }
