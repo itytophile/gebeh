@@ -77,7 +77,31 @@ impl ApuPhi {
 
         self.apuk_inst.update(alef, !apu_4mhz, true);
 
-        !afur
+        afur
+    }
+}
+
+#[derive(Default)]
+struct CpuWr {
+    adyk_inst: DrlatchEe,
+    afur_inst: DrlatchEe,
+    alef_inst: DrlatchEe,
+    apuk_inst: DrlatchEe,
+}
+
+impl CpuWr {
+    fn update(&mut self, avet: bool, write: bool) -> bool {
+        let adyk = self
+            .adyk_inst
+            .update(self.apuk_inst.get_state(), avet, true);
+
+        let afur = self.afur_inst.update(!adyk, !avet, true);
+
+        let alef = self.alef_inst.update(afur, avet, true);
+
+        self.apuk_inst.update(alef, !avet, true);
+
+        adyk && !afur && write
     }
 }
 
