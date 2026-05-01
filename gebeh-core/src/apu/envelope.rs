@@ -270,13 +270,13 @@ pub struct EnvelopeComponent {
 impl EnvelopeComponent {
     pub fn update(
         &mut self,
-        clock_512hz: bool,
+        horu_512hz: bool,
         clock_128hz: bool,
         apu_reset: bool,
         channel_restart: bool,
     ) {
         let pace_is_finished_synced = self.pace_is_finished_synced.update(
-            clock_512hz,
+            horu_512hz,
             clock_128hz,
             apu_reset,
             channel_restart,

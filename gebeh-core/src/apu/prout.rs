@@ -141,6 +141,7 @@ struct Channel {
     chanel_restart: ChannelRestart,
     envelope: EnvelopeComponent,
     apu_reset: ApuReset,
+    horu_512hz: Horu512Hz,
 }
 
 impl Channel {
@@ -152,6 +153,7 @@ impl Channel {
         apu_4mhz: bool,
         is_triggering: bool,
         is_writing_to_nrx4: bool,
+        system_clock: u16,
     ) {
         let apu_reset = self.apu_reset.update(false, apu_wr, ff26, is_audio_on);
         let channel_1mhz = self.channel_1mhz.update(apu_reset, apu_4mhz);
@@ -160,8 +162,11 @@ impl Channel {
             .update(apu_reset, is_triggering, is_writing_to_nrx4, apu_phi);
         self.chanel_restart
             .update(channel_1mhz, apu_reset, self.channel_start.get_state());
+        let horu_512hz = self
+            .horu_512hz
+            .update(apu_4mhz, apu_reset, system_clock & (1 << 10) == 0);
         self.envelope.update(
-            clock_512hz,
+            horu_512hz,
             clock_128hz,
             apu_reset,
             self.chanel_restart.get_state(),
