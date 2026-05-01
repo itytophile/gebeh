@@ -152,8 +152,8 @@ mod tests {
 
         assert_eq!(
             &[
-                false, false, false, false, true, true, true, true, false, false, false, false,
-                true, true, true, true
+                true, true, true, true, false, false, false, false, true, true, true, true, false,
+                false, false, false,
             ],
             apu_phi_wave.as_slice()
         )
