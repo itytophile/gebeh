@@ -65,11 +65,6 @@ fn main() {
     // the end of what's interesting (yeah it's called input it's strange)
     let input = &args[2];
 
-    let notable_ports: Vec<&str> = args
-        .get(3)
-        .map(|arg| arg.split(',').collect())
-        .unwrap_or_default();
-
     let nots_by_output: HashMap<_, _> = instances
         .iter()
         .filter_map(|instance| {
@@ -124,6 +119,13 @@ fn main() {
     let input = canonicalize_input(input, &nots_by_output);
 
     let mut already_seen = IndexSet::new();
+
+    let notable_ports: Vec<&str> = args
+        .get(3)
+        .into_iter()
+        .flat_map(|arg| arg.split(','))
+        .map(|port| canonicalize_input(port, &nots_by_output).name)
+        .collect();
 
     dfs(
         input.name,

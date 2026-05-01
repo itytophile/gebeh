@@ -1,6 +1,6 @@
 use crate::{
     apu::MAX_VOLUME,
-    cells::{Dffr, NorLatch},
+    cells::{Dffr, DffrToggle, NegativeEdge, NorLatch},
 };
 
 #[derive(Clone, Default)]
@@ -117,11 +117,45 @@ impl EgStop {
         pace_clk: bool,
     ) -> bool {
         let should_reset = apu_reset || channel_restart;
-        let should_stop = !is_increasing && channel_env.get() == 0 || is_increasing && channel_env.get() == 0x0f;
+        let should_stop =
+            !is_increasing && channel_env.get() == 0 || is_increasing && channel_env.get() == 0x0f;
 
         let is_stopped = self.dffr.update(should_stop, pace_clk, !should_reset);
 
         self.nor_latch.update(is_stopped, should_reset)
+    }
+}
+
+// kyvo horu_512hz,byfe_128hz,apu_reset,ch2_restart,jopa,ff17_d0_n,ff17_d1_n,ff17_d2_n
+struct PaceIsFinished {
+    clock_divider: DffrToggle,
+    pace_counter: SmallByte<3>,
+    counter_clk_edge: NegativeEdge,
+}
+
+impl PaceIsFinished {
+    fn update(
+        &mut self,
+        clock_128hz: bool,
+        apu_reset: bool,
+        ch2_restart: bool,
+        // jopa for ch2
+        pace_clk: bool,
+        pace_reg: SmallByte<3>
+    ) -> bool {
+        let should_load = ch2_restart || pace_clk;
+
+        let counter_clk = self.clock_divider.update(!clock_128hz, !apu_reset);
+
+        if should_load {
+            self.pace_counter = pace_reg
+        }
+
+        if self.counter_clk_edge.update(counter_clk) {
+            self.pace_counter = self.pace_counter.increment();
+        }
+
+        self.pace_counter.get() == 0x07
     }
 }
 
@@ -131,5 +165,8 @@ struct SmallByte<const SIZE: u8>(u8);
 impl<const SIZE: u8> SmallByte<SIZE> {
     fn get(self) -> u8 {
         self.0 & ((1 << SIZE) - 1)
+    }
+    fn increment(self) -> Self {
+        Self(self.0.wrapping_add(1))
     }
 }
