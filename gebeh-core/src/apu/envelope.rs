@@ -246,21 +246,21 @@ impl EnvelopeValue {
 }
 
 #[derive(Clone, Copy)]
-struct SmallByte<const SIZE: u8>(u8);
+pub struct SmallByte<const SIZE: u8>(u8);
 
 impl<const SIZE: u8> SmallByte<SIZE> {
-    fn get(self) -> u8 {
+    pub fn get(self) -> u8 {
         self.0 & ((1 << SIZE) - 1)
     }
-    fn increment(self) -> Self {
+    pub fn increment(self) -> Self {
         Self(self.0.wrapping_add(1))
     }
-    fn decrement(self) -> Self {
+    pub fn decrement(self) -> Self {
         Self(self.0.wrapping_sub(1))
     }
 }
 
-struct EnvelopeComponent {
+pub struct EnvelopeComponent {
     register: u8,
     envelope_value: EnvelopeValue,
     pace_is_finished_synced: PaceIsFinishedSynced,
@@ -268,7 +268,13 @@ struct EnvelopeComponent {
 }
 
 impl EnvelopeComponent {
-    fn update(&mut self, clock_512hz: bool, clock_128hz: bool, apu_reset: bool, ch2_restart: bool) {
+    pub fn update(
+        &mut self,
+        clock_512hz: bool,
+        clock_128hz: bool,
+        apu_reset: bool,
+        ch2_restart: bool,
+    ) {
         let pace_is_finished_synced = self.pace_is_finished_synced.update(
             clock_512hz,
             clock_128hz,
@@ -292,5 +298,9 @@ impl EnvelopeComponent {
             ch2_restart,
             SmallByte(self.register >> 4),
         );
+    }
+
+    pub fn get_value(&self) -> SmallByte<4> {
+        self.envelope_value.get_value()
     }
 }
