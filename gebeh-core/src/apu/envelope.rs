@@ -196,10 +196,7 @@ impl PaceIsFinishedSynced {
 
 // ch2_env0 ff17_d0,ff17_d1,ff17_d2,ff17_d3,ff17_d3_n,ff17_d4,ff17_d5,ff17_d6,ff17_d7,jopa,ch2_eg_stop,ch2_restart
 struct EnvelopeValue {
-    feno_inst: Tffnl,
-    fete_inst: Tffnl,
-    fomy_inst: Tffnl,
-    fena_inst: Tffnl,
+    state: Tffnl,
 }
 
 impl EnvelopeValue {
@@ -218,28 +215,32 @@ impl EnvelopeValue {
 
         let gafa = hofo;
         let feno_inst_output = self
-            .feno_inst
-            .update(volume_reg.get() & 1 != 0, ch2_restart, gafa);
+            .state
+            .update(0, volume_reg.get() & 1 != 0, ch2_restart, gafa);
         let ch2_env0 = feno_inst_output;
         let feno_n = !feno_inst_output;
 
         let faru = is_increasing && ch2_env0 || feno_n && !is_increasing;
         let fete_inst_output =
-            self.fete_inst
-                .update(volume_reg.get() & 0b10 != 0, ch2_restart, faru);
+            self.state
+                .update(1, volume_reg.get() & 0b10 != 0, ch2_restart, faru);
         let ch2_env1 = fete_inst_output;
         let fete_n = !fete_inst_output;
 
         let etup = is_increasing && ch2_env1 || fete_n && !is_increasing;
         let fomy_inst_output =
-            self.fomy_inst
-                .update(volume_reg.get() & 0b100 != 0, ch2_restart, etup);
+            self.state
+                .update(2, volume_reg.get() & 0b100 != 0, ch2_restart, etup);
         let ch2_env2 = fomy_inst_output;
         let fomy_n = !fomy_inst_output;
 
         let fopy = is_increasing && ch2_env2 || fomy_n && !is_increasing;
-        self.fena_inst
-            .update(volume_reg.get() & 0b1000 != 0, ch2_restart, fopy);
+        self.state
+            .update(3, volume_reg.get() & 0b1000 != 0, ch2_restart, fopy);
+    }
+
+    fn get_value(&self) -> SmallByte<4> {
+        SmallByte(self.state.get_state())
     }
 }
 
@@ -277,7 +278,7 @@ impl EnvelopeComponent {
         let is_increasing = self.register & 0b1000 != 0;
         let is_envelope_stopped = self.envelope_is_stopped.update(
             ch2_restart,
-            self.envelope_value.state,
+            self.envelope_value.get_value(),
             is_increasing,
             apu_reset,
             pace_is_finished_synced,
