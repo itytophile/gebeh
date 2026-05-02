@@ -7,7 +7,7 @@ pub struct Tffnl {
 }
 
 impl Tffnl {
-    pub fn update(&mut self, index: u8, d: bool, tclk_n: bool, load: bool) -> bool {
+    pub fn update(&mut self, index: u8, d: bool, load: bool, tclk_n: bool) -> bool {
         if load {
             self.state = set_bit_at(self.state, index, d);
         }
