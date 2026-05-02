@@ -127,24 +127,25 @@ impl Apu {
 
     #[must_use]
     pub fn execute(&mut self, div: u8, system_clock: u16) -> bool {
-        for (inner_channel, nrx4) in [
-            (
-                &mut self.ch1.volume_and_envelope,
-                self.write_address == CH1_PERIOD_HIGH_AND_CONTROL,
-            ),
-            (
-                &mut self.ch2.volume_and_envelope,
-                self.write_address == CH2_PERIOD_HIGH_AND_CONTROL,
-            ),
-            (
-                &mut self.ch4.volume_and_envelope,
-                self.write_address == CH2_PERIOD_HIGH_AND_CONTROL,
-            ),
-        ] {
-            for i in 0..8 {
-                let avet = AVET_4MHZ & (1 << i) != 0;
+        for i in 0..8 {
+            let avet = AVET_4MHZ & (1 << i) != 0;
+            let cpu_wr = self.cpu_wr.update(avet, self.is_writing);
+            for (inner_channel, nrx4) in [
+                (
+                    &mut self.ch1.volume_and_envelope,
+                    self.write_address == CH1_PERIOD_HIGH_AND_CONTROL,
+                ),
+                (
+                    &mut self.ch2.volume_and_envelope,
+                    self.write_address == CH2_PERIOD_HIGH_AND_CONTROL,
+                ),
+                (
+                    &mut self.ch4.volume_and_envelope,
+                    self.write_address == CH2_PERIOD_HIGH_AND_CONTROL,
+                ),
+            ] {
                 inner_channel.update(
-                    self.cpu_wr.update(avet, self.is_writing),
+                    cpu_wr,
                     self.write_address == AUDIO_MASTER_CONTROL,
                     nrx4,
                     self.write_value & (1 << 7) != 0,
@@ -154,6 +155,7 @@ impl Apu {
                 );
             }
         }
+        self.is_writing = false;
 
         if !self.is_on || !self.falling_edge.update(div & (1 << 4) != 0) {
             return false;
@@ -217,6 +219,9 @@ impl Apu {
     }
 
     pub fn write(&mut self, index: u16, value: u8) {
+        self.is_writing = true;
+        self.write_address = index;
+        self.write_value = value;
         use crate::state::*;
 
         // according to blargg we can write to the initial length timer registers when the apu is off
