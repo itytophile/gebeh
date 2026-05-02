@@ -39,12 +39,13 @@ impl ChannelStart {
         &mut self,
         apu_reset: bool,
         is_triggering: bool,
-        is_writing_to_nrx4: bool,
+        apu_wr: bool,
+        nrx4: bool,
         apu_phi: bool,
     ) {
         let is_starting = self.is_starting.update(
             is_triggering,
-            is_writing_to_nrx4,
+            apu_wr && nrx4,
             !(apu_reset || self.is_starting_synced.state),
         );
         self.is_starting_synced
@@ -149,17 +150,17 @@ impl Channel {
         &mut self,
         apu_wr: bool,
         ff26: bool,
+        nrx4: bool,
         is_audio_on: bool,
         apu_4mhz: bool,
         is_triggering: bool,
-        is_writing_to_nrx4: bool,
         system_clock: u16,
     ) {
         let apu_reset = self.apu_reset.update(false, apu_wr, ff26, is_audio_on);
         let channel_1mhz = self.channel_1mhz.update(apu_reset, apu_4mhz);
         let apu_phi = self.apu_phi.update(apu_4mhz);
         self.channel_start
-            .update(apu_reset, is_triggering, is_writing_to_nrx4, apu_phi);
+            .update(apu_reset, is_triggering, apu_wr, nrx4, apu_phi);
         self.chanel_restart
             .update(channel_1mhz, apu_reset, self.channel_start.get_state());
         self.apu_clocks
