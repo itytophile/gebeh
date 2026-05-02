@@ -1,13 +1,13 @@
 use crate::apu::{
     MAX_VOLUME,
-    envelope::VolumeAndEnvelope,
     length::{Length, MASK_6_BITS},
+    prout::Channel,
 };
 
 #[derive(Default, Clone)]
 pub struct NoiseChannel {
     length: Length<MASK_6_BITS>,
-    volume_and_envelope: VolumeAndEnvelope,
+    pub volume_and_envelope: Channel,
     nr43: u8,
     is_enabled: bool,
 }
@@ -20,11 +20,6 @@ impl NoiseChannel {
             ..Default::default()
         }
     }
-    pub fn tick_envelope(&mut self) {
-        if self.is_on() {
-            self.volume_and_envelope.tick();
-        }
-    }
     pub fn tick_length(&mut self) {
         self.is_enabled &= !self.length.tick();
     }
@@ -35,11 +30,11 @@ impl NoiseChannel {
         0xff
     }
     pub fn write_nr42(&mut self, value: u8) {
-        self.volume_and_envelope.write_register(value);
-        self.is_enabled &= self.volume_and_envelope.is_dac_on();
+        self.volume_and_envelope.envelope.write_register(value);
+        self.is_enabled &= self.volume_and_envelope.envelope.is_dac_on();
     }
     pub fn read_nr42(&self) -> u8 {
-        self.volume_and_envelope.get_register()
+        self.volume_and_envelope.envelope.get_register()
     }
     pub fn write_nr43(&mut self, value: u8) {
         self.nr43 = value;
@@ -62,15 +57,14 @@ impl NoiseChannel {
         self.length.trigger(div_apu);
 
         // according to blargg "Disabled DAC should prevent enable at trigger"
-        if !self.volume_and_envelope.is_dac_on() {
+        if !self.volume_and_envelope.envelope.is_dac_on() {
             return;
         }
         self.is_enabled = true;
-        self.volume_and_envelope.trigger();
     }
 
     pub fn is_on(&self) -> bool {
-        self.volume_and_envelope.is_dac_on() && self.is_enabled
+        self.volume_and_envelope.envelope.is_dac_on() && self.is_enabled
     }
 
     fn get_divider(&self) -> u8 {
@@ -89,8 +83,8 @@ impl NoiseChannel {
             divider: self.get_divider(),
             shift: self.get_shift(),
             is_short_mode: self.is_short_mode(),
-            volume: self.volume_and_envelope.get_volume(),
-            is_dac_on: self.volume_and_envelope.is_dac_on(),
+            volume: self.volume_and_envelope.envelope.get_volume(),
+            is_dac_on: self.volume_and_envelope.envelope.is_dac_on(),
         }
     }
 }

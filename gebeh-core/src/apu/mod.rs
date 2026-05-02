@@ -4,10 +4,12 @@ use crate::{
     FallingEdge,
     apu::{
         noise_channel::{NoiseChannel, NoiseSampler},
+        prout::CpuWr,
         pulse_channel::{PulseChannel, PulseSampler},
         sweep::Ch1Sweep,
         wave_channel::{WaveChannel, WaveSampler},
     },
+    state::{AUDIO_MASTER_CONTROL, CH1_PERIOD_HIGH_AND_CONTROL, CH2_PERIOD_HIGH_AND_CONTROL},
 };
 
 mod envelope;
@@ -35,6 +37,10 @@ pub struct Apu {
     // https://gbdev.io/pandocs/Audio_details.html#div-apu
     div_apu: u8,
     falling_edge: FallingEdge,
+    pub is_writing: bool,
+    pub write_address: u16,
+    pub write_value: u8,
+    cpu_wr: CpuWr,
 }
 
 bitflags::bitflags! {
@@ -73,6 +79,8 @@ bitflags::bitflags! {
         const RIGHT_VOLUME_MASK = 0b00000111;
     }
 }
+
+const AVET_4MHZ: u8 = 0b01010101;
 
 impl Apu {
     pub fn increment_div_apu(&mut self) {
@@ -118,7 +126,35 @@ impl Apu {
     }
 
     #[must_use]
-    pub fn execute(&mut self, div: u8) -> bool {
+    pub fn execute(&mut self, div: u8, system_clock: u16) -> bool {
+        for (inner_channel, nrx4) in [
+            (
+                &mut self.ch1.volume_and_envelope,
+                self.write_address == CH1_PERIOD_HIGH_AND_CONTROL,
+            ),
+            (
+                &mut self.ch2.volume_and_envelope,
+                self.write_address == CH2_PERIOD_HIGH_AND_CONTROL,
+            ),
+            (
+                &mut self.ch4.volume_and_envelope,
+                self.write_address == CH2_PERIOD_HIGH_AND_CONTROL,
+            ),
+        ] {
+            for i in 0..8 {
+                let avet = AVET_4MHZ & (1 << i) != 0;
+                inner_channel.update(
+                    self.cpu_wr.update(avet, self.is_writing),
+                    self.write_address == AUDIO_MASTER_CONTROL,
+                    nrx4,
+                    self.write_value & (1 << 7) != 0,
+                    avet,
+                    self.write_value & (1 << 7) != 0,
+                    system_clock,
+                );
+            }
+        }
+
         if !self.is_on || !self.falling_edge.update(div & (1 << 4) != 0) {
             return false;
         }
@@ -132,11 +168,6 @@ impl Apu {
         }
         if self.div_apu % 4 == 2 {
             self.ch1.tick_sweep();
-        }
-        if self.div_apu % 8 == 7 {
-            self.ch1.tick_envelope();
-            self.ch2.tick_envelope();
-            self.ch4.tick_envelope();
         }
 
         true

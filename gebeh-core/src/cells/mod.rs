@@ -8,6 +8,7 @@ pub use drlatch_ee::*;
 pub use nor_latch::*;
 pub use tffnl::*;
 
+#[derive(Default, Clone)]
 pub struct NegativeEdge(bool);
 
 impl NegativeEdge {

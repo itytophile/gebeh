@@ -1,3 +1,4 @@
+#[derive(Default, Clone)]
 pub struct Dffr {
     clk: bool,
     pub state: bool,
@@ -14,6 +15,7 @@ impl Dffr {
     }
 }
 
+#[derive(Default, Clone)]
 pub struct DffrToggle {
     clk: bool,
     pub state: bool,

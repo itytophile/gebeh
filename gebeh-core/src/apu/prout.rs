@@ -3,6 +3,7 @@ use crate::{
     cells::{Dffr, DffrToggle, DrlatchEe, NorLatch},
 };
 
+#[derive(Clone, Default)]
 struct ChannelRestart {
     syncer_1mhz: Dffr,
     has_started: NorLatch,
@@ -29,6 +30,7 @@ impl ChannelRestart {
 
 // ch2_start apu_phi,apu_reset,ff19,apu_wr
 // etap ch2_start,apu_phi,apu_reset,ff19,apu_wr
+#[derive(Clone, Default)]
 struct ChannelStart {
     is_starting: DrlatchEe,
     is_starting_synced: Dffr,
@@ -61,7 +63,7 @@ impl ChannelStart {
 // alef test_reset_n,adyk,apuk
 // I don't really understand the "sort of" clock divider with drlatch_ee so let's brute copy the thing
 // PS: according to the test below, it's dividing the clock by 4
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ApuPhi {
     adyk_inst: DrlatchEe,
     afur_inst: DrlatchEe,
@@ -85,8 +87,8 @@ impl ApuPhi {
     }
 }
 
-#[derive(Default)]
-struct CpuWr {
+#[derive(Clone, Default)]
+pub struct CpuWr {
     adyk_inst: DrlatchEe,
     afur_inst: DrlatchEe,
     alef_inst: DrlatchEe,
@@ -94,7 +96,7 @@ struct CpuWr {
 }
 
 impl CpuWr {
-    fn update(&mut self, avet: bool, write: bool) -> bool {
+    pub fn update(&mut self, avet: bool, write: bool) -> bool {
         let adyk = self
             .adyk_inst
             .update(self.apuk_inst.get_state(), avet, true);
@@ -109,6 +111,7 @@ impl CpuWr {
     }
 }
 
+#[derive(Clone, Default)]
 struct Channel1Mhz {
     first_divider: DffrToggle,
     second_divider: DffrToggle,
@@ -121,6 +124,7 @@ impl Channel1Mhz {
     }
 }
 
+#[derive(Clone, Default)]
 struct ApuReset {
     is_audio_on: Dffr,
 }
@@ -135,18 +139,19 @@ impl ApuReset {
     }
 }
 
-struct Channel {
+#[derive(Clone, Default)]
+pub struct Channel {
     apu_phi: ApuPhi,
     channel_1mhz: Channel1Mhz,
     channel_start: ChannelStart,
     chanel_restart: ChannelRestart,
-    envelope: EnvelopeComponent,
+    pub envelope: EnvelopeComponent,
     apu_reset: ApuReset,
     apu_clocks: ApuClocks,
 }
 
 impl Channel {
-    fn update(
+    pub fn update(
         &mut self,
         apu_wr: bool,
         ff26: bool,
@@ -174,6 +179,7 @@ impl Channel {
     }
 }
 
+#[derive(Clone, Default)]
 struct ApuClocks {
     ajer_inst: DffrToggle,
     bara_inst: Dffr,

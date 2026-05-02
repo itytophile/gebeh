@@ -1,3 +1,4 @@
+#[derive(Default, Clone)]
 pub struct NorLatch(bool);
 
 impl NorLatch {

@@ -85,7 +85,9 @@ impl Emulator {
             &mut self.state,
             self.cycles,
         );
-        let must_increment_div_apu = self.apu.execute(self.timer.get_div());
+        let must_increment_div_apu = self
+            .apu
+            .execute(self.timer.get_div(), self.timer.get_system_counter());
 
         let interrupts_from_previous_cycle = self.state.interrupt_flag;
         for _ in 0..2 {

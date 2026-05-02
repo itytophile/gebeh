@@ -1,106 +1,7 @@
-use crate::{
-    apu::MAX_VOLUME,
-    cells::{Dffr, DffrToggle, NegativeEdge, NorLatch, Tffnl},
-};
-
-#[derive(Clone, Default)]
-struct EnvelopeTimer {
-    value: u8, // 4 bits
-    is_increasing: bool,
-    sweep_pace: u8, // 3 bits
-    pace_count: u8,
-    stopped: bool,
-}
-
-impl EnvelopeTimer {
-    fn trigger(&mut self, volume_and_envelope: u8) {
-        self.is_increasing = volume_and_envelope & 0x08 != 0;
-        self.value = (volume_and_envelope >> 4) & 0x0f;
-        self.sweep_pace = volume_and_envelope & 0x07;
-        self.pace_count = 0;
-        self.stopped = false;
-    }
-    fn tick(&mut self) {
-        // https://gbdev.io/pandocs/Audio_Registers.html#ff12--nr12-channel-1-volume--envelope
-        // A setting of 0 disables the envelope.
-        // about multiple of 8 https://gbdev.io/pandocs/Audio_details.html#div-apu
-        if self.sweep_pace == 0 {
-            return;
-        }
-
-        self.pace_count += 1;
-
-        if self.pace_count != self.sweep_pace {
-            return;
-        }
-
-        self.pace_count = 0;
-
-        match (self.is_increasing, self.value) {
-            (true, MAX_VOLUME) | (false, 0) => self.stopped = true,
-            (true, _) => self.value += 1,
-            (false, _) => self.value -= 1,
-        }
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct VolumeAndEnvelope {
-    timer: EnvelopeTimer,
-    register: u8,
-}
-
-impl VolumeAndEnvelope {
-    pub fn is_dac_on(&self) -> bool {
-        // https://gbdev.io/pandocs/Audio_details.html#dacs
-        self.register & 0xf8 != 0
-    }
-
-    pub fn get_volume(&self) -> u8 {
-        self.timer.value
-    }
-
-    pub fn get_register(&self) -> u8 {
-        self.register
-    }
-
-    pub fn write_register(&mut self, value: u8) {
-        self.zombie_mode_glitch(value);
-        self.register = value;
-    }
-
-    // https://gbdev.io/pandocs/Audio_details.html#obscure-behavior
-    // useful for Prehistorik Man intro
-    fn zombie_mode_glitch(&mut self, value: u8) {
-        let old_pace = self.register & 0x07;
-
-        let is_increasing = self.register & 0x08 != 0;
-
-        if old_pace == 0 && !self.timer.stopped {
-            self.timer.value = self.timer.value.wrapping_add(1);
-        } else if !is_increasing {
-            self.timer.value = self.timer.value.wrapping_add(2);
-        }
-
-        let will_increase = value & 0x08 != 0;
-
-        if is_increasing != will_increase {
-            self.timer.value = 16u8.wrapping_sub(self.timer.value);
-        }
-
-        self.timer.value &= 0x0f;
-    }
-
-    pub fn trigger(&mut self) {
-        self.timer.trigger(self.register);
-    }
-
-    pub fn tick(&mut self) {
-        self.timer.tick();
-    }
-}
+use crate::cells::{Dffr, DffrToggle, NegativeEdge, NorLatch, Tffnl};
 
 // ch2_eg_stop ch2_restart,jyro,ch2_env0,ch2_env1,ch2_env2,ch2_env3,ff17_d3,jopa
+#[derive(Default, Clone)]
 struct EnvelopeIsStopped {
     dffr: Dffr,
     nor_latch: NorLatch,
@@ -129,6 +30,7 @@ impl EnvelopeIsStopped {
 }
 
 // kyvo horu_512hz,byfe_128hz,apu_reset,ch2_restart,jopa,ff17_d0_n,ff17_d1_n,ff17_d2_n
+#[derive(Default, Clone)]
 struct PaceIsFinished {
     clock_divider: DffrToggle,
     pace_counter: SmallByte<3>,
@@ -162,6 +64,7 @@ impl PaceIsFinished {
 }
 
 // jopa kyvo,horu_512hz,ff17_d0,ff17_d1,ff17_d2,ch2_restart,apu_reset
+#[derive(Default, Clone)]
 struct PaceIsFinishedSynced {
     syncer_512hz: Dffr,
     pace_is_finished: PaceIsFinished,
@@ -195,6 +98,7 @@ impl PaceIsFinishedSynced {
 }
 
 // ch2_env0 ff17_d0,ff17_d1,ff17_d2,ff17_d3,ff17_d3_n,ff17_d4,ff17_d5,ff17_d6,ff17_d7,jopa,ch2_eg_stop,ch2_restart
+#[derive(Default, Clone)]
 struct EnvelopeValue {
     // I can't do a pretty increase/decrease logic with a normal byte because we have to emulate the zombie mode
     // glitch
@@ -245,7 +149,7 @@ impl EnvelopeValue {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct SmallByte<const SIZE: u8>(u8);
 
 impl<const SIZE: u8> SmallByte<SIZE> {
@@ -260,6 +164,7 @@ impl<const SIZE: u8> SmallByte<SIZE> {
     }
 }
 
+#[derive(Default, Clone)]
 pub struct EnvelopeComponent {
     register: u8,
     envelope_value: EnvelopeValue,
@@ -300,7 +205,20 @@ impl EnvelopeComponent {
         );
     }
 
-    pub fn get_value(&self) -> SmallByte<4> {
-        self.envelope_value.get_value()
+    pub fn is_dac_on(&self) -> bool {
+        // https://gbdev.io/pandocs/Audio_details.html#dacs
+        self.register & 0xf8 != 0
+    }
+
+    pub fn get_volume(&self) -> u8 {
+        self.envelope_value.get_value().0
+    }
+
+    pub fn get_register(&self) -> u8 {
+        self.register
+    }
+
+    pub fn write_register(&mut self, value: u8) {
+        self.register = value;
     }
 }

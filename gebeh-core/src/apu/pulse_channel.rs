@@ -1,7 +1,7 @@
 use crate::apu::{
     MAX_VOLUME,
-    envelope::VolumeAndEnvelope,
     length::{Length, MASK_6_BITS},
+    prout::Channel,
     sweep::{Ch1Sweep, Sweep},
 };
 
@@ -17,7 +17,7 @@ const WAVE_11: Wave = [1, 0, 0, 0, 0, 0, 0, 1];
 pub struct PulseChannel<S: Sweep> {
     length: Length<MASK_6_BITS>,
     duty_cycle: u8,
-    volume_and_envelope: VolumeAndEnvelope,
+    pub volume_and_envelope: Channel,
     period_low: u8,
     period_high: u8,
     is_enabled: bool,
@@ -25,11 +25,6 @@ pub struct PulseChannel<S: Sweep> {
 }
 
 impl<S: Sweep + Default> PulseChannel<S> {
-    pub fn tick_envelope(&mut self) {
-        if self.is_on() {
-            self.volume_and_envelope.tick();
-        }
-    }
     pub fn tick_length(&mut self) {
         self.is_enabled &= !self.length.tick();
     }
@@ -43,11 +38,11 @@ impl<S: Sweep + Default> PulseChannel<S> {
         self.length.set_initial_timer_length(value);
     }
     pub fn get_nrx2(&self) -> u8 {
-        self.volume_and_envelope.get_register()
+        self.volume_and_envelope.envelope.get_register()
     }
     pub fn write_nrx2(&mut self, value: u8) {
-        self.volume_and_envelope.write_register(value);
-        self.is_enabled &= self.volume_and_envelope.is_dac_on();
+        self.volume_and_envelope.envelope.write_register(value);
+        self.is_enabled &= self.volume_and_envelope.envelope.is_dac_on();
     }
     pub fn get_nrx3(&self) -> u8 {
         0xff
@@ -72,11 +67,9 @@ impl<S: Sweep + Default> PulseChannel<S> {
         self.length.trigger(div_apu);
 
         // according to blargg "Disabled DAC should prevent enable at trigger"
-        if !self.volume_and_envelope.is_dac_on() {
+        if !self.volume_and_envelope.envelope.is_dac_on() {
             return;
         }
-
-        self.volume_and_envelope.trigger();
 
         self.is_enabled = self.sweep.trigger(self.get_period_value());
     }
@@ -114,8 +107,8 @@ impl<S: Sweep + Default> PulseChannel<S> {
                 .sweep
                 .get_period_value()
                 .unwrap_or(self.get_period_value()),
-            volume: self.volume_and_envelope.get_volume(),
-            is_dac_on: self.volume_and_envelope.is_dac_on(),
+            volume: self.volume_and_envelope.envelope.get_volume(),
+            is_dac_on: self.volume_and_envelope.envelope.is_dac_on(),
             sample_shift: 0.,
         }
     }

@@ -1,5 +1,6 @@
 // https://iceboy.a-singer.de/doc/dmg_cells.html#tffnl
 // can contain 8 Tffnl
+#[derive(Default, Clone)]
 pub struct Tffnl {
     state: u8,
     tclk_n: u8,

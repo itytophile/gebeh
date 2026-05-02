@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct DrlatchEe(bool);
 
 impl DrlatchEe {
