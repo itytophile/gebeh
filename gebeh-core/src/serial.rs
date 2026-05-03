@@ -1,7 +1,15 @@
 use crate::{
     FallingEdge,
-    state::{Interruptions, SerialControl, State},
+    state::{Interruptions, State},
 };
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    pub struct SerialControl: u8 {
+        const TRANSFER_ENABLE = 1 << 7;
+        const CLOCK_SELECT = 1;
+    }
+}
 
 #[derive(Clone)]
 enum SerialControlState {

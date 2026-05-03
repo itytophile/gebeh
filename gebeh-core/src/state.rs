@@ -55,32 +55,6 @@ pub const HRAM: u16 = 0xff80;
 pub const INTERRUPT_ENABLE: u16 = 0xffff;
 
 bitflags::bitflags! {
-    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
-    pub struct SerialControl: u8 {
-        const TRANSFER_ENABLE = 1 << 7;
-        const CLOCK_SELECT = 1;
-    }
-}
-
-bitflags::bitflags! {
-    #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
-    pub struct LcdStatus: u8 {
-        const LYC_INT = 1 << 6;
-        const OAM_INT = 1 << 5;
-        const VBLANK_INT = 1 << 4;
-        const HBLANK_INT = 1 << 3;
-        const LYC_EQUAL_TO_LY = 1 << 2;
-        // Drawing before ppu mask for debug output
-        const DRAWING = 0b11;
-        const PPU_MASK = 0b11;
-        const HBLANK = 0;
-        const VBLANK = 1;
-        const OAM_SCAN = 0b10;
-        const READONLY_MASK = 0b111;
-    }
-}
-
-bitflags::bitflags! {
     #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
     pub struct Interruptions: u8 {
         const VBLANK = 1;

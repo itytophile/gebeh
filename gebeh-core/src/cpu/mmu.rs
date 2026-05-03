@@ -5,8 +5,8 @@ use crate::{
     dma::Dma,
     joypad::Joypad,
     mbc::Mbc,
-    ppu::{LcdControl, Ppu},
-    serial::Serial,
+    ppu::{LcdControl, LcdStatus, Ppu},
+    serial::{Serial, SerialControl},
     state::*,
     timer::Timer,
 };

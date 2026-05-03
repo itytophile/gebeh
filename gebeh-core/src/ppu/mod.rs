@@ -10,12 +10,30 @@ use arrayvec::ArrayVec;
 use crate::{
     WIDTH,
     ppu::renderer::Renderer,
-    state::{EXTERNAL_RAM, Interruptions, LcdStatus, NOT_USABLE, OAM, State, VIDEO_RAM},
+    state::{EXTERNAL_RAM, Interruptions, NOT_USABLE, OAM, State, VIDEO_RAM},
 };
 
 pub use background_fetcher::get_bg_win_tile;
 pub use scanline::Scanline;
 pub use sprite_fetcher::get_line_from_tile;
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
+    pub struct LcdStatus: u8 {
+        const LYC_INT = 1 << 6;
+        const OAM_INT = 1 << 5;
+        const VBLANK_INT = 1 << 4;
+        const HBLANK_INT = 1 << 3;
+        const LYC_EQUAL_TO_LY = 1 << 2;
+        // Drawing before ppu mask for debug output
+        const DRAWING = 0b11;
+        const PPU_MASK = 0b11;
+        const HBLANK = 0;
+        const VBLANK = 1;
+        const OAM_SCAN = 0b10;
+        const READONLY_MASK = 0b111;
+    }
+}
 
 #[derive(Clone)]
 pub enum PpuStep {
