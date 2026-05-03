@@ -13,6 +13,8 @@ use crate::{
 pub struct Dma {
     range: Range<u16>,
     is_active: bool,
+    pub dma_register: u8,
+    pub dma_request: bool,
 }
 
 impl Default for Dma {
@@ -20,6 +22,8 @@ impl Default for Dma {
         Self {
             range: 0..0,
             is_active: false,
+            dma_register: 0,
+            dma_request: false,
         }
     }
 }
@@ -38,11 +42,11 @@ impl Dma {
             self.is_active = false;
         }
 
-        if state.dma_request {
-            state.dma_request = false;
+        if self.dma_request {
+            self.dma_request = false;
             // for next cycle
-            self.range = u16::from_be_bytes([state.dma_register, 0])
-                ..u16::from_be_bytes([state.dma_register, 0xa0]);
+            self.range = u16::from_be_bytes([self.dma_register, 0])
+                ..u16::from_be_bytes([self.dma_register, 0xa0]);
         }
     }
 }

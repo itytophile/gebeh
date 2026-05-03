@@ -108,7 +108,7 @@ impl MmuCpuExt for State {
             SCX => peripherals.ppu.get_scx(),
             LY => peripherals.ppu.get_ly(),
             LYC => peripherals.ppu.lyc,
-            DMA => self.dma_register,
+            DMA => peripherals.dma.dma_register,
             BGP => peripherals.ppu.get_bgp(),
             OBP0 => peripherals.ppu.get_obp0(),
             OBP1 => peripherals.ppu.get_obp1(),
@@ -179,8 +179,9 @@ impl MmuCpuExt for State {
             LY => {} // read only
             LYC => peripherals.ppu.lyc = value,
             DMA => {
-                self.dma_register = value;
-                self.dma_request = true;
+                let dma = &mut *peripherals.dma;
+                dma.dma_register = value;
+                dma.dma_request = true;
             }
             BGP => peripherals.ppu.set_bgp(value),
             OBP0 => peripherals.ppu.set_obp0(value),

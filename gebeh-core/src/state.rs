@@ -127,8 +127,6 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 #[derive(Clone)]
 pub struct State {
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
-    pub dma_register: u8,
-    pub dma_request: bool,
 
     pub interrupt_flag: Interruptions,
 }
@@ -137,8 +135,6 @@ impl Default for State {
     fn default() -> Self {
         Self {
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
-            dma_register: 0,
-            dma_request: false,
             interrupt_flag: Interruptions::empty(),
         }
     }
