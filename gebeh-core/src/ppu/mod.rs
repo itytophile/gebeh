@@ -10,7 +10,7 @@ use arrayvec::ArrayVec;
 use crate::{
     WIDTH,
     ppu::renderer::Renderer,
-    state::{EXTERNAL_RAM, Interruptions, LcdStatus, State, VIDEO_RAM},
+    state::{EXTERNAL_RAM, Interruptions, LcdStatus, NOT_USABLE, OAM, State, VIDEO_RAM},
 };
 
 pub use background_fetcher::get_bg_win_tile;
@@ -73,9 +73,11 @@ struct PpuState {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
-    pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-    pub obp0: u8,
-    pub obp1: u8,
+    video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+    obp0: u8,
+    obp1: u8,
+    wy: u8,
+    oam: [u8; (NOT_USABLE - OAM) as usize],
 }
 
 impl Default for PpuState {
@@ -94,6 +96,8 @@ impl Default for PpuState {
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
             obp0: 0,
             obp1: 0,
+            oam: [0; (NOT_USABLE - OAM) as usize],
+            wy: 0,
         }
     }
 }
@@ -221,6 +225,7 @@ impl From<[u8; 4]> for ObjectAttribute {
 }
 
 pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
+pub type Oam = [u8; (NOT_USABLE - OAM) as usize];
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
@@ -261,6 +266,18 @@ pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn get_wy(&self) -> u8 {
+        self.state.wy
+    }
+    pub fn set_wy(&mut self, value: u8) {
+        self.state.wy = value;
+    }
+    pub fn get_oam(&self) -> &Oam {
+        &self.state.oam
+    }
+    pub fn get_oam_mut(&mut self) -> &mut Oam {
+        &mut self.state.oam
+    }
     pub fn get_obp0(&self) -> u8 {
         self.state.obp0
     }
@@ -394,7 +411,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
+    fn switch_from_finished_mode(&mut self, _: u64) {
         match &mut self.step {
             PpuStep::SkippedOamScan {
                 dots_count: OAM_SCAN_DURATION,
@@ -411,7 +428,8 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 ly,
             } => {
-                let mut objects_to_sort: ArrayVec<_, 10> = state
+                let mut objects_to_sort: ArrayVec<_, 10> = self
+                    .state
                     .oam
                     .as_chunks::<4>()
                     .0
@@ -551,7 +569,7 @@ impl Ppu {
             self.state.refresh_old();
             return;
         }
-        self.switch_from_finished_mode(state, cycles);
+        self.switch_from_finished_mode(cycles);
         self.fire_interrupts(state, cycles);
 
         if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
@@ -569,7 +587,7 @@ impl Ppu {
             | PpuStep::HorizontalBlank { window_y, ly, .. }
                 if window_y.is_none()
                     && self.state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                    && *ly == state.wy =>
+                    && *ly == self.state.wy =>
             {
                 *window_y = Some(0);
             }

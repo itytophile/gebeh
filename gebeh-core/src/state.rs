@@ -133,8 +133,6 @@ pub struct State {
     pub interrupt_flag: Interruptions,
     pub sound_panning: u8,
     pub audio_master_control: u8,
-    pub wy: u8,
-    pub oam: [u8; (NOT_USABLE - OAM) as usize],
 }
 
 impl Default for State {
@@ -146,9 +144,6 @@ impl Default for State {
             interrupt_flag: Interruptions::empty(),
             sound_panning: 0,
             audio_master_control: 0,
-
-            wy: 0,
-            oam: [0; (NOT_USABLE - OAM) as usize],
         }
     }
 }

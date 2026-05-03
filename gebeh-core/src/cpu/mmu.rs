@@ -88,7 +88,7 @@ impl MmuCpuExt for State {
                 {
                     0xff
                 } else {
-                    self.oam[usize::from(index - OAM)]
+                    peripherals.ppu.get_oam()[usize::from(index - OAM)]
                 }
             }
             JOYPAD => peripherals.joypad.get_register(),
@@ -112,7 +112,7 @@ impl MmuCpuExt for State {
             BGP => peripherals.ppu.get_bgp(),
             OBP0 => peripherals.ppu.get_obp0(),
             OBP1 => peripherals.ppu.get_obp1(),
-            WY => self.wy,
+            WY => peripherals.ppu.get_wy(),
             WX => peripherals.ppu.get_wx(),
             0xff4c => 0xff,
             0xff4d => 0xff,
@@ -150,7 +150,7 @@ impl MmuCpuExt for State {
                     && ppu != LcdStatus::OAM_SCAN
                     && !peripherals.dma.is_active()
                 {
-                    self.oam[usize::from(index - OAM)] = value
+                    peripherals.ppu.get_oam_mut()[usize::from(index - OAM)] = value
                 }
             }
             NOT_USABLE..JOYPAD => {}
@@ -185,10 +185,8 @@ impl MmuCpuExt for State {
             BGP => peripherals.ppu.set_bgp(value),
             OBP0 => peripherals.ppu.set_obp0(value),
             OBP1 => peripherals.ppu.set_obp1(value),
-            WY => self.wy = value,
-            WX => {
-                peripherals.ppu.set_wx(value);
-            }
+            WY => peripherals.ppu.set_wy(value),
+            WX => peripherals.ppu.set_wx(value),
             0xff4c => {}
             0xff4d => {}
             0xff4e => {}

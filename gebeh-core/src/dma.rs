@@ -2,7 +2,7 @@ use core::ops::Range;
 
 use crate::{
     mbc::Mbc,
-    ppu::Vram,
+    ppu::Ppu,
     state::{State, mmu_read},
 };
 
@@ -29,9 +29,10 @@ impl Dma {
         self.is_active
     }
 
-    pub fn execute<M: Mbc + ?Sized>(&mut self, state: &mut State, mbc: &M, vram: &Vram, _: u64) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, state: &mut State, mbc: &M, ppu: &mut Ppu, _: u64) {
         if let Some(address) = self.range.next() {
-            state.oam[usize::from(address as u8)] = mmu_read(state, address, mbc, vram);
+            ppu.get_oam_mut()[usize::from(address as u8)] =
+                mmu_read(state, address, mbc, ppu.get_vram());
             self.is_active = true;
         } else {
             self.is_active = false;
