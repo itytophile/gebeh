@@ -1,10 +1,6 @@
 use core::ops::Range;
 
-use crate::{
-    mbc::Mbc,
-    ppu::Ppu,
-    state::{State, mmu_read},
-};
+use crate::{Wram, mbc::Mbc, ppu::Ppu, state::mmu_read};
 
 // about conflicts
 // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
@@ -33,10 +29,10 @@ impl Dma {
         self.is_active
     }
 
-    pub fn execute<M: Mbc + ?Sized>(&mut self, state: &mut State, mbc: &M, ppu: &mut Ppu, _: u64) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &M, ppu: &mut Ppu, wram: &Wram, _: u64) {
         if let Some(address) = self.range.next() {
             ppu.get_oam_mut()[usize::from(address as u8)] =
-                mmu_read(state, address, mbc, ppu.get_vram());
+                mmu_read(address, mbc, ppu.get_vram(), wram);
             self.is_active = true;
         } else {
             self.is_active = false;

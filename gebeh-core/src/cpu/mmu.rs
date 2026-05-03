@@ -1,4 +1,5 @@
 use crate::{
+    Wram,
     apu::Apu,
     cpu::Cpu,
     dma::Dma,
@@ -18,6 +19,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub ppu: &'a mut Ppu,
     pub dma: &'a mut Dma,
     pub serial: &'a mut Serial,
+    pub wram: &'a mut Wram,
 }
 
 impl<M: Mbc + ?Sized> Peripherals<'_, M> {
@@ -30,6 +32,7 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
             ppu: self.ppu,
             dma: self.dma,
             serial: self.serial,
+            wram: self.wram,
         }
     }
 }
@@ -42,6 +45,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub ppu: &'a Ppu,
     pub dma: &'a Dma,
     pub serial: &'a Serial,
+    pub wram: &'a Wram,
 }
 
 pub trait MmuCpuExt {
@@ -79,7 +83,12 @@ impl MmuCpuExt for State {
         match index {
             // https://gbdev.io/pandocs/Power_Up_Sequence.html#power-up-sequence
             ..0x100 if !cpu.boot_rom_mapping_control => cpu.boot_rom[usize::from(index)],
-            ..OAM => mmu_read(self, index, peripherals.mbc, peripherals.ppu.get_vram()),
+            ..OAM => mmu_read(
+                index,
+                peripherals.mbc,
+                peripherals.ppu.get_vram(),
+                peripherals.wram,
+            ),
             OAM..NOT_USABLE => {
                 let ppu = peripherals.ppu.get_ppu_mode();
                 if ppu == LcdStatus::DRAWING
@@ -142,8 +151,8 @@ impl MmuCpuExt for State {
                 }
             }
             EXTERNAL_RAM..WORK_RAM => peripherals.mbc.write(index, value),
-            WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)] = value,
-            ECHO_RAM..OAM => self.wram[usize::from(index - ECHO_RAM)] = value,
+            WORK_RAM..ECHO_RAM => peripherals.wram[usize::from(index - WORK_RAM)] = value,
+            ECHO_RAM..OAM => peripherals.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
                 let ppu = peripherals.ppu.get_ppu_mode();
                 if ppu != LcdStatus::DRAWING

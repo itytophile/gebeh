@@ -28,7 +28,11 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-#[derive(Clone, Default)]
+use crate::state::{ECHO_RAM, WORK_RAM};
+
+pub type Wram = [u8; (ECHO_RAM - WORK_RAM) as usize];
+
+#[derive(Clone)]
 pub struct Emulator {
     ppu: Ppu,
     dma: Dma,
@@ -38,7 +42,25 @@ pub struct Emulator {
     joypad: Joypad,
     apu: Apu,
     pub serial: Serial,
+    wram: Wram,
     cycles: u64,
+}
+
+impl Default for Emulator {
+    fn default() -> Self {
+        Self {
+            ppu: Default::default(),
+            dma: Default::default(),
+            cpu: Default::default(),
+            state: Default::default(),
+            timer: Default::default(),
+            joypad: Default::default(),
+            apu: Default::default(),
+            serial: Default::default(),
+            wram: [0; _],
+            cycles: Default::default(),
+        }
+    }
 }
 
 impl Emulator {
@@ -106,6 +128,7 @@ impl Emulator {
                 ppu: &mut self.ppu,
                 dma: &mut self.dma,
                 serial: &mut self.serial,
+                wram: &mut self.wram,
             },
             self.cycles,
         );
