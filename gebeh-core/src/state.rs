@@ -129,8 +129,7 @@ pub struct State {
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
     pub dma_request: bool,
-    pub obp0: u8,
-    pub obp1: u8,
+
     pub interrupt_flag: Interruptions,
     pub sound_panning: u8,
     pub audio_master_control: u8,
@@ -144,8 +143,6 @@ impl Default for State {
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,
-            obp0: 0,
-            obp1: 0,
             interrupt_flag: Interruptions::empty(),
             sound_panning: 0,
             audio_master_control: 0,

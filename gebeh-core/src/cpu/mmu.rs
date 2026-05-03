@@ -110,8 +110,8 @@ impl MmuCpuExt for State {
             LYC => peripherals.ppu.lyc,
             DMA => self.dma_register,
             BGP => peripherals.ppu.get_bgp(),
-            OBP0 => self.obp0,
-            OBP1 => self.obp1,
+            OBP0 => peripherals.ppu.get_obp0(),
+            OBP1 => peripherals.ppu.get_obp1(),
             WY => self.wy,
             WX => peripherals.ppu.get_wx(),
             0xff4c => 0xff,
@@ -183,8 +183,8 @@ impl MmuCpuExt for State {
                 self.dma_request = true;
             }
             BGP => peripherals.ppu.set_bgp(value),
-            OBP0 => self.obp0 = value,
-            OBP1 => self.obp1 = value,
+            OBP0 => peripherals.ppu.set_obp0(value),
+            OBP1 => peripherals.ppu.set_obp1(value),
             WY => self.wy = value,
             WX => {
                 peripherals.ppu.set_wx(value);

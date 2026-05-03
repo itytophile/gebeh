@@ -74,6 +74,8 @@ struct PpuState {
     old_wx: u8,
     old_old_wx: u8,
     pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+    pub obp0: u8,
+    pub obp1: u8,
 }
 
 impl Default for PpuState {
@@ -90,6 +92,8 @@ impl Default for PpuState {
             old_wx: Default::default(),
             old_old_wx: Default::default(),
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+            obp0: 0,
+            obp1: 0,
         }
     }
 }
@@ -257,6 +261,18 @@ pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn get_obp0(&self) -> u8 {
+        self.state.obp0
+    }
+    pub fn set_obp0(&mut self, value: u8) {
+        self.state.obp0 = value
+    }
+    pub fn get_obp1(&self) -> u8 {
+        self.state.obp1
+    }
+    pub fn set_obp1(&mut self, value: u8) {
+        self.state.obp1 = value
+    }
     pub fn get_vram_mut(&mut self) -> &mut Vram {
         &mut self.state.video_ram
     }
@@ -573,7 +589,7 @@ impl Ppu {
                 ly,
                 ..
             } => {
-                renderer.execute(state, window_y, &self.state, *ly, cycles);
+                renderer.execute(window_y, &self.state, *ly, cycles);
 
                 *dots_count += 1;
             }
