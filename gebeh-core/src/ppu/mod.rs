@@ -10,7 +10,7 @@ use arrayvec::ArrayVec;
 use crate::{
     WIDTH,
     ppu::renderer::Renderer,
-    state::{Interruptions, LcdStatus, State},
+    state::{EXTERNAL_RAM, Interruptions, LcdStatus, State, VIDEO_RAM},
 };
 
 pub use background_fetcher::get_bg_win_tile;
@@ -60,7 +60,7 @@ pub struct Ppu {
     pub lyc: u8,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct PpuState {
     lcd_control: LcdControl,
     bgp: u8,
@@ -73,6 +73,25 @@ struct PpuState {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
+    pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+}
+
+impl Default for PpuState {
+    fn default() -> Self {
+        Self {
+            lcd_control: Default::default(),
+            bgp: Default::default(),
+            old_bgp: Default::default(),
+            old_lcd_control: Default::default(),
+            old_old_lcd_control: Default::default(),
+            scy: Default::default(),
+            scx: Default::default(),
+            wx: Default::default(),
+            old_wx: Default::default(),
+            old_old_wx: Default::default(),
+            video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+        }
+    }
 }
 
 impl PpuState {
@@ -197,6 +216,8 @@ impl From<[u8; 4]> for ObjectAttribute {
     }
 }
 
+pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
+
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
 // D'après "The cycle accurate gameboy docs":
@@ -236,6 +257,12 @@ impl From<[u8; 4]> for ObjectAttribute {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn get_vram_mut(&mut self) -> &mut Vram {
+        &mut self.state.video_ram
+    }
+    pub fn get_vram(&self) -> &Vram {
+        &self.state.video_ram
+    }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         // https://www.devrs.com/gb/files/faqs.html#GBBugs
         // Citation: As far as has been figured out, the bug happens everytime

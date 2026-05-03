@@ -878,7 +878,12 @@ impl Cpu {
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
-                peripherals.dma.execute(state, peripherals.mbc, cycle_count);
+                peripherals.dma.execute(
+                    state,
+                    peripherals.mbc,
+                    peripherals.ppu.get_vram(),
+                    cycle_count,
+                );
                 return;
             }
             self.is_halted = false;
@@ -907,7 +912,12 @@ impl Cpu {
             };
         }
 
-        peripherals.dma.execute(state, peripherals.mbc, cycle_count);
+        peripherals.dma.execute(
+            state,
+            peripherals.mbc,
+            peripherals.ppu.get_vram(),
+            cycle_count,
+        );
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst

@@ -1,4 +1,4 @@
-use crate::mbc::Mbc;
+use crate::{mbc::Mbc, ppu::Vram};
 
 pub const ROM_BANK: u16 = 0x0000;
 pub const SWITCHABLE_ROM_BANK: u16 = 0x4000;
@@ -126,7 +126,6 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 
 #[derive(Clone)]
 pub struct State {
-    pub video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
     pub wram: [u8; (ECHO_RAM - WORK_RAM) as usize],
     pub dma_register: u8,
     pub dma_request: bool,
@@ -142,7 +141,6 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            video_ram: [0; 0x2000],
             wram: [0; (ECHO_RAM - WORK_RAM) as usize],
             dma_register: 0,
             dma_request: false,
@@ -158,20 +156,14 @@ impl Default for State {
     }
 }
 
-pub trait MmuExt {
-    fn read<M: Mbc + ?Sized>(&self, index: u16, mbc: &M) -> u8;
-}
-
-impl MmuExt for State {
-    fn read<M: Mbc + ?Sized>(&self, index: u16, mbc: &M) -> u8 {
-        match index {
-            0..VIDEO_RAM => mbc.read(index),
-            VIDEO_RAM..EXTERNAL_RAM => self.video_ram[usize::from(index - VIDEO_RAM)],
-            EXTERNAL_RAM..WORK_RAM => mbc.read(index),
-            WORK_RAM..ECHO_RAM => self.wram[usize::from(index - WORK_RAM)],
-            // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
-            // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215
-            ECHO_RAM.. => self.wram[usize::from(index - ECHO_RAM)],
-        }
+pub fn mmu_read<M: Mbc + ?Sized>(state: &State, index: u16, mbc: &M, vram: &Vram) -> u8 {
+    match index {
+        0..VIDEO_RAM => mbc.read(index),
+        VIDEO_RAM..EXTERNAL_RAM => vram[usize::from(index - VIDEO_RAM)],
+        EXTERNAL_RAM..WORK_RAM => mbc.read(index),
+        WORK_RAM..ECHO_RAM => state.wram[usize::from(index - WORK_RAM)],
+        // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
+        // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215
+        ECHO_RAM.. => state.wram[usize::from(index - ECHO_RAM)],
     }
 }

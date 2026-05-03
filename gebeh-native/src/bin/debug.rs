@@ -4,8 +4,7 @@ use gebeh::InstantRtc;
 use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
-    ppu::{LcdControl, PpuStep, color::ColorIndex, get_bg_win_tile, get_line_from_tile},
-    state::State,
+    ppu::{LcdControl, PpuStep, Vram, color::ColorIndex, get_bg_win_tile, get_line_from_tile},
 };
 use gebeh_front_helper::get_mbc;
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
@@ -179,7 +178,7 @@ fn main() {
             } if window_id == debug_window.id() => {
                 if !is_paused {
                     draw_tiles_debug(
-                        &emulator.state,
+                        emulator.get_ppu().get_vram(),
                         debug_pixels.frame_mut().as_chunks_mut::<4>().0,
                     );
                     debug_pixels.render().unwrap();
@@ -363,8 +362,8 @@ fn drive_emulator(
     }
 }
 
-fn draw_tiles_debug(state: &State, pixels: &mut [[u8; 4]]) {
-    let (tiles, _) = state.video_ram[..0x1800].as_chunks::<16>();
+fn draw_tiles_debug(vram: &Vram, pixels: &mut [[u8; 4]]) {
+    let (tiles, _) = vram[..0x1800].as_chunks::<16>();
     for (index, tile) in tiles.iter().enumerate() {
         // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable
         draw_tile(pixels, index, tile, DEBUG_TILE_COL_COUNT, 0xe1);
@@ -396,13 +395,13 @@ fn draw_tile(
 }
 
 fn draw_tile_map_debug(emulator: &Emulator, pixels: &mut [[u8; 4]]) {
-    for (index, tile_index) in emulator.state.video_ram[0x1800..]
+    for (index, tile_index) in emulator.get_ppu().get_vram()[0x1800..]
         .iter()
         .copied()
         .enumerate()
     {
         let tile = get_bg_win_tile(
-            emulator.state.video_ram[..0x1800].try_into().unwrap(),
+            emulator.get_ppu().get_vram()[..0x1800].try_into().unwrap(),
             tile_index,
             !emulator
                 .get_ppu()

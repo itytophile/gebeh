@@ -96,7 +96,7 @@ impl Renderer {
         else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &state.video_ram,
+                &ppu_state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -162,7 +162,7 @@ impl Renderer {
         {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &state.video_ram,
+                &ppu_state.video_ram,
                 ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
@@ -182,7 +182,7 @@ impl Renderer {
         } else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &state.video_ram,
+                &ppu_state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -194,7 +194,6 @@ impl Renderer {
             cursor,
             &mut self.rendering_state,
             &mut self.objects,
-            state,
             ppu_state,
             ly,
         );
