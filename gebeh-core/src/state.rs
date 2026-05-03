@@ -131,8 +131,6 @@ pub struct State {
     pub dma_request: bool,
 
     pub interrupt_flag: Interruptions,
-    pub sound_panning: u8,
-    pub audio_master_control: u8,
 }
 
 impl Default for State {
@@ -142,8 +140,6 @@ impl Default for State {
             dma_register: 0,
             dma_request: false,
             interrupt_flag: Interruptions::empty(),
-            sound_panning: 0,
-            audio_master_control: 0,
         }
     }
 }
