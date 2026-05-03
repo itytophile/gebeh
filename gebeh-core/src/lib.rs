@@ -13,6 +13,7 @@ use crate::{
     timer::Timer,
 };
 
+pub mod addresses;
 pub mod apu;
 pub mod cpu;
 pub mod dma;
@@ -21,7 +22,6 @@ pub mod joypad;
 pub mod mbc;
 pub mod ppu;
 pub mod serial;
-pub mod state;
 pub mod timer;
 
 pub const WIDTH: u8 = 160;
@@ -29,7 +29,7 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-use crate::state::{ECHO_RAM, WORK_RAM};
+use crate::addresses::{ECHO_RAM, WORK_RAM};
 
 pub type Wram = [u8; (ECHO_RAM - WORK_RAM) as usize];
 

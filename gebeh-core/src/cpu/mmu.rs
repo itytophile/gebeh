@@ -1,5 +1,6 @@
 use crate::{
     Wram,
+    addresses::*,
     apu::Apu,
     cpu::Cpu,
     dma::Dma,
@@ -8,7 +9,6 @@ use crate::{
     mbc::Mbc,
     ppu::{LcdControl, LcdStatus, Ppu},
     serial::{Serial, SerialControl},
-    state::*,
     timer::Timer,
 };
 

@@ -1,4 +1,4 @@
-use crate::{mbc::*, state::*};
+use crate::{addresses::*, mbc::*};
 use core::{num::NonZeroU8, ops::Deref};
 
 #[derive(Clone)]

@@ -1,11 +1,11 @@
 use arrayvec::ArrayVec;
 
 use crate::{
+    addresses::VIDEO_RAM,
     ppu::{
         LcdControl, ObjectAttribute, ObjectFlags, PpuState, TILE_LENGTH, Tile, TileVramObj,
         renderer::RenderingState,
     },
-    state::VIDEO_RAM,
 };
 
 #[derive(Clone)]

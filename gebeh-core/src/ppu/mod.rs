@@ -9,9 +9,9 @@ use arrayvec::ArrayVec;
 
 use crate::{
     WIDTH,
+    addresses::{EXTERNAL_RAM, NOT_USABLE, OAM, VIDEO_RAM},
     interrupts::Interrupts,
     ppu::renderer::Renderer,
-    state::{EXTERNAL_RAM, NOT_USABLE, OAM, VIDEO_RAM},
 };
 
 pub use background_fetcher::get_bg_win_tile;
