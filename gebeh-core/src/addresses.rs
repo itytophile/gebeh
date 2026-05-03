@@ -1,5 +1,3 @@
-use crate::{Wram, mbc::Mbc, ppu::Vram};
-
 pub const ROM_BANK: u16 = 0x0000;
 pub const SWITCHABLE_ROM_BANK: u16 = 0x4000;
 pub const VIDEO_RAM: u16 = 0x8000;
@@ -53,15 +51,3 @@ pub const WX: u16 = 0xff4b;
 pub const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 pub const HRAM: u16 = 0xff80;
 pub const INTERRUPT_ENABLE: u16 = 0xffff;
-
-pub fn mmu_read<M: Mbc + ?Sized>(index: u16, mbc: &M, vram: &Vram, wram: &Wram) -> u8 {
-    match index {
-        0..VIDEO_RAM => mbc.read(index),
-        VIDEO_RAM..EXTERNAL_RAM => vram[usize::from(index - VIDEO_RAM)],
-        EXTERNAL_RAM..WORK_RAM => mbc.read(index),
-        WORK_RAM..ECHO_RAM => wram[usize::from(index - WORK_RAM)],
-        // if greater than 0xdfff then the dma has access to a bigger echo ram than the cpu
-        // from https://github.com/Gekkio/mooneye-gb/blob/3856dcbca82a7d32bd438cc92fd9693f868e2e23/core/src/hardware.rs#L215
-        ECHO_RAM.. => wram[usize::from(index - ECHO_RAM)],
-    }
-}

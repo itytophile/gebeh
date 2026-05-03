@@ -1,9 +1,9 @@
 pub mod instructions;
 mod mmu;
-pub use mmu::Peripherals;
 
 use crate::{
-    cpu::mmu::{read, write},
+    cpu::mmu::write,
+    external_bus::{ExternalBus, Peripherals},
     interrupts::Interrupts,
     mbc::Mbc,
 };
@@ -870,7 +870,12 @@ impl Cpu {
 }
 
 impl Cpu {
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mut peripherals: Peripherals<M>, cycle_count: u64) {
+    pub fn execute<M: Mbc + ?Sized>(
+        &mut self,
+        external_bus: &mut ExternalBus,
+        mut peripherals: Peripherals<M>,
+        cycle_count: u64,
+    ) {
         let interrupts_to_execute =
             Interrupts::from_bits_truncate(self.interrupt_enable.bits()) & *peripherals.interrupts;
         // Peripherals interrupts are not handled the same cycle they are triggered.
@@ -889,6 +894,7 @@ impl Cpu {
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
                 peripherals.dma.execute(
+                    external_bus,
                     peripherals.mbc,
                     peripherals.ppu,
                     peripherals.wram,
@@ -911,18 +917,20 @@ impl Cpu {
             (self.pc, self.current_opcode) = match self.instruction_register.1.set_pc {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
-                    let opcode = read(address, self, peripherals.get_ref(), cycle_count);
+                    let opcode =
+                        external_bus.read(address, self, peripherals.get_ref(), cycle_count);
 
                     (address.wrapping_add(1), opcode)
                 }
                 SetPc::NoIncrement => (
                     self.pc,
-                    read(self.pc, self, peripherals.get_ref(), cycle_count),
+                    external_bus.read(self.pc, self, peripherals.get_ref(), cycle_count),
                 ),
             };
         }
 
         peripherals.dma.execute(
+            external_bus,
             peripherals.mbc,
             peripherals.ppu,
             peripherals.wram,
@@ -956,7 +964,7 @@ impl Cpu {
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => AfterReadInstruction::Read(
-                read(
+                external_bus.read(
                     0xff00 | u16::from(self.lsb),
                     self,
                     peripherals.get_ref(),
@@ -966,7 +974,7 @@ impl Cpu {
             ),
             Instruction::Read(ReadAddress::Accumulator8Bit(register), inst) => {
                 AfterReadInstruction::Read(
-                    read(
+                    external_bus.read(
                         0xff00 | u16::from(self.get_8bit_register(register)),
                         self,
                         peripherals.get_ref(),
@@ -987,7 +995,7 @@ impl Cpu {
                     }
                 }
                 AfterReadInstruction::Read(
-                    read(register_value, self, peripherals.get_ref(), cycle_count),
+                    external_bus.read(register_value, self, peripherals.get_ref(), cycle_count),
                     inst,
                 )
             }
