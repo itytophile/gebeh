@@ -2,10 +2,12 @@ pub mod instructions;
 mod mmu;
 
 use crate::{
+    addresses::*,
     cpu::mmu::write,
-    external_bus::{ExternalBus, Peripherals},
+    external_bus::{ExternalBus, Peripherals, PeripheralsRef},
     interrupts::Interrupts,
     mbc::Mbc,
+    ppu::LcdStatus,
 };
 use arrayvec::ArrayVec;
 use instructions::{
@@ -870,6 +872,73 @@ impl Cpu {
 }
 
 impl Cpu {
+    fn read<M: Mbc + ?Sized>(
+        &self,
+        index: u16,
+        external_bus: &mut ExternalBus,
+        peripherals: PeripheralsRef<M>,
+        cycles: u64,
+    ) -> u8 {
+        if (VIDEO_RAM..EXTERNAL_RAM).contains(&index)
+            && peripherals.ppu.get_ppu_mode() == LcdStatus::DRAWING
+        {
+            return 0xff;
+        }
+
+        match index {
+            ..0x100 if !self.boot_rom_mapping_control => self.boot_rom[usize::from(index)],
+            ..OAM => external_bus.read(
+                index,
+                peripherals.mbc,
+                peripherals.ppu.get_vram(),
+                peripherals.wram,
+            ),
+            OAM..NOT_USABLE => {
+                let ppu = peripherals.ppu.get_ppu_mode();
+                if ppu == LcdStatus::DRAWING
+                    || ppu == LcdStatus::OAM_SCAN
+                    || peripherals.dma.is_active()
+                {
+                    0xff
+                } else {
+                    peripherals.ppu.get_oam()[usize::from(index - OAM)]
+                }
+            }
+            JOYPAD => peripherals.joypad.get_register(),
+            SB => peripherals.serial.sb,
+            SC => peripherals.serial.get_control().bits() | 0b01111110,
+            0xff03 => 0xff,
+            DIV => peripherals.timer.get_div(),
+            TIMER_COUNTER => peripherals.timer.get_tima(),
+            TIMER_MODULO => peripherals.timer.get_tma(),
+            TIMER_CONTROL => peripherals.timer.get_tac(),
+            0xff08..INTERRUPT_FLAG => 0xff,
+            INTERRUPT_FLAG => peripherals.interrupts.bits() | 0b11100000,
+            CH1_SWEEP..LCD_CONTROL => peripherals.apu.read(index, cycles),
+            LCD_CONTROL => peripherals.ppu.get_lcd_control().bits(),
+            LCD_STATUS => peripherals.ppu.get_lcd_status().bits() | 0b10000000,
+            SCY => peripherals.ppu.get_scy(),
+            SCX => peripherals.ppu.get_scx(),
+            LY => peripherals.ppu.get_ly(),
+            LYC => peripherals.ppu.lyc,
+            DMA => peripherals.dma.dma_register,
+            BGP => peripherals.ppu.get_bgp(),
+            OBP0 => peripherals.ppu.get_obp0(),
+            OBP1 => peripherals.ppu.get_obp1(),
+            WY => peripherals.ppu.get_wy(),
+            WX => peripherals.ppu.get_wx(),
+            0xff4c => 0xff,
+            0xff4d => 0xff,
+            0xff4e => 0xff,
+            0xff4f => 0xff,
+            BOOT_ROM_MAPPING_CONTROL => 0xff,
+            0xff51..HRAM => 0xff,
+            HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)],
+            INTERRUPT_ENABLE => self.interrupt_enable.bits(),
+            _ => todo!("Reading ${index:04x}"),
+        }
+    }
+
     pub fn execute<M: Mbc + ?Sized>(
         &mut self,
         external_bus: &mut ExternalBus,
@@ -918,13 +987,13 @@ impl Cpu {
                 SetPc::WithIncrement(register) => {
                     let address = self.get_16bit_register(register);
                     let opcode =
-                        external_bus.read(address, self, peripherals.get_ref(), cycle_count);
+                        self.read(address, external_bus, peripherals.get_ref(), cycle_count);
 
                     (address.wrapping_add(1), opcode)
                 }
                 SetPc::NoIncrement => (
                     self.pc,
-                    external_bus.read(self.pc, self, peripherals.get_ref(), cycle_count),
+                    self.read(self.pc, external_bus, peripherals.get_ref(), cycle_count),
                 ),
             };
         }
@@ -964,9 +1033,9 @@ impl Cpu {
         let inst = match inst {
             Instruction::NoRead(no_read) => AfterReadInstruction::NoRead(no_read),
             Instruction::Read(ReadAddress::Accumulator, inst) => AfterReadInstruction::Read(
-                external_bus.read(
+                self.read(
                     0xff00 | u16::from(self.lsb),
-                    self,
+                    external_bus,
                     peripherals.get_ref(),
                     cycle_count,
                 ),
@@ -974,9 +1043,9 @@ impl Cpu {
             ),
             Instruction::Read(ReadAddress::Accumulator8Bit(register), inst) => {
                 AfterReadInstruction::Read(
-                    external_bus.read(
+                    self.read(
                         0xff00 | u16::from(self.get_8bit_register(register)),
-                        self,
+                        external_bus,
                         peripherals.get_ref(),
                         cycle_count,
                     ),
@@ -995,7 +1064,12 @@ impl Cpu {
                     }
                 }
                 AfterReadInstruction::Read(
-                    external_bus.read(register_value, self, peripherals.get_ref(), cycle_count),
+                    self.read(
+                        register_value,
+                        external_bus,
+                        peripherals.get_ref(),
+                        cycle_count,
+                    ),
                     inst,
                 )
             }
