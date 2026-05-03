@@ -9,8 +9,9 @@ use arrayvec::ArrayVec;
 
 use crate::{
     WIDTH,
+    interrupts::Interrupts,
     ppu::renderer::Renderer,
-    state::{EXTERNAL_RAM, Interruptions, NOT_USABLE, OAM, State, VIDEO_RAM},
+    state::{EXTERNAL_RAM, NOT_USABLE, OAM, VIDEO_RAM},
 };
 
 pub use background_fetcher::get_bg_win_tile;
@@ -527,9 +528,9 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
+    pub fn fire_interrupts(&mut self, interrupts: &mut Interrupts, _: u64) {
         if let PpuStep::VerticalBlankScanline { dots_count: 2 } = self.step {
-            state.interrupt_flag.insert(Interruptions::VBLANK);
+            interrupts.insert(Interrupts::VBLANK);
         }
 
         let stat_mode_irq = match &self.step {
@@ -578,17 +579,17 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            state.interrupt_flag.insert(Interruptions::LCD);
+            interrupts.insert(Interrupts::LCD);
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, cycles: u64) {
+    pub fn execute(&mut self, interrupts: &mut Interrupts, cycles: u64) {
         if !self.is_ppu_enabled() {
             self.state.refresh_old();
             return;
         }
         self.switch_from_finished_mode(cycles);
-        self.fire_interrupts(state, cycles);
+        self.fire_interrupts(interrupts, cycles);
 
         if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
             self.interrupt_part_lcd_status = value;
@@ -639,8 +640,8 @@ impl Ppu {
 #[cfg(test)]
 mod tests {
     use crate::{
+        interrupts::Interrupts,
         ppu::{LcdControl, Ppu, PpuStep},
-        state::State,
     };
 
     extern crate std;
@@ -648,20 +649,20 @@ mod tests {
     #[test]
     fn line_duration() {
         let mut ppu = Ppu::default();
-        let mut state = State::default();
+        let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
         loop {
             if let PpuStep::OamScan { .. } = ppu.step {
                 break;
             }
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
         }
         let mut duration = 0;
         let current_ly = ppu.get_ly();
         while ppu.get_ly() <= current_ly {
             duration += 1;
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
         }
         assert_eq!(456, duration);
     }
@@ -669,7 +670,7 @@ mod tests {
     #[test]
     fn frame_duration() {
         let mut ppu = Ppu::default();
-        let mut state = State::default();
+        let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
         loop {
@@ -681,10 +682,10 @@ mod tests {
             {
                 break;
             }
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
         }
         let mut duration = 1;
-        ppu.execute(&mut state, 0);
+        ppu.execute(&mut interrupts, 0);
         loop {
             if let PpuStep::OamScan {
                 ly: 0,
@@ -694,7 +695,7 @@ mod tests {
             {
                 break;
             }
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
             duration += 1;
         }
         assert_eq!(70224, duration);
@@ -703,12 +704,12 @@ mod tests {
     #[test]
     fn all_ly() {
         let mut ppu = Ppu::default();
-        let mut state = State::default();
+        let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
 
         while !lys.is_empty() {
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
             lys.remove(&ppu.get_ly());
         }
     }

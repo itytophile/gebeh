@@ -54,34 +54,6 @@ pub const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;
 pub const HRAM: u16 = 0xff80;
 pub const INTERRUPT_ENABLE: u16 = 0xffff;
 
-bitflags::bitflags! {
-    #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
-    pub struct Interruptions: u8 {
-        const VBLANK = 1;
-        const LCD = 1 << 1;
-        const TIMER = 1 << 2;
-        const SERIAL = 1 << 3;
-        const JOYPAD = 1 << 4;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Interruptions;
-
-    #[test]
-    fn good_priority() {
-        let ints = Interruptions::all();
-        let mut ints = ints.iter();
-        assert_eq!(Some(Interruptions::VBLANK), ints.next());
-        assert_eq!(Some(Interruptions::LCD), ints.next());
-        assert_eq!(Some(Interruptions::TIMER), ints.next());
-        assert_eq!(Some(Interruptions::SERIAL), ints.next());
-        assert_eq!(Some(Interruptions::JOYPAD), ints.next());
-        assert_eq!(None, ints.next());
-    }
-}
-
 // from https://github.com/Ashiepaws/Bootix
 pub const BOOTIX_BOOT_ROM: [u8; 256] = [
     49, 254, 255, 33, 255, 159, 175, 50, 203, 124, 32, 250, 14, 17, 33, 38, 255, 62, 128, 50, 226,
@@ -97,19 +69,6 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
     84, 73, 88, 46, 68, 77, 71, 32, 118, 49, 46, 50, 0, 62, 255, 198, 1, 11, 30, 216, 33, 77, 1, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 1, 224, 80,
 ];
-
-#[derive(Clone)]
-pub struct State {
-    pub interrupt_flag: Interruptions,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            interrupt_flag: Interruptions::empty(),
-        }
-    }
-}
 
 pub fn mmu_read<M: Mbc + ?Sized>(index: u16, mbc: &M, vram: &Vram, wram: &Wram) -> u8 {
     match index {

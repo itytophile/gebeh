@@ -183,7 +183,7 @@ impl RollbackSerial {
                     if synced_cycle == emulator.get_cycles() {
                         let response = emulator
                             .serial
-                            .set_msg_from_master(*value, &mut emulator.state);
+                            .set_msg_from_master(*value, &mut emulator.interrupts);
                         self.force_snapshot = true;
                         if response != self.last_correction {
                             messages.push(

@@ -5,17 +5,18 @@ use crate::{
     apu::Apu,
     cpu::{Cpu, Peripherals},
     dma::Dma,
+    interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
     ppu::Ppu,
     serial::Serial,
-    state::{Interruptions, State},
     timer::Timer,
 };
 
 pub mod apu;
 pub mod cpu;
 pub mod dma;
+pub mod interrupts;
 pub mod joypad;
 pub mod mbc;
 pub mod ppu;
@@ -37,7 +38,7 @@ pub struct Emulator {
     ppu: Ppu,
     dma: Dma,
     cpu: Cpu,
-    pub state: State,
+    pub interrupts: Interrupts,
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
@@ -52,13 +53,13 @@ impl Default for Emulator {
             ppu: Default::default(),
             dma: Default::default(),
             cpu: Default::default(),
-            state: Default::default(),
             timer: Default::default(),
             joypad: Default::default(),
             apu: Default::default(),
             serial: Default::default(),
             wram: [0; _],
             cycles: Default::default(),
+            interrupts: Default::default(),
         }
     }
 }
@@ -81,7 +82,7 @@ impl Emulator {
         self.joypad.input = joypad;
         // if some bits went from 1 to 0
         if previous_joypad.get_register() & !self.joypad.get_register() != 0 {
-            self.state.interrupt_flag.insert(Interruptions::JOYPAD);
+            self.interrupts.insert(Interrupts::JOYPAD);
         }
     }
     pub fn get_joypad(&self) -> &JoypadInput {
@@ -100,26 +101,25 @@ impl Emulator {
 
 impl Emulator {
     pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
-        self.timer.execute(&mut self.state, self.cycles);
+        self.timer.execute(&mut self.interrupts, self.cycles);
         let master_serial_byte = self.serial.execute(
             self.timer.get_system_counter(),
-            &mut self.state,
+            &mut self.interrupts,
             self.cycles,
         );
         let must_increment_div_apu = self.apu.execute(self.timer.get_div());
 
-        let interrupts_from_previous_cycle = self.state.interrupt_flag;
+        let interrupts_from_previous_cycle = self.interrupts;
         for _ in 0..2 {
-            self.ppu.execute(&mut self.state, self.cycles);
+            self.ppu.execute(&mut self.interrupts, self.cycles);
         }
         // I don't understand halt timings https://gekkio.fi/blog/2016/game-boy-research-status
         let mut slowed_interrupts_in_halt_mode = None;
         if self.cpu.is_halted {
-            slowed_interrupts_in_halt_mode = Some(self.state.interrupt_flag);
-            self.state.interrupt_flag = interrupts_from_previous_cycle;
+            slowed_interrupts_in_halt_mode = Some(self.interrupts);
+            self.interrupts = interrupts_from_previous_cycle;
         }
         self.cpu.execute(
-            &mut self.state,
             Peripherals {
                 mbc,
                 timer: &mut self.timer,
@@ -129,14 +129,15 @@ impl Emulator {
                 dma: &mut self.dma,
                 serial: &mut self.serial,
                 wram: &mut self.wram,
+                interrupts: &mut self.interrupts,
             },
             self.cycles,
         );
         if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
-            self.state.interrupt_flag = interrupt_flag;
+            self.interrupts = interrupt_flag;
         }
         for _ in 2..4 {
-            self.ppu.execute(&mut self.state, self.cycles);
+            self.ppu.execute(&mut self.interrupts, self.cycles);
         }
 
         if must_increment_div_apu {
