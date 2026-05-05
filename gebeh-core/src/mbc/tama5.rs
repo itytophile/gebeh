@@ -2,7 +2,7 @@
 // original license: https://www.mozilla.org/en-US/MPL/2.0/
 // used GLM 5 to first convert the C code into Rust before fixing hallucinated shenanigans
 
-use crate::{mbc::*, state::*};
+use crate::{addresses::*, mbc::*};
 use core::ops::Deref;
 
 const GBTAMA5_BANK_LO: u8 = 0x0;

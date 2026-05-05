@@ -153,7 +153,7 @@ impl Apu {
     }
 
     pub fn read(&self, index: u16, cycles: u64) -> u8 {
-        use crate::state::*;
+        use crate::addresses::*;
         match index {
             CH1_SWEEP => self.ch1.get_nr10(),
             CH1_LENGTH_TIMER_AND_DUTY_CYCLE => self.ch1.get_nrx1(),
@@ -185,7 +185,7 @@ impl Apu {
     }
 
     pub fn write(&mut self, index: u16, value: u8) {
-        use crate::state::*;
+        use crate::addresses::*;
 
         // according to blargg we can write to the initial length timer registers when the apu is off
         match (index, self.is_on) {

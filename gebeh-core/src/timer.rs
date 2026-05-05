@@ -1,4 +1,4 @@
-use crate::state::{Interruptions, State};
+use crate::interrupts::Interrupts;
 
 // There is a system counter which is 14 bits wide
 // The div register is the height most significant bits of this system counter
@@ -58,7 +58,7 @@ impl Timer {
         self.tima = value;
         self.tma_to_tima_delay = false;
     }
-    pub fn execute(&mut self, state: &mut State, _: u64) {
+    pub fn execute(&mut self, interrupts: &mut Interrupts, _: u64) {
         // we only check a single bit to see if it's a multiple of the frequency
         let frequency_mask = match self.tac & 0b11 {
             0b00 => 0x80, // multiple of 256
@@ -90,7 +90,7 @@ impl Timer {
         if self.tima == 0 {
             // indeed, it's not delayed. Remove the delay fixes a mooneye test.
             // I'll investigate later (or never)
-            state.interrupt_flag.insert(Interruptions::TIMER);
+            interrupts.insert(Interrupts::TIMER);
             self.tma_to_tima_delay = true;
         }
     }

@@ -19,15 +19,12 @@
 
 use arrayvec::ArrayVec;
 
-use crate::{
-    ppu::{
-        LcdControl, ObjectAttribute, PpuState, Scrolling,
-        background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
-        fifos::Fifos,
-        scanline::ScanlineBuilder,
-        sprite_fetcher::SpriteFetcher,
-    },
-    state::State,
+use crate::ppu::{
+    LcdControl, ObjectAttribute, PpuState, Scrolling,
+    background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
+    fifos::Fifos,
+    scanline::ScanlineBuilder,
+    sprite_fetcher::SpriteFetcher,
 };
 
 #[derive(Clone)]
@@ -83,7 +80,6 @@ impl Renderer {
 
     pub(super) fn execute(
         &mut self,
-        state: &State,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState,
         ly: u8,
@@ -96,7 +92,7 @@ impl Renderer {
         else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &state.video_ram,
+                &ppu_state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -162,7 +158,7 @@ impl Renderer {
         {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &state.video_ram,
+                &ppu_state.video_ram,
                 ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
@@ -182,7 +178,7 @@ impl Renderer {
         } else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &state.video_ram,
+                &ppu_state.video_ram,
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -194,7 +190,6 @@ impl Renderer {
             cursor,
             &mut self.rendering_state,
             &mut self.objects,
-            state,
             ppu_state,
             ly,
         );
@@ -207,8 +202,8 @@ impl Renderer {
             self.scanline
                 .push_pixel(self.rendering_state.fifos.render_pixel(
                     ppu_state.get_effective_bgp(),
-                    state.obp0,
-                    state.obp1,
+                    ppu_state.obp0,
+                    ppu_state.obp1,
                     ppu_state.is_background_enabled(),
                     ppu_state.is_obj_enabled(),
                 ));
@@ -232,14 +227,12 @@ mod tests {
     use crate::{
         WIDTH,
         ppu::{LcdControl, ObjectAttribute, ObjectFlags, PpuState, renderer::Renderer},
-        state::State,
     };
 
     // all timings are +2 compared to pandocs timings
     const MINIMUM_TIME: u16 = 174;
 
     fn get_timing(
-        state: &State,
         mut window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
         ppu_state: &PpuState,
@@ -248,7 +241,7 @@ mod tests {
         let mut renderer = Renderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
-            renderer.execute(state, &mut window_y, ppu_state, ly, 0);
+            renderer.execute(&mut window_y, ppu_state, ly, 0);
             dots += 1;
         }
         dots
@@ -257,21 +250,13 @@ mod tests {
     #[test]
     fn normal_timing() {
         assert_eq!(
-            get_timing(
-                &State::default(),
-                None,
-                Default::default(),
-                &Default::default(),
-                0
-            ),
+            get_timing(None, Default::default(), &Default::default(), 0),
             MINIMUM_TIME
         );
     }
 
     #[test]
     fn with_window() {
-        let state = State::default();
-
         // https://gbdev.io/pandocs/Scrolling.html#ff4aff4b--wy-wx-window-y-position-x-position-plus-7
         // Citation: The Window is visible (if enabled) when both coordinates are in the ranges WX=0..166, WY=0..143 respectively
         for wx in 0..167 {
@@ -279,7 +264,6 @@ mod tests {
             // Citation: After the last non-window pixel is emitted, a 6-dot penalty is incurred
             assert_eq!(
                 get_timing(
-                    &state,
                     Some(0),
                     Default::default(),
                     &PpuState {
@@ -299,7 +283,6 @@ mod tests {
         // the window is not visible
         assert_eq!(
             get_timing(
-                &state,
                 Some(0),
                 Default::default(),
                 &PpuState {
@@ -317,7 +300,6 @@ mod tests {
 
     #[test]
     fn with_objects() {
-        let state = State::default();
         let objects = ArrayVec::from_iter([ObjectAttribute {
             flags: ObjectFlags::empty(),
             tile_index: 0,
@@ -328,7 +310,6 @@ mod tests {
         // Citation: an OBJ with an OAM X position of 0 always incurs a 11-dot penalty
         assert_eq!(
             get_timing(
-                &state,
                 None,
                 objects,
                 &PpuState {
@@ -343,14 +324,11 @@ mod tests {
 
     #[test]
     fn with_scroll_x() {
-        let state = State::default();
-
         for scx in 0..=u8::MAX {
             // https://gbdev.io/pandocs/Rendering.html#mode-3-length
             // Citation: At the very beginning of Mode 3, rendering is paused for SCX % 8 dots
             assert_eq!(
                 get_timing(
-                    &state,
                     None,
                     Default::default(),
                     &PpuState {

@@ -1,7 +1,12 @@
-use crate::{
-    FallingEdge,
-    state::{Interruptions, SerialControl, State},
-};
+use crate::{FallingEdge, interrupts::Interrupts};
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq)]
+    pub struct SerialControl: u8 {
+        const TRANSFER_ENABLE = 1 << 7;
+        const CLOCK_SELECT = 1;
+    }
+}
 
 #[derive(Clone)]
 enum SerialControlState {
@@ -85,9 +90,14 @@ impl Serial {
     }
 
     #[must_use]
-    pub fn execute(&mut self, system_clock: u16, state: &mut State, _: u64) -> Option<u8> {
+    pub fn execute(
+        &mut self,
+        system_clock: u16,
+        interrupts: &mut Interrupts,
+        _: u64,
+    ) -> Option<u8> {
         if self.delay_int {
-            state.interrupt_flag.insert(Interruptions::SERIAL);
+            interrupts.insert(Interrupts::SERIAL);
             self.delay_int = false;
         }
         if get_clock_16384_hz(&mut self.falling_edge, system_clock)
@@ -108,14 +118,14 @@ impl Serial {
         None
     }
 
-    pub fn set_msg_from_master(&mut self, byte: u8, state: &mut State) -> u8 {
+    pub fn set_msg_from_master(&mut self, byte: u8, interrupts: &mut Interrupts) -> u8 {
         if !core::matches!(self.sc, SerialControlState::Slave) {
             return 0xff;
         }
 
         let response = self.sb;
         self.sc = SerialControlState::NoTransfer { is_master: false };
-        state.interrupt_flag.insert(Interruptions::SERIAL);
+        interrupts.insert(Interrupts::SERIAL);
         self.sb = byte;
         response
     }

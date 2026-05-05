@@ -2,7 +2,7 @@
 
 use core::ops::Deref;
 
-use crate::{mbc::*, state::*};
+use crate::{addresses::*, mbc::*};
 
 #[derive(Clone)]
 pub struct M161<T> {

@@ -1,6 +1,7 @@
 mod background_fetcher;
 pub mod color;
 mod fifos;
+mod oam_dma;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
@@ -8,14 +9,37 @@ mod sprite_fetcher;
 use arrayvec::ArrayVec;
 
 use crate::{
-    WIDTH,
-    ppu::renderer::Renderer,
-    state::{Interruptions, LcdStatus, State},
+    WIDTH, Wram,
+    addresses::{EXTERNAL_RAM, VIDEO_RAM},
+    interrupts::Interrupts,
+    mbc::Mbc,
+    ppu::{
+        oam_dma::{BLOCKED_OAM, Oam, OamDma},
+        renderer::Renderer,
+    },
 };
 
 pub use background_fetcher::get_bg_win_tile;
 pub use scanline::Scanline;
 pub use sprite_fetcher::get_line_from_tile;
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy,  PartialEq, Eq, Default)]
+    pub struct LcdStatus: u8 {
+        const LYC_INT = 1 << 6;
+        const OAM_INT = 1 << 5;
+        const VBLANK_INT = 1 << 4;
+        const HBLANK_INT = 1 << 3;
+        const LYC_EQUAL_TO_LY = 1 << 2;
+        // Drawing before ppu mask for debug output
+        const DRAWING = 0b11;
+        const PPU_MASK = 0b11;
+        const HBLANK = 0;
+        const VBLANK = 1;
+        const OAM_SCAN = 0b10;
+        const READONLY_MASK = 0b111;
+    }
+}
 
 #[derive(Clone)]
 pub enum PpuStep {
@@ -58,9 +82,10 @@ pub struct Ppu {
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
+    oam_dma: OamDma,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct PpuState {
     lcd_control: LcdControl,
     bgp: u8,
@@ -73,6 +98,31 @@ struct PpuState {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
+    video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+    obp0: u8,
+    obp1: u8,
+    wy: u8,
+}
+
+impl Default for PpuState {
+    fn default() -> Self {
+        Self {
+            lcd_control: Default::default(),
+            bgp: Default::default(),
+            old_bgp: Default::default(),
+            old_lcd_control: Default::default(),
+            old_old_lcd_control: Default::default(),
+            scy: Default::default(),
+            scx: Default::default(),
+            wx: Default::default(),
+            old_wx: Default::default(),
+            old_old_wx: Default::default(),
+            video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+            obp0: 0,
+            obp1: 0,
+            wy: 0,
+        }
+    }
 }
 
 impl PpuState {
@@ -197,6 +247,8 @@ impl From<[u8; 4]> for ObjectAttribute {
     }
 }
 
+pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
+
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
 // D'après "The cycle accurate gameboy docs":
@@ -236,6 +288,71 @@ impl From<[u8; 4]> for ObjectAttribute {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn trigger_dma(&mut self, value: u8) {
+        self.oam_dma.trigger_dma(value);
+    }
+    pub fn execute_dma<M: Mbc + ?Sized>(&mut self, mbc: &M, wram: &Wram, cycles: u64) {
+        self.oam_dma.execute(
+            mbc,
+            VramReader {
+                vram: &self.state.video_ram,
+                mode: self.get_ppu_mode(),
+            },
+            wram,
+            cycles,
+        );
+    }
+    pub fn get_dma_register(&self) -> u8 {
+        self.oam_dma.dma_register
+    }
+    pub fn get_oam(&self) -> &Oam {
+        let mode = self.get_ppu_mode();
+        if mode == LcdStatus::OAM_SCAN || mode == LcdStatus::DRAWING {
+            &BLOCKED_OAM
+        } else {
+            self.oam_dma.get_oam()
+        }
+    }
+    pub fn write_oam(&mut self, index: u8, value: u8) {
+        let mode = self.get_ppu_mode();
+        if mode == LcdStatus::OAM_SCAN || mode == LcdStatus::DRAWING {
+            return;
+        }
+        self.oam_dma.write_oam(index, value);
+    }
+    pub fn get_vram_reader(&self) -> VramReader<'_> {
+        VramReader {
+            vram: &self.state.video_ram,
+            mode: self.get_ppu_mode(),
+        }
+    }
+    pub fn get_wy(&self) -> u8 {
+        self.state.wy
+    }
+    pub fn set_wy(&mut self, value: u8) {
+        self.state.wy = value;
+    }
+    pub fn get_obp0(&self) -> u8 {
+        self.state.obp0
+    }
+    pub fn set_obp0(&mut self, value: u8) {
+        self.state.obp0 = value
+    }
+    pub fn get_obp1(&self) -> u8 {
+        self.state.obp1
+    }
+    pub fn set_obp1(&mut self, value: u8) {
+        self.state.obp1 = value
+    }
+    pub fn get_vram(&self) -> &Vram {
+        &self.state.video_ram
+    }
+
+    pub fn write_vram(&mut self, index: u16, value: u8) {
+        if self.get_ppu_mode() != LcdStatus::DRAWING {
+            self.state.video_ram[usize::from(index)] = value;
+        }
+    }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         // https://www.devrs.com/gb/files/faqs.html#GBBugs
         // Citation: As far as has been figured out, the bug happens everytime
@@ -269,7 +386,7 @@ impl Ppu {
         status
     }
 
-    pub fn get_ppu_mode(&self) -> LcdStatus {
+    fn get_ppu_mode(&self) -> LcdStatus {
         if !self.is_ppu_enabled() {
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
             // Citation: Reports 0 instead when the PPU is disabled.
@@ -351,7 +468,7 @@ impl Ppu {
         }
     }
 
-    fn switch_from_finished_mode(&mut self, state: &State, _: u64) {
+    fn switch_from_finished_mode(&mut self, _: u64) {
         match &mut self.step {
             PpuStep::SkippedOamScan {
                 dots_count: OAM_SCAN_DURATION,
@@ -368,8 +485,9 @@ impl Ppu {
                 dots_count: OAM_SCAN_DURATION,
                 ly,
             } => {
-                let mut objects_to_sort: ArrayVec<_, 10> = state
-                    .oam
+                let mut objects_to_sort: ArrayVec<_, 10> = self
+                    .oam_dma
+                    .get_oam()
                     .as_chunks::<4>()
                     .0
                     .iter()
@@ -448,9 +566,9 @@ impl Ppu {
         };
     }
 
-    pub fn fire_interrupts(&mut self, state: &mut State, _: u64) {
+    pub fn fire_interrupts(&mut self, interrupts: &mut Interrupts, _: u64) {
         if let PpuStep::VerticalBlankScanline { dots_count: 2 } = self.step {
-            state.interrupt_flag.insert(Interruptions::VBLANK);
+            interrupts.insert(Interrupts::VBLANK);
         }
 
         let stat_mode_irq = match &self.step {
@@ -499,17 +617,17 @@ impl Ppu {
 
         // rising edge described by https://raw.githubusercontent.com/geaz/emu-gameboy/master/docs/The%20Cycle-Accurate%20Game%20Boy%20Docs.pdf
         if stat_irq {
-            state.interrupt_flag.insert(Interruptions::LCD);
+            interrupts.insert(Interrupts::LCD);
         }
     }
 
-    pub fn execute(&mut self, state: &mut State, cycles: u64) {
+    pub fn execute(&mut self, interrupts: &mut Interrupts, cycles: u64) {
         if !self.is_ppu_enabled() {
             self.state.refresh_old();
             return;
         }
-        self.switch_from_finished_mode(state, cycles);
-        self.fire_interrupts(state, cycles);
+        self.switch_from_finished_mode(cycles);
+        self.fire_interrupts(interrupts, cycles);
 
         if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
             self.interrupt_part_lcd_status = value;
@@ -526,7 +644,7 @@ impl Ppu {
             | PpuStep::HorizontalBlank { window_y, ly, .. }
                 if window_y.is_none()
                     && self.state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
-                    && *ly == state.wy =>
+                    && *ly == self.state.wy =>
             {
                 *window_y = Some(0);
             }
@@ -546,7 +664,7 @@ impl Ppu {
                 ly,
                 ..
             } => {
-                renderer.execute(state, window_y, &self.state, *ly, cycles);
+                renderer.execute(window_y, &self.state, *ly, cycles);
 
                 *dots_count += 1;
             }
@@ -557,11 +675,27 @@ impl Ppu {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct VramReader<'a> {
+    vram: &'a Vram,
+    mode: LcdStatus,
+}
+
+impl VramReader<'_> {
+    pub fn read_vram(self, index: u16) -> u8 {
+        if self.mode == LcdStatus::DRAWING {
+            0xff
+        } else {
+            self.vram[usize::from(index)]
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
+        interrupts::Interrupts,
         ppu::{LcdControl, Ppu, PpuStep},
-        state::State,
     };
 
     extern crate std;
@@ -569,20 +703,20 @@ mod tests {
     #[test]
     fn line_duration() {
         let mut ppu = Ppu::default();
-        let mut state = State::default();
+        let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
         loop {
             if let PpuStep::OamScan { .. } = ppu.step {
                 break;
             }
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
         }
         let mut duration = 0;
         let current_ly = ppu.get_ly();
         while ppu.get_ly() <= current_ly {
             duration += 1;
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
         }
         assert_eq!(456, duration);
     }
@@ -590,7 +724,7 @@ mod tests {
     #[test]
     fn frame_duration() {
         let mut ppu = Ppu::default();
-        let mut state = State::default();
+        let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
         loop {
@@ -602,10 +736,10 @@ mod tests {
             {
                 break;
             }
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
         }
         let mut duration = 1;
-        ppu.execute(&mut state, 0);
+        ppu.execute(&mut interrupts, 0);
         loop {
             if let PpuStep::OamScan {
                 ly: 0,
@@ -615,7 +749,7 @@ mod tests {
             {
                 break;
             }
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
             duration += 1;
         }
         assert_eq!(70224, duration);
@@ -624,12 +758,12 @@ mod tests {
     #[test]
     fn all_ly() {
         let mut ppu = Ppu::default();
-        let mut state = State::default();
+        let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
 
         while !lys.is_empty() {
-            ppu.execute(&mut state, 0);
+            ppu.execute(&mut interrupts, 0);
             lys.remove(&ppu.get_ly());
         }
     }

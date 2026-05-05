@@ -1,5 +1,5 @@
 // https://gbdev.gg8.se/wiki/articles/Memory_Bank_Controllers#Wisdom_Tree
-use crate::{mbc::*, state::*};
+use crate::{addresses::*, mbc::*};
 use core::ops::Deref;
 
 #[derive(Clone)]

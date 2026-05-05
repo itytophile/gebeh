@@ -1,6 +1,6 @@
 use crate::{
+    addresses::VIDEO_RAM,
     ppu::{Scrolling, TILE_LENGTH, Tile, TileVram, renderer::RenderingState},
-    state::VIDEO_RAM,
 };
 
 #[derive(Clone, Copy, Default)]
