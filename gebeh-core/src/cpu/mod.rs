@@ -183,10 +183,7 @@ impl Cpu {
         match index {
             OAM..NOT_USABLE => {
                 let ppu = peripherals.ppu.get_ppu_mode();
-                if ppu == LcdStatus::DRAWING
-                    || ppu == LcdStatus::OAM_SCAN
-                    || peripherals.dma.is_active()
-                {
+                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN {
                     0xff
                 } else {
                     peripherals.ppu.get_oam()[usize::from(index - OAM)]
@@ -209,7 +206,7 @@ impl Cpu {
             SCX => peripherals.ppu.get_scx(),
             LY => peripherals.ppu.get_ly(),
             LYC => peripherals.ppu.lyc,
-            DMA => peripherals.dma.dma_register,
+            DMA => peripherals.ppu.get_dma_register(),
             BGP => peripherals.ppu.get_bgp(),
             OBP0 => peripherals.ppu.get_obp0(),
             OBP1 => peripherals.ppu.get_obp1(),
@@ -263,12 +260,9 @@ impl Cpu {
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
             if interrupts_to_execute.is_empty() {
-                peripherals.dma.execute(
-                    peripherals.mbc,
-                    peripherals.ppu,
-                    peripherals.wram,
-                    cycle_count,
-                );
+                peripherals
+                    .ppu
+                    .execute_dma(peripherals.mbc, peripherals.wram, cycle_count);
                 return;
             }
             self.is_halted = false;
@@ -297,12 +291,9 @@ impl Cpu {
             };
         }
 
-        peripherals.dma.execute(
-            peripherals.mbc,
-            peripherals.ppu,
-            peripherals.wram,
-            cycle_count,
-        );
+        peripherals
+            .ppu
+            .execute_dma(peripherals.mbc, peripherals.wram, cycle_count);
 
         let inst = if let Some(inst) = self.instruction_register.0.pop() {
             inst

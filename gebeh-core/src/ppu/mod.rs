@@ -1,6 +1,7 @@
 mod background_fetcher;
 pub mod color;
 mod fifos;
+mod oam_dma;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
@@ -8,10 +9,14 @@ mod sprite_fetcher;
 use arrayvec::ArrayVec;
 
 use crate::{
-    WIDTH,
-    addresses::{EXTERNAL_RAM, NOT_USABLE, OAM, VIDEO_RAM},
+    WIDTH, Wram,
+    addresses::{EXTERNAL_RAM, VIDEO_RAM},
     interrupts::Interrupts,
-    ppu::renderer::Renderer,
+    mbc::Mbc,
+    ppu::{
+        oam_dma::{Oam, OamDma},
+        renderer::Renderer,
+    },
 };
 
 pub use background_fetcher::get_bg_win_tile;
@@ -77,6 +82,7 @@ pub struct Ppu {
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
+    oam_dma: OamDma,
 }
 
 #[derive(Clone)]
@@ -96,7 +102,6 @@ struct PpuState {
     obp0: u8,
     obp1: u8,
     wy: u8,
-    oam: [u8; (NOT_USABLE - OAM) as usize],
 }
 
 impl Default for PpuState {
@@ -115,7 +120,6 @@ impl Default for PpuState {
             video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
             obp0: 0,
             obp1: 0,
-            oam: [0; (NOT_USABLE - OAM) as usize],
             wy: 0,
         }
     }
@@ -244,7 +248,6 @@ impl From<[u8; 4]> for ObjectAttribute {
 }
 
 pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
-pub type Oam = [u8; (NOT_USABLE - OAM) as usize];
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
@@ -285,17 +288,27 @@ pub type Oam = [u8; (NOT_USABLE - OAM) as usize];
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
+    pub fn trigger_dma(&mut self, value: u8) {
+        self.oam_dma.trigger_dma(value);
+    }
+    pub fn execute_dma<M: Mbc + ?Sized>(&mut self, mbc: &M, wram: &Wram, cycles: u64) {
+        self.oam_dma
+            .execute(mbc, &self.state.video_ram, wram, cycles);
+    }
+    pub fn get_dma_register(&self) -> u8 {
+        self.oam_dma.dma_register
+    }
+    pub fn get_oam(&self) -> &Oam {
+        self.oam_dma.get_oam()
+    }
+    pub fn write_oam(&mut self, index: u8, value: u8) {
+        self.oam_dma.write_oam(index, value);
+    }
     pub fn get_wy(&self) -> u8 {
         self.state.wy
     }
     pub fn set_wy(&mut self, value: u8) {
         self.state.wy = value;
-    }
-    pub fn get_oam(&self) -> &Oam {
-        &self.state.oam
-    }
-    pub fn get_oam_mut(&mut self) -> &mut Oam {
-        &mut self.state.oam
     }
     pub fn get_obp0(&self) -> u8 {
         self.state.obp0
@@ -448,8 +461,8 @@ impl Ppu {
                 ly,
             } => {
                 let mut objects_to_sort: ArrayVec<_, 10> = self
-                    .state
-                    .oam
+                    .oam_dma
+                    .get_oam()
                     .as_chunks::<4>()
                     .0
                     .iter()

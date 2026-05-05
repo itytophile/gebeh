@@ -4,7 +4,6 @@
 use crate::{
     apu::Apu,
     cpu::Cpu,
-    dma::Dma,
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
@@ -16,7 +15,6 @@ use crate::{
 pub mod addresses;
 pub mod apu;
 pub mod cpu;
-pub mod dma;
 pub mod external_bus;
 pub mod interrupts;
 pub mod joypad;
@@ -31,7 +29,6 @@ pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
-    pub dma: &'a mut Dma,
     pub serial: &'a mut Serial,
     pub wram: &'a mut Wram,
     pub interrupts: &'a mut Interrupts,
@@ -45,7 +42,6 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
             joypad: self.joypad,
             apu: self.apu,
             ppu: self.ppu,
-            dma: self.dma,
             serial: self.serial,
             wram: self.wram,
             interrupts: *self.interrupts,
@@ -59,7 +55,6 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
     pub ppu: &'a Ppu,
-    pub dma: &'a Dma,
     pub serial: &'a Serial,
     pub wram: &'a Wram,
     pub interrupts: Interrupts,
@@ -77,7 +72,6 @@ pub type Wram = [u8; (ECHO_RAM - WORK_RAM) as usize];
 #[derive(Clone)]
 pub struct Emulator {
     ppu: Ppu,
-    dma: Dma,
     cpu: Cpu,
     pub interrupts: Interrupts,
     timer: Timer,
@@ -92,7 +86,6 @@ impl Default for Emulator {
     fn default() -> Self {
         Self {
             ppu: Default::default(),
-            dma: Default::default(),
             cpu: Default::default(),
             timer: Default::default(),
             joypad: Default::default(),
@@ -167,7 +160,6 @@ impl Emulator {
                 joypad: &mut self.joypad,
                 apu: &mut self.apu,
                 ppu: &mut self.ppu,
-                dma: &mut self.dma,
                 serial: &mut self.serial,
                 wram: &mut self.wram,
                 interrupts: &mut self.interrupts,

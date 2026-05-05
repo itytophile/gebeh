@@ -28,11 +28,10 @@ impl Cpu {
             ECHO_RAM..OAM => peripherals.wram[usize::from(index - ECHO_RAM)] = value,
             OAM..NOT_USABLE => {
                 let ppu = peripherals.ppu.get_ppu_mode();
-                if ppu != LcdStatus::DRAWING
-                    && ppu != LcdStatus::OAM_SCAN
-                    && !peripherals.dma.is_active()
-                {
-                    peripherals.ppu.get_oam_mut()[usize::from(index - OAM)] = value
+                if ppu != LcdStatus::DRAWING && ppu != LcdStatus::OAM_SCAN {
+                    peripherals
+                        .ppu
+                        .write_oam(u8::try_from(index - OAM).unwrap(), value)
                 }
             }
             NOT_USABLE..JOYPAD => {}
@@ -60,11 +59,7 @@ impl Cpu {
             SCX => peripherals.ppu.set_scx(value),
             LY => {} // read only
             LYC => peripherals.ppu.lyc = value,
-            DMA => {
-                let dma = &mut *peripherals.dma;
-                dma.dma_register = value;
-                dma.dma_request = true;
-            }
+            DMA => peripherals.ppu.trigger_dma(value),
             BGP => peripherals.ppu.set_bgp(value),
             OBP0 => peripherals.ppu.set_obp0(value),
             OBP1 => peripherals.ppu.set_obp1(value),
