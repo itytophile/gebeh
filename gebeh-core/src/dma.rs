@@ -1,6 +1,6 @@
 use core::ops::Range;
 
-use crate::{Wram, bus::external_bus_read, mbc::Mbc, ppu::Ppu};
+use crate::{Wram, external_bus::external_bus_read, mbc::Mbc, ppu::Ppu};
 
 // about conflicts
 // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981

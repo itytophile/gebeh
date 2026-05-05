@@ -20,7 +20,7 @@ gebeh-network = { path = "./gebeh-network" }
 
 [profile.release]
 overflow-checks = true
-lto = true
+# lto = true
 
 [profile.test]
 opt-level = 3

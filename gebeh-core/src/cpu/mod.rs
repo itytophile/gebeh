@@ -1,9 +1,10 @@
+mod bus;
 mod execute_instruction;
 pub mod instructions;
 
 use crate::{
-    Peripherals, PeripheralsRef, addresses::*, bus::external_bus_read, interrupts::Interrupts,
-    mbc::Mbc, ppu::LcdStatus,
+    Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
+    interrupts::Interrupts, mbc::Mbc, ppu::LcdStatus,
 };
 use arrayvec::ArrayVec;
 use instructions::{

@@ -15,9 +15,9 @@ use crate::{
 
 pub mod addresses;
 pub mod apu;
-pub mod bus;
 pub mod cpu;
 pub mod dma;
+pub mod external_bus;
 pub mod interrupts;
 pub mod joypad;
 pub mod mbc;
