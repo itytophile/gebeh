@@ -14,7 +14,7 @@ use crate::{
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
-        oam_dma::{Oam, OamDma},
+        oam_dma::{BLOCKED_OAM, Oam, OamDma},
         renderer::Renderer,
     },
 };
@@ -292,17 +292,39 @@ impl Ppu {
         self.oam_dma.trigger_dma(value);
     }
     pub fn execute_dma<M: Mbc + ?Sized>(&mut self, mbc: &M, wram: &Wram, cycles: u64) {
-        self.oam_dma
-            .execute(mbc, &self.state.video_ram, wram, cycles);
+        self.oam_dma.execute(
+            mbc,
+            VramReader {
+                vram: &self.state.video_ram,
+                mode: self.get_ppu_mode(),
+            },
+            wram,
+            cycles,
+        );
     }
     pub fn get_dma_register(&self) -> u8 {
         self.oam_dma.dma_register
     }
     pub fn get_oam(&self) -> &Oam {
-        self.oam_dma.get_oam()
+        let mode = self.get_ppu_mode();
+        if mode == LcdStatus::OAM_SCAN || mode == LcdStatus::DRAWING {
+            &BLOCKED_OAM
+        } else {
+            self.oam_dma.get_oam()
+        }
     }
     pub fn write_oam(&mut self, index: u8, value: u8) {
+        let mode = self.get_ppu_mode();
+        if mode == LcdStatus::OAM_SCAN || mode == LcdStatus::DRAWING {
+            return;
+        }
         self.oam_dma.write_oam(index, value);
+    }
+    pub fn get_vram_reader(&self) -> VramReader<'_> {
+        VramReader {
+            vram: &self.state.video_ram,
+            mode: self.get_ppu_mode(),
+        }
     }
     pub fn get_wy(&self) -> u8 {
         self.state.wy
@@ -322,11 +344,14 @@ impl Ppu {
     pub fn set_obp1(&mut self, value: u8) {
         self.state.obp1 = value
     }
-    pub fn get_vram_mut(&mut self) -> &mut Vram {
-        &mut self.state.video_ram
-    }
     pub fn get_vram(&self) -> &Vram {
         &self.state.video_ram
+    }
+
+    pub fn write_vram(&mut self, index: u16, value: u8) {
+        if self.get_ppu_mode() != LcdStatus::DRAWING {
+            self.state.video_ram[usize::from(index)] = value;
+        }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
         // https://www.devrs.com/gb/files/faqs.html#GBBugs
@@ -361,7 +386,7 @@ impl Ppu {
         status
     }
 
-    pub fn get_ppu_mode(&self) -> LcdStatus {
+    fn get_ppu_mode(&self) -> LcdStatus {
         if !self.is_ppu_enabled() {
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
             // Citation: Reports 0 instead when the PPU is disabled.
@@ -647,6 +672,22 @@ impl Ppu {
         };
 
         self.state.refresh_old();
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct VramReader<'a> {
+    vram: &'a Vram,
+    mode: LcdStatus,
+}
+
+impl VramReader<'_> {
+    pub fn read_vram(self, index: u16) -> u8 {
+        if self.mode == LcdStatus::DRAWING {
+            0xff
+        } else {
+            self.vram[usize::from(index)]
+        }
     }
 }
 

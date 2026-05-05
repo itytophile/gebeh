@@ -1,10 +1,5 @@
 use crate::{
-    Peripherals,
-    addresses::*,
-    cpu::Cpu,
-    interrupts::Interrupts,
-    mbc::Mbc,
-    ppu::{LcdControl, LcdStatus},
+    Peripherals, addresses::*, cpu::Cpu, interrupts::Interrupts, mbc::Mbc, ppu::LcdControl,
     serial::SerialControl,
 };
 
@@ -18,22 +13,13 @@ impl Cpu {
     ) {
         match index {
             0..VIDEO_RAM => peripherals.mbc.write(index, value),
-            VIDEO_RAM..EXTERNAL_RAM => {
-                if peripherals.ppu.get_ppu_mode() != LcdStatus::DRAWING {
-                    peripherals.ppu.get_vram_mut()[usize::from(index - VIDEO_RAM)] = value
-                }
-            }
+            VIDEO_RAM..EXTERNAL_RAM => peripherals.ppu.write_vram(index - VIDEO_RAM, value),
             EXTERNAL_RAM..WORK_RAM => peripherals.mbc.write(index, value),
             WORK_RAM..ECHO_RAM => peripherals.wram[usize::from(index - WORK_RAM)] = value,
             ECHO_RAM..OAM => peripherals.wram[usize::from(index - ECHO_RAM)] = value,
-            OAM..NOT_USABLE => {
-                let ppu = peripherals.ppu.get_ppu_mode();
-                if ppu != LcdStatus::DRAWING && ppu != LcdStatus::OAM_SCAN {
-                    peripherals
-                        .ppu
-                        .write_oam(u8::try_from(index - OAM).unwrap(), value)
-                }
-            }
+            OAM..NOT_USABLE => peripherals
+                .ppu
+                .write_oam(u8::try_from(index - OAM).unwrap(), value),
             NOT_USABLE..JOYPAD => {}
             JOYPAD => peripherals.joypad.set_register(value),
             SB => peripherals.serial.sb = value,

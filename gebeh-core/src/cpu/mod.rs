@@ -4,7 +4,7 @@ pub mod instructions;
 
 use crate::{
     Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
-    interrupts::Interrupts, mbc::Mbc, ppu::LcdStatus,
+    interrupts::Interrupts, mbc::Mbc,
 };
 use arrayvec::ArrayVec;
 use instructions::{
@@ -181,14 +181,7 @@ impl Cpu {
         cycles: u64,
     ) -> u8 {
         match index {
-            OAM..NOT_USABLE => {
-                let ppu = peripherals.ppu.get_ppu_mode();
-                if ppu == LcdStatus::DRAWING || ppu == LcdStatus::OAM_SCAN {
-                    0xff
-                } else {
-                    peripherals.ppu.get_oam()[usize::from(index - OAM)]
-                }
-            }
+            OAM..NOT_USABLE => peripherals.ppu.get_oam()[usize::from(index - OAM)],
             JOYPAD => peripherals.joypad.get_register(),
             SB => peripherals.serial.sb,
             SC => peripherals.serial.get_control().bits() | 0b01111110,
@@ -224,18 +217,12 @@ impl Cpu {
         }
     }
     fn read<M: Mbc + ?Sized>(&self, index: u16, peripherals: PeripheralsRef<M>, cycles: u64) -> u8 {
-        if (VIDEO_RAM..EXTERNAL_RAM).contains(&index)
-            && peripherals.ppu.get_ppu_mode() == LcdStatus::DRAWING
-        {
-            return 0xff;
-        }
-
         match index {
             ..0x100 if !self.boot_rom_mapping_control => self.boot_rom[usize::from(index)],
             ..OAM => external_bus_read(
                 index,
                 peripherals.mbc,
-                peripherals.ppu.get_vram(),
+                peripherals.ppu.get_vram_reader(),
                 peripherals.wram,
             ),
             index => self.internal_bus_read(index, peripherals, cycles),
