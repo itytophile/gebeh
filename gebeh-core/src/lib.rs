@@ -5,7 +5,7 @@ use crate::{
     apu::Apu,
     cpu::Cpu,
     dma::Dma,
-    external_bus::{ExternalBus, Peripherals},
+    external_bus::Peripherals,
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
@@ -46,7 +46,6 @@ pub struct Emulator {
     apu: Apu,
     pub serial: Serial,
     wram: Wram,
-    external_bus: ExternalBus,
     cycles: u64,
 }
 
@@ -63,7 +62,6 @@ impl Default for Emulator {
             wram: [0; _],
             cycles: Default::default(),
             interrupts: Default::default(),
-            external_bus: Default::default(),
         }
     }
 }
@@ -124,7 +122,6 @@ impl Emulator {
             self.interrupts = interrupts_from_previous_cycle;
         }
         self.cpu.execute(
-            &mut self.external_bus,
             Peripherals {
                 mbc,
                 timer: &mut self.timer,

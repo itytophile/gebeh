@@ -51,50 +51,6 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
     pub interrupts: Interrupts,
 }
 
-#[derive(Clone, Default)]
-pub struct ExternalBus {
-    last_value_read: u8,
-    is_used_by_dma: bool,
-}
-
-impl ExternalBus {
-    pub fn read<M: Mbc + ?Sized>(&mut self, index: u16, mbc: &M, vram: &Vram, wram: &Wram) -> u8 {
-        // if self.is_used_by_dma {
-        //     return self.last_value_read;
-        // }
-
-        mmu_read(index, mbc, vram, wram)
-    }
-}
-
-#[derive(Clone)]
-pub struct DmaPov;
-
-impl DmaPov {
-    pub fn new(bus: &mut ExternalBus) -> Self {
-        if bus.is_used_by_dma {
-            panic!()
-        }
-        bus.is_used_by_dma = true;
-        DmaPov
-    }
-    pub fn close(self, bus: &mut ExternalBus) {
-        bus.is_used_by_dma = false;
-    }
-    pub fn read<M: Mbc + ?Sized>(
-        &self,
-        bus: &mut ExternalBus,
-        index: u16,
-        mbc: &M,
-        vram: &Vram,
-        wram: &Wram,
-    ) -> u8 {
-        let value = mmu_read(index, mbc, vram, wram);
-        bus.last_value_read = value;
-        value
-    }
-}
-
 pub fn mmu_read<M: Mbc + ?Sized>(index: u16, mbc: &M, vram: &Vram, wram: &Wram) -> u8 {
     match index {
         0..VIDEO_RAM => mbc.read(index),
