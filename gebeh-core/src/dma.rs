@@ -1,6 +1,6 @@
 use core::ops::Range;
 
-use crate::{Wram, external_bus::mmu_read, mbc::Mbc, ppu::Ppu};
+use crate::{Wram, bus::external_bus_read, mbc::Mbc, ppu::Ppu};
 
 // about conflicts
 // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
@@ -33,7 +33,7 @@ impl Dma {
         if let Some(address) = self.range.next() {
             self.is_active = true;
             ppu.get_oam_mut()[usize::from(address as u8)] =
-                mmu_read(address, mbc, ppu.get_vram(), wram);
+                external_bus_read(address, mbc, ppu.get_vram(), wram);
         } else {
             self.is_active = false;
         }

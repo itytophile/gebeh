@@ -1,10 +1,9 @@
 pub mod instructions;
-mod mmu;
 
 use crate::{
+    Peripherals, PeripheralsRef,
     addresses::*,
-    cpu::mmu::write,
-    external_bus::{Peripherals, PeripheralsRef, mmu_read},
+    bus::{external_bus_read, write},
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::LcdStatus,
@@ -872,21 +871,13 @@ impl Cpu {
 }
 
 impl Cpu {
-    fn read<M: Mbc + ?Sized>(&self, index: u16, peripherals: PeripheralsRef<M>, cycles: u64) -> u8 {
-        if (VIDEO_RAM..EXTERNAL_RAM).contains(&index)
-            && peripherals.ppu.get_ppu_mode() == LcdStatus::DRAWING
-        {
-            return 0xff;
-        }
-
+    pub fn internal_bus_read<M: Mbc + ?Sized>(
+        &self,
+        index: u16,
+        peripherals: PeripheralsRef<M>,
+        cycles: u64,
+    ) -> u8 {
         match index {
-            ..0x100 if !self.boot_rom_mapping_control => self.boot_rom[usize::from(index)],
-            ..OAM => mmu_read(
-                index,
-                peripherals.mbc,
-                peripherals.ppu.get_vram(),
-                peripherals.wram,
-            ),
             OAM..NOT_USABLE => {
                 let ppu = peripherals.ppu.get_ppu_mode();
                 if ppu == LcdStatus::DRAWING
@@ -929,7 +920,25 @@ impl Cpu {
             0xff51..HRAM => 0xff,
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)],
             INTERRUPT_ENABLE => self.interrupt_enable.bits(),
-            _ => todo!("Reading ${index:04x}"),
+            _ => todo!("Reading ${index:04x} from internal bus"),
+        }
+    }
+    fn read<M: Mbc + ?Sized>(&self, index: u16, peripherals: PeripheralsRef<M>, cycles: u64) -> u8 {
+        if (VIDEO_RAM..EXTERNAL_RAM).contains(&index)
+            && peripherals.ppu.get_ppu_mode() == LcdStatus::DRAWING
+        {
+            return 0xff;
+        }
+
+        match index {
+            ..0x100 if !self.boot_rom_mapping_control => self.boot_rom[usize::from(index)],
+            ..OAM => external_bus_read(
+                index,
+                peripherals.mbc,
+                peripherals.ppu.get_vram(),
+                peripherals.wram,
+            ),
+            index => self.internal_bus_read(index, peripherals, cycles),
         }
     }
 

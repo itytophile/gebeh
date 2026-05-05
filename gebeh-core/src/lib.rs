@@ -5,7 +5,6 @@ use crate::{
     apu::Apu,
     cpu::Cpu,
     dma::Dma,
-    external_bus::Peripherals,
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
@@ -16,15 +15,55 @@ use crate::{
 
 pub mod addresses;
 pub mod apu;
+pub mod bus;
 pub mod cpu;
 pub mod dma;
-pub mod external_bus;
 pub mod interrupts;
 pub mod joypad;
 pub mod mbc;
 pub mod ppu;
 pub mod serial;
 pub mod timer;
+
+pub struct Peripherals<'a, M: Mbc + ?Sized> {
+    pub mbc: &'a mut M,
+    pub timer: &'a mut Timer,
+    pub joypad: &'a mut Joypad,
+    pub apu: &'a mut Apu,
+    pub ppu: &'a mut Ppu,
+    pub dma: &'a mut Dma,
+    pub serial: &'a mut Serial,
+    pub wram: &'a mut Wram,
+    pub interrupts: &'a mut Interrupts,
+}
+
+impl<M: Mbc + ?Sized> Peripherals<'_, M> {
+    pub fn get_ref(&self) -> PeripheralsRef<'_, M> {
+        PeripheralsRef {
+            mbc: self.mbc,
+            timer: self.timer,
+            joypad: self.joypad,
+            apu: self.apu,
+            ppu: self.ppu,
+            dma: self.dma,
+            serial: self.serial,
+            wram: self.wram,
+            interrupts: *self.interrupts,
+        }
+    }
+}
+
+pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
+    pub mbc: &'a M,
+    pub timer: &'a Timer,
+    pub joypad: &'a Joypad,
+    pub apu: &'a Apu,
+    pub ppu: &'a Ppu,
+    pub dma: &'a Dma,
+    pub serial: &'a Serial,
+    pub wram: &'a Wram,
+    pub interrupts: Interrupts,
+}
 
 pub const WIDTH: u8 = 160;
 pub const HEIGHT: u8 = 144;
