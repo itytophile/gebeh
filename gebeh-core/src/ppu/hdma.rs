@@ -1,6 +1,8 @@
 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=double#lcd-vram-dma-transfers
 
-#[derive(Clone, Copy)]
+use crate::ppu::Vram;
+
+#[derive(Clone, Copy, PartialEq)]
 enum HdmaState {
     Inactive,
     GeneralPurpose,
@@ -60,5 +62,14 @@ impl Hdma {
         };
 
         (self.length & 0x7f) | (last_bit << 7)
+    }
+
+    // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
+    // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
+    pub fn execute(&mut self, vram: &mut Vram) {
+        if self.state == HdmaState::Inactive {
+            return;
+        }
+        todo!()
     }
 }
