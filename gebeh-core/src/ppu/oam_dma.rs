@@ -5,7 +5,7 @@ use crate::{
     addresses::{NOT_USABLE, OAM},
     external_bus::external_bus_read,
     mbc::Mbc,
-    ppu::VramReader,
+    ppu::Vram,
 };
 
 // about conflicts
@@ -37,17 +37,10 @@ impl Default for OamDma {
 pub const BLOCKED_OAM: Oam = [0xff; _];
 
 impl OamDma {
-    pub fn execute<M: Mbc + ?Sized>(
-        &mut self,
-        mbc: &M,
-        vram_reader: VramReader,
-        wram: &Wram,
-        _: u64,
-    ) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &M, vram: Option<&Vram>, wram: &Wram, _: u64) {
         if let Some(address) = self.range.next() {
             self.is_active = true;
-            self.oam[usize::from(address as u8)] =
-                external_bus_read(address, mbc, vram_reader, wram);
+            self.oam[usize::from(address as u8)] = external_bus_read(address, mbc, vram, wram);
         } else {
             self.is_active = false;
         }

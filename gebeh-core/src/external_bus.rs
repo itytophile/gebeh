@@ -1,15 +1,15 @@
-use crate::{Wram, addresses::*, mbc::Mbc, ppu::VramReader};
+use crate::{Wram, addresses::*, mbc::Mbc, ppu::Vram};
 
 pub fn external_bus_read<M: Mbc + ?Sized>(
     index: u16,
     mbc: &M,
-    vram_reader: Option<VramReader<'_>>,
+    vram: Option<&Vram>,
     wram: &Wram,
 ) -> u8 {
     match index {
         0..VIDEO_RAM => mbc.read(index),
-        VIDEO_RAM..EXTERNAL_RAM => vram_reader
-            .map(|r| r.read_vram(index - VIDEO_RAM))
+        VIDEO_RAM..EXTERNAL_RAM => vram
+            .map(|r| r[usize::from(index - VIDEO_RAM)])
             .unwrap_or(0xff),
         EXTERNAL_RAM..WORK_RAM => mbc.read(index),
         WORK_RAM..ECHO_RAM => wram[usize::from(index - WORK_RAM)],

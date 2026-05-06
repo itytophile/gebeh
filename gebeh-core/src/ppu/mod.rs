@@ -295,9 +295,10 @@ impl Ppu {
     pub fn execute_dma<M: Mbc + ?Sized>(&mut self, mbc: &M, wram: &Wram, cycles: u64) {
         self.oam_dma.execute(
             mbc,
-            VramReader {
-                vram: &self.state.video_ram,
-                mode: self.get_ppu_mode(),
+            if self.get_ppu_mode() != LcdStatus::DRAWING {
+                Some(&self.state.video_ram)
+            } else {
+                None
             },
             wram,
             cycles,
@@ -321,10 +322,11 @@ impl Ppu {
         }
         self.oam_dma.write_oam(index, value);
     }
-    pub fn get_vram_reader(&self) -> VramReader<'_> {
-        VramReader {
-            vram: &self.state.video_ram,
-            mode: self.get_ppu_mode(),
+    pub fn get_vram_if_available(&self) -> Option<&Vram> {
+        if self.get_ppu_mode() == LcdStatus::DRAWING {
+            None
+        } else {
+            Some(&self.state.video_ram)
         }
     }
     pub fn get_wy(&self) -> u8 {
@@ -673,22 +675,6 @@ impl Ppu {
         };
 
         self.state.refresh_old();
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct VramReader<'a> {
-    vram: &'a Vram,
-    mode: LcdStatus,
-}
-
-impl VramReader<'_> {
-    pub fn read_vram(self, index: u16) -> u8 {
-        if self.mode == LcdStatus::DRAWING {
-            0xff
-        } else {
-            self.vram[usize::from(index)]
-        }
     }
 }
 

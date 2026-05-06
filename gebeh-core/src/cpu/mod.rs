@@ -180,7 +180,7 @@ impl Cpu {
             ..OAM => external_bus_read(
                 index,
                 peripherals.mbc,
-                peripherals.ppu.get_vram_reader(),
+                peripherals.ppu.get_vram_if_available(),
                 peripherals.wram,
             ),
             index => self.internal_bus_read(index, peripherals, cycles),
