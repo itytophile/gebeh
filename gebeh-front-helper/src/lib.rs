@@ -165,3 +165,9 @@ pub fn get_title_from_rom(rom: &[u8]) -> &str {
         .unwrap_or(title.len());
     str::from_utf8(&title[..end_zero_pos]).unwrap()
 }
+
+const CGB_FLAG: usize = 0x0143;
+
+pub fn is_cgb_compatible(rom: &[u8]) -> bool {
+    rom[CGB_FLAG] == 0x80 || rom[CGB_FLAG] == 0xc0
+}

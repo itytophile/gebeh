@@ -1,5 +1,6 @@
 mod background_fetcher;
 pub mod color;
+mod hdma;
 mod fifos;
 mod oam_dma;
 mod renderer;
