@@ -1,19 +1,25 @@
 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=double#lcd-vram-dma-transfers
 
-use crate::ppu::Vram;
+use crate::{Wram, external_bus::external_bus_read, mbc::Mbc, ppu::Vram};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone)]
+struct CopyCursor {
+    src: u16,
+    dst: u16,
+}
+
+#[derive(Clone)]
 enum HdmaState {
     Inactive,
-    GeneralPurpose,
-    HBlank,
+    GeneralPurpose(CopyCursor),
+    HBlank(CopyCursor),
 }
 
 pub struct Hdma {
     source_address: u16,
     destination_address: u16,
     transfer_length: u8,
-    length: u8,
+    length: u16,
     state: HdmaState,
 }
 
@@ -42,14 +48,25 @@ impl Hdma {
     }
 
     pub fn write_length_mode_start(&mut self, value: u8) {
-        self.length = value;
-        self.state = match (self.state, value >> 7) {
-            (HdmaState::Inactive, 0) => HdmaState::GeneralPurpose,
-            (HdmaState::Inactive, 1) => HdmaState::HBlank,
-            (HdmaState::GeneralPurpose, _) => panic!("The CPU is supposed to be halted"),
+        // Citation: the lower 7 bits of which specify the Transfer Length (divided by $10, minus 1)
+        self.length = (u16::from(value & 0x7f) + 1) << 4;
+        match (&self.state, value >> 7) {
+            (HdmaState::Inactive, 0) => {
+                self.state = HdmaState::GeneralPurpose(CopyCursor {
+                    src: self.source_address,
+                    dst: self.destination_address,
+                })
+            }
+            (HdmaState::Inactive, 1) => {
+                self.state = HdmaState::HBlank(CopyCursor {
+                    src: self.source_address,
+                    dst: self.destination_address,
+                })
+            }
+            (HdmaState::GeneralPurpose(_), _) => panic!("The CPU is supposed to be halted"),
             // Citation: It is also possible to terminate an active HBlank transfer by writing zero to Bit 7 of FF55
-            (HdmaState::HBlank, 0) => HdmaState::Inactive,
-            _ => self.state,
+            (HdmaState::HBlank(_), 0) => self.state = HdmaState::Inactive,
+            _ => {}
         };
     }
 
@@ -57,19 +74,28 @@ impl Hdma {
         // Citation: Reading Bit 7 of FF55 can be used to confirm if the DMA transfer is active (1=Not Active, 0=Active).
         let last_bit = match self.state {
             HdmaState::Inactive => 1,
-            HdmaState::GeneralPurpose => panic!("The CPU is supposed to be halted"),
-            HdmaState::HBlank => 0,
+            HdmaState::GeneralPurpose(_) => panic!("The CPU is supposed to be halted"),
+            HdmaState::HBlank(_) => 0,
         };
 
-        (self.length & 0x7f) | (last_bit << 7)
+        (u8::try_from((self.length >> 4).wrapping_sub(1)).unwrap() & 0x7f) | (last_bit << 7)
     }
 
     // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
     // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
-    pub fn execute(&mut self, vram: &mut Vram) {
-        if self.state == HdmaState::Inactive {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, vram: &mut Vram, mbc: &M, wram: &Wram) {
+        let (HdmaState::GeneralPurpose(cursor) | HdmaState::HBlank(cursor)) = &mut self.state
+        else {
             return;
+        };
+        vram[usize::from(cursor.dst)] = external_bus_read(cursor.src, mbc, None, wram);
+        vram[usize::from(cursor.dst.wrapping_add(1))] =
+            external_bus_read(cursor.src.wrapping_add(1), mbc, None, wram);
+        cursor.src = cursor.src.wrapping_add(2);
+        cursor.dst = cursor.dst.wrapping_add(2);
+        self.length = self.length.wrapping_sub(1);
+        if self.length == 0 {
+            self.state = HdmaState::Inactive;
         }
-        todo!()
     }
 }
