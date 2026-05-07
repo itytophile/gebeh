@@ -1,10 +1,10 @@
-use crate::{addresses::*, mbc::Mbc, ppu::Vram, wram::Wram};
+use crate::{Ram, addresses::*, mbc::Mbc, ppu::Vram};
 
 pub fn external_bus_read(
     index: u16,
     mbc: &(impl Mbc + ?Sized),
     vram: Option<&Vram>,
-    wram: &impl Wram,
+    wram: &impl Ram,
 ) -> u8 {
     match index {
         0..VIDEO_RAM => mbc.read(index),

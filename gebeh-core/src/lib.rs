@@ -10,7 +10,7 @@ use crate::{
     ppu::Ppu,
     serial::Serial,
     timer::Timer,
-    wram::{DmgWram, Wram},
+    wram::DmgWram,
 };
 
 pub mod addresses;
@@ -25,7 +25,12 @@ pub mod serial;
 pub mod timer;
 pub mod wram;
 
-pub struct Peripherals<'a, M: Mbc + ?Sized, W: Wram> {
+pub trait Ram: Default {
+    fn read(&self, address: u16) -> u8;
+    fn write(&mut self, address: u16, value: u8);
+}
+
+pub struct Peripherals<'a, M: Mbc + ?Sized, W: Ram> {
     pub mbc: &'a mut M,
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
@@ -36,7 +41,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized, W: Wram> {
     pub interrupts: &'a mut Interrupts,
 }
 
-impl<M: Mbc + ?Sized, W: Wram> Peripherals<'_, M, W> {
+impl<M: Mbc + ?Sized, W: Ram> Peripherals<'_, M, W> {
     pub fn get_ref(&self) -> PeripheralsRef<'_, M, W> {
         PeripheralsRef {
             mbc: self.mbc,
@@ -51,7 +56,7 @@ impl<M: Mbc + ?Sized, W: Wram> Peripherals<'_, M, W> {
     }
 }
 
-pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Wram> {
+pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Ram> {
     pub mbc: &'a M,
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,

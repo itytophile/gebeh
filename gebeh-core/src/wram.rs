@@ -1,4 +1,4 @@
-use crate::addresses::*;
+use crate::{Ram, addresses::*};
 
 #[derive(Clone)]
 pub struct DmgWram([u8; (ECHO_RAM - WORK_RAM) as usize]);
@@ -9,12 +9,7 @@ impl Default for DmgWram {
     }
 }
 
-pub trait Wram: Default {
-    fn read(&self, address: u16) -> u8;
-    fn write(&mut self, address: u16, value: u8);
-}
-
-impl Wram for DmgWram {
+impl Ram for DmgWram {
     fn read(&self, address: u16) -> u8 {
         self.0[usize::from(address)]
     }
@@ -50,7 +45,7 @@ impl CgbWram {
     }
 }
 
-impl Wram for CgbWram {
+impl Ram for CgbWram {
     fn read(&self, address: u16) -> u8 {
         self.data[self.get_address(address)]
     }

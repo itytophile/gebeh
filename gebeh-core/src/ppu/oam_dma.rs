@@ -1,7 +1,7 @@
 use core::ops::Range;
 
 use crate::{
-    Wram,
+    Ram,
     addresses::{NOT_USABLE, OAM},
     external_bus::external_bus_read,
     mbc::Mbc,
@@ -37,7 +37,7 @@ impl Default for OamDma {
 pub const BLOCKED_OAM: Oam = [0xff; _];
 
 impl OamDma {
-    pub fn execute<M: Mbc + ?Sized, W: Wram>(
+    pub fn execute<M: Mbc + ?Sized, W: Ram>(
         &mut self,
         mbc: &M,
         vram: Option<&Vram>,
