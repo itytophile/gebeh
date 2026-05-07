@@ -1,8 +1,8 @@
 use crate::{addresses::*, mbc::Mbc, ppu::Vram, wram::Wram};
 
-pub fn external_bus_read<M: Mbc + ?Sized>(
+pub fn external_bus_read(
     index: u16,
-    mbc: &M,
+    mbc: &(impl Mbc + ?Sized),
     vram: Option<&Vram>,
     wram: &impl Wram,
 ) -> u8 {
