@@ -1,5 +1,6 @@
 use crate::addresses::*;
 
+#[derive(Clone)]
 pub struct DmgWram([u8; (ECHO_RAM - WORK_RAM) as usize]);
 
 impl Default for DmgWram {
@@ -8,18 +9,18 @@ impl Default for DmgWram {
     }
 }
 
-pub trait Wram {
+pub trait Wram: Default {
     fn read(&self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
 }
 
 impl Wram for DmgWram {
     fn read(&self, address: u16) -> u8 {
-        self.0[usize::from(address - WORK_RAM)]
+        self.0[usize::from(address)]
     }
 
     fn write(&mut self, address: u16, value: u8) {
-        self.0[usize::from(address - WORK_RAM)] = value;
+        self.0[usize::from(address)] = value;
     }
 }
 
@@ -45,7 +46,7 @@ impl CgbWram {
         self.bank = bank & 0x07;
     }
     fn get_address(&self, address: u16) -> usize {
-        usize::from(self.bank.max(1)) * 0x1000 + usize::from(address - WORK_RAM)
+        usize::from(self.bank.max(1)) * 0x1000 + usize::from(address)
     }
 }
 

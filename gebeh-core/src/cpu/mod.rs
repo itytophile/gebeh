@@ -4,7 +4,7 @@ pub mod instructions;
 
 use crate::{
     Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
-    interrupts::Interrupts, mbc::Mbc,
+    interrupts::Interrupts, mbc::Mbc, wram::DmgWram,
 };
 use arrayvec::ArrayVec;
 use instructions::{
@@ -174,7 +174,12 @@ impl Cpu {
 }
 
 impl Cpu {
-    fn read<M: Mbc + ?Sized>(&self, index: u16, peripherals: PeripheralsRef<M>, cycles: u64) -> u8 {
+    fn read<M: Mbc + ?Sized>(
+        &self,
+        index: u16,
+        peripherals: PeripheralsRef<M, DmgWram>,
+        cycles: u64,
+    ) -> u8 {
         match index {
             ..0x100 if !self.boot_rom_mapping_control => self.boot_rom[usize::from(index)],
             ..OAM => external_bus_read(
@@ -187,7 +192,11 @@ impl Cpu {
         }
     }
 
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mut peripherals: Peripherals<M>, cycle_count: u64) {
+    pub fn execute<M: Mbc + ?Sized>(
+        &mut self,
+        mut peripherals: Peripherals<M, DmgWram>,
+        cycle_count: u64,
+    ) {
         let interrupts_to_execute =
             Interrupts::from_bits_truncate(self.interrupt_enable.bits()) & *peripherals.interrupts;
         // Peripherals interrupts are not handled the same cycle they are triggered.

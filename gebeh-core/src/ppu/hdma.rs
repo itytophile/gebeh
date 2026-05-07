@@ -1,6 +1,6 @@
 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=double#lcd-vram-dma-transfers
 
-use crate::{Wram, external_bus::external_bus_read, mbc::Mbc, ppu::Vram};
+use crate::{external_bus::external_bus_read, mbc::Mbc, ppu::Vram, wram::CgbWram};
 
 #[derive(Clone)]
 struct CopyCursor {
@@ -83,7 +83,7 @@ impl Hdma {
 
     // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
     // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
-    pub fn execute<M: Mbc + ?Sized>(&mut self, vram: &mut Vram, mbc: &M, wram: &Wram) {
+    pub fn execute<M: Mbc + ?Sized>(&mut self, vram: &mut Vram, mbc: &M, wram: &CgbWram) {
         let (HdmaState::GeneralPurpose(cursor) | HdmaState::HBlank(cursor)) = &mut self.state
         else {
             return;

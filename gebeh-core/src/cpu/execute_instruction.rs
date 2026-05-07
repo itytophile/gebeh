@@ -3,6 +3,7 @@ use super::instructions::{
     ReadInstruction, Register16Bit, SetPc, vec,
 };
 use crate::cpu::{Cpu, Flags};
+use crate::wram::DmgWram;
 use crate::{Peripherals, interrupts::Interrupts, mbc::Mbc};
 
 fn is_half_carry(a: u8, b: u8, result: u8) -> bool {
@@ -133,7 +134,7 @@ impl Cpu {
         inst: AfterReadInstruction,
         interrupts_to_execute: Interrupts,
         cycle_count: u64,
-        peripherals: &mut Peripherals<M>,
+        peripherals: &mut Peripherals<M, DmgWram>,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;

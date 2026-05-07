@@ -10,6 +10,7 @@ use crate::{
     ppu::Ppu,
     serial::Serial,
     timer::Timer,
+    wram::{DmgWram, Wram},
 };
 
 pub mod addresses;
@@ -24,19 +25,19 @@ pub mod serial;
 pub mod timer;
 pub mod wram;
 
-pub struct Peripherals<'a, M: Mbc + ?Sized> {
+pub struct Peripherals<'a, M: Mbc + ?Sized, W: Wram> {
     pub mbc: &'a mut M,
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
     pub serial: &'a mut Serial,
-    pub wram: &'a mut Wram,
+    pub wram: &'a mut W,
     pub interrupts: &'a mut Interrupts,
 }
 
-impl<M: Mbc + ?Sized> Peripherals<'_, M> {
-    pub fn get_ref(&self) -> PeripheralsRef<'_, M> {
+impl<M: Mbc + ?Sized, W: Wram> Peripherals<'_, M, W> {
+    pub fn get_ref(&self) -> PeripheralsRef<'_, M, W> {
         PeripheralsRef {
             mbc: self.mbc,
             timer: self.timer,
@@ -50,14 +51,14 @@ impl<M: Mbc + ?Sized> Peripherals<'_, M> {
     }
 }
 
-pub struct PeripheralsRef<'a, M: Mbc + ?Sized> {
+pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Wram> {
     pub mbc: &'a M,
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
     pub ppu: &'a Ppu,
     pub serial: &'a Serial,
-    pub wram: &'a Wram,
+    pub wram: &'a W,
     pub interrupts: Interrupts,
 }
 
@@ -66,11 +67,7 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-use crate::addresses::{ECHO_RAM, WORK_RAM};
-
-pub type Wram = [u8; (ECHO_RAM - WORK_RAM) as usize];
-
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Emulator {
     ppu: Ppu,
     cpu: Cpu,
@@ -79,24 +76,8 @@ pub struct Emulator {
     joypad: Joypad,
     apu: Apu,
     pub serial: Serial,
-    wram: Wram,
+    wram: DmgWram,
     cycles: u64,
-}
-
-impl Default for Emulator {
-    fn default() -> Self {
-        Self {
-            ppu: Default::default(),
-            cpu: Default::default(),
-            timer: Default::default(),
-            joypad: Default::default(),
-            apu: Default::default(),
-            serial: Default::default(),
-            wram: [0; _],
-            cycles: Default::default(),
-            interrupts: Default::default(),
-        }
-    }
 }
 
 impl Emulator {

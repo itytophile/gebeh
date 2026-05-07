@@ -1,13 +1,19 @@
 use crate::{
-    Peripherals, PeripheralsRef, addresses::*, cpu::Cpu, interrupts::Interrupts, mbc::Mbc,
-    ppu::LcdControl, serial::SerialControl,
+    Peripherals, PeripheralsRef,
+    addresses::*,
+    cpu::Cpu,
+    interrupts::Interrupts,
+    mbc::Mbc,
+    ppu::LcdControl,
+    serial::SerialControl,
+    wram::{DmgWram, Wram},
 };
 
 impl Cpu {
     pub fn internal_bus_read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<M>,
+        peripherals: PeripheralsRef<M, DmgWram>,
         cycles: u64,
     ) -> u8 {
         match index {
@@ -50,15 +56,15 @@ impl Cpu {
         &mut self,
         index: u16,
         value: u8,
-        peripherals: &mut Peripherals<M>,
+        peripherals: &mut Peripherals<M, DmgWram>,
         _: u64,
     ) {
         match index {
             0..VIDEO_RAM => peripherals.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => peripherals.ppu.write_vram(index - VIDEO_RAM, value),
             EXTERNAL_RAM..WORK_RAM => peripherals.mbc.write(index, value),
-            WORK_RAM..ECHO_RAM => peripherals.wram[usize::from(index - WORK_RAM)] = value,
-            ECHO_RAM..OAM => peripherals.wram[usize::from(index - ECHO_RAM)] = value,
+            WORK_RAM..ECHO_RAM => peripherals.wram.write(index - WORK_RAM, value),
+            ECHO_RAM..OAM => peripherals.wram.write(index - ECHO_RAM, value),
             OAM..NOT_USABLE => peripherals
                 .ppu
                 .write_oam(u8::try_from(index - OAM).unwrap(), value),

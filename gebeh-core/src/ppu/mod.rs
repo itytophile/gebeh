@@ -292,7 +292,7 @@ impl Ppu {
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
-    pub fn execute_dma<M: Mbc + ?Sized>(&mut self, mbc: &M, wram: &Wram, cycles: u64) {
+    pub fn execute_dma<M: Mbc + ?Sized, W: Wram>(&mut self, mbc: &M, wram: &W, cycles: u64) {
         self.oam_dma.execute(
             mbc,
             if self.get_ppu_mode() != LcdStatus::DRAWING {

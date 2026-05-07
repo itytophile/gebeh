@@ -37,7 +37,13 @@ impl Default for OamDma {
 pub const BLOCKED_OAM: Oam = [0xff; _];
 
 impl OamDma {
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &M, vram: Option<&Vram>, wram: &Wram, _: u64) {
+    pub fn execute<M: Mbc + ?Sized, W: Wram>(
+        &mut self,
+        mbc: &M,
+        vram: Option<&Vram>,
+        wram: &W,
+        _: u64,
+    ) {
         if let Some(address) = self.range.next() {
             self.is_active = true;
             self.oam[usize::from(address as u8)] = external_bus_read(address, mbc, vram, wram);
