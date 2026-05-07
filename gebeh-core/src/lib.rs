@@ -22,6 +22,7 @@ pub mod mbc;
 pub mod ppu;
 pub mod serial;
 pub mod timer;
+pub mod wram;
 
 pub struct Peripherals<'a, M: Mbc + ?Sized> {
     pub mbc: &'a mut M,
