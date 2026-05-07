@@ -35,6 +35,12 @@ pub struct CgbVram {
     data: [u8; VRAM_SIZE * 2],
 }
 
+impl CgbVram {
+    pub fn set_bank(&mut self, bank: u8) {
+        self.bank = bank & 0x01;
+    }
+}
+
 impl Default for CgbVram {
     fn default() -> Self {
         Self {
@@ -48,14 +54,14 @@ impl Deref for CgbVram {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        let base = usize::from(self.bank.max(1)) * VRAM_SIZE;
+        let base = usize::from(self.bank) * VRAM_SIZE;
         &self.data[base..base + VRAM_SIZE]
     }
 }
 
 impl DerefMut for CgbVram {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let base = usize::from(self.bank.max(1)) * VRAM_SIZE;
+        let base = usize::from(self.bank) * VRAM_SIZE;
         &mut self.data[base..base + VRAM_SIZE]
     }
 }
