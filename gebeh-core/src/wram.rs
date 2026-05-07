@@ -40,7 +40,7 @@ impl Default for CgbWram {
 
 impl CgbWram {
     pub fn read_bank(&self) -> u8 {
-        self.bank
+        self.bank | 0b11111000
     }
     pub fn set_bank(&mut self, bank: u8) {
         self.bank = bank & 0x07;
