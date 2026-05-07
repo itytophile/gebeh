@@ -1,13 +1,15 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+use core::ops::{Deref, DerefMut};
+
 use crate::{
     apu::Apu,
     cpu::Cpu,
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
-    ppu::Ppu,
+    ppu::{Ppu, vram::DmgVram},
     serial::Serial,
     timer::Timer,
     wram::DmgWram,
@@ -25,24 +27,21 @@ pub mod serial;
 pub mod timer;
 pub mod wram;
 
-pub trait Ram: Default {
-    fn read(&self, address: u16) -> u8;
-    fn write(&mut self, address: u16, value: u8);
-}
+pub trait Ram: Default + Clone + Deref<Target = [u8]> + DerefMut<Target = [u8]> {}
 
-pub struct Peripherals<'a, M: Mbc + ?Sized, W: Ram> {
+pub struct Peripherals<'a, M: Mbc + ?Sized, W: Ram, Vram: Ram> {
     pub mbc: &'a mut M,
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
-    pub ppu: &'a mut Ppu,
+    pub ppu: &'a mut Ppu<Vram>,
     pub serial: &'a mut Serial,
     pub wram: &'a mut W,
     pub interrupts: &'a mut Interrupts,
 }
 
-impl<M: Mbc + ?Sized, W: Ram> Peripherals<'_, M, W> {
-    pub fn get_ref(&self) -> PeripheralsRef<'_, M, W> {
+impl<M: Mbc + ?Sized, W: Ram, Vram: Ram> Peripherals<'_, M, W, Vram> {
+    pub fn get_ref(&self) -> PeripheralsRef<'_, M, W, Vram> {
         PeripheralsRef {
             mbc: self.mbc,
             timer: self.timer,
@@ -56,12 +55,12 @@ impl<M: Mbc + ?Sized, W: Ram> Peripherals<'_, M, W> {
     }
 }
 
-pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Ram> {
+pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Ram, Vram: Ram> {
     pub mbc: &'a M,
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
-    pub ppu: &'a Ppu,
+    pub ppu: &'a Ppu<Vram>,
     pub serial: &'a Serial,
     pub wram: &'a W,
     pub interrupts: Interrupts,
@@ -74,7 +73,7 @@ pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
 #[derive(Clone, Default)]
 pub struct Emulator {
-    ppu: Ppu,
+    ppu: Ppu<DmgVram>,
     cpu: Cpu,
     pub interrupts: Interrupts,
     timer: Timer,
@@ -90,7 +89,7 @@ impl Emulator {
         self.serial
             .will_emit_byte(self.timer.get_system_counter().wrapping_add(1))
     }
-    pub fn get_ppu(&self) -> &Ppu {
+    pub fn get_ppu(&self) -> &Ppu<DmgVram> {
         &self.ppu
     }
     pub fn get_cpu(&self) -> &Cpu {

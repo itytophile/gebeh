@@ -4,7 +4,9 @@ use gebeh::InstantRtc;
 use gebeh_core::{
     Emulator, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
-    ppu::{LcdControl, PpuStep, Vram, color::ColorIndex, get_bg_win_tile, get_line_from_tile},
+    ppu::{
+        LcdControl, PpuStep, color::ColorIndex, get_bg_win_tile, get_line_from_tile, vram::DmgVram,
+    },
 };
 use gebeh_front_helper::get_mbc;
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
@@ -362,7 +364,7 @@ fn drive_emulator(
     }
 }
 
-fn draw_tiles_debug(vram: &Vram, pixels: &mut [[u8; 4]]) {
+fn draw_tiles_debug(vram: &DmgVram, pixels: &mut [[u8; 4]]) {
     let (tiles, _) = vram[..0x1800].as_chunks::<16>();
     for (index, tile) in tiles.iter().enumerate() {
         // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable

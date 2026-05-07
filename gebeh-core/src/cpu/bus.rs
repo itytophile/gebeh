@@ -1,13 +1,19 @@
 use crate::{
-    Peripherals, PeripheralsRef, Ram, addresses::*, cpu::Cpu, interrupts::Interrupts, mbc::Mbc,
-    ppu::LcdControl, serial::SerialControl, wram::DmgWram,
+    Peripherals, PeripheralsRef,
+    addresses::*,
+    cpu::Cpu,
+    interrupts::Interrupts,
+    mbc::Mbc,
+    ppu::{LcdControl, vram::DmgVram},
+    serial::SerialControl,
+    wram::DmgWram,
 };
 
 impl Cpu {
     pub fn internal_bus_read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<M, DmgWram>,
+        peripherals: PeripheralsRef<M, DmgWram, DmgVram>,
         cycles: u64,
     ) -> u8 {
         match index {
@@ -50,7 +56,7 @@ impl Cpu {
         &mut self,
         index: u16,
         value: u8,
-        peripherals: &mut Peripherals<M, DmgWram>,
+        peripherals: &mut Peripherals<M, DmgWram, DmgVram>,
         _: u64,
     ) {
         match index {

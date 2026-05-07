@@ -1,6 +1,7 @@
 use arrayvec::ArrayVec;
 
 use crate::{
+    Ram,
     addresses::VIDEO_RAM,
     ppu::{
         LcdControl, ObjectAttribute, ObjectFlags, PpuState, TILE_LENGTH, Tile, TileVramObj,
@@ -30,7 +31,7 @@ impl SpriteFetcher {
         cursor: i16,
         rendering_state: &mut RenderingState,
         objects: &mut ArrayVec<ObjectAttribute, 10>,
-        ppu_state: &PpuState,
+        ppu_state: &PpuState<impl Ram>,
         ly: u8,
     ) {
         use SpriteFetcher::*;
@@ -107,7 +108,7 @@ impl SpriteFetcher {
 }
 
 #[must_use]
-fn get_object_tile_line(obj: &ObjectAttribute, ppu_state: &PpuState, ly: u8) -> [u8; 2] {
+fn get_object_tile_line(obj: &ObjectAttribute, ppu_state: &PpuState<impl Ram>, ly: u8) -> [u8; 2] {
     let is_big = ppu_state.lcd_control.contains(LcdControl::OBJ_SIZE);
     let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })

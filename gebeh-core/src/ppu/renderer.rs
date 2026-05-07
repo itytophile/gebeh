@@ -19,12 +19,15 @@
 
 use arrayvec::ArrayVec;
 
-use crate::ppu::{
-    LcdControl, ObjectAttribute, PpuState, Scrolling,
-    background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
-    fifos::Fifos,
-    scanline::ScanlineBuilder,
-    sprite_fetcher::SpriteFetcher,
+use crate::{
+    Ram,
+    ppu::{
+        LcdControl, ObjectAttribute, PpuState, Scrolling,
+        background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
+        fifos::Fifos,
+        scanline::ScanlineBuilder,
+        sprite_fetcher::SpriteFetcher,
+    },
 };
 
 #[derive(Clone)]
@@ -81,7 +84,7 @@ impl Renderer {
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState,
+        ppu_state: &PpuState<impl Ram>,
         ly: u8,
         _: u64,
     ) {
@@ -226,7 +229,9 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, ObjectAttribute, ObjectFlags, PpuState, renderer::Renderer},
+        ppu::{
+            LcdControl, ObjectAttribute, ObjectFlags, PpuState, renderer::Renderer, vram::DmgVram,
+        },
     };
 
     // all timings are +2 compared to pandocs timings
@@ -235,7 +240,7 @@ mod tests {
     fn get_timing(
         mut window_y: Option<u8>,
         objects: ArrayVec<ObjectAttribute, 10>,
-        ppu_state: &PpuState,
+        ppu_state: &PpuState<DmgVram>,
         ly: u8,
     ) -> u16 {
         let mut renderer = Renderer::new(objects);

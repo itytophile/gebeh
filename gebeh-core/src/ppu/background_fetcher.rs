@@ -1,4 +1,5 @@
 use crate::{
+    Ram,
     addresses::VIDEO_RAM,
     ppu::{Scrolling, TILE_LENGTH, Tile, TileVram, renderer::RenderingState},
 };
@@ -38,7 +39,7 @@ impl BackgroundFetcher {
     pub fn execute(
         &mut self,
         rendering_state: &mut RenderingState,
-        vram: &[u8; 0x2000],
+        vram: &impl Ram,
         tile_map_address: u16,
         scrolling: Scrolling,
         y: u8,

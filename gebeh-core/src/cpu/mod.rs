@@ -4,7 +4,7 @@ pub mod instructions;
 
 use crate::{
     Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
-    interrupts::Interrupts, mbc::Mbc, wram::DmgWram,
+    interrupts::Interrupts, mbc::Mbc, ppu::vram::DmgVram, wram::DmgWram,
 };
 use arrayvec::ArrayVec;
 use instructions::{
@@ -177,7 +177,7 @@ impl Cpu {
     fn read<M: Mbc + ?Sized>(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<M, DmgWram>,
+        peripherals: PeripheralsRef<M, DmgWram, DmgVram>,
         cycles: u64,
     ) -> u8 {
         match index {
@@ -194,7 +194,7 @@ impl Cpu {
 
     pub fn execute<M: Mbc + ?Sized>(
         &mut self,
-        mut peripherals: Peripherals<M, DmgWram>,
+        mut peripherals: Peripherals<M, DmgWram, DmgVram>,
         cycle_count: u64,
     ) {
         let interrupts_to_execute =

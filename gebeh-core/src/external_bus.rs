@@ -1,9 +1,9 @@
-use crate::{Ram, addresses::*, mbc::Mbc, ppu::Vram};
+use crate::{Ram, addresses::*, mbc::Mbc};
 
 pub fn external_bus_read(
     index: u16,
     mbc: &(impl Mbc + ?Sized),
-    vram: Option<&Vram>,
+    vram: Option<&impl Ram>,
     wram: &impl Ram,
 ) -> u8 {
     match index {

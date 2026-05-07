@@ -1,6 +1,6 @@
 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=double#lcd-vram-dma-transfers
 
-use crate::{external_bus::external_bus_read, mbc::Mbc, ppu::Vram, wram::CgbWram};
+use crate::{external_bus::external_bus_read, mbc::Mbc, ppu::vram::CgbVram, wram::CgbWram};
 
 #[derive(Clone)]
 struct CopyCursor {
@@ -83,14 +83,19 @@ impl Hdma {
 
     // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
     // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
-    pub fn execute<M: Mbc + ?Sized>(&mut self, vram: &mut Vram, mbc: &M, wram: &CgbWram) {
+    pub fn execute(&mut self, vram: &mut CgbVram, mbc: &(impl Mbc + ?Sized), wram: &CgbWram) {
         let (HdmaState::GeneralPurpose(cursor) | HdmaState::HBlank(cursor)) = &mut self.state
         else {
             return;
         };
-        vram[usize::from(cursor.dst)] = external_bus_read(cursor.src, mbc, None, wram);
-        vram[usize::from(cursor.dst.wrapping_add(1))] =
-            external_bus_read(cursor.src.wrapping_add(1), mbc, None, wram);
+        vram[usize::from(cursor.dst)] =
+            external_bus_read(cursor.src, mbc, Option::<&CgbVram>::None, wram);
+        vram[usize::from(cursor.dst.wrapping_add(1))] = external_bus_read(
+            cursor.src.wrapping_add(1),
+            mbc,
+            Option::<&CgbVram>::None,
+            wram,
+        );
         cursor.src = cursor.src.wrapping_add(2);
         cursor.dst = cursor.dst.wrapping_add(2);
         self.length = self.length.wrapping_sub(1);

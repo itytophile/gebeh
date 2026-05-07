@@ -1,7 +1,11 @@
-use crate::{Ram, addresses::*};
+use core::ops::{Deref, DerefMut};
+
+use crate::Ram;
+
+const WRAM_BANK_SIZE: u16 = 0x1000;
 
 #[derive(Clone)]
-pub struct DmgWram([u8; (ECHO_RAM - WORK_RAM) as usize]);
+pub struct DmgWram([u8; WRAM_BANK_SIZE as usize * 2]);
 
 impl Default for DmgWram {
     fn default() -> Self {
@@ -9,19 +13,26 @@ impl Default for DmgWram {
     }
 }
 
-impl Ram for DmgWram {
-    fn read(&self, address: u16) -> u8 {
-        self.0[usize::from(address)]
-    }
+impl Deref for DmgWram {
+    type Target = [u8];
 
-    fn write(&mut self, address: u16, value: u8) {
-        self.0[usize::from(address)] = value;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
+impl DerefMut for DmgWram {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Ram for DmgWram {}
+
+#[derive(Clone)]
 pub struct CgbWram {
     bank: u8,
-    data: [u8; (ECHO_RAM - WORK_RAM) as usize / 2 * 8],
+    data: [u8; WRAM_BANK_SIZE as usize * 8],
 }
 
 impl Default for CgbWram {
@@ -45,12 +56,20 @@ impl CgbWram {
     }
 }
 
-impl Ram for CgbWram {
-    fn read(&self, address: u16) -> u8 {
-        self.data[self.get_address(address)]
-    }
+impl Deref for CgbWram {
+    type Target = [u8];
 
-    fn write(&mut self, address: u16, value: u8) {
-        self.data[self.get_address(address)] = value;
+    fn deref(&self) -> &Self::Target {
+        let base = self.get_address(0);
+        &self.data[base..base + usize::from(WRAM_BANK_SIZE)]
     }
 }
+
+impl DerefMut for CgbWram {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let base = self.get_address(0);
+        &mut self.data[base..base + usize::from(WRAM_BANK_SIZE)]
+    }
+}
+
+impl Ram for CgbWram {}

@@ -6,12 +6,12 @@ mod oam_dma;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
+pub mod vram;
 
 use arrayvec::ArrayVec;
 
 use crate::{
     Ram, WIDTH,
-    addresses::{EXTERNAL_RAM, VIDEO_RAM},
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
@@ -74,10 +74,10 @@ pub enum PpuStep {
 }
 
 #[derive(Clone, Default)]
-pub struct Ppu {
+pub struct Ppu<Vram: Ram> {
     pub step: PpuStep,
     stat_irq: bool,
-    state: PpuState,
+    state: PpuState<Vram>,
     previous_lyc: u8,
     // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
@@ -86,8 +86,8 @@ pub struct Ppu {
     oam_dma: OamDma,
 }
 
-#[derive(Clone)]
-struct PpuState {
+#[derive(Clone, Default)]
+struct PpuState<Vram: Ram> {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -99,34 +99,13 @@ struct PpuState {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
-    video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+    video_ram: Vram,
     obp0: u8,
     obp1: u8,
     wy: u8,
 }
 
-impl Default for PpuState {
-    fn default() -> Self {
-        Self {
-            lcd_control: Default::default(),
-            bgp: Default::default(),
-            old_bgp: Default::default(),
-            old_lcd_control: Default::default(),
-            old_old_lcd_control: Default::default(),
-            scy: Default::default(),
-            scx: Default::default(),
-            wx: Default::default(),
-            old_wx: Default::default(),
-            old_old_wx: Default::default(),
-            video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-            obp0: 0,
-            obp1: 0,
-            wy: 0,
-        }
-    }
-}
-
-impl PpuState {
+impl<Vram: Ram> PpuState<Vram> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }
@@ -248,8 +227,6 @@ impl From<[u8; 4]> for ObjectAttribute {
     }
 }
 
-pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
-
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
 // D'après "The cycle accurate gameboy docs":
@@ -288,7 +265,7 @@ pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
 // De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl Ppu {
+impl<Vram: Ram> Ppu<Vram> {
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
@@ -682,14 +659,14 @@ impl Ppu {
 mod tests {
     use crate::{
         interrupts::Interrupts,
-        ppu::{LcdControl, Ppu, PpuStep},
+        ppu::{LcdControl, Ppu, PpuStep, vram::DmgVram},
     };
 
     extern crate std;
 
     #[test]
     fn line_duration() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<DmgVram>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -710,7 +687,7 @@ mod tests {
 
     #[test]
     fn frame_duration() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<DmgVram>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -744,7 +721,7 @@ mod tests {
 
     #[test]
     fn all_ly() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<DmgVram>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
