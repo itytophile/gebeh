@@ -20,7 +20,7 @@
 use arrayvec::ArrayVec;
 
 use crate::ppu::{
-    LcdControl, ObjectAttribute, PpuState, Scrolling,
+    LcdControl, PpuState, Scrolling, Sprite,
     background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
     fifos::Fifos,
     scanline::ScanlineBuilder,
@@ -41,13 +41,13 @@ pub struct Renderer {
     background_pixel_fetcher: BackgroundFetcher,
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
-    pub objects: ArrayVec<ObjectAttribute, 10>,
+    pub objects: ArrayVec<Sprite, 10>,
     pub scanline: ScanlineBuilder,
     step: RendererStep,
 }
 
 impl Renderer {
-    pub fn new(objects: ArrayVec<ObjectAttribute, 10>) -> Self {
+    pub fn new(objects: ArrayVec<Sprite, 10>) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
@@ -226,7 +226,7 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, ObjectAttribute, ObjectFlags, PpuState, renderer::Renderer},
+        ppu::{LcdControl, PpuState, Sprite, renderer::Renderer, sprite::ObjectFlags},
     };
 
     // all timings are +2 compared to pandocs timings
@@ -234,7 +234,7 @@ mod tests {
 
     fn get_timing(
         mut window_y: Option<u8>,
-        objects: ArrayVec<ObjectAttribute, 10>,
+        objects: ArrayVec<Sprite, 10>,
         ppu_state: &PpuState,
         ly: u8,
     ) -> u16 {
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn with_objects() {
-        let objects = ArrayVec::from_iter([ObjectAttribute {
+        let objects = ArrayVec::from_iter([Sprite {
             flags: ObjectFlags::empty(),
             tile_index: 0,
             x: 0,

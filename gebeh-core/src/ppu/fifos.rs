@@ -1,8 +1,6 @@
-use arrayvec::ArrayVec;
-
 use crate::ppu::{
     color::{ColorIndex, DmgColor},
-    color_palettes::{self, ColorPalettes},
+    color_palettes::ColorPalettes,
 };
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/

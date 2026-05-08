@@ -6,6 +6,7 @@ mod hdma;
 mod oam_dma;
 mod renderer;
 mod scanline;
+pub mod sprite;
 mod sprite_fetcher;
 pub mod vram;
 
@@ -18,6 +19,7 @@ use crate::{
     ppu::{
         oam_dma::{BLOCKED_OAM, Oam, OamDma},
         renderer::Renderer,
+        sprite::Sprite,
         vram::DmgVram,
     },
 };
@@ -199,35 +201,6 @@ const TILE_LENGTH: u8 = 16;
 type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
-
-bitflags::bitflags! {
-    #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
-    pub struct ObjectFlags: u8 {
-        const PRIORITY = 1 << 7;
-        const Y_FLIP = 1 << 6;
-        const X_FLIP = 1 << 5;
-        const DMG_PALETTE = 1 << 4;
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct ObjectAttribute {
-    y: u8,
-    x: u8,
-    tile_index: u8,
-    flags: ObjectFlags,
-}
-
-impl From<[u8; 4]> for ObjectAttribute {
-    fn from([y, x, tile_index, flags]: [u8; 4]) -> Self {
-        Self {
-            y,
-            x,
-            tile_index,
-            flags: ObjectFlags::from_bits_retain(flags),
-        }
-    }
-}
 
 // TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
 
@@ -474,7 +447,7 @@ impl Ppu {
                     .0
                     .iter()
                     .copied()
-                    .map(ObjectAttribute::from)
+                    .map(Sprite::from)
                     .filter(|obj| {
                         let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
                         obj.y <= *ly + 16 && *ly + 16 < (obj.y + if is_big { 16 } else { 8 })

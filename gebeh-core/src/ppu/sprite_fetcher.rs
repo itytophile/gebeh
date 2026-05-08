@@ -3,8 +3,8 @@ use arrayvec::ArrayVec;
 use crate::{
     addresses::VIDEO_RAM,
     ppu::{
-        LcdControl, ObjectAttribute, ObjectFlags, PpuState, TILE_LENGTH, Tile, TileVramObj,
-        renderer::RenderingState,
+        LcdControl, PpuState, Sprite, TILE_LENGTH, Tile, TileVramObj, renderer::RenderingState,
+        sprite::ObjectFlags,
     },
 };
 
@@ -29,7 +29,7 @@ impl SpriteFetcher {
         // it can be negative if there is some scrolling
         cursor: i16,
         rendering_state: &mut RenderingState,
-        objects: &mut ArrayVec<ObjectAttribute, 10>,
+        objects: &mut ArrayVec<Sprite, 10>,
         ppu_state: &PpuState,
         ly: u8,
     ) {
@@ -107,7 +107,7 @@ impl SpriteFetcher {
 }
 
 #[must_use]
-fn get_object_tile_line(obj: &ObjectAttribute, ppu_state: &PpuState, ly: u8) -> [u8; 2] {
+fn get_object_tile_line(obj: &Sprite, ppu_state: &PpuState, ly: u8) -> [u8; 2] {
     let is_big = ppu_state.lcd_control.contains(LcdControl::OBJ_SIZE);
     let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
