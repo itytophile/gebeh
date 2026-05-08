@@ -227,7 +227,7 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, PpuState, Sprite, renderer::Renderer, sprite::ObjectFlags},
+        ppu::{LcdControl, PpuState, Sprite, TileAttributes, renderer::Renderer},
     };
 
     // all timings are +2 compared to pandocs timings
@@ -302,7 +302,7 @@ mod tests {
     #[test]
     fn with_objects() {
         let objects = ArrayVec::from_iter([Sprite {
-            flags: ObjectFlags::empty(),
+            flags: TileAttributes::empty(),
             tile_index: 0,
             x: 0,
             y: 0,

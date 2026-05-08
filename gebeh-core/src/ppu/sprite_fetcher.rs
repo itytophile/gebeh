@@ -3,8 +3,8 @@ use arrayvec::ArrayVec;
 use crate::{
     addresses::VIDEO_RAM,
     ppu::{
-        LcdControl, Sprite, TILE_LENGTH, Tile, TileVramObj, renderer::RenderingState,
-        sprite::ObjectFlags, vram::VRAM_BANK_SIZE,
+        LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj,
+        renderer::RenderingState, vram::VRAM_BANK_SIZE,
     },
 };
 
@@ -39,13 +39,13 @@ impl SpriteFetcher {
         if let Ready(tile) = *self {
             let obj = objects.pop().unwrap();
             rendering_state.fifos.load_sprite(
-                if obj.flags.contains(ObjectFlags::X_FLIP) {
+                if obj.flags.contains(TileAttributes::X_FLIP) {
                     [tile[0].reverse_bits(), tile[1].reverse_bits()]
                 } else {
                     tile
                 },
-                obj.flags.contains(ObjectFlags::PRIORITY),
-                obj.flags.contains(ObjectFlags::DMG_PALETTE),
+                obj.flags.contains(TileAttributes::PRIORITY),
+                obj.flags.contains(TileAttributes::DMG_PALETTE),
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };
@@ -118,7 +118,7 @@ fn get_object_tile_line(
     ly: u8,
 ) -> [u8; 2] {
     let is_big = lcd_control.contains(LcdControl::OBJ_SIZE);
-    let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
+    let y_flip = obj.flags.contains(TileAttributes::Y_FLIP);
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
         + (is_big && (ly + 8 >= obj.y) != y_flip) as u8;
     let tile = get_object_tile(

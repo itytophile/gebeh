@@ -46,6 +46,23 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
+    pub struct TileAttributes: u8 {
+        const PRIORITY = 1 << 7;
+        const Y_FLIP = 1 << 6;
+        const X_FLIP = 1 << 5;
+        const DMG_PALETTE = 1 << 4;
+        const CGB_BANK = 1 << 3;
+    }
+}
+
+impl TileAttributes {
+    pub fn get_cgb_palette_index(&self) -> u8 {
+        self.bits() & 0x07
+    }
+}
+
 #[derive(Clone)]
 pub enum PpuStep {
     // only used on line 0 when the lcd has just turned on
