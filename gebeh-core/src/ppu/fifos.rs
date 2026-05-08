@@ -1,6 +1,9 @@
 use arrayvec::ArrayVec;
 
-use crate::ppu::color::{ColorIndex, DmgColor};
+use crate::ppu::{
+    color::{ColorIndex, DmgColor},
+    color_palettes::{self, ColorPalettes},
+};
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
 #[derive(Default, Clone)]
@@ -127,12 +130,12 @@ pub struct CgbFifos {
 
 impl CgbFifos {
     pub fn shift(&mut self) {
-        self.bg0 <<= 1;
-        self.bg1 <<= 1;
-        self.sp0 <<= 1;
-        self.sp1 <<= 1;
-        self.mask <<= 1;
-        self.sprite_palette <<= 1;
+        self.bg0 >>= 1;
+        self.bg1 >>= 1;
+        self.sp0 >>= 1;
+        self.sp1 >>= 1;
+        self.mask >>= 1;
+        self.sprite_palette >>= 3;
 
         self.background_pixels_count -= 1;
         self.shifted_count = self.shifted_count.wrapping_add(1);
@@ -143,14 +146,14 @@ impl CgbFifos {
 
         for index in 0..8 {
             if mask & (1 << index) != 0 {
-                scaled |= 0x700 << (index * 3);
+                scaled |= 0x07 << (index * 3);
             }
         }
 
         scaled
     }
 
-    pub fn load_sprite(&mut self, tile: [u8; 2], priority: bool, palette: bool) {
+    pub fn load_sprite(&mut self, tile: [u8; 2], priority: bool, palette: u8) {
         let existing_sprite_mask = self.sp0 | self.sp1;
         // we must keep the existing sprite so we unset the bits already present from the new mask
         let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
@@ -159,12 +162,15 @@ impl CgbFifos {
         } else {
             self.mask &= !new_sprite_mask;
         }
-        let scaled = Self::scale_mask_by_3(new_sprite_mask);
-        if palette {
-            self.sprite_palette |= scaled;
-        } else {
-            self.sprite_palette &= !scaled;
+
+        for index in 0..8 {
+            if new_sprite_mask & (1 << index) != 0 {
+                let shift = index * 3;
+                self.sprite_palette =
+                    self.sprite_palette & !(0x07 << shift) | u32::from(palette) << shift;
+            }
         }
+
         self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
         self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
     }
@@ -177,32 +183,32 @@ impl CgbFifos {
 
     pub fn render_pixel(
         &self,
-        bgp: u8,
         is_background_enabled: bool,
         is_obj_enabled: bool,
+        color_palettes: &ColorPalettes,
     ) -> u16 {
         let bg_color_index = if is_background_enabled {
-            ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0)
+            ColorIndex::new(self.bg0 & 1 != 0, self.bg1 & 1 != 0)
         } else {
             ColorIndex::Zero
         };
         let sp_color_index = if is_obj_enabled {
-            ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0)
+            ColorIndex::new(self.sp0 & 1 != 0, self.sp1 & 1 != 0)
         } else {
             ColorIndex::Zero
         };
 
         if sp_color_index == ColorIndex::Zero
-            || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero)
+            || (self.mask & 1 != 0 && bg_color_index != ColorIndex::Zero)
         {
-            return bg_color_index.get_color(bgp);
+            return color_palettes
+                .background
+                .get_color(u8::try_from(self.background_palette & 0x07).unwrap());
         }
 
-        sp_color_index.get_color(if self.sprite_palette & 0x80 != 0 {
-            obp1
-        } else {
-            obp0
-        })
+        color_palettes
+            .objects
+            .get_color(u8::try_from(self.sprite_palette & 0x07).unwrap())
     }
 
     pub fn is_background_empty(&self) -> bool {
@@ -215,11 +221,5 @@ impl CgbFifos {
 
     pub fn get_shifted_count(&self) -> u8 {
         self.shifted_count
-    }
-
-    pub fn insert_window_reactivation_pixel(&mut self) {
-        self.bg0 >>= 1;
-        self.bg1 >>= 1;
-        self.background_pixels_count = 8.min(self.background_pixels_count + 1);
     }
 }
