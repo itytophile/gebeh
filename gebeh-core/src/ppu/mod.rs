@@ -18,6 +18,7 @@ use crate::{
     ppu::{
         oam_dma::{BLOCKED_OAM, Oam, OamDma},
         renderer::Renderer,
+        vram::DmgVram,
     },
 };
 
@@ -75,10 +76,10 @@ pub enum PpuStep {
 }
 
 #[derive(Clone, Default)]
-pub struct Ppu<Vram: Ram> {
+pub struct Ppu {
     pub step: PpuStep,
     stat_irq: bool,
-    state: PpuState<Vram>,
+    state: PpuState,
     previous_lyc: u8,
     // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
@@ -88,7 +89,7 @@ pub struct Ppu<Vram: Ram> {
 }
 
 #[derive(Clone, Default)]
-struct PpuState<Vram: Ram> {
+struct PpuState {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -100,13 +101,13 @@ struct PpuState<Vram: Ram> {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
-    video_ram: Vram,
+    video_ram: DmgVram,
     obp0: u8,
     obp1: u8,
     wy: u8,
 }
 
-impl<Vram: Ram> PpuState<Vram> {
+impl PpuState {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }
@@ -266,7 +267,7 @@ impl From<[u8; 4]> for ObjectAttribute {
 // De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl<Vram: Ram> Ppu<Vram> {
+impl Ppu {
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
@@ -300,7 +301,7 @@ impl<Vram: Ram> Ppu<Vram> {
         }
         self.oam_dma.write_oam(index, value);
     }
-    pub fn get_vram_if_available(&self) -> Option<&Vram> {
+    pub fn get_vram_if_available(&self) -> Option<&DmgVram> {
         if self.get_ppu_mode() == LcdStatus::DRAWING {
             None
         } else {
@@ -325,7 +326,7 @@ impl<Vram: Ram> Ppu<Vram> {
     pub fn set_obp1(&mut self, value: u8) {
         self.state.obp1 = value
     }
-    pub fn get_vram(&self) -> &Vram {
+    pub fn get_vram(&self) -> &DmgVram {
         &self.state.video_ram
     }
 
@@ -660,14 +661,14 @@ impl<Vram: Ram> Ppu<Vram> {
 mod tests {
     use crate::{
         interrupts::Interrupts,
-        ppu::{LcdControl, Ppu, PpuStep, vram::DmgVram},
+        ppu::{LcdControl, Ppu, PpuStep},
     };
 
     extern crate std;
 
     #[test]
     fn line_duration() {
-        let mut ppu = Ppu::<DmgVram>::default();
+        let mut ppu = Ppu::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -688,7 +689,7 @@ mod tests {
 
     #[test]
     fn frame_duration() {
-        let mut ppu = Ppu::<DmgVram>::default();
+        let mut ppu = Ppu::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -722,7 +723,7 @@ mod tests {
 
     #[test]
     fn all_ly() {
-        let mut ppu = Ppu::<DmgVram>::default();
+        let mut ppu = Ppu::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
