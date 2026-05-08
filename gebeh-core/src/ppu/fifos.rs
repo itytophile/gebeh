@@ -201,12 +201,14 @@ impl CgbFifos {
         {
             return color_palettes
                 .background
-                .get_color(self.current_background_palette);
+                .get_palette(self.current_background_palette)
+                [usize::from(u8::from(bg_color_index))];
         }
 
         color_palettes
             .objects
-            .get_color(u8::try_from(self.sprite_palette & 0x07).unwrap())
+            .get_palette(u8::try_from(self.sprite_palette & 0x07).unwrap())
+            [usize::from(u8::from(sp_color_index))]
     }
 
     pub fn is_background_empty(&self) -> bool {

@@ -6,6 +6,17 @@ pub enum ColorIndex {
     Three,
 }
 
+impl From<ColorIndex> for u8 {
+    fn from(value: ColorIndex) -> Self {
+        match value {
+            ColorIndex::Zero => 0,
+            ColorIndex::One => 1,
+            ColorIndex::Two => 2,
+            ColorIndex::Three => 3,
+        }
+    }
+}
+
 impl ColorIndex {
     pub fn new(least_significant_bit: bool, most_significant_bit: bool) -> Self {
         match (most_significant_bit, least_significant_bit) {

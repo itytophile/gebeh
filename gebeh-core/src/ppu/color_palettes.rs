@@ -46,13 +46,14 @@ impl InnerColorPalettes {
         }
     }
 
-    /// Returns rrrrrgggggbbbbbx
-    pub fn get_color(&self, index: u8) -> u16 {
-        let bit_index = usize::from(index) * 3 * COLOR_DEPTH;
-        let byte_index = bit_index / 8;
-        let bytes = &self.data[byte_index..];
-        let whole = u32::from_be_bytes([bytes[0], bytes[1], bytes.get(2).copied().unwrap_or(0), 0]);
-        (whole >> (16 - (bit_index % 8))) as u16
+    pub fn get_palette(&self, index: u8) -> [u16; 4] {
+        let bytes = self.data.as_chunks::<8>().0[usize::from(index)];
+        [
+            u16::from_be_bytes([bytes[0], bytes[1]]),
+            u16::from_be_bytes([bytes[2], bytes[3]]),
+            u16::from_be_bytes([bytes[4], bytes[5]]),
+            u16::from_be_bytes([bytes[6], bytes[7]]),
+        ]
     }
 }
 
