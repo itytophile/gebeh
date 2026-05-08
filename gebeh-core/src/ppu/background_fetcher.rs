@@ -3,7 +3,7 @@ use crate::{
     addresses::VIDEO_RAM,
     ppu::{
         Scrolling, TILE_LENGTH, Tile, TileAttributes, TileVram,
-        fifos::{CgbFifos, Fifos},
+        fifos::{CgbFifos, DmgFifos, Fifos},
         renderer::RenderingState,
         vram::VRAM_BANK_SIZE,
     },
@@ -44,7 +44,7 @@ impl BackgroundFetcher {
     pub fn execute(
         &mut self,
         rendering_state: &mut RenderingState,
-        fifos: &mut Fifos,
+        fifos: &mut DmgFifos,
         vram: &[u8; VRAM_BANK_SIZE],
         tile_map_address: u16,
         scrolling: Scrolling,

@@ -3,10 +3,8 @@ use arrayvec::ArrayVec;
 use crate::{
     addresses::VIDEO_RAM,
     ppu::{
-        LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj,
-        fifos::{self, Fifos},
-        renderer::RenderingState,
-        vram::VRAM_BANK_SIZE,
+        LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj, fifos::Fifos,
+        renderer::RenderingState, vram::VRAM_BANK_SIZE,
     },
 };
 
@@ -31,7 +29,7 @@ impl SpriteFetcher {
         // it can be negative if there is some scrolling
         cursor: i16,
         rendering_state: &mut RenderingState,
-        fifos: &mut Fifos,
+        fifos: &mut impl Fifos,
         objects: &mut ArrayVec<Sprite, 10>,
         lcd_control: LcdControl,
         vram_bank: &[u8; VRAM_BANK_SIZE],
@@ -47,8 +45,7 @@ impl SpriteFetcher {
                 } else {
                     tile
                 },
-                obj.flags.contains(TileAttributes::PRIORITY),
-                obj.flags.contains(TileAttributes::DMG_PALETTE),
+                obj.flags,
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };

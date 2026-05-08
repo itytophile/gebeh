@@ -1,11 +1,17 @@
 use crate::ppu::{
+    TileAttributes,
     color::{ColorIndex, DmgColor},
     color_palettes::ColorPalettes,
 };
 
+pub trait Fifos {
+    fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes);
+    fn is_background_empty(&self) -> bool;
+}
+
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
 #[derive(Default, Clone)]
-pub struct Fifos {
+pub struct DmgFifos {
     // for low background tile data
     bg0: u8,
     // for high background tile data
@@ -22,7 +28,7 @@ pub struct Fifos {
     shifted_count: u8,
 }
 
-impl Fifos {
+impl DmgFifos {
     pub fn shift(&mut self) {
         self.bg0 <<= 1;
         self.bg1 <<= 1;
@@ -33,24 +39,6 @@ impl Fifos {
 
         self.background_pixels_count -= 1;
         self.shifted_count = self.shifted_count.wrapping_add(1);
-    }
-
-    pub fn load_sprite(&mut self, tile: [u8; 2], priority: bool, palette: bool) {
-        let existing_sprite_mask = self.sp0 | self.sp1;
-        // we must keep the existing sprite so we unset the bits already present from the new mask
-        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
-        if priority {
-            self.mask |= new_sprite_mask;
-        } else {
-            self.mask &= !new_sprite_mask;
-        }
-        if palette {
-            self.palette |= new_sprite_mask;
-        } else {
-            self.palette &= !new_sprite_mask;
-        }
-        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
-        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
     }
 
     pub fn replace_background(&mut self, tile: [u8; 2]) {
@@ -87,10 +75,6 @@ impl Fifos {
         sp_color_index.get_color(if self.palette & 0x80 != 0 { obp1 } else { obp0 })
     }
 
-    pub fn is_background_empty(&self) -> bool {
-        self.background_pixels_count == 0
-    }
-
     pub fn reset_background(&mut self) {
         self.background_pixels_count = 0;
     }
@@ -103,6 +87,30 @@ impl Fifos {
         self.bg0 >>= 1;
         self.bg1 >>= 1;
         self.background_pixels_count = 8.min(self.background_pixels_count + 1);
+    }
+}
+
+impl Fifos for DmgFifos {
+    fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
+        let existing_sprite_mask = self.sp0 | self.sp1;
+        // we must keep the existing sprite so we unset the bits already present from the new mask
+        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
+        if attributes.contains(TileAttributes::PRIORITY) {
+            self.mask |= new_sprite_mask;
+        } else {
+            self.mask &= !new_sprite_mask;
+        }
+        if attributes.contains(TileAttributes::DMG_PALETTE) {
+            self.palette |= new_sprite_mask;
+        } else {
+            self.palette &= !new_sprite_mask;
+        }
+        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
+        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
+    }
+
+    fn is_background_empty(&self) -> bool {
+        self.background_pixels_count == 0
     }
 }
 
@@ -150,28 +158,6 @@ impl CgbFifos {
         scaled
     }
 
-    pub fn load_sprite(&mut self, tile: [u8; 2], priority: bool, palette: u8) {
-        let existing_sprite_mask = self.sp0 | self.sp1;
-        // we must keep the existing sprite so we unset the bits already present from the new mask
-        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
-        if priority {
-            self.mask |= new_sprite_mask;
-        } else {
-            self.mask &= !new_sprite_mask;
-        }
-
-        for index in 0..8 {
-            if new_sprite_mask & (1 << index) != 0 {
-                let shift = index * 3;
-                self.sprite_palette =
-                    self.sprite_palette & !(0x07 << shift) | u32::from(palette) << shift;
-            }
-        }
-
-        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
-        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
-    }
-
     pub fn replace_background(&mut self, tile: [u8; 2], background_palette: u8) {
         self.bg0 = tile[0];
         self.bg1 = tile[1];
@@ -211,15 +197,41 @@ impl CgbFifos {
             [usize::from(u8::from(sp_color_index))]
     }
 
-    pub fn is_background_empty(&self) -> bool {
-        self.background_pixels_count == 0
-    }
-
     pub fn reset_background(&mut self) {
         self.background_pixels_count = 0;
     }
 
     pub fn get_shifted_count(&self) -> u8 {
         self.shifted_count
+    }
+}
+
+impl Fifos for CgbFifos {
+    fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
+        let existing_sprite_mask = self.sp0 | self.sp1;
+        // we must keep the existing sprite so we unset the bits already present from the new mask
+        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
+        if attributes.contains(TileAttributes::PRIORITY) {
+            self.mask |= new_sprite_mask;
+        } else {
+            self.mask &= !new_sprite_mask;
+        }
+
+        let palette = attributes.get_cgb_palette_index();
+
+        for index in 0..8 {
+            if new_sprite_mask & (1 << index) != 0 {
+                let shift = index * 3;
+                self.sprite_palette =
+                    self.sprite_palette & !(0x07 << shift) | u32::from(palette) << shift;
+            }
+        }
+
+        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
+        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
+    }
+
+    fn is_background_empty(&self) -> bool {
+        self.background_pixels_count == 0
     }
 }
