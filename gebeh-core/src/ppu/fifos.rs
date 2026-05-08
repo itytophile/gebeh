@@ -122,8 +122,7 @@ pub struct CgbFifos {
     mask: u8,
     // 8 x 3-bits palettes
     sprite_palette: u32,
-    // 8 x 3-bits palettes
-    background_palette: u32,
+    current_background_palette: u8,
     background_pixels_count: u8,
     shifted_count: u8,
 }
@@ -175,10 +174,11 @@ impl CgbFifos {
         self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
     }
 
-    pub fn replace_background(&mut self, tile: [u8; 2]) {
+    pub fn replace_background(&mut self, tile: [u8; 2], background_palette: u8) {
         self.bg0 = tile[0];
         self.bg1 = tile[1];
         self.background_pixels_count = 8;
+        self.current_background_palette = background_palette;
     }
 
     pub fn render_pixel(
@@ -203,7 +203,7 @@ impl CgbFifos {
         {
             return color_palettes
                 .background
-                .get_color(u8::try_from(self.background_palette & 0x07).unwrap());
+                .get_color(self.current_background_palette);
         }
 
         color_palettes
