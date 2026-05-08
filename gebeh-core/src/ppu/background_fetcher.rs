@@ -239,7 +239,6 @@ impl CgbBackgroundFetcher {
                 attribute,
                 scy: Some(scy),
             } => {
-                // TODO Y FLIP
                 let tile = get_bg_win_tile(
                     vram_banks[usize::from(attribute.contains(TileAttributes::CGB_BANK))][..0x1800]
                         .try_into()
@@ -247,9 +246,15 @@ impl CgbBackgroundFetcher {
                     tile_index,
                     is_signed_addressing,
                 );
+                let line = (usize::from(y) + usize::from(scy)) % 8;
+                let line = if attribute.contains(TileAttributes::X_FLIP) {
+                    7 - line
+                } else {
+                    line
+                };
                 FetchingTileHigh {
                     tile_index,
-                    tile_low: tile[2 * ((usize::from(y) + usize::from(scy)) % 8)],
+                    tile_low: tile[2 * line],
                     attribute,
                     scy: None,
                 }
@@ -281,11 +286,14 @@ impl CgbBackgroundFetcher {
                     is_signed_addressing,
                 );
                 self.x += 1;
+                let line = (usize::from(y) + usize::from(scy)) % 8;
+                let line = if attribute.contains(TileAttributes::X_FLIP) {
+                    7 - line
+                } else {
+                    line
+                };
                 Ready {
-                    tile_line: [
-                        tile_low,
-                        tile[2 * ((usize::from(y) + usize::from(scy)) % 8) + 1],
-                    ],
+                    tile_line: [tile_low, tile[2 * line + 1]],
                     attribute,
                 }
             }
