@@ -1,8 +1,18 @@
 // https://gbdev.io/pandocs/Palettes.html#lcd-color-palettes-cgb-only
 
+#[derive(Clone)]
 struct InnerColorPalettes {
     spec: u8,
     data: [u8; 64],
+}
+
+impl Default for InnerColorPalettes {
+    fn default() -> Self {
+        Self {
+            spec: 0,
+            data: [0; _],
+        }
+    }
 }
 
 impl InnerColorPalettes {
@@ -35,41 +45,8 @@ impl InnerColorPalettes {
     }
 }
 
+#[derive(Default, Clone)]
 struct ColorPalettes {
-    background: InnerColorPalettes,
-    objects: InnerColorPalettes,
-}
-
-impl ColorPalettes {
-    fn read_background_spec(&self) -> u8 {
-        self.background.read_spec()
-    }
-
-    fn write_background_spec(&mut self, value: u8) {
-        self.background.write_spec(value);
-    }
-
-    fn read_background_data(&self) -> u8 {
-        self.background.read_data()
-    }
-
-    fn write_background_data(&mut self, value: u8) {
-        self.background.write_data(value);
-    }
-
-    fn read_objects_spec(&self) -> u8 {
-        self.objects.read_spec()
-    }
-
-    fn write_objects_spec(&mut self, value: u8) {
-        self.objects.write_spec(value);
-    }
-
-    fn read_objects_data(&self) -> u8 {
-        self.objects.read_data()
-    }
-
-    fn write_objects_data(&mut self, value: u8) {
-        self.objects.write_data(value);
-    }
+    pub background: InnerColorPalettes,
+    pub objects: InnerColorPalettes,
 }

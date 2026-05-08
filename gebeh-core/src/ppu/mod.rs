@@ -1,12 +1,12 @@
 mod background_fetcher;
 pub mod color;
+mod color_palettes;
 mod fifos;
 mod hdma;
 mod oam_dma;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
-mod color_palettes;
 pub mod vram;
 
 use arrayvec::ArrayVec;
