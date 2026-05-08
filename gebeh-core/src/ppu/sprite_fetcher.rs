@@ -4,7 +4,9 @@ use crate::{
     addresses::VIDEO_RAM,
     ppu::{
         LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj,
-        renderer::RenderingState, vram::VRAM_BANK_SIZE,
+        fifos::{self, Fifos},
+        renderer::RenderingState,
+        vram::VRAM_BANK_SIZE,
     },
 };
 
@@ -29,6 +31,7 @@ impl SpriteFetcher {
         // it can be negative if there is some scrolling
         cursor: i16,
         rendering_state: &mut RenderingState,
+        fifos: &mut Fifos,
         objects: &mut ArrayVec<Sprite, 10>,
         lcd_control: LcdControl,
         vram_bank: &[u8; VRAM_BANK_SIZE],
@@ -38,7 +41,7 @@ impl SpriteFetcher {
 
         if let Ready(tile) = *self {
             let obj = objects.pop().unwrap();
-            rendering_state.fifos.load_sprite(
+            fifos.load_sprite(
                 if obj.flags.contains(TileAttributes::X_FLIP) {
                     [tile[0].reverse_bits(), tile[1].reverse_bits()]
                 } else {
@@ -69,8 +72,7 @@ impl SpriteFetcher {
         }
 
         // stop if background fifo empty to not begin the fetch before the end of the dummy fetch
-        if !rendering_state.is_sprite_fetching_enable || rendering_state.fifos.is_background_empty()
-        {
+        if !rendering_state.is_sprite_fetching_enable || fifos.is_background_empty() {
             return;
         }
 

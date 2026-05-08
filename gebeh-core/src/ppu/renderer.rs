@@ -41,6 +41,7 @@ pub struct Renderer {
     background_pixel_fetcher: BackgroundFetcher,
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
+    fifos: Fifos,
     pub objects: ArrayVec<Sprite, 10>,
     pub scanline: ScanlineBuilder,
     step: RendererStep,
@@ -53,8 +54,9 @@ impl Renderer {
             rendering_state: RenderingState {
                 is_shifting: true,
                 is_sprite_fetching_enable: false,
-                fifos: Default::default(),
             },
+            fifos: Default::default(),
+
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
@@ -70,8 +72,7 @@ impl Renderer {
         else {
             return false;
         };
-        let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
-            - i16::from(first_pixels_to_skip);
+        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
         let Some(obj) = self.objects.last() else {
             return false;
         };
@@ -92,7 +93,8 @@ impl Renderer {
         else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &ppu_state.video_ram,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -113,8 +115,7 @@ impl Renderer {
 
             return;
         };
-        let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
-            - i16::from(first_pixels_to_skip);
+        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
 
         // yes can be triggered multiple times if wx changes during the same scanline
         if ppu_state
@@ -134,13 +135,11 @@ impl Renderer {
                     step: Default::default(),
                     x: 1,
                 };
-                self.rendering_state.fifos.reset_background();
+                self.fifos.reset_background();
                 *window_y = window_y.wrapping_add(1);
-            } else if self.rendering_state.fifos.is_background_empty() {
+            } else if self.fifos.is_background_empty() {
                 // according to mealybug m3_wx_4_change
-                self.rendering_state
-                    .fifos
-                    .insert_window_reactivation_pixel();
+                self.fifos.insert_window_reactivation_pixel();
             }
 
             *saved_wx = Some(ppu_state.old_old_wx);
@@ -158,7 +157,8 @@ impl Renderer {
         {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &ppu_state.video_ram,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
                 ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
@@ -178,7 +178,8 @@ impl Renderer {
         } else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &ppu_state.video_ram,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -189,28 +190,28 @@ impl Renderer {
         self.sprite_pixel_fetcher.execute(
             cursor,
             &mut self.rendering_state,
+            &mut self.fifos,
             &mut self.objects,
             ppu_state.lcd_control,
             ppu_state.video_ram.get_inner(),
             ly,
         );
 
-        if self.rendering_state.fifos.is_background_empty() || !self.rendering_state.is_shifting {
+        if self.fifos.is_background_empty() || !self.rendering_state.is_shifting {
             return;
         }
 
         if cursor >= 8 {
-            self.scanline
-                .push_pixel(self.rendering_state.fifos.render_pixel(
-                    ppu_state.get_effective_bgp(),
-                    ppu_state.obp0,
-                    ppu_state.obp1,
-                    ppu_state.is_background_enabled(),
-                    ppu_state.is_obj_enabled(),
-                ));
+            self.scanline.push_pixel(self.fifos.render_pixel(
+                ppu_state.get_effective_bgp(),
+                ppu_state.obp0,
+                ppu_state.obp1,
+                ppu_state.is_background_enabled(),
+                ppu_state.is_obj_enabled(),
+            ));
         }
 
-        self.rendering_state.fifos.shift();
+        self.fifos.shift();
     }
 }
 
@@ -218,7 +219,6 @@ impl Renderer {
 pub struct RenderingState {
     pub is_shifting: bool,
     pub is_sprite_fetching_enable: bool,
-    pub fifos: Fifos,
 }
 
 #[cfg(test)]
