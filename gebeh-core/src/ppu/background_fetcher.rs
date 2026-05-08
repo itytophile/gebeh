@@ -1,9 +1,8 @@
 use crate::{
-    Ram,
     addresses::VIDEO_RAM,
     ppu::{
         Scrolling, TILE_LENGTH, Tile, TileAttributes, TileVram,
-        fifos::{CgbFifos, DmgFifos, Fifos},
+        fifos::{CgbFifos, DmgFifos},
         renderer::RenderingState,
         vram::VRAM_BANK_SIZE,
     },
