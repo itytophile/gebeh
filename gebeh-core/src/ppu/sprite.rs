@@ -5,6 +5,13 @@ bitflags::bitflags! {
         const Y_FLIP = 1 << 6;
         const X_FLIP = 1 << 5;
         const DMG_PALETTE = 1 << 4;
+        const CGB_BANK = 1 << 3;
+    }
+}
+
+impl ObjectFlags {
+    pub fn get_cgb_palette_index(&self) -> u8 {
+        self.bits() & 0x07
     }
 }
 
