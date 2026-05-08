@@ -178,11 +178,9 @@ impl CgbFifos {
     pub fn render_pixel(
         &self,
         bgp: u8,
-        obp0: u8,
-        obp1: u8,
         is_background_enabled: bool,
         is_obj_enabled: bool,
-    ) -> DmgColor {
+    ) -> u16 {
         let bg_color_index = if is_background_enabled {
             ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0)
         } else {
