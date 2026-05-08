@@ -2,10 +2,16 @@ use core::ops::{Deref, DerefMut};
 
 use crate::Ram;
 
-const VRAM_SIZE: usize = 0x2000;
+pub const VRAM_BANK_SIZE: usize = 0x2000;
 
 #[derive(Clone)]
-pub struct DmgVram([u8; VRAM_SIZE]);
+pub struct DmgVram([u8; VRAM_BANK_SIZE]);
+
+impl DmgVram {
+    pub fn get_inner(&self) -> &[u8; VRAM_BANK_SIZE] {
+        &self.0
+    }
+}
 
 impl Default for DmgVram {
     fn default() -> Self {
@@ -32,7 +38,7 @@ impl Ram for DmgVram {}
 #[derive(Clone)]
 pub struct CgbVram {
     bank: u8,
-    data: [u8; VRAM_SIZE * 2],
+    data: [u8; VRAM_BANK_SIZE * 2],
 }
 
 impl CgbVram {
@@ -54,15 +60,15 @@ impl Deref for CgbVram {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        let base = usize::from(self.bank) * VRAM_SIZE;
-        &self.data[base..base + VRAM_SIZE]
+        let base = usize::from(self.bank) * VRAM_BANK_SIZE;
+        &self.data[base..base + VRAM_BANK_SIZE]
     }
 }
 
 impl DerefMut for CgbVram {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let base = usize::from(self.bank) * VRAM_SIZE;
-        &mut self.data[base..base + VRAM_SIZE]
+        let base = usize::from(self.bank) * VRAM_BANK_SIZE;
+        &mut self.data[base..base + VRAM_BANK_SIZE]
     }
 }
 

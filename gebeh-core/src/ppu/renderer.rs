@@ -190,7 +190,8 @@ impl Renderer {
             cursor,
             &mut self.rendering_state,
             &mut self.objects,
-            ppu_state,
+            ppu_state.lcd_control,
+            ppu_state.video_ram.get_inner(),
             ly,
         );
 

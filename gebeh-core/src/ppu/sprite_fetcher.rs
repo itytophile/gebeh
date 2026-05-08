@@ -3,8 +3,8 @@ use arrayvec::ArrayVec;
 use crate::{
     addresses::VIDEO_RAM,
     ppu::{
-        LcdControl, PpuState, Sprite, TILE_LENGTH, Tile, TileVramObj, renderer::RenderingState,
-        sprite::ObjectFlags,
+        LcdControl, Sprite, TILE_LENGTH, Tile, TileVramObj, renderer::RenderingState,
+        sprite::ObjectFlags, vram::VRAM_BANK_SIZE,
     },
 };
 
@@ -30,7 +30,8 @@ impl SpriteFetcher {
         cursor: i16,
         rendering_state: &mut RenderingState,
         objects: &mut ArrayVec<Sprite, 10>,
-        ppu_state: &PpuState,
+        lcd_control: LcdControl,
+        vram_bank: &[u8; VRAM_BANK_SIZE],
         ly: u8,
     ) {
         use SpriteFetcher::*;
@@ -58,7 +59,7 @@ impl SpriteFetcher {
             return;
         }
 
-        let is_obj_canceled = !ppu_state.lcd_control.contains(LcdControl::OBJ_ENABLE);
+        let is_obj_canceled = !lcd_control.contains(LcdControl::OBJ_ENABLE);
 
         rendering_state.is_shifting = is_obj_canceled;
 
@@ -83,7 +84,7 @@ impl SpriteFetcher {
         *self = match *self {
             FetchingTileLow { delay: 3 } => FetchingTileHigh {
                 one_dot_delay: false,
-                tile_low: get_object_tile_line(obj, ppu_state, ly)[0],
+                tile_low: get_object_tile_line(obj, lcd_control, vram_bank, ly)[0],
             },
             FetchingTileLow { delay } => FetchingTileLow { delay: delay + 1 },
             FetchingTileHigh {
@@ -99,7 +100,10 @@ impl SpriteFetcher {
             } => {
                 // we have to fetch the tile line in two steps because the LcdControl::OBJ_SIZE
                 // can be changed between fetches (don't know if it works exactly like this)
-                Ready([tile_low, get_object_tile_line(obj, ppu_state, ly)[1]])
+                Ready([
+                    tile_low,
+                    get_object_tile_line(obj, lcd_control, vram_bank, ly)[1],
+                ])
             }
             Ready(_) => unreachable!(),
         };
@@ -107,13 +111,18 @@ impl SpriteFetcher {
 }
 
 #[must_use]
-fn get_object_tile_line(obj: &Sprite, ppu_state: &PpuState, ly: u8) -> [u8; 2] {
-    let is_big = ppu_state.lcd_control.contains(LcdControl::OBJ_SIZE);
+fn get_object_tile_line(
+    obj: &Sprite,
+    lcd_control: LcdControl,
+    vram_bank: &[u8; VRAM_BANK_SIZE],
+    ly: u8,
+) -> [u8; 2] {
+    let is_big = lcd_control.contains(LcdControl::OBJ_SIZE);
     let y_flip = obj.flags.contains(ObjectFlags::Y_FLIP);
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
         + (is_big && (ly + 8 >= obj.y) != y_flip) as u8;
     let tile = get_object_tile(
-        ppu_state.video_ram[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
+        vram_bank[usize::from(0x8000 - VIDEO_RAM)..usize::from(0x9000 - VIDEO_RAM)]
             .try_into()
             .unwrap(),
         tile_index,
