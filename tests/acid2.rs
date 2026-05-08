@@ -1,5 +1,5 @@
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, ppu::color::Color};
+use gebeh_core::{Emulator, HEIGHT, ppu::color::DmgColor};
 use gebeh_front_helper::get_mbc;
 
 #[test]
@@ -12,10 +12,10 @@ fn dmg_acid2() {
     let expected = include_bytes!("acid2_expected.txt");
     let split = expected.split(|a| *a == b'\n').map(|slice| {
         slice.iter().map(|c| match c {
-            b'.' => Color::White,
-            b'-' => Color::LightGray,
-            b'#' => Color::DarkGray,
-            b'@' => Color::Black,
+            b'.' => DmgColor::White,
+            b'-' => DmgColor::LightGray,
+            b'#' => DmgColor::DarkGray,
+            b'@' => DmgColor::Black,
             _ => panic!(),
         })
     });

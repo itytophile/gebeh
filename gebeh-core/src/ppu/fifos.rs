@@ -1,4 +1,4 @@
-use crate::ppu::color::{Color, ColorIndex};
+use crate::ppu::color::{ColorIndex, DmgColor};
 
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
 #[derive(Default, Clone)]
@@ -63,7 +63,7 @@ impl Fifos {
         obp1: u8,
         is_background_enabled: bool,
         is_obj_enabled: bool,
-    ) -> Color {
+    ) -> DmgColor {
         let bg_color_index = if is_background_enabled {
             ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0)
         } else {

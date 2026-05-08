@@ -1,10 +1,10 @@
-use crate::ppu::color::Color;
+use crate::ppu::color::DmgColor;
 
 #[derive(Clone, Copy)]
 pub struct Scanline([u8; 40]);
 
 impl Scanline {
-    pub fn iter_colors(&self) -> impl Iterator<Item = Color> {
+    pub fn iter_colors(&self) -> impl Iterator<Item = DmgColor> {
         self.0
             .iter()
             .copied()
@@ -16,7 +16,7 @@ impl Scanline {
                     four_pixels,
                 ]
             })
-            .map(Color::from)
+            .map(DmgColor::from)
     }
     pub fn raw(&self) -> &[u8; 40] {
         &self.0
@@ -36,7 +36,7 @@ pub struct ScanlineBuilder {
 }
 
 impl ScanlineBuilder {
-    pub fn push_pixel(&mut self, color: Color) {
+    pub fn push_pixel(&mut self, color: DmgColor) {
         let shift = 6 - (self.index % 4) * 2;
         let pixel = &mut self.buffer.0[usize::from(self.index / 4)];
         *pixel = (u8::from(color) << shift) | (*pixel & !(0b11 << shift));

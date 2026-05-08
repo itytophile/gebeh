@@ -16,7 +16,7 @@ impl ColorIndex {
         }
     }
 
-    pub fn get_color(self, palette: u8) -> Color {
+    pub fn get_color(self, palette: u8) -> DmgColor {
         let shift: u8 = match self {
             ColorIndex::Zero => 0,
             ColorIndex::One => 2,
@@ -24,56 +24,56 @@ impl ColorIndex {
             ColorIndex::Three => 6,
         };
         match (palette >> shift) & 0b11 {
-            0 => Color::White,
-            1 => Color::LightGray,
-            2 => Color::DarkGray,
-            _ => Color::Black,
+            0 => DmgColor::White,
+            1 => DmgColor::LightGray,
+            2 => DmgColor::DarkGray,
+            _ => DmgColor::Black,
         }
     }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum Color {
+pub enum DmgColor {
     White,
     LightGray,
     DarkGray,
     Black,
 }
 
-impl From<Color> for u8 {
-    fn from(value: Color) -> Self {
+impl From<DmgColor> for u8 {
+    fn from(value: DmgColor) -> Self {
         match value {
-            Color::White => 0b11,
-            Color::LightGray => 0b10,
-            Color::DarkGray => 0b01,
-            Color::Black => 0b00,
+            DmgColor::White => 0b11,
+            DmgColor::LightGray => 0b10,
+            DmgColor::DarkGray => 0b01,
+            DmgColor::Black => 0b00,
         }
     }
 }
 
-impl From<Color> for u32 {
-    fn from(c: Color) -> u32 {
+impl From<DmgColor> for u32 {
+    fn from(c: DmgColor) -> u32 {
         match c {
-            Color::White => 0xffffff,
-            Color::LightGray => 0xaaaaaa,
-            Color::DarkGray => 0x555555,
-            Color::Black => 0,
+            DmgColor::White => 0xffffff,
+            DmgColor::LightGray => 0xaaaaaa,
+            DmgColor::DarkGray => 0x555555,
+            DmgColor::Black => 0,
         }
     }
 }
 
-impl From<Color> for [u8; 4] {
-    fn from(c: Color) -> Self {
+impl From<DmgColor> for [u8; 4] {
+    fn from(c: DmgColor) -> Self {
         match c {
-            Color::White => [0xff; 4],
-            Color::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
-            Color::DarkGray => [0x55, 0x55, 0x55, 0xff],
-            Color::Black => [0, 0, 0, 0xff],
+            DmgColor::White => [0xff; 4],
+            DmgColor::LightGray => [0xaa, 0xaa, 0xaa, 0xff],
+            DmgColor::DarkGray => [0x55, 0x55, 0x55, 0xff],
+            DmgColor::Black => [0, 0, 0, 0xff],
         }
     }
 }
 
-impl From<u8> for Color {
+impl From<u8> for DmgColor {
     fn from(value: u8) -> Self {
         match value & 0b11 {
             0 => Self::Black,
