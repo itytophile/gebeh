@@ -1,7 +1,7 @@
 // https://gbdev.io/pandocs/Palettes.html#lcd-color-palettes-cgb-only
 
 #[derive(Clone)]
-struct InnerColorPalettes {
+pub struct InnerColorPalettes {
     spec: u8,
     data: [u8; 64],
 }
@@ -24,19 +24,19 @@ impl InnerColorPalettes {
         self.spec & 0x3f
     }
 
-    fn read_spec(&self) -> u8 {
+    pub fn read_spec(&self) -> u8 {
         self.spec | 0b0100_0000
     }
 
-    fn write_spec(&mut self, value: u8) {
+    pub fn write_spec(&mut self, value: u8) {
         self.spec = value;
     }
 
-    fn read_data(&self) -> u8 {
+    pub fn read_data(&self) -> u8 {
         self.data[usize::from(self.get_address())]
     }
 
-    fn write_data(&mut self, value: u8) {
+    pub fn write_data(&mut self, value: u8) {
         let address = self.get_address();
         self.data[usize::from(address)] = value;
         if self.is_auto_increment() {
@@ -46,7 +46,7 @@ impl InnerColorPalettes {
 }
 
 #[derive(Default, Clone)]
-struct ColorPalettes {
+pub struct ColorPalettes {
     pub background: InnerColorPalettes,
     pub objects: InnerColorPalettes,
 }
