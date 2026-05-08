@@ -6,6 +6,7 @@ mod oam_dma;
 mod renderer;
 mod scanline;
 mod sprite_fetcher;
+mod color_palettes;
 pub mod vram;
 
 use arrayvec::ArrayVec;
