@@ -38,12 +38,16 @@ impl Ram for DmgVram {}
 #[derive(Clone)]
 pub struct CgbVram {
     bank: u8,
-    data: [u8; VRAM_BANK_SIZE * 2],
+    data: [[u8; VRAM_BANK_SIZE]; 2],
 }
 
 impl CgbVram {
     pub fn set_bank(&mut self, bank: u8) {
         self.bank = bank & 0x01;
+    }
+
+    pub fn get_inner(&self) -> &[[u8; VRAM_BANK_SIZE]; 2] {
+        &self.data
     }
 }
 
@@ -51,7 +55,7 @@ impl Default for CgbVram {
     fn default() -> Self {
         Self {
             bank: 0,
-            data: [0; _],
+            data: [[0; _]; _],
         }
     }
 }
@@ -60,15 +64,13 @@ impl Deref for CgbVram {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        let base = usize::from(self.bank) * VRAM_BANK_SIZE;
-        &self.data[base..base + VRAM_BANK_SIZE]
+        &self.data[usize::from(self.bank)]
     }
 }
 
 impl DerefMut for CgbVram {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let base = usize::from(self.bank) * VRAM_BANK_SIZE;
-        &mut self.data[base..base + VRAM_BANK_SIZE]
+        &mut self.data[usize::from(self.bank)]
     }
 }
 
