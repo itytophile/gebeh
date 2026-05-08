@@ -1,10 +1,13 @@
 use arrayvec::ArrayVec;
+use bitflags::Flags;
 
 use crate::{
     addresses::VIDEO_RAM,
     ppu::{
-        LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj, fifos::Fifos,
-        renderer::RenderingState, vram::VRAM_BANK_SIZE,
+        LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj,
+        fifos::{CgbFifos, DmgFifos},
+        renderer::RenderingState,
+        vram::VRAM_BANK_SIZE,
     },
 };
 
@@ -29,7 +32,7 @@ impl SpriteFetcher {
         // it can be negative if there is some scrolling
         cursor: i16,
         rendering_state: &mut RenderingState,
-        fifos: &mut impl Fifos,
+        fifos: &mut DmgFifos,
         objects: &mut ArrayVec<Sprite, 10>,
         lcd_control: LcdControl,
         vram_bank: &[u8; VRAM_BANK_SIZE],
@@ -79,6 +82,109 @@ impl SpriteFetcher {
         // 3 -> fetch tile low
         // 4 -> fetch tile high
         // 5 -> fetch tile high (end)
+
+        *self = match *self {
+            FetchingTileLow { delay: 3 } => FetchingTileHigh {
+                one_dot_delay: false,
+                tile_low: get_object_tile_line(obj, lcd_control, vram_bank, ly)[0],
+            },
+            FetchingTileLow { delay } => FetchingTileLow { delay: delay + 1 },
+            FetchingTileHigh {
+                one_dot_delay: false,
+                tile_low,
+            } => FetchingTileHigh {
+                one_dot_delay: true,
+                tile_low,
+            },
+            FetchingTileHigh {
+                one_dot_delay: true,
+                tile_low,
+            } => {
+                // we have to fetch the tile line in two steps because the LcdControl::OBJ_SIZE
+                // can be changed between fetches (don't know if it works exactly like this)
+                Ready([
+                    tile_low,
+                    get_object_tile_line(obj, lcd_control, vram_bank, ly)[1],
+                ])
+            }
+            Ready(_) => unreachable!(),
+        };
+    }
+}
+
+#[derive(Clone)]
+pub enum SpriteFetcherCgb {
+    // we have access to the object tile_index so it's useless to have it here
+    FetchingTileLow { delay: u8 },
+    FetchingTileHigh { one_dot_delay: bool, tile_low: u8 },
+    Ready([u8; 2]),
+}
+
+impl Default for SpriteFetcherCgb {
+    fn default() -> Self {
+        Self::FetchingTileLow { delay: 0 }
+    }
+}
+
+impl SpriteFetcherCgb {
+    pub fn execute(
+        &mut self,
+        // the cursor is in the same "space" as the sprites x coordinates
+        // it can be negative if there is some scrolling
+        cursor: i16,
+        rendering_state: &mut RenderingState,
+        fifos: &mut CgbFifos,
+        objects: &mut ArrayVec<Sprite, 10>,
+        lcd_control: LcdControl,
+        vram_banks: &[[u8; VRAM_BANK_SIZE]; 2],
+        ly: u8,
+    ) {
+        use SpriteFetcherCgb::*;
+
+        if let Ready(tile) = *self {
+            let obj = objects.pop().unwrap();
+            fifos.load_sprite(
+                if obj.flags.contains(TileAttributes::X_FLIP) {
+                    [tile[0].reverse_bits(), tile[1].reverse_bits()]
+                } else {
+                    tile
+                },
+                obj.flags,
+            );
+            rendering_state.is_shifting = true;
+            *self = FetchingTileLow { delay: 0 };
+        }
+
+        let Some(obj) = objects.last() else {
+            return;
+        };
+
+        if i16::from(obj.x) != cursor {
+            return;
+        }
+
+        let is_obj_canceled = !lcd_control.contains(LcdControl::OBJ_ENABLE);
+
+        rendering_state.is_shifting = is_obj_canceled;
+
+        if is_obj_canceled {
+            objects.pop();
+            return;
+        }
+
+        // stop if background fifo empty to not begin the fetch before the end of the dummy fetch
+        if !rendering_state.is_sprite_fetching_enable || fifos.is_background_empty() {
+            return;
+        }
+
+        // 0 -> fetch tile index
+        // 1 -> fetch tile index
+        // 2 -> fetch tile low
+        // 3 -> fetch tile low
+        // 4 -> fetch tile high
+        // 5 -> fetch tile high (end)
+
+        let vram_bank = &vram_banks[usize::from(obj.flags.contains(TileAttributes::CGB_BANK))];
 
         *self = match *self {
             FetchingTileLow { delay: 3 } => FetchingTileHigh {

@@ -4,11 +4,6 @@ use crate::ppu::{
     color_palettes::ColorPalettes,
 };
 
-pub trait Fifos {
-    fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes);
-    fn is_background_empty(&self) -> bool;
-}
-
 // according to https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/ht3lcfq/
 #[derive(Default, Clone)]
 pub struct DmgFifos {
@@ -88,10 +83,8 @@ impl DmgFifos {
         self.bg1 >>= 1;
         self.background_pixels_count = 8.min(self.background_pixels_count + 1);
     }
-}
 
-impl Fifos for DmgFifos {
-    fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
+    pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
         let existing_sprite_mask = self.sp0 | self.sp1;
         // we must keep the existing sprite so we unset the bits already present from the new mask
         let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
@@ -109,7 +102,7 @@ impl Fifos for DmgFifos {
         self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
     }
 
-    fn is_background_empty(&self) -> bool {
+    pub fn is_background_empty(&self) -> bool {
         self.background_pixels_count == 0
     }
 }
@@ -204,10 +197,8 @@ impl CgbFifos {
     pub fn get_shifted_count(&self) -> u8 {
         self.shifted_count
     }
-}
 
-impl Fifos for CgbFifos {
-    fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
+    pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
         let existing_sprite_mask = self.sp0 | self.sp1;
         // we must keep the existing sprite so we unset the bits already present from the new mask
         let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
@@ -231,7 +222,7 @@ impl Fifos for CgbFifos {
         self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
     }
 
-    fn is_background_empty(&self) -> bool {
+    pub fn is_background_empty(&self) -> bool {
         self.background_pixels_count == 0
     }
 }

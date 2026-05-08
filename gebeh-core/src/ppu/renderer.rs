@@ -22,7 +22,7 @@ use arrayvec::ArrayVec;
 use crate::ppu::{
     LcdControl, PpuState, Scrolling, Sprite,
     background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
-    fifos::{DmgFifos, Fifos},
+    fifos::DmgFifos,
     scanline::ScanlineBuilder,
     sprite_fetcher::SpriteFetcher,
 };
