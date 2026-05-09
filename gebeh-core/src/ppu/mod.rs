@@ -13,7 +13,7 @@ pub mod vram;
 use arrayvec::ArrayVec;
 
 use crate::{
-    Ram, WIDTH,
+    Model, Ram, WIDTH,
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
@@ -96,26 +96,26 @@ pub enum PpuStep<R: Renderer> {
 }
 
 #[derive(Clone)]
-pub struct Ppu<R: Renderer, S: StatRegisterHandler> {
-    pub step: PpuStep<R>,
+pub struct Ppu<M: Model> {
+    pub step: PpuStep<M::Renderer>,
     stat_irq: bool,
-    state: PpuState<R::Vram>,
+    state: PpuState<<M::Renderer as Renderer>::Vram>,
     previous_lyc: u8,
-    stat_register_handler: S,
+    stat_register_handler: M::StatRegisterHandler,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
     oam_dma: OamDma,
-    extra: R::Extra,
+    extra: <M::Renderer as Renderer>::Extra,
 }
 
-impl<R: Renderer, S: StatRegisterHandler> Default for Ppu<R, S> {
+impl<M: Model> Default for Ppu<M> {
     fn default() -> Self {
         Self {
             step: Default::default(),
             stat_irq: false,
             state: Default::default(),
             previous_lyc: 0,
-            stat_register_handler: S::default(),
+            stat_register_handler: M::StatRegisterHandler::default(),
             interrupt_part_lcd_status: LcdStatus::default(),
             lyc: 0,
             oam_dma: Default::default(),
@@ -273,11 +273,11 @@ impl StatRegisterHandler for () {
 }
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
+impl<M: Model> Ppu<M> {
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
-    pub fn execute_dma<M: Mbc + ?Sized, W: Ram>(&mut self, mbc: &M, wram: &W, cycles: u64) {
+    pub fn execute_dma(&mut self, mbc: &(impl Mbc + ?Sized), wram: &impl Ram, cycles: u64) {
         self.oam_dma.execute(
             mbc,
             if self.get_ppu_mode() != LcdStatus::DRAWING {
@@ -307,7 +307,7 @@ impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
         }
         self.oam_dma.write_oam(index, value);
     }
-    pub fn get_vram_if_available(&self) -> Option<&R::Vram> {
+    pub fn get_vram_if_available(&self) -> Option<&<M::Renderer as Renderer>::Vram> {
         if self.get_ppu_mode() == LcdStatus::DRAWING {
             None
         } else {
@@ -332,7 +332,7 @@ impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
     pub fn set_obp1(&mut self, value: u8) {
         self.state.obp1 = value
     }
-    pub fn get_vram(&self) -> &R::Vram {
+    pub fn get_vram(&self) -> &<M::Renderer as Renderer>::Vram {
         &self.state.video_ram
     }
 
@@ -437,7 +437,7 @@ impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
     #[must_use]
     pub fn get_scanline_if_ready(
         &self,
-    ) -> Option<&<R::ScanlineBuilder as ScanlineBuilder>::Scanline> {
+    ) -> Option<&<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,
@@ -460,7 +460,7 @@ impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
             } => {
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
-                    renderer: R::new(Default::default()),
+                    renderer: M::Renderer::new(Default::default()),
                     window_y: None,
                     ly: 0,
                 }
@@ -489,7 +489,7 @@ impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let renderer = R::new(
+                let renderer = M::Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
@@ -662,6 +662,7 @@ impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
 #[cfg(test)]
 mod tests {
     use crate::{
+        Dmg,
         interrupts::Interrupts,
         ppu::{LcdControl, Ppu, PpuStep, StatInterruptWriteQuirk, renderer::DmgRenderer},
     };
@@ -670,7 +671,7 @@ mod tests {
 
     #[test]
     fn line_duration() {
-        let mut ppu = Ppu::<DmgRenderer, StatInterruptWriteQuirk>::default();
+        let mut ppu = Ppu::<Dmg>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -691,7 +692,7 @@ mod tests {
 
     #[test]
     fn frame_duration() {
-        let mut ppu = Ppu::<DmgRenderer, StatInterruptWriteQuirk>::default();
+        let mut ppu = Ppu::<Dmg>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -725,7 +726,7 @@ mod tests {
 
     #[test]
     fn all_ly() {
-        let mut ppu = Ppu::<DmgRenderer, StatInterruptWriteQuirk>::default();
+        let mut ppu = Ppu::<Dmg>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();

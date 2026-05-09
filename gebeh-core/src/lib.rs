@@ -9,10 +9,13 @@ use crate::{
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
-    ppu::{Ppu, StatInterruptWriteQuirk, renderer::DmgRenderer},
+    ppu::{
+        Ppu, StatInterruptWriteQuirk, StatRegisterHandler,
+        renderer::{CgbRenderer, DmgRenderer, Renderer},
+    },
     serial::Serial,
     timer::Timer,
-    wram::DmgWram,
+    wram::{CgbWram, DmgWram},
 };
 
 pub mod addresses;
@@ -29,19 +32,19 @@ pub mod wram;
 
 pub trait Ram: Default + Clone + Deref<Target = [u8]> + DerefMut<Target = [u8]> {}
 
-pub struct Peripherals<'a, M: Mbc + ?Sized, W: Ram> {
+pub struct Peripherals<'a, M: Mbc + ?Sized, Mo: Model> {
     pub mbc: &'a mut M,
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
-    pub ppu: &'a mut Ppu<DmgRenderer, StatInterruptWriteQuirk>,
+    pub ppu: &'a mut Ppu<Mo>,
     pub serial: &'a mut Serial,
-    pub wram: &'a mut W,
+    pub wram: &'a mut Mo::Wram,
     pub interrupts: &'a mut Interrupts,
 }
 
-impl<M: Mbc + ?Sized, W: Ram> Peripherals<'_, M, W> {
-    pub fn get_ref(&self) -> PeripheralsRef<'_, M, W> {
+impl<M: Mbc + ?Sized, Mo: Model> Peripherals<'_, M, Mo> {
+    pub fn get_ref(&self) -> PeripheralsRef<'_, M, Mo> {
         PeripheralsRef {
             mbc: self.mbc,
             timer: self.timer,
@@ -55,14 +58,14 @@ impl<M: Mbc + ?Sized, W: Ram> Peripherals<'_, M, W> {
     }
 }
 
-pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Ram> {
+pub struct PeripheralsRef<'a, M: Mbc + ?Sized, Mo: Model> {
     pub mbc: &'a M,
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
-    pub ppu: &'a Ppu<DmgRenderer, StatInterruptWriteQuirk>,
+    pub ppu: &'a Ppu<Mo>,
     pub serial: &'a Serial,
-    pub wram: &'a W,
+    pub wram: &'a Mo::Wram,
     pub interrupts: Interrupts,
 }
 
@@ -71,9 +74,32 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
+pub trait Model {
+    type Renderer: Renderer;
+    type StatRegisterHandler: StatRegisterHandler;
+    type Wram: Ram;
+}
+
+#[derive(Clone)]
+pub struct Dmg;
+#[derive(Clone)]
+pub struct Cgb;
+
+impl Model for Dmg {
+    type Renderer = DmgRenderer;
+    type StatRegisterHandler = StatInterruptWriteQuirk;
+    type Wram = DmgWram;
+}
+
+impl Model for Cgb {
+    type Renderer = CgbRenderer;
+    type StatRegisterHandler = ();
+    type Wram = CgbWram;
+}
+
 #[derive(Clone)]
 pub struct Emulator {
-    ppu: Ppu<DmgRenderer, StatInterruptWriteQuirk>,
+    ppu: Ppu<Dmg>,
     cpu: Cpu,
     pub interrupts: Interrupts,
     timer: Timer,
@@ -105,7 +131,7 @@ impl Emulator {
         self.serial
             .will_emit_byte(self.timer.get_system_counter().wrapping_add(1))
     }
-    pub fn get_ppu(&self) -> &Ppu<DmgRenderer, StatInterruptWriteQuirk> {
+    pub fn get_ppu(&self) -> &Ppu<Dmg> {
         &self.ppu
     }
     pub fn get_cpu(&self) -> &Cpu {

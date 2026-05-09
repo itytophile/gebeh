@@ -2,6 +2,7 @@ use super::instructions::{
     AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, POP_SP, Prefetch,
     ReadInstruction, Register16Bit, SetPc, vec,
 };
+use crate::Dmg;
 use crate::cpu::{Cpu, Flags};
 use crate::wram::DmgWram;
 use crate::{Peripherals, interrupts::Interrupts, mbc::Mbc};
@@ -134,7 +135,7 @@ impl Cpu {
         inst: AfterReadInstruction,
         interrupts_to_execute: Interrupts,
         cycle_count: u64,
-        peripherals: &mut Peripherals<M, DmgWram>,
+        peripherals: &mut Peripherals<M, Dmg>,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
