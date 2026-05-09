@@ -1,14 +1,10 @@
 use arrayvec::ArrayVec;
+use ref_cast::RefCast;
 
 use crate::ppu::color::DmgColor;
 
 #[derive(Clone, Copy)]
 pub struct DmgScanline([u8; 40]);
-
-pub trait ColorIterator {
-    type Item: Into<[u8; 4]>;
-    fn iter_colors(&self) -> impl Iterator<Item = Self::Item>;
-}
 
 impl DmgScanline {
     pub fn raw(&self) -> &[u8; 40] {
@@ -16,7 +12,7 @@ impl DmgScanline {
     }
 }
 
-impl ColorIterator for DmgScanline {
+impl Scanline for DmgScanline {
     type Item = DmgColor;
     fn iter_colors(&self) -> impl Iterator<Item = DmgColor> {
         self.0
@@ -61,8 +57,13 @@ impl DmgScanlineBuilder {
     }
 }
 
-pub trait ScanlineBuilder {
-    type Scanline: Clone;
+pub trait Scanline: Copy + Default + Send + Sync + 'static {
+    type Item: Into<[u8; 4]>;
+    fn iter_colors(&self) -> impl Iterator<Item = Self::Item>;
+}
+
+pub trait ScanlineBuilder: Send + Sync {
+    type Scanline: Scanline;
     fn len(&self) -> u8;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -80,13 +81,23 @@ impl ScanlineBuilder for DmgScanlineBuilder {
     }
 }
 
+#[derive(RefCast, Clone, Copy)]
+#[repr(transparent)]
+pub struct CgbScanline([u16; 160]);
+
+impl Default for CgbScanline {
+    fn default() -> Self {
+        Self([0; _])
+    }
+}
+
 impl ScanlineBuilder for ArrayVec<u16, 160> {
-    type Scanline = [u16; 160];
+    type Scanline = CgbScanline;
     fn len(&self) -> u8 {
         self.len() as u8
     }
-    fn get_scanline(&self) -> &[u16; 160] {
-        self.as_slice().try_into().unwrap()
+    fn get_scanline(&self) -> &CgbScanline {
+        CgbScanline::ref_cast(self.as_slice().try_into().unwrap())
     }
 }
 
@@ -106,9 +117,9 @@ impl From<CgbColor> for [u8; 4] {
     }
 }
 
-impl ColorIterator for [u16; 160] {
+impl Scanline for CgbScanline {
     type Item = CgbColor;
     fn iter_colors(&self) -> impl Iterator<Item = CgbColor> {
-        self.iter().copied().map(CgbColor)
+        self.0.iter().copied().map(CgbColor)
     }
 }

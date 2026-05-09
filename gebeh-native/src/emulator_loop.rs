@@ -6,54 +6,58 @@ use cpal::{
 };
 use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
-    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY, apu::Mixer, joypad::JoypadInput,
-    ppu::DmgScanline,
+    Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY,
+    apu::Mixer,
+    joypad::JoypadInput,
+    ppu::{renderer::Renderer, scanline::ScanlineBuilder},
 };
 use gebeh_front_helper::{get_mbc_send, get_noise};
 
-pub fn spawn_emulator(
+pub fn spawn_emulator<M: Model>(
     device: &cpal::Device,
-    shared_frame: SyncSender<Frame>,
+    shared_frame: SyncSender<
+        Frame<<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline>,
+    >,
     shared_joypad: Arc<RwLock<JoypadInput>>,
     rom: Vec<u8>,
 ) -> cpal::Stream {
     let config = device.default_output_config().unwrap();
     let stream = match config.sample_format() {
         cpal::SampleFormat::I8 => {
-            create_stream::<i8>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<i8, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::I16 => {
-            create_stream::<i16>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<i16, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::I24 => {
-            create_stream::<I24>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<I24, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::I32 => {
-            create_stream::<i32>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<i32, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         // cpal::SampleFormat::I48 => run::<I48>(&device, &config.into(),shared_frame),
         cpal::SampleFormat::I64 => {
-            create_stream::<i64>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<i64, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::U8 => {
-            create_stream::<u8>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<u8, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::U16 => {
-            create_stream::<u16>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<u16, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         // cpal::SampleFormat::U24 => run::<U24>(&device, &config.into(),shared_frame),
         cpal::SampleFormat::U32 => {
-            create_stream::<u32>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<u32, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         // cpal::SampleFormat::U48 => run::<U48>(&device, &config.into(),shared_frame),
         cpal::SampleFormat::U64 => {
-            create_stream::<u64>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<u64, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::F32 => {
-            create_stream::<f32>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<f32, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::F64 => {
-            create_stream::<f64>(device, config.into(), shared_frame, shared_joypad, rom)
+            create_stream::<f64, M>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         sample_format => panic!("Unsupported sample format '{sample_format}'"),
     };
@@ -62,10 +66,12 @@ pub fn spawn_emulator(
     stream
 }
 
-fn create_stream<T>(
+fn create_stream<T, M: Model>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
-    shared_frame: SyncSender<Frame>,
+    shared_frame: SyncSender<
+        Frame<<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline>,
+    >,
     shared_joypad: Arc<RwLock<JoypadInput>>,
     rom: Vec<u8>,
 ) -> cpal::Stream
@@ -75,7 +81,7 @@ where
     // don't forget to use arc or you will clone the rom for each save state
     let (_, mut mbc) =
         get_mbc_send(Arc::from(rom.into_boxed_slice()), InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::<Dmg>::default();
+    let mut emulator = Emulator::<M>::default();
 
     let config = StreamConfig {
         channels: 2,
@@ -93,7 +99,9 @@ where
     let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
     let mut error = 0;
-    let mut current_frame = [DmgScanline::default(); HEIGHT as usize];
+    let mut current_frame =
+        [<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline::default();
+            HEIGHT as usize];
     let mut mixer = Mixer::new(sample_rate as f32, noise, short_noise);
 
     device

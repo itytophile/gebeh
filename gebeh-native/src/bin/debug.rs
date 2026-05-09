@@ -8,7 +8,7 @@ use gebeh_core::{
         LcdControl, PpuStep,
         color::ColorIndex,
         get_bg_win_tile, get_line_from_tile,
-        scanline::{ColorIterator, ScanlineBuilder},
+        scanline::{Scanline, ScanlineBuilder},
         vram::DmgVram,
     },
 };

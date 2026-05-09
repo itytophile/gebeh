@@ -67,7 +67,7 @@ impl Hdma {
     }
 }
 
-pub trait HdmaRegs: Default + Clone {
+pub trait HdmaRegs: Default + Clone + Send + Sync {
     fn write_source_address_low(&mut self, value: u8);
     fn write_source_address_high(&mut self, value: u8);
     fn write_destination_address_low(&mut self, value: u8);

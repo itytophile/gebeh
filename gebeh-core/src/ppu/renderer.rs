@@ -27,9 +27,9 @@ pub enum RendererStep {
     },
 }
 
-pub trait Renderer: Clone {
+pub trait Renderer: Clone + Send + Sync {
     type Vram: VramRegs;
-    type Extra: Default + Clone;
+    type Extra: Default + Clone + Send + Sync;
     type ScanlineBuilder: ScanlineBuilder;
     fn new(objects: ArrayVec<Sprite, 10>) -> Self;
     fn execute(

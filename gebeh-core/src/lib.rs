@@ -35,7 +35,10 @@ pub mod serial;
 pub mod timer;
 pub mod wram;
 
-pub trait Ram: Default + Clone + Deref<Target = [u8]> + DerefMut<Target = [u8]> {}
+pub trait Ram:
+    Default + Clone + Deref<Target = [u8]> + DerefMut<Target = [u8]> + Send + Sync
+{
+}
 
 pub struct Peripherals<'a, M: Mbc + ?Sized, Mo: Model> {
     pub mbc: &'a mut M,
@@ -82,7 +85,7 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-pub trait Model: Clone {
+pub trait Model: Clone + 'static {
     type Renderer: Renderer;
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Wram;
@@ -91,6 +94,7 @@ pub trait Model: Clone {
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
     where
         Self: Sized;
+    fn get_emulator() -> Emulator<Self>;
 }
 
 #[derive(Clone)]
@@ -130,6 +134,20 @@ impl Model for Dmg {
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
+    fn get_emulator() -> Emulator<Self> {
+        Emulator {
+            ppu: Default::default(),
+            cpu: Cpu::new(&BOOTIX_BOOT_ROM),
+            interrupts: Interrupts::default(),
+            timer: Timer::default(),
+            joypad: Joypad::default(),
+            apu: Apu::default(),
+            serial: Serial::default(),
+            wram: DmgWram::default(),
+            cycles: 0,
+            hdma: (),
+        }
+    }
 }
 
 impl Model for Cgb {
@@ -155,6 +173,20 @@ impl Model for Cgb {
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
+    fn get_emulator() -> Emulator<Self> {
+        Emulator {
+            ppu: Default::default(),
+            cpu: Cpu::new(&CGB_BOYTACEAN),
+            interrupts: Interrupts::default(),
+            timer: Timer::default(),
+            joypad: Joypad::default(),
+            apu: Apu::default(),
+            serial: Serial::default(),
+            wram: Default::default(),
+            cycles: 0,
+            hdma: Hdma::default(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -171,37 +203,9 @@ pub struct Emulator<M: Model> {
     hdma: M::HdmaRegs,
 }
 
-impl Default for Emulator<Dmg> {
+impl<M: Model> Default for Emulator<M> {
     fn default() -> Self {
-        Self {
-            ppu: Default::default(),
-            cpu: Cpu::new(&BOOTIX_BOOT_ROM),
-            interrupts: Interrupts::default(),
-            timer: Timer::default(),
-            joypad: Joypad::default(),
-            apu: Apu::default(),
-            serial: Serial::default(),
-            wram: DmgWram::default(),
-            cycles: 0,
-            hdma: (),
-        }
-    }
-}
-
-impl Default for Emulator<Cgb> {
-    fn default() -> Self {
-        Self {
-            ppu: Default::default(),
-            cpu: Cpu::new(&CGB_BOYTACEAN),
-            interrupts: Interrupts::default(),
-            timer: Timer::default(),
-            joypad: Joypad::default(),
-            apu: Apu::default(),
-            serial: Serial::default(),
-            wram: Default::default(),
-            cycles: 0,
-            hdma: Hdma::default(),
-        }
+        M::get_emulator()
     }
 }
 

@@ -233,7 +233,7 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-pub trait StatRegisterHandler: Default + Clone {
+pub trait StatRegisterHandler: Default + Clone + Send + Sync {
     fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus);
     fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus);
 }
@@ -495,7 +495,7 @@ impl<M: Model> Ppu<M> {
                     .unwrap(),
                     window_y: *window_y,
                     dots_count: 0,
-                    scanline: renderer.get_scanline_builder().get_scanline().clone(),
+                    scanline: *renderer.get_scanline_builder().get_scanline(),
                     ly: *ly,
                 }
             }
