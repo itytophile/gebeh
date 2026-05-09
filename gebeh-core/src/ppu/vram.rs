@@ -72,7 +72,7 @@ impl DerefMut for CgbVram {
 
 impl Ram for CgbVram {}
 
-pub trait VramRegs {
+pub trait VramRegs: Ram {
     fn write_bank(&mut self, bank: u8);
     fn read_bank(&self) -> u8;
 }

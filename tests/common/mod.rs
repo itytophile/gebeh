@@ -1,8 +1,8 @@
-use gebeh_core::{Emulator, mbc::Mbc};
+use gebeh_core::{Dmg, Emulator, EmulatorExt, mbc::Mbc};
 use std::iter;
 
 pub fn machine_to_serial_iter(
-    emulator: &mut Emulator,
+    emulator: &mut Emulator<Dmg>,
     mbc: &mut dyn Mbc,
 ) -> impl Iterator<Item = u8> {
     iter::from_fn(move || {

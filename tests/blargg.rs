@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use crate::common::machine_to_serial_iter;
 use arrayvec::ArrayVec;
 use gebeh::InstantRtc;
-use gebeh_core::Emulator;
+use gebeh_core::{Dmg, Emulator, EmulatorExt};
 use gebeh_front_helper::get_mbc;
 
 mod common;
@@ -51,7 +51,7 @@ fn mem_timing_2() {
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     // we have to clear the ram to have a 0 terminated string in ram...
     mbc.load_saved_ram(&[0; 0x8000]);
-    let mut machine = Emulator::default();
+    let mut machine = Emulator::<Dmg>::default();
 
     let output = loop {
         machine.execute(mbc.as_mut());

@@ -2,7 +2,8 @@ use std::{cell::Cell, rc::Rc};
 
 use arrayvec::ArrayVec;
 use gebeh_core::{
-    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer, joypad::JoypadInput,
+    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer,
+    joypad::JoypadInput,
 };
 use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
@@ -18,7 +19,7 @@ use crate::rtc::AudioRtc;
 mod rtc;
 
 struct WebEmulatorInner {
-    emulator: Emulator,
+    emulator: Emulator<Dmg>,
     sample_index: u32,
     mbc: EasyMbc,
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
@@ -34,7 +35,7 @@ struct WebEmulatorInner {
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Option<WebEmulatorInner>,
-    network: Option<RollbackSerial>,
+    network: Option<RollbackSerial<Dmg>>,
 }
 
 impl WebEmulatorInner {
@@ -99,7 +100,7 @@ impl WebEmulatorInner {
         sample_rate: u32,
         audio_time: u32,
         on_new_frame: &js_sys::Function,
-        mut serial_mode: Option<&mut RollbackSerial>,
+        mut serial_mode: Option<&mut RollbackSerial<Dmg>>,
     ) -> Box<[u8]> {
         let mut messages = ArrayVec::<SerialMessage, 4>::new();
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
@@ -313,7 +314,7 @@ impl WebEmulator {
             synchro.add_messages(&message);
             None
         } else {
-            let msg = RollbackSerial::handle_msg_no_emulator(&message)?;
+            let msg = RollbackSerial::<Dmg>::handle_msg_no_emulator(&message)?;
             Some(SerialMessage::serialize(&[msg]))
         }
     }

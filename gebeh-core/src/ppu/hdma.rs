@@ -13,13 +13,15 @@ struct CopyCursor {
     dst: u16,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 enum HdmaState {
+    #[default]
     Inactive,
     GeneralPurpose(CopyCursor),
     HBlank(CopyCursor),
 }
 
+#[derive(Clone, Default)]
 pub struct Hdma {
     source_address: u16,
     destination_address: u16,
@@ -65,7 +67,7 @@ impl Hdma {
     }
 }
 
-pub trait HdmaRegs {
+pub trait HdmaRegs: Default + Clone {
     fn write_source_address_low(&mut self, value: u8);
     fn write_source_address_high(&mut self, value: u8);
     fn write_destination_address_low(&mut self, value: u8);

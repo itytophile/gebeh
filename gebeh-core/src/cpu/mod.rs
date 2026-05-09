@@ -3,7 +3,7 @@ mod execute_instruction;
 pub mod instructions;
 
 use crate::{
-    Dmg, Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
+    Model, Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
     interrupts::Interrupts, mbc::Mbc,
 };
 use arrayvec::ArrayVec;
@@ -272,10 +272,10 @@ impl Cpu {
 }
 
 impl Cpu {
-    fn read<M: Mbc + ?Sized>(
+    fn read(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<M, Dmg>,
+        peripherals: PeripheralsRef<impl Mbc + ?Sized, impl Model>,
         cycles: u64,
     ) -> u8 {
         // https://gbdev.io/pandocs/Power_Up_Sequence.html#size
@@ -293,9 +293,9 @@ impl Cpu {
         }
     }
 
-    pub fn execute<M: Mbc + ?Sized>(
+    pub fn execute(
         &mut self,
-        mut peripherals: Peripherals<M, Dmg>,
+        mut peripherals: Peripherals<impl Mbc + ?Sized, impl Model>,
         cycle_count: u64,
     ) {
         let interrupts_to_execute =

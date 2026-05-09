@@ -233,7 +233,7 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-pub trait StatRegisterHandler: Default {
+pub trait StatRegisterHandler: Default + Clone {
     fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus);
     fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus);
 }
@@ -368,7 +368,7 @@ impl<M: Model> Ppu<M> {
         status
     }
 
-    fn get_ppu_mode(&self) -> LcdStatus {
+    pub fn get_ppu_mode(&self) -> LcdStatus {
         if !self.is_ppu_enabled() {
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
             // Citation: Reports 0 instead when the PPU is disabled.

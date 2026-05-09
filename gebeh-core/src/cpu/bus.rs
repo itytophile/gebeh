@@ -1,5 +1,5 @@
 use crate::{
-    Dmg, Peripherals, PeripheralsRef,
+    Model, Peripherals, PeripheralsRef,
     addresses::*,
     cpu::Cpu,
     interrupts::Interrupts,
@@ -10,10 +10,10 @@ use crate::{
 };
 
 impl Cpu {
-    pub fn internal_bus_read<M: Mbc + ?Sized>(
+    pub fn internal_bus_read(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<M, Dmg>,
+        peripherals: PeripheralsRef<impl Mbc + ?Sized, impl Model>,
         cycles: u64,
     ) -> u8 {
         match index {
@@ -56,11 +56,11 @@ impl Cpu {
             _ => todo!("Reading ${index:04x} from internal bus"),
         }
     }
-    pub fn write<M: Mbc + ?Sized>(
+    pub fn write(
         &mut self,
         index: u16,
         value: u8,
-        peripherals: &mut Peripherals<M, Dmg>,
+        peripherals: &mut Peripherals<impl Mbc + ?Sized, impl Model>,
         _: u64,
     ) {
         match index {

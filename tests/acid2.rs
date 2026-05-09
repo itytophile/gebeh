@@ -1,5 +1,5 @@
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, ppu::color::DmgColor};
+use gebeh_core::{Dmg, Emulator, EmulatorExt, HEIGHT, ppu::color::DmgColor};
 use gebeh_front_helper::get_mbc;
 
 #[test]
@@ -7,7 +7,7 @@ fn dmg_acid2() {
     let rom = std::fs::read("./downloads/dmg-acid2.gb").unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::default();
+    let mut emulator = Emulator::<Dmg>::default();
     let mut previous_ly = None;
     let expected = include_bytes!("acid2_expected.txt");
     let split = expected.split(|a| *a == b'\n').map(|slice| {

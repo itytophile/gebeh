@@ -1,5 +1,5 @@
 use gebeh::InstantRtc;
-use gebeh_core::Emulator;
+use gebeh_core::{Dmg, Emulator, EmulatorExt};
 use gebeh_front_helper::get_mbc;
 
 fn test_mooneye(path: &str) {
@@ -8,7 +8,7 @@ fn test_mooneye(path: &str) {
     ))
     .unwrap();
     let rom = rom.as_slice();
-    let mut emulator = Emulator::default();
+    let mut emulator = Emulator::<Dmg>::default();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
 
     // https://github.com/Gekkio/mooneye-test-suite/tree/main?tab=readme-ov-file#passfail-reporting

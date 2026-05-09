@@ -2,7 +2,7 @@ use super::instructions::{
     AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, POP_SP, Prefetch,
     ReadInstruction, Register16Bit, SetPc, vec,
 };
-use crate::Dmg;
+use crate::Model;
 use crate::cpu::{Cpu, Flags};
 use crate::{Peripherals, interrupts::Interrupts, mbc::Mbc};
 
@@ -129,12 +129,12 @@ impl Cpu {
         self.ime = true;
     }
 
-    pub(super) fn execute_instruction<M: Mbc + ?Sized>(
+    pub(super) fn execute_instruction(
         &mut self,
         inst: AfterReadInstruction,
         interrupts_to_execute: Interrupts,
         cycle_count: u64,
-        peripherals: &mut Peripherals<M, Dmg>,
+        peripherals: &mut Peripherals<impl Mbc + ?Sized, impl Model>,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;

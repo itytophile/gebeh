@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use gebeh::InstantRtc;
 use gebeh_core::{
-    Emulator, HEIGHT, WIDTH,
+    Dmg, Emulator, EmulatorExt, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::{
         LcdControl, PpuStep, color::ColorIndex, get_bg_win_tile, get_line_from_tile, vram::DmgVram,
@@ -308,7 +308,7 @@ fn exit(elwt: &EventLoopWindowTarget<()>, title: &str, mbc: &dyn Mbc) {
 
 fn drive_emulator(
     mbc: &mut dyn Mbc,
-    emulator: &mut Emulator,
+    emulator: &mut Emulator<Dmg>,
     pixels: &mut [[u8; 4]],
     debug_mode: &mut DebugMode,
 ) {
@@ -396,7 +396,7 @@ fn draw_tile(
     }
 }
 
-fn draw_tile_map_debug(emulator: &Emulator, pixels: &mut [[u8; 4]]) {
+fn draw_tile_map_debug(emulator: &Emulator<Dmg>, pixels: &mut [[u8; 4]]) {
     for (index, tile_index) in emulator.get_ppu().get_vram()[0x1800..]
         .iter()
         .copied()

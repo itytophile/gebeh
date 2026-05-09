@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 
 use gebeh::InstantRtc;
-use gebeh_core::Emulator;
+use gebeh_core::{Dmg, Emulator, EmulatorExt};
 use gebeh_front_helper::get_mbc;
 
 fn dmg_sound(name: &str) {
@@ -13,7 +13,7 @@ fn dmg_sound(name: &str) {
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
     // we have to clear the ram to have a 0 terminated string in ram...
     mbc.load_saved_ram(&[0; 0x8000]);
-    let mut machine = Emulator::default();
+    let mut machine = Emulator::<Dmg>::default();
 
     while mbc.get_ram_to_save().unwrap()[0] == 0x80
         || mbc.get_ram_to_save().unwrap()[1..4] != [0xde, 0xb0, 0x61]

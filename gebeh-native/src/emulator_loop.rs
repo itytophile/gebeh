@@ -6,7 +6,7 @@ use cpal::{
 };
 use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
-    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY,
+    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY,
     apu::Mixer,
     joypad::JoypadInput,
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
@@ -92,7 +92,7 @@ where
     // don't forget to use arc or you will clone the rom for each save state
     let (_, mut mbc) =
         get_mbc_send(Arc::from(rom.into_boxed_slice()), InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::default();
+    let mut emulator = Emulator::<Dmg>::default();
 
     let config = StreamConfig {
         channels: 2,

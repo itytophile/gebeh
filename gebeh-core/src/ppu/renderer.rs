@@ -6,20 +6,16 @@
 
 use arrayvec::ArrayVec;
 
-use crate::{
-    Ram,
-    ppu::{
-        LcdControl, PpuState, Scrolling, Sprite,
-        background_fetcher::{
-            BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher,
-            CgbBackgroundFetcherStep,
-        },
-        color_palettes::ColorPalettes,
-        fifos::{CgbFifos, DmgFifos},
-        scanline::{DmgScanlineBuilder, ScanlineBuilder},
-        sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
-        vram::{CgbVram, DmgVram},
+use crate::ppu::{
+    LcdControl, PpuState, Scrolling, Sprite,
+    background_fetcher::{
+        BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher, CgbBackgroundFetcherStep,
     },
+    color_palettes::ColorPalettes,
+    fifos::{CgbFifos, DmgFifos},
+    scanline::{DmgScanlineBuilder, ScanlineBuilder},
+    sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
+    vram::{CgbVram, DmgVram, VramRegs},
 };
 
 #[derive(Clone)]
@@ -32,7 +28,7 @@ pub enum RendererStep {
 }
 
 pub trait Renderer: Clone {
-    type Vram: Ram;
+    type Vram: VramRegs;
     type Extra: Default + Clone;
     type ScanlineBuilder: ScanlineBuilder;
     fn new(objects: ArrayVec<Sprite, 10>) -> Self;

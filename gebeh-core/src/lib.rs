@@ -7,7 +7,7 @@ use arrayvec::ArrayVec;
 
 use crate::{
     apu::Apu,
-    cpu::{BOOTIX_BOOT_ROM, Cpu},
+    cpu::{BOOTIX_BOOT_ROM, CGB_BOYTACEAN, Cpu},
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
@@ -82,12 +82,15 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-pub trait Model {
+pub trait Model: Clone {
     type Renderer: Renderer;
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Wram;
     type HdmaRegs: HdmaRegs;
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10>;
+    fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
+    where
+        Self: Sized;
 }
 
 #[derive(Clone)]
@@ -124,6 +127,9 @@ impl Model for Dmg {
             .map(|(_, object)| object)
             .collect()
     }
+    fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
+        emulator.execute(mbc)
+    }
 }
 
 impl Model for Cgb {
@@ -146,22 +152,26 @@ impl Model for Cgb {
             .take(10)
             .collect()
     }
+    fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
+        emulator.execute(mbc)
+    }
 }
 
 #[derive(Clone)]
-pub struct Emulator {
-    ppu: Ppu<Dmg>,
+pub struct Emulator<M: Model> {
+    ppu: Ppu<M>,
     cpu: Cpu,
     pub interrupts: Interrupts,
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
     pub serial: Serial,
-    wram: DmgWram,
+    wram: M::Wram,
     cycles: u64,
+    hdma: M::HdmaRegs,
 }
 
-impl Default for Emulator {
+impl Default for Emulator<Dmg> {
     fn default() -> Self {
         Self {
             ppu: Default::default(),
@@ -173,16 +183,34 @@ impl Default for Emulator {
             serial: Serial::default(),
             wram: DmgWram::default(),
             cycles: 0,
+            hdma: (),
         }
     }
 }
 
-impl Emulator {
+impl Default for Emulator<Cgb> {
+    fn default() -> Self {
+        Self {
+            ppu: Default::default(),
+            cpu: Cpu::new(&CGB_BOYTACEAN),
+            interrupts: Interrupts::default(),
+            timer: Timer::default(),
+            joypad: Joypad::default(),
+            apu: Apu::default(),
+            serial: Serial::default(),
+            wram: Default::default(),
+            cycles: 0,
+            hdma: Hdma::default(),
+        }
+    }
+}
+
+impl<M: Model> Emulator<M> {
     pub fn will_serial_emit_byte(&self) -> bool {
         self.serial
             .will_emit_byte(self.timer.get_system_counter().wrapping_add(1))
     }
-    pub fn get_ppu(&self) -> &Ppu<Dmg> {
+    pub fn get_ppu(&self) -> &Ppu<M> {
         &self.ppu
     }
     pub fn get_cpu(&self) -> &Cpu {
@@ -212,8 +240,8 @@ impl Emulator {
     }
 }
 
-impl Emulator {
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
+impl Emulator<Dmg> {
+    fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
         self.timer.execute(&mut self.interrupts, self.cycles);
         let master_serial_byte = self.serial.execute(
             self.timer.get_system_counter(),
@@ -259,6 +287,69 @@ impl Emulator {
         self.timer.commit_tima_overflow();
         self.cycles = self.cycles.wrapping_add(1);
         master_serial_byte
+    }
+}
+
+impl Emulator<Cgb> {
+    fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
+        let ppu_mode = self.ppu.get_ppu_mode();
+        self.hdma
+            .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode);
+        self.timer.execute(&mut self.interrupts, self.cycles);
+        let master_serial_byte = self.serial.execute(
+            self.timer.get_system_counter(),
+            &mut self.interrupts,
+            self.cycles,
+        );
+        let must_increment_div_apu = self.apu.execute(self.timer.get_div());
+
+        let interrupts_from_previous_cycle = self.interrupts;
+        for _ in 0..2 {
+            self.ppu.execute(&mut self.interrupts, self.cycles);
+        }
+        // I don't understand halt timings https://gekkio.fi/blog/2016/game-boy-research-status
+        let mut slowed_interrupts_in_halt_mode = None;
+        if self.cpu.is_halted {
+            slowed_interrupts_in_halt_mode = Some(self.interrupts);
+            self.interrupts = interrupts_from_previous_cycle;
+        }
+        self.cpu.execute(
+            Peripherals {
+                mbc,
+                timer: &mut self.timer,
+                joypad: &mut self.joypad,
+                apu: &mut self.apu,
+                ppu: &mut self.ppu,
+                serial: &mut self.serial,
+                wram: &mut self.wram,
+                interrupts: &mut self.interrupts,
+                hdma: &mut self.hdma,
+            },
+            self.cycles,
+        );
+        if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
+            self.interrupts = interrupt_flag;
+        }
+        for _ in 2..4 {
+            self.ppu.execute(&mut self.interrupts, self.cycles);
+        }
+
+        if must_increment_div_apu {
+            self.apu.increment_div_apu();
+        }
+        self.timer.commit_tima_overflow();
+        self.cycles = self.cycles.wrapping_add(1);
+        master_serial_byte
+    }
+}
+
+pub trait EmulatorExt {
+    fn execute(&mut self, mbc: &mut (impl Mbc + ?Sized)) -> Option<u8>;
+}
+
+impl<M: Model> EmulatorExt for Emulator<M> {
+    fn execute(&mut self, mbc: &mut (impl Mbc + ?Sized)) -> Option<u8> {
+        M::execute(self, mbc)
     }
 }
 
