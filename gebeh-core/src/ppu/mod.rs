@@ -236,7 +236,7 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-trait StatRegisterHandler: Default {
+pub trait StatRegisterHandler: Default {
     fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus);
     fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus);
 }

@@ -5,7 +5,7 @@ use core::ops::{Deref, DerefMut};
 
 use crate::{
     apu::Apu,
-    cpu::Cpu,
+    cpu::{BOOTIX_BOOT_ROM, Cpu},
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
@@ -71,7 +71,7 @@ pub const HEIGHT: u8 = 144;
 // https://gbdev.io/pandocs/Specifications.html
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Emulator {
     ppu: Ppu<DmgRenderer, StatInterruptWriteQuirk>,
     cpu: Cpu,
@@ -82,6 +82,22 @@ pub struct Emulator {
     pub serial: Serial,
     wram: DmgWram,
     cycles: u64,
+}
+
+impl Default for Emulator {
+    fn default() -> Self {
+        Self {
+            ppu: Default::default(),
+            cpu: Cpu::new(&BOOTIX_BOOT_ROM),
+            interrupts: Interrupts::default(),
+            timer: Timer::default(),
+            joypad: Joypad::default(),
+            apu: Apu::default(),
+            serial: Serial::default(),
+            wram: DmgWram::default(),
+            cycles: 0,
+        }
+    }
 }
 
 impl Emulator {
