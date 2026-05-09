@@ -42,10 +42,6 @@ pub struct CgbVram {
 }
 
 impl CgbVram {
-    pub fn set_bank(&mut self, bank: u8) {
-        self.bank = bank & 0x01;
-    }
-
     pub fn get_inner(&self) -> &[[u8; VRAM_BANK_SIZE]; 2] {
         &self.data
     }
@@ -75,3 +71,26 @@ impl DerefMut for CgbVram {
 }
 
 impl Ram for CgbVram {}
+
+pub trait VramRegs {
+    fn write_bank(&mut self, bank: u8);
+    fn read_bank(&self) -> u8;
+}
+
+impl VramRegs for CgbVram {
+    fn write_bank(&mut self, bank: u8) {
+        self.bank = bank & 0x01;
+    }
+
+    fn read_bank(&self) -> u8 {
+        self.bank | 0xfe
+    }
+}
+
+impl VramRegs for DmgVram {
+    fn write_bank(&mut self, _: u8) {}
+
+    fn read_bank(&self) -> u8 {
+        0xff
+    }
+}

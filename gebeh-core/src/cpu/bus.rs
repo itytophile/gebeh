@@ -4,7 +4,7 @@ use crate::{
     cpu::Cpu,
     interrupts::Interrupts,
     mbc::Mbc,
-    ppu::{LcdControl, hdma::HdmaRegs},
+    ppu::{LcdControl, hdma::HdmaRegs, vram::VramRegs},
     serial::SerialControl,
 };
 
@@ -43,7 +43,7 @@ impl Cpu {
             0xff4c => 0xff,
             0xff4d => 0xff,
             0xff4e => 0xff,
-            0xff4f => 0xff,
+            0xff4f => peripherals.ppu.get_vram().read_bank(),
             BOOT_ROM_MAPPING_CONTROL => 0xff,
             HDMA_SOURCE_HIGH..HDMA_LENGTH_AND_MODE => 0xff,
             HDMA_LENGTH_AND_MODE => peripherals.hdma.read_mode_and_length(),
@@ -103,9 +103,14 @@ impl Cpu {
             0xff4c => {}
             0xff4d => {}
             0xff4e => {}
-            0xff4f => {}
+            0xff4f => peripherals.ppu.get_vram_mut().write_bank(value),
             BOOT_ROM_MAPPING_CONTROL => self.boot_rom_mapping_control |= value != 0,
-            0xff51..HRAM => {}
+            HDMA_SOURCE_HIGH => peripherals.hdma.write_source_address_high(value),
+            HDMA_SOURCE_LOW => peripherals.hdma.write_source_address_low(value),
+            HDMA_DESTINATION_HIGH => peripherals.hdma.write_destination_address_high(value),
+            HDMA_DESTINATION_LOW => peripherals.hdma.write_destination_address_low(value),
+            HDMA_LENGTH_AND_MODE => peripherals.hdma.write_length_mode_start(value),
+            0xff56..HRAM => {}
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)] = value,
             INTERRUPT_ENABLE => self.interrupt_enable = Interrupts::from_bits_retain(value),
         }

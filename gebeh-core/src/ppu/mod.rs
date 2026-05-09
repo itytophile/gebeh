@@ -332,7 +332,9 @@ impl<M: Model> Ppu<M> {
     pub fn get_vram(&self) -> &<M::Renderer as Renderer>::Vram {
         &self.state.video_ram
     }
-
+    pub fn get_vram_mut(&mut self) -> &mut <M::Renderer as Renderer>::Vram {
+        &mut self.state.video_ram
+    }
     pub fn write_vram(&mut self, index: u16, value: u8) {
         if self.get_ppu_mode() != LcdStatus::DRAWING {
             self.state.video_ram[usize::from(index)] = value;
