@@ -55,21 +55,6 @@ impl Renderer {
         }
     }
 
-    pub fn is_sprite_on_cursor(&self) -> bool {
-        let RendererStep::AfterDummy {
-            first_pixels_to_skip,
-            ..
-        } = self.step
-        else {
-            return false;
-        };
-        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
-        let Some(obj) = self.objects.last() else {
-            return false;
-        };
-        i16::from(obj.x) == cursor
-    }
-
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
@@ -235,21 +220,6 @@ impl CgbRenderer {
             objects,
             step: RendererStep::DummyFetch,
         }
-    }
-
-    pub fn is_sprite_on_cursor(&self) -> bool {
-        let RendererStep::AfterDummy {
-            first_pixels_to_skip,
-            ..
-        } = self.step
-        else {
-            return false;
-        };
-        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
-        let Some(obj) = self.objects.last() else {
-            return false;
-        };
-        i16::from(obj.x) == cursor
     }
 
     pub(super) fn execute(
