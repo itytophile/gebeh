@@ -28,7 +28,7 @@ pub enum RendererStep {
 }
 
 #[derive(Clone)]
-pub struct Renderer {
+pub struct DmgRenderer {
     background_pixel_fetcher: BackgroundFetcher,
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
@@ -38,7 +38,7 @@ pub struct Renderer {
     step: RendererStep,
 }
 
-impl Renderer {
+impl DmgRenderer {
     pub fn new(objects: ArrayVec<Sprite, 10>) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
@@ -366,7 +366,7 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, PpuState, Sprite, TileAttributes, renderer::Renderer},
+        ppu::{LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer},
     };
 
     // all timings are +2 compared to pandocs timings
@@ -378,7 +378,7 @@ mod tests {
         ppu_state: &PpuState,
         ly: u8,
     ) -> u16 {
-        let mut renderer = Renderer::new(objects);
+        let mut renderer = DmgRenderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
             renderer.execute(&mut window_y, ppu_state, ly, 0);

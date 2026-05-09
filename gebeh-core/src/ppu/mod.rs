@@ -18,7 +18,7 @@ use crate::{
     mbc::Mbc,
     ppu::{
         oam_dma::{BLOCKED_OAM, Oam, OamDma},
-        renderer::Renderer,
+        renderer::DmgRenderer,
         sprite::Sprite,
         vram::DmgVram,
     },
@@ -78,7 +78,7 @@ pub enum PpuStep {
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
-        renderer: Renderer,
+        renderer: DmgRenderer,
         ly: u8,
     }, // <= 289
     HorizontalBlank {
@@ -410,7 +410,7 @@ impl Ppu {
             } => {
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
-                    renderer: Renderer::new(Default::default()),
+                    renderer: DmgRenderer::new(Default::default()),
                     window_y: None,
                     ly: 0,
                 }
@@ -439,7 +439,7 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let renderer = Renderer::new(
+                let renderer = DmgRenderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
@@ -455,7 +455,7 @@ impl Ppu {
             }
             PpuStep::Drawing {
                 dots_count,
-                renderer: Renderer { scanline, .. },
+                renderer: DmgRenderer { scanline, .. },
                 window_y,
                 ly,
                 ..
