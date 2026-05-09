@@ -88,16 +88,17 @@ impl Hdma {
 
     // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
     // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
+    /// Returns true if HDMA has performed a transfer, false otherwise.
     pub fn execute(
         &mut self,
         vram: &mut CgbVram,
         mbc: &(impl Mbc + ?Sized),
         wram: &CgbWram,
         ppu_mode: LcdStatus,
-    ) {
+    ) -> bool {
         let (HdmaState::GeneralPurpose(cursor) | HdmaState::HBlank(cursor)) = &mut self.state
         else {
-            return;
+            return false;
         };
 
         if ppu_mode == LcdStatus::HBLANK || ppu_mode == LcdStatus::VBLANK {
@@ -117,5 +118,7 @@ impl Hdma {
         if self.length == 0 {
             self.state = HdmaState::Inactive;
         }
+
+        true
     }
 }
