@@ -108,7 +108,7 @@ pub struct Ppu {
 }
 
 #[derive(Clone, Default)]
-struct PpuState {
+struct PpuState<V = DmgVram> {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -120,13 +120,13 @@ struct PpuState {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
-    video_ram: DmgVram,
+    video_ram: V,
     obp0: u8,
     obp1: u8,
     wy: u8,
 }
 
-impl PpuState {
+impl<V> PpuState<V> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }

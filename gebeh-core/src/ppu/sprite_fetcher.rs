@@ -113,20 +113,20 @@ impl SpriteFetcher {
 }
 
 #[derive(Clone)]
-pub enum SpriteFetcherCgb {
+pub enum CgbSpriteFetcher {
     // we have access to the object tile_index so it's useless to have it here
     FetchingTileLow { delay: u8 },
     FetchingTileHigh { one_dot_delay: bool, tile_low: u8 },
     Ready([u8; 2]),
 }
 
-impl Default for SpriteFetcherCgb {
+impl Default for CgbSpriteFetcher {
     fn default() -> Self {
         Self::FetchingTileLow { delay: 0 }
     }
 }
 
-impl SpriteFetcherCgb {
+impl CgbSpriteFetcher {
     pub fn execute(
         &mut self,
         // the cursor is in the same "space" as the sprites x coordinates
@@ -139,7 +139,7 @@ impl SpriteFetcherCgb {
         vram_banks: &[[u8; VRAM_BANK_SIZE]; 2],
         ly: u8,
     ) {
-        use SpriteFetcherCgb::*;
+        use CgbSpriteFetcher::*;
 
         if let Ready(tile) = *self {
             let obj = objects.pop().unwrap();

@@ -21,10 +21,14 @@ use arrayvec::ArrayVec;
 
 use crate::ppu::{
     LcdControl, PpuState, Scrolling, Sprite,
-    background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
-    fifos::DmgFifos,
+    background_fetcher::{
+        BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher, CgbBackgroundFetcherStep,
+    },
+    color_palettes::ColorPalettes,
+    fifos::{CgbFifos, DmgFifos},
     scanline::ScanlineBuilder,
-    sprite_fetcher::SpriteFetcher,
+    sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
+    vram::CgbVram,
 };
 
 #[derive(Clone)]
@@ -208,6 +212,184 @@ impl Renderer {
                 ppu_state.obp1,
                 ppu_state.is_background_enabled(),
                 ppu_state.is_obj_enabled(),
+            ));
+        }
+
+        self.fifos.shift();
+    }
+}
+
+// yea I'm copy pasting everything. The original rendering logic has specific Game Boy Pocket behavior.
+// So there is a lot of chance that in the future, the cgb rendering logic will be modified.
+
+#[derive(Clone)]
+pub struct CgbRenderer {
+    background_pixel_fetcher: CgbBackgroundFetcher,
+    sprite_pixel_fetcher: CgbSpriteFetcher,
+    rendering_state: RenderingState,
+    fifos: CgbFifos,
+    pub objects: ArrayVec<Sprite, 10>,
+    pub scanline: ArrayVec<u16, 160>,
+    step: RendererStep,
+}
+
+impl CgbRenderer {
+    pub fn new(objects: ArrayVec<Sprite, 10>) -> Self {
+        Self {
+            background_pixel_fetcher: Default::default(),
+            rendering_state: RenderingState {
+                is_shifting: true,
+                is_sprite_fetching_enable: false,
+            },
+            fifos: Default::default(),
+
+            sprite_pixel_fetcher: Default::default(),
+            scanline: Default::default(),
+            objects,
+            step: RendererStep::DummyFetch,
+        }
+    }
+
+    pub fn is_sprite_on_cursor(&self) -> bool {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ..
+        } = self.step
+        else {
+            return false;
+        };
+        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
+        let Some(obj) = self.objects.last() else {
+            return false;
+        };
+        i16::from(obj.x) == cursor
+    }
+
+    pub(super) fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<CgbVram>,
+        color_palettes: &ColorPalettes,
+        ly: u8,
+        _: u64,
+    ) {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ref mut saved_wx,
+        } = self.step
+        else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ly,
+                ppu_state.is_signed_addressing(),
+            );
+
+            if let CgbBackgroundFetcherStep::Ready { .. } = self.background_pixel_fetcher.step {
+                self.step = RendererStep::AfterDummy {
+                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+                    // Citation: The scroll registers are re-read on each tile fetch, except for
+                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
+                    //
+                    // And according to mealybug, it's read after the dummy fetch
+                    first_pixels_to_skip: ppu_state.scx % 8,
+                    saved_wx: None,
+                };
+            }
+
+            return;
+        };
+        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
+
+        // yes can be triggered multiple times if wx changes during the same scanline
+        if ppu_state
+            .old_lcd_control
+            .contains(LcdControl::WINDOW_ENABLE)
+            && (cursor == i16::from(ppu_state.old_old_wx.saturating_add(1))
+                // strange race condition showed by mealybug and my Game Boy Pocket
+                || (cursor == i16::from(ppu_state.old_old_wx.saturating_add(2))
+                    && !ppu_state
+                        .old_old_lcd_control
+                        .contains(LcdControl::WINDOW_ENABLE)))
+            && let Some(window_y) = window_y
+            && Some(ppu_state.old_old_wx) != *saved_wx
+        {
+            if saved_wx.is_none() {
+                self.background_pixel_fetcher = CgbBackgroundFetcher {
+                    step: Default::default(),
+                    x: 1,
+                };
+                self.fifos.reset_background();
+                *window_y = window_y.wrapping_add(1);
+            }
+
+            *saved_wx = Some(ppu_state.old_old_wx);
+
+            // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
+            if ppu_state.old_old_wx == 0 && first_pixels_to_skip > 0 {
+                return;
+            }
+        }
+
+        // those systems can run "concurrently"
+
+        if let Some(window_y) = window_y
+            && saved_wx.is_some()
+        {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
+                ppu_state.get_window_tile_map_address(),
+                Scrolling::default(),
+                // - 1 because we increment it at window initialization
+                window_y.wrapping_sub(1),
+                ppu_state.is_signed_addressing(),
+            );
+            // according to mealybug, when the window is disabled, we have to wait for the fetch to end
+            // before disabling the window for real
+            if matches!(
+                self.background_pixel_fetcher.step,
+                // yeah it works with this step, don't know why
+                CgbBackgroundFetcherStep::FetchingTileIndex { .. }
+            ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            {
+                *saved_wx = None;
+            }
+        } else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ly,
+                ppu_state.is_signed_addressing(),
+            );
+        }
+
+        self.sprite_pixel_fetcher.execute(
+            cursor,
+            &mut self.rendering_state,
+            &mut self.fifos,
+            &mut self.objects,
+            ppu_state.lcd_control,
+            ppu_state.video_ram.get_inner(),
+            ly,
+        );
+
+        if self.fifos.is_background_empty() || !self.rendering_state.is_shifting {
+            return;
+        }
+
+        if cursor >= 8 {
+            self.scanline.push(self.fifos.render_pixel(
+                ppu_state.is_background_enabled(),
+                ppu_state.is_obj_enabled(),
+                color_palettes,
             ));
         }
 
