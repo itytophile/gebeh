@@ -2,15 +2,13 @@ mod background_fetcher;
 pub mod color;
 mod color_palettes;
 mod fifos;
-mod hdma;
+pub mod hdma;
 pub mod oam_dma;
 pub mod renderer;
 mod scanline;
 pub mod sprite;
 mod sprite_fetcher;
 pub mod vram;
-
-use arrayvec::ArrayVec;
 
 use crate::{
     Model, Ram, WIDTH,
@@ -124,7 +122,7 @@ impl<M: Model> Default for Ppu<M> {
 }
 
 #[derive(Clone, Default)]
-struct PpuState<V> {
+pub struct PpuState<V> {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -642,7 +640,7 @@ mod tests {
     use crate::{
         Dmg,
         interrupts::Interrupts,
-        ppu::{LcdControl, Ppu, PpuStep, StatInterruptWriteQuirk, renderer::DmgRenderer},
+        ppu::{LcdControl, Ppu, PpuStep},
     };
 
     extern crate std;

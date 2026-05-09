@@ -40,6 +40,7 @@ pub struct BackgroundFetcher {
 }
 
 impl BackgroundFetcher {
+    #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &mut self,
         rendering_state: &mut RenderingState,
@@ -177,6 +178,7 @@ pub struct CgbBackgroundFetcher {
 }
 
 impl CgbBackgroundFetcher {
+    #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &mut self,
         rendering_state: &mut RenderingState,

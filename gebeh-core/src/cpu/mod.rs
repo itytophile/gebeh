@@ -4,7 +4,7 @@ pub mod instructions;
 
 use crate::{
     Dmg, Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
-    interrupts::Interrupts, mbc::Mbc, wram::DmgWram,
+    interrupts::Interrupts, mbc::Mbc,
 };
 use arrayvec::ArrayVec;
 use instructions::{

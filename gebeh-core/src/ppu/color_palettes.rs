@@ -15,8 +15,6 @@ impl Default for InnerColorPalettes {
     }
 }
 
-const COLOR_DEPTH: usize = 5;
-
 impl InnerColorPalettes {
     fn is_auto_increment(&self) -> bool {
         self.spec & 0x80 != 0

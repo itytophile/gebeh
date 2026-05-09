@@ -23,7 +23,6 @@ enum HdmaState {
 pub struct Hdma {
     source_address: u16,
     destination_address: u16,
-    transfer_length: u8,
     length: u16,
     state: HdmaState,
 }

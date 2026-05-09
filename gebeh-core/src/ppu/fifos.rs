@@ -139,18 +139,6 @@ impl CgbFifos {
         self.shifted_count = self.shifted_count.wrapping_add(1);
     }
 
-    fn scale_mask_by_3(mask: u8) -> u32 {
-        let mut scaled = 0;
-
-        for index in 0..8 {
-            if mask & (1 << index) != 0 {
-                scaled |= 0x07 << (index * 3);
-            }
-        }
-
-        scaled
-    }
-
     pub fn replace_background(&mut self, tile: [u8; 2], background_palette: u8) {
         self.bg0 = tile[0];
         self.bg1 = tile[1];

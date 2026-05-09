@@ -13,6 +13,7 @@ use crate::{
     mbc::Mbc,
     ppu::{
         LcdControl, Ppu, StatInterruptWriteQuirk, StatRegisterHandler,
+        hdma::{Hdma, HdmaRegs},
         oam_dma::Oam,
         renderer::{CgbRenderer, DmgRenderer, Renderer},
         sprite::Sprite,
@@ -82,6 +83,7 @@ pub trait Model {
     type Renderer: Renderer;
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Ram;
+    type HdmaRegs: HdmaRegs;
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10>;
 }
 
@@ -94,6 +96,7 @@ impl Model for Dmg {
     type Renderer = DmgRenderer;
     type StatRegisterHandler = StatInterruptWriteQuirk;
     type Wram = DmgWram;
+    type HdmaRegs = ();
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10> {
         let mut objects_to_sort: ArrayVec<_, 10> = oam
             .as_chunks::<4>()
@@ -124,6 +127,7 @@ impl Model for Cgb {
     type Renderer = CgbRenderer;
     type StatRegisterHandler = ();
     type Wram = CgbWram;
+    type HdmaRegs = Hdma;
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10> {
         // Citation: In CGB mode, only the object’s location in OAM determines its priority. The earlier the object, the higher its priority.
         oam.as_chunks::<4>()

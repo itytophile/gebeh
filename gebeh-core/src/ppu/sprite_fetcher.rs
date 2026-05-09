@@ -25,6 +25,7 @@ impl Default for SpriteFetcher {
 }
 
 impl SpriteFetcher {
+    #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &mut self,
         // the cursor is in the same "space" as the sprites x coordinates
@@ -126,6 +127,7 @@ impl Default for CgbSpriteFetcher {
 }
 
 impl CgbSpriteFetcher {
+    #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &mut self,
         // the cursor is in the same "space" as the sprites x coordinates
