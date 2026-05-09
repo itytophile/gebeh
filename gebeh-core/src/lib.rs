@@ -46,6 +46,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized, Mo: Model> {
     pub serial: &'a mut Serial,
     pub wram: &'a mut Mo::Wram,
     pub interrupts: &'a mut Interrupts,
+    pub hdma: &'a mut Mo::HdmaRegs,
 }
 
 impl<M: Mbc + ?Sized, Mo: Model> Peripherals<'_, M, Mo> {
@@ -59,6 +60,7 @@ impl<M: Mbc + ?Sized, Mo: Model> Peripherals<'_, M, Mo> {
             serial: self.serial,
             wram: self.wram,
             interrupts: *self.interrupts,
+            hdma: self.hdma,
         }
     }
 }
@@ -72,6 +74,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized, Mo: Model> {
     pub serial: &'a Serial,
     pub wram: &'a Mo::Wram,
     pub interrupts: Interrupts,
+    pub hdma: &'a Mo::HdmaRegs,
 }
 
 pub const WIDTH: u8 = 160;
@@ -239,6 +242,7 @@ impl Emulator {
                 serial: &mut self.serial,
                 wram: &mut self.wram,
                 interrupts: &mut self.interrupts,
+                hdma: &mut (),
             },
             self.cycles,
         );

@@ -1,6 +1,11 @@
 use crate::{
-    Dmg, Peripherals, PeripheralsRef, addresses::*, cpu::Cpu, interrupts::Interrupts, mbc::Mbc,
-    ppu::LcdControl, serial::SerialControl,
+    Dmg, Peripherals, PeripheralsRef,
+    addresses::*,
+    cpu::Cpu,
+    interrupts::Interrupts,
+    mbc::Mbc,
+    ppu::{LcdControl, hdma::HdmaRegs},
+    serial::SerialControl,
 };
 
 impl Cpu {
@@ -40,7 +45,9 @@ impl Cpu {
             0xff4e => 0xff,
             0xff4f => 0xff,
             BOOT_ROM_MAPPING_CONTROL => 0xff,
-            0xff51..HRAM => 0xff,
+            HDMA_SOURCE_HIGH..HDMA_LENGTH_AND_MODE => 0xff,
+            HDMA_LENGTH_AND_MODE => peripherals.hdma.read_mode_and_length(),
+            0xff56..HRAM => 0xff,
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)],
             INTERRUPT_ENABLE => self.interrupt_enable.bits(),
             _ => todo!("Reading ${index:04x} from internal bus"),
