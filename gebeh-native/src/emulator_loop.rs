@@ -6,56 +6,54 @@ use cpal::{
 };
 use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
-    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY,
-    apu::Mixer,
-    joypad::JoypadInput,
-    mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
+    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY, apu::Mixer, joypad::JoypadInput,
     ppu::DmgScanline,
 };
-use gebeh_front_helper::{get_mbc_send, get_noise, get_title_from_rom};
+use gebeh_front_helper::{get_mbc_send, get_noise};
 
 pub fn spawn_emulator(
     device: &cpal::Device,
     shared_frame: SyncSender<Frame>,
     shared_joypad: Arc<RwLock<JoypadInput>>,
+    rom: Vec<u8>,
 ) -> cpal::Stream {
     let config = device.default_output_config().unwrap();
     let stream = match config.sample_format() {
         cpal::SampleFormat::I8 => {
-            create_stream::<i8>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<i8>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::I16 => {
-            create_stream::<i16>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<i16>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::I24 => {
-            create_stream::<I24>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<I24>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::I32 => {
-            create_stream::<i32>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<i32>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         // cpal::SampleFormat::I48 => run::<I48>(&device, &config.into(),shared_frame),
         cpal::SampleFormat::I64 => {
-            create_stream::<i64>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<i64>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::U8 => {
-            create_stream::<u8>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<u8>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::U16 => {
-            create_stream::<u16>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<u16>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         // cpal::SampleFormat::U24 => run::<U24>(&device, &config.into(),shared_frame),
         cpal::SampleFormat::U32 => {
-            create_stream::<u32>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<u32>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         // cpal::SampleFormat::U48 => run::<U48>(&device, &config.into(),shared_frame),
         cpal::SampleFormat::U64 => {
-            create_stream::<u64>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<u64>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::F32 => {
-            create_stream::<f32>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<f32>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         cpal::SampleFormat::F64 => {
-            create_stream::<f64>(device, config.into(), shared_frame, shared_joypad)
+            create_stream::<f64>(device, config.into(), shared_frame, shared_joypad, rom)
         }
         sample_format => panic!("Unsupported sample format '{sample_format}'"),
     };
@@ -69,26 +67,11 @@ fn create_stream<T>(
     config: cpal::StreamConfig,
     shared_frame: SyncSender<Frame>,
     shared_joypad: Arc<RwLock<JoypadInput>>,
+    rom: Vec<u8>,
 ) -> cpal::Stream
 where
     T: SizedSample + FromSample<f32>,
 {
-    let rom = std::fs::read(
-        std::env::args()
-            .nth(1)
-            .expect("Please provide a path as first argument"),
-    )
-    .unwrap();
-
-    println!("Title: {}", get_title_from_rom(&rom));
-
-    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
-    let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
-    println!("Cartridge type: {cartridge_type:?}");
-    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0148--rom-size
-    println!("ROM size: {} KiB", get_factor_32_kib_rom(&rom) * 32);
-    println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
-
     // don't forget to use arc or you will clone the rom for each save state
     let (_, mut mbc) =
         get_mbc_send(Arc::from(rom.into_boxed_slice()), InstantRtc::default()).unwrap();

@@ -4,7 +4,13 @@ use std::sync::{Arc, RwLock};
 
 use cpal::traits::HostTrait;
 use gebeh::Frame;
-use gebeh_core::{HEIGHT, WIDTH, joypad::JoypadInput, ppu::scanline::ColorIterator};
+use gebeh_core::{
+    HEIGHT, WIDTH,
+    joypad::JoypadInput,
+    mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
+    ppu::scanline::ColorIterator,
+};
+use gebeh_front_helper::{get_title_from_rom, is_cgb_compatible};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
@@ -28,6 +34,26 @@ fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_
 fn main() {
     color_eyre::install().unwrap();
     env_logger::init();
+
+    let rom = std::fs::read(
+        std::env::args()
+            .nth(1)
+            .expect("Please provide a path as first argument"),
+    )
+    .unwrap();
+
+    let is_cgb_compatible = is_cgb_compatible(&rom);
+
+    println!("CGB compatibility: {is_cgb_compatible}");
+
+    println!("Title: {}", get_title_from_rom(&rom));
+
+    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
+    let cartridge_type = CartridgeType::try_from(rom[0x147]).unwrap();
+    println!("Cartridge type: {cartridge_type:?}");
+    // https://gbdev.io/pandocs/The_Cartridge_Header.html#0148--rom-size
+    println!("ROM size: {} KiB", get_factor_32_kib_rom(&rom) * 32);
+    println!("RAM size: {} KiB", get_factor_8_kib_ram(&rom) * 8);
 
     let event_loop = EventLoop::new().unwrap();
 
@@ -55,7 +81,7 @@ fn main() {
         .default_output_device()
         .expect("failed to find output device");
 
-    let _handle = spawn_emulator(&device, tx_frame, shared_joypad);
+    let _handle = spawn_emulator(&device, tx_frame, shared_joypad, rom);
 
     event_loop
         .run(|event, elwt| match event {
