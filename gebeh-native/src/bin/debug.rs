@@ -5,7 +5,11 @@ use gebeh_core::{
     Dmg, Emulator, EmulatorExt, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::{
-        LcdControl, PpuStep, color::ColorIndex, get_bg_win_tile, get_line_from_tile, vram::DmgVram,
+        LcdControl, PpuStep,
+        color::ColorIndex,
+        get_bg_win_tile, get_line_from_tile,
+        scanline::{ColorIterator, ScanlineBuilder},
+        vram::DmgVram,
     },
 };
 use gebeh_front_helper::get_mbc;

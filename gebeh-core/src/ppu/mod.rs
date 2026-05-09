@@ -5,7 +5,7 @@ mod fifos;
 pub mod hdma;
 pub mod oam_dma;
 pub mod renderer;
-mod scanline;
+pub mod scanline;
 pub mod sprite;
 mod sprite_fetcher;
 pub mod vram;

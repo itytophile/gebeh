@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use cpal::traits::HostTrait;
 use gebeh::Frame;
-use gebeh_core::{HEIGHT, WIDTH, joypad::JoypadInput};
+use gebeh_core::{HEIGHT, WIDTH, joypad::JoypadInput, ppu::scanline::ColorIterator};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,

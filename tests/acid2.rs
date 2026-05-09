@@ -1,5 +1,8 @@
 use gebeh::InstantRtc;
-use gebeh_core::{Dmg, Emulator, EmulatorExt, HEIGHT, ppu::color::DmgColor};
+use gebeh_core::{
+    Dmg, Emulator, EmulatorExt, HEIGHT,
+    ppu::{color::DmgColor, scanline::ColorIterator},
+};
 use gebeh_front_helper::get_mbc;
 
 #[test]

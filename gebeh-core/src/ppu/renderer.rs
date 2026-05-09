@@ -433,7 +433,10 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer, vram::DmgVram},
+        ppu::{
+            LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer,
+            scanline::ScanlineBuilder, vram::DmgVram,
+        },
     };
 
     // all timings are +2 compared to pandocs timings
