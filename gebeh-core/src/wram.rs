@@ -45,12 +45,6 @@ impl Default for CgbWram {
 }
 
 impl CgbWram {
-    pub fn read_bank(&self) -> u8 {
-        self.bank | 0b11111000
-    }
-    pub fn set_bank(&mut self, bank: u8) {
-        self.bank = bank & 0x07;
-    }
     fn get_address(&self, address: u16) -> usize {
         usize::from(self.bank.max(1)) * 0x1000 + usize::from(address)
     }
@@ -73,3 +67,24 @@ impl DerefMut for CgbWram {
 }
 
 impl Ram for CgbWram {}
+
+pub trait Wram: Ram {
+    fn write_bank(&mut self, bank: u8);
+    fn read_bank(&self) -> u8;
+}
+
+impl Wram for CgbWram {
+    fn write_bank(&mut self, bank: u8) {
+        self.bank = bank & 0x07;
+    }
+    fn read_bank(&self) -> u8 {
+        self.bank | 0b11111000
+    }
+}
+
+impl Wram for DmgWram {
+    fn write_bank(&mut self, _: u8) {}
+    fn read_bank(&self) -> u8 {
+        0xff
+    }
+}

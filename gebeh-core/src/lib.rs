@@ -20,7 +20,7 @@ use crate::{
     },
     serial::Serial,
     timer::Timer,
-    wram::{CgbWram, DmgWram},
+    wram::{CgbWram, DmgWram, Wram},
 };
 
 pub mod addresses;
@@ -85,7 +85,7 @@ pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 pub trait Model {
     type Renderer: Renderer;
     type StatRegisterHandler: StatRegisterHandler;
-    type Wram: Ram;
+    type Wram: Wram;
     type HdmaRegs: HdmaRegs;
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10>;
 }
