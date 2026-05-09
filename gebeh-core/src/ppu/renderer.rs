@@ -13,9 +13,9 @@ use crate::ppu::{
     },
     color_palettes::ColorPalettes,
     fifos::{CgbFifos, DmgFifos},
-    scanline::ScanlineBuilder,
+    scanline::{DmgScanlineBuilder, ScanlineBuilder},
     sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
-    vram::CgbVram,
+    vram::{CgbVram, DmgVram},
 };
 
 #[derive(Clone)]
@@ -27,14 +27,28 @@ pub enum RendererStep {
     },
 }
 
+pub trait Renderer {
+    type Extra;
+    type ScanlineBuilder: ScanlineBuilder;
+    fn new(objects: ArrayVec<Sprite, 10>) -> Self;
+    fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<Self::Extra>,
+        ly: u8,
+        cycle: u64,
+    );
+    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder;
+}
+
 #[derive(Clone)]
 pub struct DmgRenderer {
     background_pixel_fetcher: BackgroundFetcher,
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
     fifos: DmgFifos,
-    pub objects: ArrayVec<Sprite, 10>,
-    pub scanline: ScanlineBuilder,
+    objects: ArrayVec<Sprite, 10>,
+    pub scanline: DmgScanlineBuilder,
     step: RendererStep,
 }
 
@@ -191,6 +205,29 @@ impl DmgRenderer {
     }
 }
 
+impl Renderer for DmgRenderer {
+    type Extra = DmgVram;
+    type ScanlineBuilder = DmgScanlineBuilder;
+
+    fn new(objects: ArrayVec<Sprite, 10>) -> Self {
+        Self::new(objects)
+    }
+
+    fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<Self::Extra>,
+        ly: u8,
+        cycle: u64,
+    ) {
+        self.execute(window_y, ppu_state, ly, cycle);
+    }
+
+    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {
+        &self.scanline
+    }
+}
+
 // yea I'm copy pasting everything. The original rendering logic has specific Game Boy Pocket behavior.
 // So there is a lot of chance that in the future, the cgb rendering logic will be modified.
 
@@ -225,8 +262,7 @@ impl CgbRenderer {
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState<CgbVram>,
-        color_palettes: &ColorPalettes,
+        ppu_state: &PpuState<(CgbVram, ColorPalettes)>,
         ly: u8,
         _: u64,
     ) {
@@ -238,7 +274,7 @@ impl CgbRenderer {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &mut self.fifos,
-                ppu_state.video_ram.get_inner(),
+                ppu_state.video_ram.0.get_inner(),
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -299,7 +335,7 @@ impl CgbRenderer {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &mut self.fifos,
-                ppu_state.video_ram.get_inner(),
+                ppu_state.video_ram.0.get_inner(),
                 ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
@@ -320,7 +356,7 @@ impl CgbRenderer {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
                 &mut self.fifos,
-                ppu_state.video_ram.get_inner(),
+                ppu_state.video_ram.0.get_inner(),
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -334,7 +370,7 @@ impl CgbRenderer {
             &mut self.fifos,
             &mut self.objects,
             ppu_state.lcd_control,
-            ppu_state.video_ram.get_inner(),
+            ppu_state.video_ram.0.get_inner(),
             ly,
         );
 
@@ -346,11 +382,35 @@ impl CgbRenderer {
             self.scanline.push(self.fifos.render_pixel(
                 ppu_state.is_background_enabled(),
                 ppu_state.is_obj_enabled(),
-                color_palettes,
+                &ppu_state.video_ram.1,
             ));
         }
 
         self.fifos.shift();
+    }
+}
+
+impl Renderer for CgbRenderer {
+    type Extra = (CgbVram, ColorPalettes);
+    type ScanlineBuilder = ArrayVec<u16, 160>;
+
+    fn new(objects: ArrayVec<Sprite, 10>) -> Self {
+        Self::new(objects)
+    }
+
+    fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<Self::Extra>,
+        ly: u8,
+        cycle: u64,
+    ) {
+        // we don't have to care about color palettes here since the render pixel function will just ignore them if it's not needed
+        self.execute(window_y, ppu_state, ly, cycle);
+    }
+
+    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {
+        &self.scanline
     }
 }
 

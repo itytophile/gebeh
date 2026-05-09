@@ -25,7 +25,7 @@ use crate::{
 };
 
 pub use background_fetcher::get_bg_win_tile;
-pub use scanline::Scanline;
+pub use scanline::DmgScanline;
 pub use sprite_fetcher::get_line_from_tile;
 
 bitflags::bitflags! {
@@ -85,7 +85,7 @@ pub enum PpuStep {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
-        scanline: Scanline,
+        scanline: DmgScanline,
         ly: u8,
     }, // <= 204
     VerticalBlankScanline {
@@ -387,7 +387,7 @@ impl Ppu {
     }
 
     #[must_use]
-    pub fn get_scanline_if_ready(&self) -> Option<&Scanline> {
+    pub fn get_scanline_if_ready(&self) -> Option<&DmgScanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,

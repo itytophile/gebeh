@@ -10,7 +10,7 @@ use gebeh_core::{
     apu::Mixer,
     joypad::JoypadInput,
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
-    ppu::Scanline,
+    ppu::DmgScanline,
 };
 use gebeh_front_helper::{get_mbc_send, get_noise, get_title_from_rom};
 
@@ -110,7 +110,7 @@ where
     let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
     let mut error = 0;
-    let mut current_frame = [Scanline::default(); HEIGHT as usize];
+    let mut current_frame = [DmgScanline::default(); HEIGHT as usize];
     let mut mixer = Mixer::new(sample_rate as f32, noise, short_noise);
 
     device
