@@ -9,7 +9,7 @@ use crate::{
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
-    ppu::{Ppu, renderer::DmgRenderer},
+    ppu::{Ppu, StatInterruptWriteQuirk, renderer::DmgRenderer},
     serial::Serial,
     timer::Timer,
     wram::DmgWram,
@@ -34,7 +34,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized, W: Ram> {
     pub timer: &'a mut Timer,
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
-    pub ppu: &'a mut Ppu<DmgRenderer>,
+    pub ppu: &'a mut Ppu<DmgRenderer, StatInterruptWriteQuirk>,
     pub serial: &'a mut Serial,
     pub wram: &'a mut W,
     pub interrupts: &'a mut Interrupts,
@@ -60,7 +60,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized, W: Ram> {
     pub timer: &'a Timer,
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
-    pub ppu: &'a Ppu<DmgRenderer>,
+    pub ppu: &'a Ppu<DmgRenderer, StatInterruptWriteQuirk>,
     pub serial: &'a Serial,
     pub wram: &'a W,
     pub interrupts: Interrupts,
@@ -73,7 +73,7 @@ pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
 #[derive(Clone, Default)]
 pub struct Emulator {
-    ppu: Ppu<DmgRenderer>,
+    ppu: Ppu<DmgRenderer, StatInterruptWriteQuirk>,
     cpu: Cpu,
     pub interrupts: Interrupts,
     timer: Timer,
@@ -89,7 +89,7 @@ impl Emulator {
         self.serial
             .will_emit_byte(self.timer.get_system_counter().wrapping_add(1))
     }
-    pub fn get_ppu(&self) -> &Ppu<DmgRenderer> {
+    pub fn get_ppu(&self) -> &Ppu<DmgRenderer, StatInterruptWriteQuirk> {
         &self.ppu
     }
     pub fn get_cpu(&self) -> &Cpu {

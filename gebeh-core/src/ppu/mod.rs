@@ -96,27 +96,26 @@ pub enum PpuStep<R: Renderer> {
 }
 
 #[derive(Clone)]
-pub struct Ppu<R: Renderer> {
+pub struct Ppu<R: Renderer, S: StatRegisterHandler> {
     pub step: PpuStep<R>,
     stat_irq: bool,
     state: PpuState<R::Vram>,
     previous_lyc: u8,
-    // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
-    queued_interrupt_part_lcd_status: Option<LcdStatus>,
+    stat_register_handler: S,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
     oam_dma: OamDma,
     extra: R::Extra,
 }
 
-impl<R: Renderer> Default for Ppu<R> {
+impl<R: Renderer, S: StatRegisterHandler> Default for Ppu<R, S> {
     fn default() -> Self {
         Self {
             step: Default::default(),
             stat_irq: false,
             state: Default::default(),
             previous_lyc: 0,
-            queued_interrupt_part_lcd_status: None,
+            stat_register_handler: S::default(),
             interrupt_part_lcd_status: LcdStatus::default(),
             lyc: 0,
             oam_dma: Default::default(),
@@ -237,8 +236,44 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
+trait StatRegisterHandler: Default {
+    fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus);
+    fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus);
+}
+
+#[derive(Default, Clone)]
+pub struct StatInterruptWriteQuirk {
+    // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
+    queued_interrupt_part_lcd_status: Option<LcdStatus>,
+}
+
+impl StatRegisterHandler for StatInterruptWriteQuirk {
+    fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus) {
+        // https://www.devrs.com/gb/files/faqs.html#GBBugs
+        // Citation: As far as has been figured out, the bug happens everytime
+        // ANYTHING (including 00) is written to the STAT register ($ff41) while
+        // the gameboy is either in HBLANK or VBLANK mode
+        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
+        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
+        *stat_reg = LcdStatus::from_bits_truncate(0xff)
+    }
+
+    fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus) {
+        if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
+            *stat_reg = value;
+        }
+    }
+}
+
+impl StatRegisterHandler for () {
+    fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus) {
+        *stat_reg = LcdStatus::from_bits_truncate(value);
+    }
+    fn after_interrupt_handling(&mut self, _: &mut LcdStatus) {}
+}
+
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl<R: Renderer> Ppu<R> {
+impl<R: Renderer, S: StatRegisterHandler> Ppu<R, S> {
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
@@ -307,13 +342,8 @@ impl<R: Renderer> Ppu<R> {
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
-        // https://www.devrs.com/gb/files/faqs.html#GBBugs
-        // Citation: As far as has been figured out, the bug happens everytime
-        // ANYTHING (including 00) is written to the STAT register ($ff41) while
-        // the gameboy is either in HBLANK or VBLANK mode
-        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
-        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
-        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
+        self.stat_register_handler
+            .set_interrupt_part_lcd_status(value, &mut self.interrupt_part_lcd_status);
     }
 
     pub fn get_ly(&self) -> u8 {
@@ -584,9 +614,8 @@ impl<R: Renderer> Ppu<R> {
         self.switch_from_finished_mode(cycles);
         self.fire_interrupts(interrupts, cycles);
 
-        if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
-            self.interrupt_part_lcd_status = value;
-        }
+        self.stat_register_handler
+            .after_interrupt_handling(&mut self.interrupt_part_lcd_status);
 
         // Pandocs says (https://gbdev.io/pandocs/Scrolling.html#window):
         // WY condition was triggered: i.e. at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
@@ -634,14 +663,14 @@ impl<R: Renderer> Ppu<R> {
 mod tests {
     use crate::{
         interrupts::Interrupts,
-        ppu::{LcdControl, Ppu, PpuStep, renderer::DmgRenderer},
+        ppu::{LcdControl, Ppu, PpuStep, StatInterruptWriteQuirk, renderer::DmgRenderer},
     };
 
     extern crate std;
 
     #[test]
     fn line_duration() {
-        let mut ppu = Ppu::<DmgRenderer>::default();
+        let mut ppu = Ppu::<DmgRenderer, StatInterruptWriteQuirk>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -662,7 +691,7 @@ mod tests {
 
     #[test]
     fn frame_duration() {
-        let mut ppu = Ppu::<DmgRenderer>::default();
+        let mut ppu = Ppu::<DmgRenderer, StatInterruptWriteQuirk>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -696,7 +725,7 @@ mod tests {
 
     #[test]
     fn all_ly() {
-        let mut ppu = Ppu::<DmgRenderer>::default();
+        let mut ppu = Ppu::<DmgRenderer, StatInterruptWriteQuirk>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();
