@@ -4,7 +4,6 @@ use super::instructions::{
 };
 use crate::Dmg;
 use crate::cpu::{Cpu, Flags};
-use crate::wram::DmgWram;
 use crate::{Peripherals, interrupts::Interrupts, mbc::Mbc};
 
 fn is_half_carry(a: u8, b: u8, result: u8) -> bool {

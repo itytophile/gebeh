@@ -3,7 +3,7 @@ pub mod color;
 mod color_palettes;
 mod fifos;
 mod hdma;
-mod oam_dma;
+pub mod oam_dma;
 pub mod renderer;
 mod scanline;
 pub mod sprite;
@@ -21,7 +21,6 @@ use crate::{
         renderer::Renderer,
         scanline::ScanlineBuilder,
         sprite::Sprite,
-        vram::DmgVram,
     },
 };
 
@@ -125,7 +124,7 @@ impl<M: Model> Default for Ppu<M> {
 }
 
 #[derive(Clone, Default)]
-struct PpuState<V = DmgVram> {
+struct PpuState<V> {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -470,32 +469,11 @@ impl<M: Model> Ppu<M> {
                 dots_count: OAM_SCAN_DURATION,
                 ly,
             } => {
-                let mut objects_to_sort: ArrayVec<_, 10> = self
-                    .oam_dma
-                    .get_oam()
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .copied()
-                    .map(Sprite::from)
-                    .filter(|obj| {
-                        let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
-                        obj.y <= *ly + 16 && *ly + 16 < (obj.y + if is_big { 16 } else { 8 })
-                    })
-                    .take(10)
-                    .enumerate()
-                    .collect();
-                // https://gbdev.io/pandocs/OAM.html#drawing-priority
-                // Citation: the smaller the X coordinate, the higher the priority.
-                // When X coordinates are identical, the object located first in OAM has higher priority.
-                objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let renderer = M::Renderer::new(
-                    objects_to_sort
-                        .into_iter()
-                        .rev() // because we will pop the objects
-                        .map(|(_, object)| object)
-                        .collect(),
-                );
+                let renderer = M::Renderer::new(M::parse_objects(
+                    self.oam_dma.get_oam(),
+                    self.state.lcd_control,
+                    *ly,
+                ));
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
                     renderer,

@@ -1,6 +1,6 @@
 use crate::{
     Dmg, Peripherals, PeripheralsRef, addresses::*, cpu::Cpu, interrupts::Interrupts, mbc::Mbc,
-    ppu::LcdControl, serial::SerialControl, wram::DmgWram,
+    ppu::LcdControl, serial::SerialControl,
 };
 
 impl Cpu {

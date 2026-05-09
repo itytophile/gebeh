@@ -78,7 +78,7 @@ impl DmgRenderer {
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState,
+        ppu_state: &PpuState<DmgVram>,
         ly: u8,
         _: u64,
     ) {
@@ -437,7 +437,7 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer},
+        ppu::{LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer, vram::DmgVram},
     };
 
     // all timings are +2 compared to pandocs timings
@@ -446,7 +446,7 @@ mod tests {
     fn get_timing(
         mut window_y: Option<u8>,
         objects: ArrayVec<Sprite, 10>,
-        ppu_state: &PpuState,
+        ppu_state: &PpuState<DmgVram>,
         ly: u8,
     ) -> u16 {
         let mut renderer = DmgRenderer::new(objects);

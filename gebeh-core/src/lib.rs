@@ -3,6 +3,8 @@
 
 use core::ops::{Deref, DerefMut};
 
+use arrayvec::ArrayVec;
+
 use crate::{
     apu::Apu,
     cpu::{BOOTIX_BOOT_ROM, Cpu},
@@ -10,8 +12,10 @@ use crate::{
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
     ppu::{
-        Ppu, StatInterruptWriteQuirk, StatRegisterHandler,
+        LcdControl, Ppu, StatInterruptWriteQuirk, StatRegisterHandler,
+        oam_dma::Oam,
         renderer::{CgbRenderer, DmgRenderer, Renderer},
+        sprite::Sprite,
     },
     serial::Serial,
     timer::Timer,
@@ -78,6 +82,7 @@ pub trait Model {
     type Renderer: Renderer;
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Ram;
+    fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10>;
 }
 
 #[derive(Clone)]
@@ -89,12 +94,51 @@ impl Model for Dmg {
     type Renderer = DmgRenderer;
     type StatRegisterHandler = StatInterruptWriteQuirk;
     type Wram = DmgWram;
+    fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10> {
+        let mut objects_to_sort: ArrayVec<_, 10> = oam
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .copied()
+            .map(Sprite::from)
+            .filter(|obj| {
+                let is_big = lcd_control.contains(LcdControl::OBJ_SIZE);
+                obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+            })
+            .take(10)
+            .enumerate()
+            .collect();
+        // https://gbdev.io/pandocs/OAM.html#drawing-priority
+        // Citation: the smaller the X coordinate, the higher the priority.
+        // When X coordinates are identical, the object located first in OAM has higher priority.
+        objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
+        objects_to_sort
+            .into_iter()
+            .rev() // because we will pop the objects
+            .map(|(_, object)| object)
+            .collect()
+    }
 }
 
 impl Model for Cgb {
     type Renderer = CgbRenderer;
     type StatRegisterHandler = ();
     type Wram = CgbWram;
+    fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10> {
+        // Citation: In CGB mode, only the object’s location in OAM determines its priority. The earlier the object, the higher its priority.
+        oam.as_chunks::<4>()
+            .0
+            .iter()
+            .rev() // because we will pop the objects
+            .copied()
+            .map(Sprite::from)
+            .filter(|obj| {
+                let is_big = lcd_control.contains(LcdControl::OBJ_SIZE);
+                obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+            })
+            .take(10)
+            .collect()
+    }
 }
 
 #[derive(Clone)]
