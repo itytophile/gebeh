@@ -3,19 +3,6 @@
 // https://gbdev.io/pandocs/pixel_fifo.html#fifo-pixel-fetcher
 // http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt
 // https://www.reddit.com/r/EmuDev/comments/s6cpis/gameboy_trying_to_understand_sprite_fifo_behavior/ <- spitting facts
-//
-// The ppu can't do two tile fetches at the same time, so if we fetch a sprite for an object
-// then we must pause the background/window tile fetch.
-// A sprite fetch is triggered only if the background fifo has pixels.
-// according to "Gameboy Emulator Development Guide", the background pixel fetcher is not only paused, but reset.
-// During the object sprite fetch, both the LCD AND the background FIFO are paused.
-// The Sprite FIFO has not the same behavior as the Background FIFO. The background pixel fetcher always wait for
-// the background fifo to be empty before refilling it. However the sprite pixel fetcher, is only replacing the "empty slots"
-// of the Sprite FIFO, to keep the pixels of the previous sprite.
-// We know from pandocs (https://gbdev.io/pandocs/OAM.html#drawing-priority) that if two sprites overlap, opaque colors are drawn over
-// the transparent ones (yes) so I assume the sprite pixel fetcher refills the sprite FIFO with an OR operation.
-// But what about the priority flag ? (https://gbdev.io/pandocs/OAM.html#byte-3--attributesflags) we will keep a fifo for that
-// and try to guess along the way.
 
 use arrayvec::ArrayVec;
 
