@@ -4,7 +4,7 @@ mod color_palettes;
 mod fifos;
 mod hdma;
 mod oam_dma;
-mod renderer;
+pub mod renderer;
 mod scanline;
 pub mod sprite;
 mod sprite_fetcher;
@@ -18,7 +18,8 @@ use crate::{
     mbc::Mbc,
     ppu::{
         oam_dma::{BLOCKED_OAM, Oam, OamDma},
-        renderer::DmgRenderer,
+        renderer::Renderer,
+        scanline::ScanlineBuilder,
         sprite::Sprite,
         vram::DmgVram,
     },
@@ -64,7 +65,7 @@ impl TileAttributes {
 }
 
 #[derive(Clone)]
-pub enum PpuStep {
+pub enum PpuStep<R: Renderer> {
     // only used on line 0 when the lcd has just turned on
     SkippedOamScan {
         dots_count: u8,
@@ -78,14 +79,14 @@ pub enum PpuStep {
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
-        renderer: DmgRenderer,
+        renderer: R,
         ly: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
-        scanline: DmgScanline,
+        scanline: <<R as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline,
         ly: u8,
     }, // <= 204
     VerticalBlankScanline {
@@ -94,17 +95,34 @@ pub enum PpuStep {
     }, // <= 456
 }
 
-#[derive(Clone, Default)]
-pub struct Ppu {
-    pub step: PpuStep,
+#[derive(Clone)]
+pub struct Ppu<R: Renderer> {
+    pub step: PpuStep<R>,
     stat_irq: bool,
-    state: PpuState,
+    state: PpuState<R::Vram>,
     previous_lyc: u8,
     // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
     queued_interrupt_part_lcd_status: Option<LcdStatus>,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
     oam_dma: OamDma,
+    extra: R::Extra,
+}
+
+impl<R: Renderer> Default for Ppu<R> {
+    fn default() -> Self {
+        Self {
+            step: Default::default(),
+            stat_irq: false,
+            state: Default::default(),
+            previous_lyc: 0,
+            queued_interrupt_part_lcd_status: None,
+            interrupt_part_lcd_status: LcdStatus::default(),
+            lyc: 0,
+            oam_dma: Default::default(),
+            extra: Default::default(),
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -205,7 +223,7 @@ const OAM_SCAN_DURATION: u8 = 79;
 const SCANLINE_DURATION: u16 = 456;
 const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
-impl Default for PpuStep {
+impl<R: Renderer> Default for PpuStep<R> {
     fn default() -> Self {
         Self::SkippedOamScan { dots_count: 2 }
     }
@@ -220,7 +238,7 @@ type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl Ppu {
+impl<R: Renderer> Ppu<R> {
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
@@ -254,7 +272,7 @@ impl Ppu {
         }
         self.oam_dma.write_oam(index, value);
     }
-    pub fn get_vram_if_available(&self) -> Option<&DmgVram> {
+    pub fn get_vram_if_available(&self) -> Option<&R::Vram> {
         if self.get_ppu_mode() == LcdStatus::DRAWING {
             None
         } else {
@@ -279,7 +297,7 @@ impl Ppu {
     pub fn set_obp1(&mut self, value: u8) {
         self.state.obp1 = value
     }
-    pub fn get_vram(&self) -> &DmgVram {
+    pub fn get_vram(&self) -> &R::Vram {
         &self.state.video_ram
     }
 
@@ -387,7 +405,9 @@ impl Ppu {
     }
 
     #[must_use]
-    pub fn get_scanline_if_ready(&self) -> Option<&DmgScanline> {
+    pub fn get_scanline_if_ready(
+        &self,
+    ) -> Option<&<R::ScanlineBuilder as ScanlineBuilder>::Scanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,
@@ -410,7 +430,7 @@ impl Ppu {
             } => {
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
-                    renderer: DmgRenderer::new(Default::default()),
+                    renderer: R::new(Default::default()),
                     window_y: None,
                     ly: 0,
                 }
@@ -439,7 +459,7 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let renderer = DmgRenderer::new(
+                let renderer = R::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
@@ -455,11 +475,11 @@ impl Ppu {
             }
             PpuStep::Drawing {
                 dots_count,
-                renderer: DmgRenderer { scanline, .. },
+                renderer,
                 window_y,
                 ly,
                 ..
-            } if scanline.len() == WIDTH => {
+            } if renderer.get_scanline_builder().len() == WIDTH => {
                 self.step = PpuStep::HorizontalBlank {
                     remaining_dots: u8::try_from(
                         SCANLINE_DURATION - u16::from(OAM_SCAN_DURATION) - *dots_count,
@@ -467,7 +487,7 @@ impl Ppu {
                     .unwrap(),
                     window_y: *window_y,
                     dots_count: 0,
-                    scanline: *scanline.get_scanline(),
+                    scanline: renderer.get_scanline_builder().get_scanline().clone(),
                     ly: *ly,
                 }
             }
@@ -599,7 +619,7 @@ impl Ppu {
                 ly,
                 ..
             } => {
-                renderer.execute(window_y, &self.state, *ly, cycles);
+                renderer.execute(window_y, &self.state, &self.extra, *ly, cycles);
 
                 *dots_count += 1;
             }
@@ -614,14 +634,14 @@ impl Ppu {
 mod tests {
     use crate::{
         interrupts::Interrupts,
-        ppu::{LcdControl, Ppu, PpuStep},
+        ppu::{LcdControl, Ppu, PpuStep, renderer::DmgRenderer},
     };
 
     extern crate std;
 
     #[test]
     fn line_duration() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<DmgRenderer>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -642,7 +662,7 @@ mod tests {
 
     #[test]
     fn frame_duration() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<DmgRenderer>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -676,7 +696,7 @@ mod tests {
 
     #[test]
     fn all_ly() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<DmgRenderer>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();

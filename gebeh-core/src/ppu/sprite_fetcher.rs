@@ -1,5 +1,4 @@
 use arrayvec::ArrayVec;
-use bitflags::Flags;
 
 use crate::{
     addresses::VIDEO_RAM,

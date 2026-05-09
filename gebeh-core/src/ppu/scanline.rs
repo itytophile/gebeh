@@ -53,7 +53,7 @@ impl DmgScanlineBuilder {
 }
 
 pub trait ScanlineBuilder {
-    type Scanline;
+    type Scanline: Clone;
     fn len(&self) -> u8;
     fn get_scanline(&self) -> &Self::Scanline;
 }
