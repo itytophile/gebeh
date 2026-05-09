@@ -219,43 +219,6 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-// TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
-
-// D'après "The cycle accurate gameboy docs":
-// - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
-// - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
-// - Le OAM scan commence seulement au deuxième M-cycle d'une ligne. En effet, les modes sont décalés par rapport à la ligne, le Hblank déborde
-//  à la fin et est exécuté au premier M-cycle de la ligne prochaine. Cela implique qu'un même Hblank peut connaître deux valeurs de LY différentes.
-
-// ce que veut mooneye: écart entre OAM_INT et STAT MODE HBLANK = 63 M-cycles ou 252 dots (80 + 172)
-// cependant d'après "The cycle accurate gameboy docs", l'interruption de OAM_INT arrive un cycle plus tôt
-
-// D'après un commentaire dans SameBoy: It seems that the STAT register's mode bits are always "late" by 4 T-cycles.
-// Donc les modes ne sont pas décalés en fin de compte ?
-// Supposons que les modes ne soient pas décalés mais que cela soit le STAT qui soit à la bourre.
-// Cela expliquerait pourquoi l'interruption du Mode 2 arrive un cycle avant Stat=2 (sauf ligne 0)
-// Or l'interruption vblank arrive toujours pile poil quand son stat passe à 1.
-// Mooneye veut aussi que l'écart en OAM_INT et HBLANK_INT = 63 M-cycles
-// Donc à partir de ces informations je peux conclure:
-// - le OAM scan (mode 2) commence bien au cycle 0
-// - son interruption est lancée cycle 0 (bien synchronisée) (cycle 1 à la ligne 0)
-// - son STAT est en retard d'un M-cycle
-// - Le Drawing (mode 3) commence bien au cycle 20, juste après OAM scan
-// - son STAT est en retard d'un M-cycle
-// - le Hblank (mode 0) commence après le Drawing de façon normale
-// - son interruption est lancée dès le premier cycle (bien synchronisée)
-// - son STAT n'est pas en retard, il est changé dès le premier cycle (bien synchronisé même cycle que l'interruption)
-// - VBLANK a un retard d'un cycle sur son STAT et sur son interruption (j'en peux plus)
-//
-// Nouvelle info de Mooneye, il veut un écart parfait entre l'interruption de OAM scan et le changement de STAT en mode 3 (drawing)
-// cependant actuellement le STAT du mode 3 est en retard, alors que l'interruption de OAM scan est parfait.
-// Tout ça me donne l'impression que si le PPU actionne une interruption alors le CPU a un délai d'un cycle avant de le traiter.
-// En effet, pour corriger ce timing Interruption Mode 2 => STAT Mode 3 il faudrait corriger le retard de STAT mode 3. Mais cela
-// serait en contradiction avec "The cycle accurate gameboy docs" qui dit bien que le STAT Mode 3 a le retard.
-// Donc on va tenter un délai d'un M-cycle pour le traitement d'une interruption de la part du CPU. Cela implique que le Hblank a
-// aussi son STAT en retard, comme indiqué par le commentaire de SameBoy.
-// De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
-
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl Ppu {
     pub fn trigger_dma(&mut self, value: u8) {
