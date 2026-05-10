@@ -155,10 +155,10 @@ impl Model for Cgb {
     type HdmaRegs = Hdma;
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10> {
         // Citation: In CGB mode, only the object’s location in OAM determines its priority. The earlier the object, the higher its priority.
-        oam.as_chunks::<4>()
+        let mut sprites: ArrayVec<Sprite, 10> = oam
+            .as_chunks::<4>()
             .0
             .iter()
-            .rev() // because we will pop the objects
             .copied()
             .map(Sprite::from)
             .filter(|obj| {
@@ -166,7 +166,12 @@ impl Model for Cgb {
                 obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 })
             })
             .take(10)
-            .collect()
+            .collect();
+
+        // because we will pop the objects
+        sprites.reverse();
+
+        sprites
     }
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
