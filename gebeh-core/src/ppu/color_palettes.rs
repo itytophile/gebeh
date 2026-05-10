@@ -25,7 +25,7 @@ impl InnerColorPalettes {
     }
 
     pub fn read_spec(&self) -> u8 {
-        self.spec | 0b0100_0000
+        self.spec
     }
 
     pub fn write_spec(&mut self, value: u8) {
@@ -46,11 +46,12 @@ impl InnerColorPalettes {
 
     pub fn get_palette(&self, index: u8) -> [u16; 4] {
         let bytes = self.data.as_chunks::<8>().0[usize::from(index)];
+        // store in little endian to not break the order
         [
-            u16::from_be_bytes([bytes[0], bytes[1]]),
-            u16::from_be_bytes([bytes[2], bytes[3]]),
-            u16::from_be_bytes([bytes[4], bytes[5]]),
-            u16::from_be_bytes([bytes[6], bytes[7]]),
+            u16::from_le_bytes([bytes[0], bytes[1]]),
+            u16::from_le_bytes([bytes[2], bytes[3]]),
+            u16::from_le_bytes([bytes[4], bytes[5]]),
+            u16::from_le_bytes([bytes[6], bytes[7]]),
         ]
     }
 }
