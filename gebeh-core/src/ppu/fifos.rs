@@ -150,26 +150,28 @@ impl CgbFifos {
 
     pub fn render_pixel(
         &self,
-        is_background_enabled: bool,
+        master_background_priority: bool,
         is_obj_enabled: bool,
         color_palettes: &ColorPalettes,
     ) -> u16 {
         let bg_color_index = ColorIndex::new(self.bg0 & 1 != 0, self.bg1 & 1 != 0);
         let sp_color_index = ColorIndex::new(self.sp0 & 1 != 0, self.sp1 & 1 != 0);
 
-        if sp_color_index == ColorIndex::Zero
-            || is_background_enabled
-                && (!is_obj_enabled
-                    || (self.sprite_priority & 1 != 0 && bg_color_index != ColorIndex::Zero))
+        let obj_over_bg = !master_background_priority
+            || !self.current_background_priority && self.sprite_priority & 1 == 0;
+
+        if is_obj_enabled
+            && (obj_over_bg && sp_color_index != ColorIndex::Zero
+                || !obj_over_bg && bg_color_index == ColorIndex::Zero)
         {
-            color_palettes
-                .background
-                .get_palette(self.current_background_palette)[usize::from(u8::from(bg_color_index))]
-        } else {
             color_palettes
                 .objects
                 .get_palette(u8::try_from(self.sprite_palette & 0x07).unwrap())
                 [usize::from(u8::from(sp_color_index))]
+        } else {
+            color_palettes
+                .background
+                .get_palette(self.current_background_palette)[usize::from(u8::from(bg_color_index))]
         }
     }
 
