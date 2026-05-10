@@ -128,20 +128,20 @@ pub struct CgbFifos {
 
 impl CgbFifos {
     pub fn shift(&mut self) {
-        self.bg0 >>= 1;
-        self.bg1 >>= 1;
-        self.sp0 >>= 1;
-        self.sp1 >>= 1;
-        self.sprite_priority >>= 1;
-        self.sprite_palette >>= 3;
+        self.bg0 <<= 1;
+        self.bg1 <<= 1;
+        self.sp0 <<= 1;
+        self.sp1 <<= 1;
+        self.sprite_priority <<= 1;
+        self.sprite_palette <<= 3;
 
         self.background_pixels_count -= 1;
         self.shifted_count = self.shifted_count.wrapping_add(1);
     }
 
     pub fn replace_background(&mut self, tile: [u8; 2], attributes: TileAttributes) {
-        self.bg0 = tile[0].reverse_bits();
-        self.bg1 = tile[1].reverse_bits();
+        self.bg0 = tile[0];
+        self.bg1 = tile[1];
         self.background_pixels_count = 8;
         self.current_background_attributes = attributes;
     }
@@ -152,14 +152,14 @@ impl CgbFifos {
         is_obj_enabled: bool,
         color_palettes: &ColorPalettes,
     ) -> u16 {
-        let bg_color_index = ColorIndex::new(self.bg0 & 1 != 0, self.bg1 & 1 != 0);
-        let sp_color_index = ColorIndex::new(self.sp0 & 1 != 0, self.sp1 & 1 != 0);
+        let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
+        let sp_color_index = ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0);
 
         let obj_over_bg = !master_background_priority
             || !self
                 .current_background_attributes
                 .contains(TileAttributes::PRIORITY)
-                && self.sprite_priority & 1 == 0;
+                && self.sprite_priority & 0x80 == 0;
 
         if is_obj_enabled
             && (obj_over_bg && sp_color_index != ColorIndex::Zero
@@ -167,7 +167,7 @@ impl CgbFifos {
         {
             color_palettes
                 .objects
-                .get_palette(u8::try_from(self.sprite_palette & 0x07).unwrap())
+                .get_palette(u8::try_from((self.sprite_palette >> 29) & 0x07).unwrap())
                 [usize::from(u8::from(sp_color_index))]
         } else {
             color_palettes
@@ -189,7 +189,7 @@ impl CgbFifos {
         let existing_sprite_mask = self.sp0 | self.sp1;
         // we must keep the existing sprite so we unset the bits already present from the new mask
         let new_sprite_mask =
-            (tile[0].reverse_bits() | tile[1].reverse_bits()) & !existing_sprite_mask;
+            (tile[0] | tile[1]) & !existing_sprite_mask;
         if attributes.contains(TileAttributes::PRIORITY) {
             self.sprite_priority |= new_sprite_mask;
         } else {
@@ -200,14 +200,14 @@ impl CgbFifos {
 
         for index in 0..8 {
             if new_sprite_mask & (1 << index) != 0 {
-                let shift = index * 3;
+                let shift = index * 3 + 8;
                 self.sprite_palette =
                     self.sprite_palette & !(0x07 << shift) | u32::from(palette) << shift;
             }
         }
 
-        self.sp0 = new_sprite_mask & tile[0].reverse_bits() | !new_sprite_mask & self.sp0;
-        self.sp1 = new_sprite_mask & tile[1].reverse_bits() | !new_sprite_mask & self.sp1;
+        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
+        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
     }
 
     pub fn is_background_empty(&self) -> bool {
