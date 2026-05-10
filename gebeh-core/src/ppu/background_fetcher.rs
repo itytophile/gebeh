@@ -248,7 +248,7 @@ impl CgbBackgroundFetcher {
                     is_signed_addressing,
                 );
                 let line = (usize::from(y) + usize::from(scy)) % 8;
-                let line = if attribute.contains(TileAttributes::X_FLIP) {
+                let line = if attribute.contains(TileAttributes::Y_FLIP) {
                     7 - line
                 } else {
                     line
@@ -288,7 +288,7 @@ impl CgbBackgroundFetcher {
                 );
                 self.x += 1;
                 let line = (usize::from(y) + usize::from(scy)) % 8;
-                let line = if attribute.contains(TileAttributes::X_FLIP) {
+                let line = if attribute.contains(TileAttributes::Y_FLIP) {
                     7 - line
                 } else {
                     line
