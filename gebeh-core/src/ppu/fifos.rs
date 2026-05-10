@@ -119,10 +119,9 @@ pub struct CgbFifos {
     sp1: u8,
     // if the background must be drawn over the sprite
     sprite_priority: u8,
-    current_background_priority: bool,
     // 8 x 3-bits palettes
     sprite_palette: u32,
-    current_background_palette: u8,
+    current_background_attributes: TileAttributes,
     background_pixels_count: u8,
     shifted_count: u8,
 }
@@ -144,8 +143,7 @@ impl CgbFifos {
         self.bg0 = tile[0].reverse_bits();
         self.bg1 = tile[1].reverse_bits();
         self.background_pixels_count = 8;
-        self.current_background_palette = attributes.get_cgb_palette_index();
-        self.current_background_priority = attributes.contains(TileAttributes::PRIORITY);
+        self.current_background_attributes = attributes;
     }
 
     pub fn render_pixel(
@@ -158,7 +156,10 @@ impl CgbFifos {
         let sp_color_index = ColorIndex::new(self.sp0 & 1 != 0, self.sp1 & 1 != 0);
 
         let obj_over_bg = !master_background_priority
-            || !self.current_background_priority && self.sprite_priority & 1 == 0;
+            || !self
+                .current_background_attributes
+                .contains(TileAttributes::PRIORITY)
+                && self.sprite_priority & 1 == 0;
 
         if is_obj_enabled
             && (obj_over_bg && sp_color_index != ColorIndex::Zero
@@ -171,7 +172,8 @@ impl CgbFifos {
         } else {
             color_palettes
                 .background
-                .get_palette(self.current_background_palette)[usize::from(u8::from(bg_color_index))]
+                .get_palette(self.current_background_attributes.get_cgb_palette_index())
+                [usize::from(u8::from(bg_color_index))]
         }
     }
 
