@@ -101,8 +101,8 @@ pub struct CgbColor(pub u16);
 impl From<CgbColor> for [u8; 4] {
     fn from(value: CgbColor) -> Self {
         let r = value.0 >> 11;
-        let g = value.0 >> 6 & 0x1f;
-        let b = value.0 >> 1 & 0x1f;
+        let g = (value.0 >> 6) & 0x1f;
+        let b = (value.0 >> 1) & 0x1f;
         // https://github.com/mattcurrie/cgb-acid2#reference-image
         [
             u8::try_from((r << 3) | (r >> 2)).unwrap(),
