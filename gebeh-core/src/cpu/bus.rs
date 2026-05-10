@@ -4,7 +4,7 @@ use crate::{
     cpu::Cpu,
     interrupts::Interrupts,
     mbc::Mbc,
-    ppu::{LcdControl, hdma::HdmaRegs, vram::VramRegs},
+    ppu::{LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs, vram::VramRegs},
     serial::SerialControl,
     wram::Wram,
 };
@@ -48,7 +48,12 @@ impl Cpu {
             BOOT_ROM_MAPPING_CONTROL => 0xff,
             HDMA_SOURCE_HIGH..HDMA_LENGTH_AND_MODE => 0xff,
             HDMA_LENGTH_AND_MODE => peripherals.hdma.read_mode_and_length(),
-            0xff56..WRAM_BANK => 0xff,
+            0xff56..BCPS_BGPI => 0xff,
+            BCPS_BGPI => peripherals.ppu.get_color_palettes().read_background_spec(),
+            BCPD_BGPD => peripherals.ppu.get_color_palettes().read_background_data(),
+            OCPS_OGPI => peripherals.ppu.get_color_palettes().read_obj_spec(),
+            OCPD_OGPD => peripherals.ppu.get_color_palettes().read_obj_data(),
+            0xff6c..WRAM_BANK => 0xff,
             WRAM_BANK => peripherals.wram.read_bank(),
             0xFF71..HRAM => 0xff,
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)],
@@ -113,7 +118,24 @@ impl Cpu {
             HDMA_DESTINATION_HIGH => peripherals.hdma.write_destination_address_high(value),
             HDMA_DESTINATION_LOW => peripherals.hdma.write_destination_address_low(value),
             HDMA_LENGTH_AND_MODE => peripherals.hdma.write_length_mode_start(value),
-            0xff56..WRAM_BANK => {}
+            0xff56..BCPS_BGPI => {}
+            BCPS_BGPI => peripherals
+                .ppu
+                .get_color_palettes_mut()
+                .write_background_spec(value),
+            BCPD_BGPD => peripherals
+                .ppu
+                .get_color_palettes_mut()
+                .write_background_data(value),
+            OCPS_OGPI => peripherals
+                .ppu
+                .get_color_palettes_mut()
+                .write_obj_spec(value),
+            OCPD_OGPD => peripherals
+                .ppu
+                .get_color_palettes_mut()
+                .write_obj_data(value),
+            0xff6c..WRAM_BANK => {}
             WRAM_BANK => peripherals.wram.write_bank(value),
             0xff71..HRAM => {}
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)] = value,

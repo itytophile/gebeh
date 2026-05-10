@@ -271,6 +271,12 @@ impl StatRegisterHandler for () {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl<M: Model> Ppu<M> {
+    pub fn get_color_palettes(&self) -> &<M::Renderer as Renderer>::ColorPalettes {
+        &self.color_palettes
+    }
+    pub fn get_color_palettes_mut(&mut self) -> &mut <M::Renderer as Renderer>::ColorPalettes {
+        &mut self.color_palettes
+    }
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
