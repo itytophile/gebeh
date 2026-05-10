@@ -300,8 +300,10 @@ impl Emulator<Dmg> {
 impl Emulator<Cgb> {
     fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
         let ppu_mode = self.ppu.get_ppu_mode();
-        self.hdma
-            .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode);
+        let hdma_has_performed =
+            self.hdma
+                .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode);
+
         self.timer.execute(&mut self.interrupts, self.cycles);
         let master_serial_byte = self.serial.execute(
             self.timer.get_system_counter(),
@@ -320,20 +322,25 @@ impl Emulator<Cgb> {
             slowed_interrupts_in_halt_mode = Some(self.interrupts);
             self.interrupts = interrupts_from_previous_cycle;
         }
-        self.cpu.execute(
-            Peripherals {
-                mbc,
-                timer: &mut self.timer,
-                joypad: &mut self.joypad,
-                apu: &mut self.apu,
-                ppu: &mut self.ppu,
-                serial: &mut self.serial,
-                wram: &mut self.wram,
-                interrupts: &mut self.interrupts,
-                hdma: &mut self.hdma,
-            },
-            self.cycles,
-        );
+        if hdma_has_performed {
+            self.ppu.execute_dma(mbc, &self.wram, self.cycles);
+        } else {
+            self.cpu.execute(
+                Peripherals {
+                    mbc,
+                    timer: &mut self.timer,
+                    joypad: &mut self.joypad,
+                    apu: &mut self.apu,
+                    ppu: &mut self.ppu,
+                    serial: &mut self.serial,
+                    wram: &mut self.wram,
+                    interrupts: &mut self.interrupts,
+                    hdma: &mut self.hdma,
+                },
+                self.cycles,
+            );
+        }
+
         if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
             self.interrupts = interrupt_flag;
         }
