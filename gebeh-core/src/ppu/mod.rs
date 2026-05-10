@@ -1,6 +1,6 @@
 mod background_fetcher;
 pub mod color;
-mod color_palettes;
+pub mod color_palettes;
 mod fifos;
 pub mod hdma;
 pub mod oam_dma;
@@ -102,7 +102,7 @@ pub struct Ppu<M: Model> {
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
     oam_dma: OamDma,
-    extra: <M::Renderer as Renderer>::Extra,
+    color_palettes: <M::Renderer as Renderer>::ColorPalettes,
 }
 
 impl<M: Model> Default for Ppu<M> {
@@ -116,7 +116,7 @@ impl<M: Model> Default for Ppu<M> {
             interrupt_part_lcd_status: LcdStatus::default(),
             lyc: 0,
             oam_dma: Default::default(),
-            extra: Default::default(),
+            color_palettes: Default::default(),
         }
     }
 }
@@ -626,7 +626,7 @@ impl<M: Model> Ppu<M> {
                 ly,
                 ..
             } => {
-                renderer.execute(window_y, &self.state, &self.extra, *ly, cycles);
+                renderer.execute(window_y, &self.state, &self.color_palettes, *ly, cycles);
 
                 *dots_count += 1;
             }

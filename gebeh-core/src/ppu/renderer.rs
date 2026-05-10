@@ -11,7 +11,7 @@ use crate::ppu::{
     background_fetcher::{
         BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher, CgbBackgroundFetcherStep,
     },
-    color_palettes::ColorPalettes,
+    color_palettes::{ColorPalettes, ColorPalettesRegs},
     fifos::{CgbFifos, DmgFifos},
     scanline::{DmgScanlineBuilder, ScanlineBuilder},
     sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
@@ -29,14 +29,14 @@ pub enum RendererStep {
 
 pub trait Renderer: Clone + Send + Sync {
     type Vram: VramRegs;
-    type Extra: Default + Clone + Send + Sync;
+    type ColorPalettes: ColorPalettesRegs;
     type ScanlineBuilder: ScanlineBuilder;
     fn new(objects: ArrayVec<Sprite, 10>) -> Self;
     fn execute(
         &mut self,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState<Self::Vram>,
-        extra: &Self::Extra,
+        extra: &Self::ColorPalettes,
         ly: u8,
         cycle: u64,
     );
@@ -209,7 +209,7 @@ impl DmgRenderer {
 
 impl Renderer for DmgRenderer {
     type Vram = DmgVram;
-    type Extra = ();
+    type ColorPalettes = ();
     type ScanlineBuilder = DmgScanlineBuilder;
 
     fn new(objects: ArrayVec<Sprite, 10>) -> Self {
@@ -220,7 +220,7 @@ impl Renderer for DmgRenderer {
         &mut self,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState<Self::Vram>,
-        _: &Self::Extra,
+        _: &Self::ColorPalettes,
         ly: u8,
         cycle: u64,
     ) {
@@ -397,7 +397,7 @@ impl CgbRenderer {
 
 impl Renderer for CgbRenderer {
     type Vram = CgbVram;
-    type Extra = ColorPalettes;
+    type ColorPalettes = ColorPalettes;
     type ScanlineBuilder = ArrayVec<u16, 160>;
 
     fn new(objects: ArrayVec<Sprite, 10>) -> Self {
@@ -408,12 +408,12 @@ impl Renderer for CgbRenderer {
         &mut self,
         window_y: &mut Option<u8>,
         ppu_state: &PpuState<Self::Vram>,
-        extra: &Self::Extra,
+        color_palettes: &Self::ColorPalettes,
         ly: u8,
         cycle: u64,
     ) {
         // we don't have to care about color palettes here since the render pixel function will just ignore them if it's not needed
-        self.execute(window_y, ppu_state, extra, ly, cycle);
+        self.execute(window_y, ppu_state, color_palettes, ly, cycle);
     }
 
     fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {

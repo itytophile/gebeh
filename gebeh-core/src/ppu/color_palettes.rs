@@ -60,3 +60,75 @@ pub struct ColorPalettes {
     pub background: InnerColorPalettes,
     pub objects: InnerColorPalettes,
 }
+
+pub trait ColorPalettesRegs: Default + Clone + Send + Sync {
+    fn read_background_spec(&self) -> u8;
+    fn write_background_spec(&mut self, value: u8);
+    fn read_background_data(&self) -> u8;
+    fn write_background_data(&mut self, value: u8);
+
+    fn read_obj_spec(&self) -> u8;
+    fn write_obj_spec(&mut self, value: u8);
+    fn read_obj_data(&self) -> u8;
+    fn write_obj_data(&mut self, value: u8);
+}
+
+impl ColorPalettesRegs for () {
+    fn read_background_spec(&self) -> u8 {
+        0xff
+    }
+
+    fn write_background_spec(&mut self, _: u8) {}
+
+    fn read_background_data(&self) -> u8 {
+        0xff
+    }
+
+    fn write_background_data(&mut self, _: u8) {}
+
+    fn read_obj_spec(&self) -> u8 {
+        0xff
+    }
+
+    fn write_obj_spec(&mut self, _: u8) {}
+
+    fn read_obj_data(&self) -> u8 {
+        0xff
+    }
+
+    fn write_obj_data(&mut self, _: u8) {}
+}
+
+impl ColorPalettesRegs for ColorPalettes {
+    fn read_background_spec(&self) -> u8 {
+        self.background.read_spec()
+    }
+
+    fn write_background_spec(&mut self, value: u8) {
+        self.background.write_spec(value);
+    }
+
+    fn read_background_data(&self) -> u8 {
+        self.background.read_data()
+    }
+
+    fn write_background_data(&mut self, value: u8) {
+        self.background.write_data(value);
+    }
+
+    fn read_obj_spec(&self) -> u8 {
+        self.objects.read_spec()
+    }
+
+    fn write_obj_spec(&mut self, value: u8) {
+        self.objects.write_spec(value);
+    }
+
+    fn read_obj_data(&self) -> u8 {
+        self.objects.read_data()
+    }
+
+    fn write_obj_data(&mut self, value: u8) {
+        self.objects.write_data(value);
+    }
+}
