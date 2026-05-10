@@ -188,8 +188,7 @@ impl CgbFifos {
     pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
         let existing_sprite_mask = self.sp0 | self.sp1;
         // we must keep the existing sprite so we unset the bits already present from the new mask
-        let new_sprite_mask =
-            (tile[0] | tile[1]) & !existing_sprite_mask;
+        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
         if attributes.contains(TileAttributes::PRIORITY) {
             self.sprite_priority |= new_sprite_mask;
         } else {

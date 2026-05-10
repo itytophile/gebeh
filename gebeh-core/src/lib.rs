@@ -154,8 +154,7 @@ impl Model for Cgb {
     type Wram = CgbWram;
     type HdmaRegs = Hdma;
     fn parse_objects(oam: &Oam, lcd_control: LcdControl, ly: u8) -> ArrayVec<Sprite, 10> {
-        // Citation: In CGB mode, only the object’s location in OAM determines its priority. The earlier the object, the higher its priority.
-        let mut sprites: ArrayVec<Sprite, 10> = oam
+        let mut objects_to_sort: ArrayVec<_, 10> = oam
             .as_chunks::<4>()
             .0
             .iter()
@@ -166,12 +165,17 @@ impl Model for Cgb {
                 obj.y <= ly + 16 && ly + 16 < (obj.y + if is_big { 16 } else { 8 })
             })
             .take(10)
+            .enumerate()
             .collect();
-
-        // because we will pop the objects
-        sprites.reverse();
-
-        sprites
+        // https://gbdev.io/pandocs/OAM.html#drawing-priority
+        // Citation: the smaller the X coordinate, the higher the priority.
+        // When X coordinates are identical, the object located first in OAM has higher priority.
+        objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
+        objects_to_sort
+            .into_iter()
+            .rev() // because we will pop the objects
+            .map(|(_, object)| object)
+            .collect()
     }
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)

@@ -1,6 +1,6 @@
 use crate::ppu::TileAttributes;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Sprite {
     pub y: u8,
     pub x: u8,
