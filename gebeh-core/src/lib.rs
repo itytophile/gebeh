@@ -1,8 +1,6 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use core::ops::{Deref, DerefMut};
-
 use arrayvec::ArrayVec;
 
 use crate::{
@@ -35,9 +33,9 @@ pub mod serial;
 pub mod timer;
 pub mod wram;
 
-pub trait Ram:
-    Default + Clone + Deref<Target = [u8]> + DerefMut<Target = [u8]> + Send + Sync
-{
+pub trait Ram: Default + Clone + Send + Sync {
+    fn read(&self, index: u16) -> u8;
+    fn write(&mut self, index: u16, value: u8);
 }
 
 pub struct Peripherals<'a, M: Mbc + ?Sized, Mo: Model> {

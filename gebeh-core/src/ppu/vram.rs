@@ -1,5 +1,3 @@
-use core::ops::{Deref, DerefMut};
-
 use crate::Ram;
 
 pub const VRAM_BANK_SIZE: usize = 0x2000;
@@ -19,21 +17,15 @@ impl Default for DmgVram {
     }
 }
 
-impl Deref for DmgVram {
-    type Target = [u8];
+impl Ram for DmgVram {
+    fn read(&self, index: u16) -> u8 {
+        self.0[usize::from(index)]
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    fn write(&mut self, index: u16, value: u8) {
+        self.0[usize::from(index)] = value;
     }
 }
-
-impl DerefMut for DmgVram {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Ram for DmgVram {}
 
 #[derive(Clone)]
 pub struct CgbVram {
@@ -56,21 +48,15 @@ impl Default for CgbVram {
     }
 }
 
-impl Deref for CgbVram {
-    type Target = [u8];
+impl Ram for CgbVram {
+    fn read(&self, index: u16) -> u8 {
+        self.data[usize::from(self.bank)][usize::from(index)]
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.data[usize::from(self.bank)]
+    fn write(&mut self, index: u16, value: u8) {
+        self.data[usize::from(self.bank)][usize::from(index)] = value;
     }
 }
-
-impl DerefMut for CgbVram {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data[usize::from(self.bank)]
-    }
-}
-
-impl Ram for CgbVram {}
 
 pub trait VramRegs: Ram {
     fn write_bank(&mut self, bank: u8);

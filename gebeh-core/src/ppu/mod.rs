@@ -337,7 +337,7 @@ impl<M: Model> Ppu<M> {
     }
     pub fn write_vram(&mut self, index: u16, value: u8) {
         if self.get_ppu_mode() != LcdStatus::DRAWING {
-            self.state.video_ram[usize::from(index)] = value;
+            self.state.video_ram.write(index, value);
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {

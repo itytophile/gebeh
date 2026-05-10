@@ -1,5 +1,5 @@
 use crate::{
-    Model, Peripherals, PeripheralsRef,
+    Model, Peripherals, PeripheralsRef, Ram,
     addresses::*,
     cpu::Cpu,
     interrupts::Interrupts,
@@ -67,8 +67,8 @@ impl Cpu {
             0..VIDEO_RAM => peripherals.mbc.write(index, value),
             VIDEO_RAM..EXTERNAL_RAM => peripherals.ppu.write_vram(index - VIDEO_RAM, value),
             EXTERNAL_RAM..WORK_RAM => peripherals.mbc.write(index, value),
-            WORK_RAM..ECHO_RAM => peripherals.wram[usize::from(index - WORK_RAM)] = value,
-            ECHO_RAM..OAM => peripherals.wram[usize::from(index - ECHO_RAM)] = value,
+            WORK_RAM..ECHO_RAM => peripherals.wram.write(index - WORK_RAM, value),
+            ECHO_RAM..OAM => peripherals.wram.write(index - ECHO_RAM, value),
             OAM..NOT_USABLE => peripherals
                 .ppu
                 .write_oam(u8::try_from(index - OAM).unwrap(), value),

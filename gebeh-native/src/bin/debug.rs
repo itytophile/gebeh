@@ -369,7 +369,7 @@ fn drive_emulator(
 }
 
 fn draw_tiles_debug(vram: &DmgVram, pixels: &mut [[u8; 4]]) {
-    let (tiles, _) = vram[..0x1800].as_chunks::<16>();
+    let (tiles, _) = vram.get_inner()[..0x1800].as_chunks::<16>();
     for (index, tile) in tiles.iter().enumerate() {
         // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable
         draw_tile(pixels, index, tile, DEBUG_TILE_COL_COUNT, 0xe1);
@@ -401,13 +401,13 @@ fn draw_tile(
 }
 
 fn draw_tile_map_debug(emulator: &Emulator<Dmg>, pixels: &mut [[u8; 4]]) {
-    for (index, tile_index) in emulator.get_ppu().get_vram()[0x1800..]
+    for (index, tile_index) in emulator.get_ppu().get_vram().get_inner()[0x1800..]
         .iter()
         .copied()
         .enumerate()
     {
         let tile = get_bg_win_tile(
-            emulator.get_ppu().get_vram()[..0x1800].try_into().unwrap(),
+            emulator.get_ppu().get_vram().get_inner()[..0x1800].try_into().unwrap(),
             tile_index,
             !emulator
                 .get_ppu()

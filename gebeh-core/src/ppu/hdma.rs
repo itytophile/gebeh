@@ -1,6 +1,7 @@
 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=double#lcd-vram-dma-transfers
 
 use crate::{
+    Ram,
     external_bus::external_bus_read,
     mbc::Mbc,
     ppu::{LcdStatus, vram::CgbVram},
@@ -46,14 +47,19 @@ impl Hdma {
         };
 
         if ppu_mode == LcdStatus::HBLANK || ppu_mode == LcdStatus::VBLANK {
-            vram[usize::from(cursor.dst)] =
-                external_bus_read(cursor.src, mbc, Option::<&CgbVram>::None, wram);
-            vram[usize::from(cursor.dst.wrapping_add(1))] = external_bus_read(
-                cursor.src.wrapping_add(1),
-                mbc,
-                Option::<&CgbVram>::None,
-                wram,
+            vram.write(
+                cursor.dst,
+                external_bus_read(cursor.src, mbc, Option::<&CgbVram>::None, wram),
             );
+            vram.write(
+                cursor.dst.wrapping_add(1),
+                external_bus_read(
+                    cursor.src.wrapping_add(1),
+                    mbc,
+                    Option::<&CgbVram>::None,
+                    wram,
+                ),
+            )
         }
 
         cursor.src = cursor.src.wrapping_add(2);
