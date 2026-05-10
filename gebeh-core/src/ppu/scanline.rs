@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 use ref_cast::RefCast;
 
-use crate::ppu::color::DmgColor;
+use crate::ppu::color::{CgbColor, DmgColor};
 
 #[derive(Clone, Copy)]
 pub struct DmgScanline([u8; 40]);
@@ -98,22 +98,6 @@ impl ScanlineBuilder for ArrayVec<u16, 160> {
     }
     fn get_scanline(&self) -> &CgbScanline {
         CgbScanline::ref_cast(self.as_slice().try_into().unwrap())
-    }
-}
-
-pub struct CgbColor(u16);
-
-impl From<CgbColor> for [u8; 4] {
-    fn from(value: CgbColor) -> Self {
-        let r = value.0 >> 11;
-        let g = value.0 >> 6 & 0x1f;
-        let b = value.0 >> 1 & 0x1f;
-        [
-            u8::try_from(r * 0xff / 0x1f).unwrap(),
-            u8::try_from(g * 0xff / 0x1f).unwrap(),
-            u8::try_from(b * 0xff / 0x1f).unwrap(),
-            0xff,
-        ]
     }
 }
 
