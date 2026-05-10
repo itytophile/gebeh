@@ -118,7 +118,8 @@ pub struct CgbFifos {
     // for high sprite tile data
     sp1: u8,
     // if the background must be drawn over the sprite
-    mask: u8,
+    sprite_priority: u8,
+    current_background_priority: bool,
     // 8 x 3-bits palettes
     sprite_palette: u32,
     current_background_palette: u8,
@@ -132,18 +133,19 @@ impl CgbFifos {
         self.bg1 >>= 1;
         self.sp0 >>= 1;
         self.sp1 >>= 1;
-        self.mask >>= 1;
+        self.sprite_priority >>= 1;
         self.sprite_palette >>= 3;
 
         self.background_pixels_count -= 1;
         self.shifted_count = self.shifted_count.wrapping_add(1);
     }
 
-    pub fn replace_background(&mut self, tile: [u8; 2], background_palette: u8) {
-        self.bg0 = tile[0];
-        self.bg1 = tile[1];
+    pub fn replace_background(&mut self, tile: [u8; 2], attributes: TileAttributes) {
+        self.bg0 = tile[0].reverse_bits();
+        self.bg1 = tile[1].reverse_bits();
         self.background_pixels_count = 8;
-        self.current_background_palette = background_palette;
+        self.current_background_palette = attributes.get_cgb_palette_index();
+        self.current_background_priority = attributes.contains(TileAttributes::PRIORITY);
     }
 
     pub fn render_pixel(
@@ -152,30 +154,23 @@ impl CgbFifos {
         is_obj_enabled: bool,
         color_palettes: &ColorPalettes,
     ) -> u16 {
-        let bg_color_index = if is_background_enabled {
-            ColorIndex::new(self.bg0 & 1 != 0, self.bg1 & 1 != 0)
-        } else {
-            ColorIndex::Zero
-        };
-        let sp_color_index = if is_obj_enabled {
-            ColorIndex::new(self.sp0 & 1 != 0, self.sp1 & 1 != 0)
-        } else {
-            ColorIndex::Zero
-        };
+        let bg_color_index = ColorIndex::new(self.bg0 & 1 != 0, self.bg1 & 1 != 0);
+        let sp_color_index = ColorIndex::new(self.sp0 & 1 != 0, self.sp1 & 1 != 0);
 
         if sp_color_index == ColorIndex::Zero
-            || (self.mask & 1 != 0 && bg_color_index != ColorIndex::Zero)
+            || is_background_enabled
+                && (!is_obj_enabled
+                    || (self.sprite_priority & 1 != 0 && bg_color_index != ColorIndex::Zero))
         {
-            return color_palettes
+            color_palettes
                 .background
-                .get_palette(self.current_background_palette)
-                [usize::from(u8::from(bg_color_index))];
+                .get_palette(self.current_background_palette)[usize::from(u8::from(bg_color_index))]
+        } else {
+            color_palettes
+                .objects
+                .get_palette(u8::try_from(self.sprite_palette & 0x07).unwrap())
+                [usize::from(u8::from(sp_color_index))]
         }
-
-        color_palettes
-            .objects
-            .get_palette(u8::try_from(self.sprite_palette & 0x07).unwrap())
-            [usize::from(u8::from(sp_color_index))]
     }
 
     pub fn reset_background(&mut self) {
@@ -189,11 +184,12 @@ impl CgbFifos {
     pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
         let existing_sprite_mask = self.sp0 | self.sp1;
         // we must keep the existing sprite so we unset the bits already present from the new mask
-        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
+        let new_sprite_mask =
+            (tile[0].reverse_bits() | tile[1].reverse_bits()) & !existing_sprite_mask;
         if attributes.contains(TileAttributes::PRIORITY) {
-            self.mask |= new_sprite_mask;
+            self.sprite_priority |= new_sprite_mask;
         } else {
-            self.mask &= !new_sprite_mask;
+            self.sprite_priority &= !new_sprite_mask;
         }
 
         let palette = attributes.get_cgb_palette_index();
@@ -206,8 +202,8 @@ impl CgbFifos {
             }
         }
 
-        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
-        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
+        self.sp0 = new_sprite_mask & tile[0].reverse_bits() | !new_sprite_mask & self.sp0;
+        self.sp1 = new_sprite_mask & tile[1].reverse_bits() | !new_sprite_mask & self.sp1;
     }
 
     pub fn is_background_empty(&self) -> bool {

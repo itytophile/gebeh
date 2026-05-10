@@ -204,7 +204,7 @@ impl CgbBackgroundFetcher {
                 } else {
                     tile
                 },
-                attribute.get_cgb_palette_index(),
+                attribute,
             );
             // we will start another fetching process, too bad for the sprite fetcher
             rendering_state.is_sprite_fetching_enable = false;
