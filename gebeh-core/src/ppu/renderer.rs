@@ -511,7 +511,7 @@ mod tests {
     #[test]
     fn with_objects() {
         let objects = ArrayVec::from_iter([Sprite {
-            flags: TileAttributes::empty(),
+            attributes: TileAttributes::empty(),
             tile_index: 0,
             x: 0,
             y: 0,

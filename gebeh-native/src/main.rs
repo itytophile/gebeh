@@ -5,7 +5,13 @@ use std::sync::{Arc, RwLock};
 use cpal::traits::HostTrait;
 use gebeh::Frame;
 use gebeh_core::{
-    Cgb, Dmg, HEIGHT, Model, WIDTH, joypad::JoypadInput, mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom}, ppu::{renderer::Renderer, scanline::{Scanline, ScanlineBuilder}}
+    Cgb, Dmg, HEIGHT, Model, WIDTH,
+    joypad::JoypadInput,
+    mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
+    ppu::{
+        renderer::Renderer,
+        scanline::{Scanline, ScanlineBuilder},
+    },
 };
 use gebeh_front_helper::{get_title_from_rom, is_cgb_compatible};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
@@ -76,7 +82,9 @@ fn execute<M: Model>(rom: Vec<u8>) {
     let mut pixels = get_pixels_from_window(&window, WIDTH.into(), HEIGHT.into());
 
     let joypad: Arc<RwLock<JoypadInput>> = Default::default();
-    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<Frame<<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline>>(2);
+    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<
+        Frame<<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline>,
+    >(2);
 
     let shared_joypad = joypad.clone();
 

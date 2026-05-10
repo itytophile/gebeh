@@ -5,7 +5,7 @@ pub struct Sprite {
     pub y: u8,
     pub x: u8,
     pub tile_index: u8,
-    pub flags: TileAttributes,
+    pub attributes: TileAttributes,
 }
 
 impl From<[u8; 4]> for Sprite {
@@ -14,7 +14,7 @@ impl From<[u8; 4]> for Sprite {
             y,
             x,
             tile_index,
-            flags: TileAttributes::from_bits_retain(flags),
+            attributes: TileAttributes::from_bits_retain(flags),
         }
     }
 }

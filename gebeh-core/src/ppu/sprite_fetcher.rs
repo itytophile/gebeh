@@ -43,12 +43,12 @@ impl SpriteFetcher {
         if let Ready(tile) = *self {
             let obj = objects.pop().unwrap();
             fifos.load_sprite(
-                if obj.flags.contains(TileAttributes::X_FLIP) {
+                if obj.attributes.contains(TileAttributes::X_FLIP) {
                     [tile[0].reverse_bits(), tile[1].reverse_bits()]
                 } else {
                     tile
                 },
-                obj.flags,
+                obj.attributes,
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };
@@ -145,12 +145,12 @@ impl CgbSpriteFetcher {
         if let Ready(tile) = *self {
             let obj = objects.pop().unwrap();
             fifos.load_sprite(
-                if obj.flags.contains(TileAttributes::X_FLIP) {
+                if obj.attributes.contains(TileAttributes::X_FLIP) {
                     [tile[0].reverse_bits(), tile[1].reverse_bits()]
                 } else {
                     tile
                 },
-                obj.flags,
+                obj.attributes,
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };
@@ -185,7 +185,7 @@ impl CgbSpriteFetcher {
         // 4 -> fetch tile high
         // 5 -> fetch tile high (end)
 
-        let vram_bank = &vram_banks[usize::from(obj.flags.contains(TileAttributes::CGB_BANK))];
+        let vram_bank = &vram_banks[usize::from(obj.attributes.contains(TileAttributes::CGB_BANK))];
 
         *self = match *self {
             FetchingTileLow { delay: 3 } => FetchingTileHigh {
@@ -224,7 +224,7 @@ fn get_object_tile_line(
     ly: u8,
 ) -> [u8; 2] {
     let is_big = lcd_control.contains(LcdControl::OBJ_SIZE);
-    let y_flip = obj.flags.contains(TileAttributes::Y_FLIP);
+    let y_flip = obj.attributes.contains(TileAttributes::Y_FLIP);
     let tile_index = (obj.tile_index & if is_big { 0xfe } else { 0xff })
         + (is_big && (ly + 8 >= obj.y) != y_flip) as u8;
     let tile = get_object_tile(

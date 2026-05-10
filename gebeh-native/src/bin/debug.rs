@@ -407,7 +407,9 @@ fn draw_tile_map_debug(emulator: &Emulator<Dmg>, pixels: &mut [[u8; 4]]) {
         .enumerate()
     {
         let tile = get_bg_win_tile(
-            emulator.get_ppu().get_vram().get_inner()[..0x1800].try_into().unwrap(),
+            emulator.get_ppu().get_vram().get_inner()[..0x1800]
+                .try_into()
+                .unwrap(),
             tile_index,
             !emulator
                 .get_ppu()
