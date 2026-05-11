@@ -205,12 +205,21 @@ impl CgbFifos {
         for (new, old) in new_sprite_pixels
             .iter_mut()
             .rev()
-            .zip(self.sprite_pixels.clone())
+            .zip(self.sprite_pixels.iter().rev().copied())
         {
             // Citation: In CGB mode, only the object’s location in OAM determines its priority.
             // The earlier the object, the higher its priority.
-            if old.oam_index() < new.oam_index() {
-                *new = old;
+            *new = match (
+                old.oam_index() < new.oam_index(),
+                new.color_index() == 0,
+                old.color_index() == 0,
+            ) {
+                (true, true, _) => old,
+                (_, false, true) => *new,
+                (true, false, false) => old,
+                (false, true, true) => *new,
+                (false, true, false) => old,
+                (false, false, false) => *new,
             }
         }
 
