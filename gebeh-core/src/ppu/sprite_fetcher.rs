@@ -135,7 +135,7 @@ impl CgbSpriteFetcher {
         cursor: i16,
         rendering_state: &mut RenderingState,
         fifos: &mut CgbFifos,
-        objects: &mut ArrayVec<Sprite, 10>,
+        objects: &mut ArrayVec<(u8, Sprite), 10>,
         lcd_control: LcdControl,
         vram_banks: &[[u8; VRAM_BANK_SIZE]; 2],
         ly: u8,
@@ -143,7 +143,7 @@ impl CgbSpriteFetcher {
         use CgbSpriteFetcher::*;
 
         if let Ready(tile) = *self {
-            let obj = objects.pop().unwrap();
+            let (oam_index, obj) = objects.pop().unwrap();
             fifos.load_sprite(
                 if obj.attributes.contains(TileAttributes::X_FLIP) {
                     [tile[0].reverse_bits(), tile[1].reverse_bits()]
@@ -151,12 +151,13 @@ impl CgbSpriteFetcher {
                     tile
                 },
                 obj.attributes,
+                oam_index,
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };
         }
 
-        let Some(obj) = objects.last() else {
+        let Some((_, obj)) = objects.last() else {
             return;
         };
 

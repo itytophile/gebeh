@@ -31,7 +31,7 @@ pub trait Renderer: Clone + Send + Sync {
     type Vram: VramRegs;
     type ColorPalettes: ColorPalettesRegs;
     type ScanlineBuilder: ScanlineBuilder;
-    fn new(objects: ArrayVec<Sprite, 10>) -> Self;
+    fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self;
     fn execute(
         &mut self,
         window_y: &mut Option<u8>,
@@ -212,8 +212,8 @@ impl Renderer for DmgRenderer {
     type ColorPalettes = ();
     type ScanlineBuilder = DmgScanlineBuilder;
 
-    fn new(objects: ArrayVec<Sprite, 10>) -> Self {
-        Self::new(objects)
+    fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
+        Self::new(objects.into_iter().map(|(_, obj)| obj).collect())
     }
 
     fn execute(
@@ -241,13 +241,13 @@ pub struct CgbRenderer {
     sprite_pixel_fetcher: CgbSpriteFetcher,
     rendering_state: RenderingState,
     fifos: CgbFifos,
-    pub objects: ArrayVec<Sprite, 10>,
+    pub objects: ArrayVec<(u8, Sprite), 10>,
     pub scanline: ArrayVec<u16, 160>,
     step: RendererStep,
 }
 
 impl CgbRenderer {
-    pub fn new(objects: ArrayVec<Sprite, 10>) -> Self {
+    pub fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
@@ -400,7 +400,7 @@ impl Renderer for CgbRenderer {
     type ColorPalettes = ColorPalettes;
     type ScanlineBuilder = ArrayVec<u16, 160>;
 
-    fn new(objects: ArrayVec<Sprite, 10>) -> Self {
+    fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
         Self::new(objects)
     }
 

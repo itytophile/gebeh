@@ -1,3 +1,6 @@
+use arrayvec::ArrayVec;
+use bitfield_struct::bitfield;
+
 use crate::ppu::{
     TileAttributes,
     color::{ColorIndex, DmgColor},
@@ -107,20 +110,27 @@ impl DmgFifos {
     }
 }
 
+#[bitfield(u16)]
+struct PixelInfo {
+    // if the background must be drawn over the sprite
+    priority: bool,
+    #[bits(3)]
+    palette: u8,
+    #[bits(4)]
+    oam_index: u8,
+    #[bits(2)]
+    color_index: u8,
+    #[bits(6)]
+    _padding: u8,
+}
+
 #[derive(Default, Clone)]
 pub struct CgbFifos {
     // for low background tile data
     bg0: u8,
     // for high background tile data
     bg1: u8,
-    // for low sprite tile data
-    sp0: u8,
-    // for high sprite tile data
-    sp1: u8,
-    // if the background must be drawn over the sprite
-    sprite_priority: u8,
-    // 8 x 3-bits palettes
-    sprite_palette: u32,
+    sprite_pixels: ArrayVec<PixelInfo, 8>,
     current_background_attributes: TileAttributes,
     background_pixels_count: u8,
     shifted_count: u8,
@@ -130,10 +140,7 @@ impl CgbFifos {
     pub fn shift(&mut self) {
         self.bg0 <<= 1;
         self.bg1 <<= 1;
-        self.sp0 <<= 1;
-        self.sp1 <<= 1;
-        self.sprite_priority <<= 1;
-        self.sprite_palette <<= 3;
+        self.sprite_pixels.pop();
 
         self.background_pixels_count -= 1;
         self.shifted_count = self.shifted_count.wrapping_add(1);
@@ -153,22 +160,21 @@ impl CgbFifos {
         color_palettes: &ColorPalettes,
     ) -> u16 {
         let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
-        let sp_color_index = ColorIndex::new(self.sp0 & 0x80 != 0, self.sp1 & 0x80 != 0);
+
+        let sprite_pixel = self.sprite_pixels.last().copied().unwrap_or_default();
 
         let obj_over_bg = !master_background_priority
             || !self
                 .current_background_attributes
                 .contains(TileAttributes::PRIORITY)
-                && self.sprite_priority & 0x80 == 0;
+                && !sprite_pixel.priority();
 
         if is_obj_enabled
-            && (obj_over_bg && sp_color_index != ColorIndex::Zero
+            && (obj_over_bg && sprite_pixel.color_index() != 0
                 || !obj_over_bg && bg_color_index == ColorIndex::Zero)
         {
-            color_palettes
-                .objects
-                .get_palette(u8::try_from((self.sprite_palette >> 29) & 0x07).unwrap())
-                [usize::from(u8::from(sp_color_index))]
+            color_palettes.objects.get_palette(sprite_pixel.palette())
+                [usize::from(sprite_pixel.color_index())]
         } else {
             color_palettes
                 .background
@@ -185,31 +191,37 @@ impl CgbFifos {
         self.shifted_count
     }
 
-    pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes) {
-        let existing_sprite_mask = self.sp0 | self.sp1;
-        // we must keep the existing sprite so we unset the bits already present from the new mask
-        let new_sprite_mask = (tile[0] | tile[1]) & !existing_sprite_mask;
-        if attributes.contains(TileAttributes::PRIORITY) {
-            self.sprite_priority |= new_sprite_mask;
-        } else {
-            self.sprite_priority &= !new_sprite_mask;
-        }
+    pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes, oam_index: u8) {
+        let mut new_sprite_pixels: ArrayVec<PixelInfo, 8> = tile_to_indexes(tile)
+            .map(|color_index| {
+                PixelInfo::new()
+                    .with_color_index(color_index)
+                    .with_palette(attributes.get_cgb_palette_index())
+                    .with_priority(attributes.contains(TileAttributes::PRIORITY))
+                    .with_oam_index(oam_index)
+            })
+            .collect();
 
-        let palette = attributes.get_cgb_palette_index();
-
-        for index in 0..8 {
-            if new_sprite_mask & (1 << index) != 0 {
-                let shift = index * 3 + 8;
-                self.sprite_palette =
-                    self.sprite_palette & !(0x07 << shift) | u32::from(palette) << shift;
+        for (new, old) in new_sprite_pixels
+            .iter_mut()
+            .rev()
+            .zip(self.sprite_pixels.clone())
+        {
+            // Citation: In CGB mode, only the object’s location in OAM determines its priority.
+            // The earlier the object, the higher its priority.
+            if old.oam_index() < new.oam_index() {
+                *new = old;
             }
         }
 
-        self.sp0 = new_sprite_mask & tile[0] | !new_sprite_mask & self.sp0;
-        self.sp1 = new_sprite_mask & tile[1] | !new_sprite_mask & self.sp1;
+        self.sprite_pixels = new_sprite_pixels;
     }
 
     pub fn is_background_empty(&self) -> bool {
         self.background_pixels_count == 0
     }
+}
+
+fn tile_to_indexes(tile: [u8; 2]) -> impl Iterator<Item = u8> {
+    (0..8).map(move |index| ((tile[0] >> index) & 1) | (((tile[1] >> index) & 1) << 1))
 }

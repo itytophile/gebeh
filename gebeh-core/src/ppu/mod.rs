@@ -22,6 +22,7 @@ use crate::{
     },
 };
 
+use arrayvec::ArrayVec;
 pub use background_fetcher::get_bg_win_tile;
 pub use scanline::DmgScanline;
 pub use sprite_fetcher::get_line_from_tile;
@@ -475,11 +476,33 @@ impl<M: Model> Ppu<M> {
                 dots_count: OAM_SCAN_DURATION,
                 ly,
             } => {
-                let renderer = M::Renderer::new(M::parse_objects(
-                    self.oam_dma.get_oam(),
-                    self.state.lcd_control,
-                    *ly,
-                ));
+                let mut objects_to_sort: ArrayVec<_, 10> = self
+                    .oam_dma
+                    .get_oam()
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .copied()
+                    .map(Sprite::from)
+                    .filter(|obj| {
+                        let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
+                        obj.y <= *ly + 16 && *ly + 16 < (obj.y + if is_big { 16 } else { 8 })
+                    })
+                    .take(10)
+                    .enumerate()
+                    .collect();
+                // https://gbdev.io/pandocs/OAM.html#drawing-priority
+                // Citation: the smaller the X coordinate, the higher the priority.
+                // When X coordinates are identical, the object located first in OAM has higher priority.
+                objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
+
+                let renderer = M::Renderer::new(
+                    objects_to_sort
+                        .into_iter()
+                        .rev() // because we will pop the objects
+                        .map(|(index, object)| (u8::try_from(index).unwrap(), object))
+                        .collect(),
+                );
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
                     renderer,
