@@ -85,6 +85,12 @@ impl ScanlineBuilder for DmgScanlineBuilder {
 #[repr(transparent)]
 pub struct CgbScanline([u16; 160]);
 
+impl CgbScanline {
+    pub fn raw(&self) -> &[u16; 160] {
+        &self.0
+    }
+}
+
 impl Default for CgbScanline {
     fn default() -> Self {
         Self([0; _])
