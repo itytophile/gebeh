@@ -58,7 +58,7 @@ impl DmgScanlineBuilder {
 }
 
 pub trait Scanline: Copy + Default + Send + Sync + 'static {
-    type Item: Into<[u8; 4]>;
+    type Item: Into<[u8; 4]> + Into<u16>; // u16 = rgb555
     fn iter_colors(&self) -> impl Iterator<Item = Self::Item>;
 }
 

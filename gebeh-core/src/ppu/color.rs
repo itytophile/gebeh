@@ -51,6 +51,17 @@ pub enum DmgColor {
     Black,
 }
 
+impl From<DmgColor> for u16 {
+    fn from(value: DmgColor) -> Self {
+        match value {
+            DmgColor::White => 0xffff,
+            DmgColor::LightGray => 0b10101_10101_10101,
+            DmgColor::DarkGray => 0b01010_01010_01010,
+            DmgColor::Black => 0,
+        }
+    }
+}
+
 impl From<DmgColor> for u8 {
     fn from(value: DmgColor) -> Self {
         match value {
@@ -97,6 +108,12 @@ impl From<u8> for DmgColor {
 }
 
 pub struct CgbColor(pub u16);
+
+impl From<CgbColor> for u16 {
+    fn from(value: CgbColor) -> Self {
+        value.0
+    }
+}
 
 impl From<CgbColor> for [u8; 4] {
     fn from(value: CgbColor) -> Self {
