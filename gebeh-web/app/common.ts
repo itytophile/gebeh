@@ -4,7 +4,8 @@ export type FromNodeMessage =
       type: "ready";
     }
   | { type: "wasm" }
-  | { type: "frame"; buffer: Uint8Array }
+  // 5 bits depth RGB image
+  | { type: "frame"; buffer: Uint16Array }
   | { type: "save"; buffer: Uint8Array; extra: Uint8Array | undefined; title: string }
   | { type: "serial"; buffer: Uint8Array };
 export type GebehButton = "a" | "b" | "start" | "select" | "left" | "right" | "up" | "down";

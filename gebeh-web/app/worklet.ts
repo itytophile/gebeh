@@ -165,7 +165,7 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
       right,
       sampleRate,
       currentTime,
-      (frame: Uint8Array) => {
+      (frame: Uint16Array) => {
         if (!this.isMessagesEnabled) {
           return;
         }
