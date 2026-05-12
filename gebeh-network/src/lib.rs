@@ -75,19 +75,6 @@ impl<M: Model> RollbackSerial<M> {
         self.slave_snapshots.push_back(snapshot)
     }
 
-    pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<SerialMessage> {
-        let msg = SerialMessage::deserialize(msg);
-        msg.get()
-            .iter()
-            .find(|msg| msg.is_master && msg.prediction != 0xff)
-            .map(|msg| SerialMessage {
-                is_master: false,
-                prediction: 0xff,
-                value: 0xff,
-                cycle: msg.cycle.to_native(),
-            })
-    }
-
     // never try to "catch up" when there is a rollback, that's too hard for phone CPUs
 
     pub fn rollback_if_necessary(&mut self, emulator: &mut Emulator<M>, mbc: &mut EasyMbc) {
@@ -223,4 +210,17 @@ impl<M: Model> RollbackSerial<M> {
 
         messages
     }
+}
+
+pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<SerialMessage> {
+    let msg = SerialMessage::deserialize(msg);
+    msg.get()
+        .iter()
+        .find(|msg| msg.is_master && msg.prediction != 0xff)
+        .map(|msg| SerialMessage {
+            is_master: false,
+            prediction: 0xff,
+            value: 0xff,
+            cycle: msg.cycle.to_native(),
+        })
 }

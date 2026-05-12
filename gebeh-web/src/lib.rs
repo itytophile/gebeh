@@ -326,7 +326,7 @@ impl WebEmulator {
             synchro.add_messages(&message);
             None
         } else {
-            let msg = RollbackSerial::<Dmg>::handle_msg_no_emulator(&message)?;
+            let msg = gebeh_network::handle_msg_no_emulator(&message)?;
             Some(SerialMessage::serialize(&[msg]))
         }
     }
