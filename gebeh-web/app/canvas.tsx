@@ -83,9 +83,12 @@ const initCanvas = (canvas: HTMLCanvasElement, port: MessagePort) => {
         const d = imageData.data;
         for (const [index, byte] of data.buffer.entries()) {
           const index_color = index * 4;
-          d[index_color] = byte & 0x1f;
-          d[index_color + 1] = (byte >> 5) & 0x1f;
-          d[index_color + 2] = (byte >> 10) & 0x1f;
+          const r = byte & 0x1f;
+          const g = (byte >> 5) & 0x1f;
+          const b = (byte >> 10) & 0x1f;
+          d[index_color] = (r << 3) | (r >> 2);
+          d[index_color + 1] = (g << 3) | (g >> 2);
+          d[index_color + 2] = (b << 3) | (b >> 2);
           d[index_color + 3] = 255;
         }
         context.putImageData(imageData, 0, 0);

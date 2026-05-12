@@ -2,8 +2,10 @@ use std::{cell::Cell, rc::Rc};
 
 use arrayvec::ArrayVec;
 use gebeh_core::{
-    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer,
+    Dmg, Emulator, EmulatorExt, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH,
+    apu::Mixer,
     joypad::JoypadInput,
+    ppu::{color::DmgColor, scanline::Scanline},
 };
 use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
 use wasm_bindgen::prelude::*;
@@ -26,7 +28,7 @@ struct WebEmulatorInner {
     error: u32,
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
-    current_frame: [u8; WIDTH as usize * HEIGHT as usize],
+    current_frame: [u16; WIDTH as usize * HEIGHT as usize],
     start_time: u64,
     seconds_since_epoch: Rc<Cell<u64>>,
 }
@@ -154,13 +156,23 @@ impl WebEmulatorInner {
             return;
         };
 
-        self.current_frame.as_chunks_mut::<40>().0[usize::from(self.emulator.get_ppu().get_ly())] =
-            *scanline.raw();
+        for (input, color) in self.current_frame.as_chunks_mut::<160>().0
+            [usize::from(self.emulator.get_ppu().get_ly())]
+        .iter_mut()
+        .zip(scanline.iter_colors())
+        {
+            *input = match color {
+                DmgColor::White => 0xffff,
+                DmgColor::LightGray => 0b10101_10101_10101,
+                DmgColor::DarkGray => 0b01010_01010_01010,
+                DmgColor::Black => 0,
+            };
+        }
 
         if self.emulator.get_ppu().get_ly() == HEIGHT - 1
             && let Err(err) = on_new_frame.call1(
                 &JsValue::null(),
-                &js_sys::Uint8Array::new_from_slice(&self.current_frame),
+                &js_sys::Uint16Array::new_from_slice(&self.current_frame),
             )
         {
             console::error_1(&err);
