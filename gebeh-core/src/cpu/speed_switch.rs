@@ -3,6 +3,7 @@
 pub trait SpeedSwitch: Default + Clone + Send + Sync {
     fn write_value(&mut self, value: u8);
     fn read_value(&self) -> u8;
+    fn trigger(&mut self);
 }
 
 bitflags::bitflags! {
@@ -19,6 +20,8 @@ impl SpeedSwitch for () {
     fn read_value(&self) -> u8 {
         0xff
     }
+
+    fn trigger(&mut self) {}
 }
 
 impl SpeedSwitch for CgbSpeedSwitch {
@@ -28,5 +31,12 @@ impl SpeedSwitch for CgbSpeedSwitch {
 
     fn read_value(&self) -> u8 {
         self.bits() | 0b0111_1110
+    }
+
+    fn trigger(&mut self) {
+        if self.contains(CgbSpeedSwitch::ARMED) {
+            self.toggle(CgbSpeedSwitch::DOUBLE_SPEED);
+            self.remove(CgbSpeedSwitch::ARMED);
+        }
     }
 }

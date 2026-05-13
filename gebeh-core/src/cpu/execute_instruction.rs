@@ -3,6 +3,7 @@ use super::instructions::{
     ReadInstruction, Register16Bit, SetPc, vec,
 };
 use crate::Model;
+use crate::cpu::speed_switch::SpeedSwitch;
 use crate::cpu::{Cpu, Flags};
 use crate::{Peripherals, interrupts::Interrupts, mbc::Mbc};
 
@@ -487,8 +488,8 @@ impl<M: Model> Cpu<M> {
                 flags.set(Flags::C, carry == 1);
             }
             NoRead(Stop) => {
-                self.stop_mode = true;
-                todo!("reset sys clock");
+                // let's ignore the stop mode
+                self.speed_switch.trigger();
             }
             NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
                 let [_, lsb] = self.sp.to_be_bytes();

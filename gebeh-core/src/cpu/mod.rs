@@ -149,7 +149,6 @@ pub struct Cpu<M: Model> {
     pub ime: bool,
     old_ime: bool,
     pub is_halted: bool,
-    pub stop_mode: bool,
     // test purposes
     pub current_opcode: u8,
     pub is_dispatching_interrupt: bool,
@@ -201,7 +200,6 @@ impl<M: Model> Cpu<M> {
             ime: false,
             old_ime: false,
             is_halted: Default::default(),
-            stop_mode: Default::default(),
             current_opcode: 0,
             is_dispatching_interrupt: false,
             interrupt_enable: Interrupts::empty(),
@@ -303,15 +301,6 @@ impl<M: Model> Cpu<M> {
             Interrupts::from_bits_truncate(self.interrupt_enable.bits()) & *peripherals.interrupts;
         // Peripherals interrupts are not handled the same cycle they are triggered.
         // However, the new value can be read or written over the same cycle.
-
-        // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
-        if self.stop_mode {
-            // self.stop_mode = false;
-            // // quand on va sortir du stop mode on va exécuter un nop
-            // // et fetch le prochain opcode en parallèle
-            // self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
-            todo!("stop")
-        }
 
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {
