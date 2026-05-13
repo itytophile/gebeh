@@ -8,6 +8,13 @@ use crate::{
     wram::CgbWram,
 };
 
+#[derive(Clone, Default)]
+enum HblankState {
+    #[default]
+    WaitingForHBlank,
+    Copying,
+}
+
 #[derive(Clone)]
 struct CopyCursor {
     src: u16,
@@ -19,7 +26,7 @@ enum HdmaState {
     #[default]
     Inactive,
     GeneralPurpose(CopyCursor),
-    HBlank(CopyCursor),
+    HBlank(CopyCursor, HblankState),
 }
 
 #[derive(Clone, Default)]
@@ -34,6 +41,7 @@ impl Hdma {
     // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
     // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
     /// Returns true if HDMA has performed a transfer, false otherwise.
+    /// Performs only one copy (execute once in fast mode, twice in normal mode)
     pub fn execute(
         &mut self,
         vram: &mut CgbVram,
@@ -41,30 +49,41 @@ impl Hdma {
         wram: &CgbWram,
         ppu_mode: LcdStatus,
     ) -> bool {
-        let (HdmaState::GeneralPurpose(cursor) | HdmaState::HBlank(cursor)) = &mut self.state
-        else {
-            return false;
+        let cursor = match &mut self.state {
+            HdmaState::Inactive => return false,
+            HdmaState::GeneralPurpose(copy_cursor) => copy_cursor,
+            HdmaState::HBlank(copy_cursor, hblank_state) => match hblank_state {
+                HblankState::WaitingForHBlank => {
+                    if ppu_mode == LcdStatus::HBLANK {
+                        *hblank_state = HblankState::Copying;
+                        copy_cursor
+                    } else {
+                        return false;
+                    }
+                }
+                HblankState::Copying => {
+                    if self.length.is_multiple_of(0x10) {
+                        if ppu_mode != LcdStatus::HBLANK {
+                            *hblank_state = HblankState::WaitingForHBlank;
+                        }
+                        return false;
+                    }
+                    copy_cursor
+                }
+            },
         };
+
+        self.length = self.length.wrapping_sub(1);
 
         if ppu_mode == LcdStatus::HBLANK || ppu_mode == LcdStatus::VBLANK {
             vram.write(
                 cursor.dst,
                 external_bus_read(cursor.src, mbc, Option::<&CgbVram>::None, wram),
             );
-            vram.write(
-                cursor.dst.wrapping_add(1),
-                external_bus_read(
-                    cursor.src.wrapping_add(1),
-                    mbc,
-                    Option::<&CgbVram>::None,
-                    wram,
-                ),
-            )
         }
+        cursor.src = cursor.src.wrapping_add(1);
+        cursor.dst = cursor.dst.wrapping_add(1);
 
-        cursor.src = cursor.src.wrapping_add(2);
-        cursor.dst = cursor.dst.wrapping_add(2);
-        self.length = self.length.wrapping_sub(1);
         if self.length == 0 {
             self.state = HdmaState::Inactive;
         }
@@ -117,14 +136,17 @@ impl HdmaRegs for Hdma {
                 })
             }
             (HdmaState::Inactive, 1) => {
-                self.state = HdmaState::HBlank(CopyCursor {
-                    src: self.source_address,
-                    dst: self.destination_address,
-                })
+                self.state = HdmaState::HBlank(
+                    CopyCursor {
+                        src: self.source_address,
+                        dst: self.destination_address,
+                    },
+                    HblankState::WaitingForHBlank,
+                )
             }
             (HdmaState::GeneralPurpose(_), _) => panic!("The CPU is supposed to be halted"),
             // Citation: It is also possible to terminate an active HBlank transfer by writing zero to Bit 7 of FF55
-            (HdmaState::HBlank(_), 0) => self.state = HdmaState::Inactive,
+            (HdmaState::HBlank(_, _), 0) => self.state = HdmaState::Inactive,
             _ => {}
         };
     }
@@ -134,7 +156,7 @@ impl HdmaRegs for Hdma {
         let last_bit = match self.state {
             HdmaState::Inactive => 1,
             HdmaState::GeneralPurpose(_) => panic!("The CPU is supposed to be halted"),
-            HdmaState::HBlank(_) => 0,
+            HdmaState::HBlank(_, _) => 0,
         };
 
         (u8::try_from((self.length >> 4).wrapping_sub(1)).unwrap() & 0x7f) | (last_bit << 7)
