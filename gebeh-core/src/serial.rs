@@ -64,7 +64,7 @@ impl Serial {
         }
     }
 
-    pub fn get_control(&self) -> SerialControl {
+    pub fn read_register(&self) -> u8 {
         match self.sc {
             SerialControlState::NoTransfer { is_master } => {
                 let mut sc = SerialControl::empty();
@@ -76,6 +76,8 @@ impl Serial {
                 SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT
             }
         }
+        .bits()
+            | 0b01111110
     }
 
     pub fn will_emit_byte(&self, next_system_clock: u16) -> bool {

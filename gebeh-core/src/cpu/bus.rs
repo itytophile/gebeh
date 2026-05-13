@@ -20,7 +20,7 @@ impl<M: Model> Cpu<M> {
             OAM..NOT_USABLE => peripherals.ppu.get_oam()[usize::from(index - OAM)],
             JOYPAD => peripherals.joypad.get_register(),
             SB => peripherals.serial.sb,
-            SC => peripherals.serial.get_control().bits() | 0b01111110,
+            SC => peripherals.serial.read_register(),
             0xff03 => 0xff,
             DIV => peripherals.timer.get_div(),
             TIMER_COUNTER => peripherals.timer.get_tima(),
