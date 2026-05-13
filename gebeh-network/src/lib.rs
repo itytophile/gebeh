@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use arrayvec::ArrayVec;
-use gebeh_core::{Emulator, EmulatorExt, Model};
+use gebeh_core::{Emulator, EmulatorExt, Model, serial::Serial};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
 
 use crate::{
@@ -97,7 +97,7 @@ impl<M: Model> RollbackSerial<M> {
                 *emulator = snap_emulator;
                 *mbc = snap_mbc;
 
-                emulator.serial.slave_byte = *value;
+                emulator.serial.set_slave_byte(*value);
                 // to avoid the master to reemit a message already handled by the slave
                 emulator.execute(mbc.as_mut());
 
@@ -174,7 +174,8 @@ impl<M: Model> RollbackSerial<M> {
                         self.force_snapshot = true;
                         if response != self.last_correction {
                             messages.push(
-                                cycle_to_sync.get_response(response, emulator.serial.slave_byte),
+                                cycle_to_sync
+                                    .get_response(response, emulator.serial.get_slave_byte()),
                             );
                             self.messages_to_handle.clear();
                             self.last_correction = response;
@@ -201,7 +202,7 @@ impl<M: Model> RollbackSerial<M> {
                 is_master: true,
                 value: byte,
                 cycle: emulator_clone.get_cycles(),
-                prediction: emulator_clone.serial.slave_byte,
+                prediction: emulator_clone.serial.get_slave_byte(),
             });
             self.master_snapshots.push_back((emulator_clone, mbc_clone));
         } else {

@@ -22,7 +22,7 @@ impl Default for SerialControlState {
 }
 
 #[derive(Clone)]
-pub struct DmgSerial {
+struct SerialState {
     pub sb: u8,
     sc: SerialControlState,
     falling_edge: FallingEdge,
@@ -30,7 +30,10 @@ pub struct DmgSerial {
     delay_int: bool,
 }
 
-impl Default for DmgSerial {
+#[derive(Clone, Default)]
+pub struct DmgSerial(SerialState);
+
+impl Default for SerialState {
     fn default() -> Self {
         Self {
             sb: Default::default(),
@@ -46,26 +49,45 @@ fn get_clock_16384_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool
     falling_edge.update(system_clock & (1 << 5) != 0)
 }
 
-impl DmgSerial {
-    pub fn set_control(&mut self, sc: SerialControl) {
+const READY_COUNT: u8 = 16;
+
+pub trait Serial {
+    fn write_sc(&mut self, sc: SerialControl);
+    fn read_sc(&self) -> u8;
+    fn write_sb(&mut self, value: u8);
+    fn read_sb(&self) -> u8;
+    fn will_emit_byte(&self, next_system_clock: u16) -> bool;
+    #[must_use]
+    fn execute(&mut self, system_clock: u16, interrupts: &mut Interrupts, _: u64) -> Option<u8>;
+    fn set_msg_from_master(&mut self, byte: u8, interrupts: &mut Interrupts) -> u8;
+    fn set_slave_byte(&mut self, value: u8);
+    fn get_slave_byte(&self) -> u8;
+}
+
+impl Serial for DmgSerial {
+    fn write_sc(&mut self, sc: SerialControl) {
         match (
             sc.contains(SerialControl::CLOCK_SELECT),
             sc.contains(SerialControl::TRANSFER_ENABLE),
         ) {
             (true, true) => {
-                if !core::matches!(self.sc, SerialControlState::Master { .. }) {
-                    self.sc = SerialControlState::Master { serial_count: 0 };
+                if !core::matches!(self.0.sc, SerialControlState::Master { .. }) {
+                    self.0.sc = SerialControlState::Master { serial_count: 0 };
                 }
             }
             (is_master, false) => {
-                self.sc = SerialControlState::NoTransfer { is_master };
+                self.0.sc = SerialControlState::NoTransfer { is_master };
             }
-            (false, true) => self.sc = SerialControlState::Slave,
+            (false, true) => self.0.sc = SerialControlState::Slave,
         }
     }
 
-    pub fn read_register(&self) -> u8 {
-        match self.sc {
+    fn write_sb(&mut self, value: u8) {
+        self.0.sb = value;
+    }
+
+    fn read_sc(&self) -> u8 {
+        match self.0.sc {
             SerialControlState::NoTransfer { is_master } => {
                 let mut sc = SerialControl::empty();
                 sc.set(SerialControl::CLOCK_SELECT, is_master);
@@ -80,9 +102,13 @@ impl DmgSerial {
             | 0b01111110
     }
 
-    pub fn will_emit_byte(&self, next_system_clock: u16) -> bool {
-        if get_clock_16384_hz(&mut self.falling_edge.clone(), next_system_clock)
-            && let SerialControlState::Master { serial_count } = self.sc
+    fn read_sb(&self) -> u8 {
+        self.0.sb
+    }
+
+    fn will_emit_byte(&self, next_system_clock: u16) -> bool {
+        if get_clock_16384_hz(&mut self.0.falling_edge.clone(), next_system_clock)
+            && let SerialControlState::Master { serial_count } = self.0.sc
             && serial_count == READY_COUNT - 1
         {
             true
@@ -91,28 +117,22 @@ impl DmgSerial {
         }
     }
 
-    #[must_use]
-    pub fn execute(
-        &mut self,
-        system_clock: u16,
-        interrupts: &mut Interrupts,
-        _: u64,
-    ) -> Option<u8> {
-        if self.delay_int {
+    fn execute(&mut self, system_clock: u16, interrupts: &mut Interrupts, _: u64) -> Option<u8> {
+        if self.0.delay_int {
             interrupts.insert(Interrupts::SERIAL);
-            self.delay_int = false;
+            self.0.delay_int = false;
         }
-        if get_clock_16384_hz(&mut self.falling_edge, system_clock)
-            && let SerialControlState::Master { serial_count } = &mut self.sc
+        if get_clock_16384_hz(&mut self.0.falling_edge, system_clock)
+            && let SerialControlState::Master { serial_count } = &mut self.0.sc
             && *serial_count < READY_COUNT
         {
             *serial_count += 1;
 
             if *serial_count == READY_COUNT {
-                let response = self.sb;
-                self.sc = SerialControlState::NoTransfer { is_master: true };
-                self.delay_int = true;
-                self.sb = self.slave_byte;
+                let response = self.0.sb;
+                self.0.sc = SerialControlState::NoTransfer { is_master: true };
+                self.0.delay_int = true;
+                self.0.sb = self.0.slave_byte;
                 return Some(response);
             }
         }
@@ -120,17 +140,23 @@ impl DmgSerial {
         None
     }
 
-    pub fn set_msg_from_master(&mut self, byte: u8, interrupts: &mut Interrupts) -> u8 {
-        if !core::matches!(self.sc, SerialControlState::Slave) {
+    fn set_msg_from_master(&mut self, byte: u8, interrupts: &mut Interrupts) -> u8 {
+        if !core::matches!(self.0.sc, SerialControlState::Slave) {
             return 0xff;
         }
 
-        let response = self.sb;
-        self.sc = SerialControlState::NoTransfer { is_master: false };
+        let response = self.0.sb;
+        self.0.sc = SerialControlState::NoTransfer { is_master: false };
         interrupts.insert(Interrupts::SERIAL);
-        self.sb = byte;
+        self.0.sb = byte;
         response
     }
-}
 
-const READY_COUNT: u8 = 16;
+    fn set_slave_byte(&mut self, value: u8) {
+        self.0.slave_byte = value;
+    }
+
+    fn get_slave_byte(&self) -> u8 {
+        self.0.slave_byte
+    }
+}

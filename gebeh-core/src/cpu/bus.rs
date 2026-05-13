@@ -5,7 +5,7 @@ use crate::{
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs, vram::VramRegs},
-    serial::SerialControl,
+    serial::{Serial, SerialControl},
     wram::Wram,
 };
 
@@ -19,8 +19,8 @@ impl<M: Model> Cpu<M> {
         match index {
             OAM..NOT_USABLE => peripherals.ppu.get_oam()[usize::from(index - OAM)],
             JOYPAD => peripherals.joypad.get_register(),
-            SB => peripherals.serial.sb,
-            SC => peripherals.serial.read_register(),
+            SB => peripherals.serial.read_sb(),
+            SC => peripherals.serial.read_sc(),
             0xff03 => 0xff,
             DIV => peripherals.timer.get_div(),
             TIMER_COUNTER => peripherals.timer.get_tima(),
@@ -79,10 +79,10 @@ impl<M: Model> Cpu<M> {
                 .write_oam(u8::try_from(index - OAM).unwrap(), value),
             NOT_USABLE..JOYPAD => {}
             JOYPAD => peripherals.joypad.set_register(value),
-            SB => peripherals.serial.sb = value,
+            SB => peripherals.serial.write_sb(value),
             SC => peripherals
                 .serial
-                .set_control(SerialControl::from_bits_truncate(value)),
+                .write_sc(SerialControl::from_bits_truncate(value)),
             0xff03 => {}
             // Citation:
             // Writing any value to this register resets it to $00

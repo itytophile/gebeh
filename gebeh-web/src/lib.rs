@@ -3,7 +3,7 @@ use std::{cell::Cell, rc::Rc};
 use arrayvec::ArrayVec;
 use gebeh_core::{
     Cgb, Dmg, Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer,
-    joypad::JoypadInput, ppu::scanline::Scanline,
+    joypad::JoypadInput, ppu::scanline::Scanline, serial::Serial,
 };
 use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom, is_cgb_compatible};
 use wasm_bindgen::prelude::*;
@@ -454,11 +454,11 @@ impl WebEmulator {
         } else {
             match &mut self.inner {
                 Inner::Dmg(web_emulator_inner) => {
-                    web_emulator_inner.emulator.serial.slave_byte = 0xff;
+                    web_emulator_inner.emulator.serial.set_slave_byte(0xff);
                     web_emulator_inner.network = None
                 }
                 Inner::Cgb(web_emulator_inner) => {
-                    web_emulator_inner.emulator.serial.slave_byte = 0xff;
+                    web_emulator_inner.emulator.serial.set_slave_byte(0xff);
                     web_emulator_inner.network = None
                 }
                 Inner::NetworkPreEnabled => self.inner = Inner::None,

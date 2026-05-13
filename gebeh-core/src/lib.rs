@@ -15,7 +15,7 @@ use crate::{
         hdma::{Hdma, HdmaRegs},
         renderer::{CgbRenderer, DmgRenderer, Renderer},
     },
-    serial::DmgSerial,
+    serial::{DmgSerial, Serial},
     timer::Timer,
     wram::{CgbWram, DmgWram, Wram},
 };
