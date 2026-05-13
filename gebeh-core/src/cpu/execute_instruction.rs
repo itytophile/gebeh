@@ -10,7 +10,7 @@ fn is_half_carry(a: u8, b: u8, result: u8) -> bool {
     (a ^ b ^ result) & 0x10 != 0
 }
 
-impl Cpu {
+impl<M: Model> Cpu<M> {
     fn adc(&mut self, x: u8) {
         let sum = u16::from(self.a) + u16::from(x) + self.f.contains(Flags::C) as u16;
 

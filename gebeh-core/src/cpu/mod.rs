@@ -1,7 +1,7 @@
 mod bus;
 mod execute_instruction;
-pub mod speed_switch;
 pub mod instructions;
+pub mod speed_switch;
 
 use crate::{
     Model, Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
@@ -131,7 +131,7 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 ];
 
 #[derive(Clone)]
-pub struct Cpu {
+pub struct Cpu<M: Model> {
     pub sp: u16,
     pub lsb: u8,
     pub msb: u8,
@@ -157,6 +157,7 @@ pub struct Cpu {
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
     pub boot_rom: &'static [u8],
+    pub speed_switch: M::SpeedSwitchRegs,
 }
 
 bitflags::bitflags! {
@@ -178,7 +179,7 @@ bitflags::bitflags! {
 // Pour l'instant, il semble que les écritures/lectures du CPU sont toujours traités à la fin d'un cycle.
 // Par exemple, il écrase les modif du timer pendant le cycle courant, et il a conscience des changements immédiats du ppu
 
-impl Cpu {
+impl<M: Model> Cpu<M> {
     pub fn new(boot_rom: &'static [u8]) -> Self {
         Self {
             sp: Default::default(),
@@ -207,6 +208,7 @@ impl Cpu {
             hram: [0; 0x7f],
             boot_rom_mapping_control: false,
             boot_rom,
+            speed_switch: Default::default(),
         }
     }
     fn get_8bit_register(&self, register: Register8Bit) -> u8 {
@@ -270,13 +272,11 @@ impl Cpu {
         self.set_8bit_register(register.get_msb(), msb);
         self.set_8bit_register(register.get_lsb(), lsb);
     }
-}
 
-impl Cpu {
     fn read(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<impl Mbc + ?Sized, impl Model>,
+        peripherals: PeripheralsRef<impl Mbc + ?Sized, M>,
         cycles: u64,
     ) -> u8 {
         // https://gbdev.io/pandocs/Power_Up_Sequence.html#size
@@ -296,7 +296,7 @@ impl Cpu {
 
     pub fn execute(
         &mut self,
-        mut peripherals: Peripherals<impl Mbc + ?Sized, impl Model>,
+        mut peripherals: Peripherals<impl Mbc + ?Sized, M>,
         cycle_count: u64,
     ) {
         let interrupts_to_execute =

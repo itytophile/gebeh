@@ -9,11 +9,11 @@ use crate::{
     wram::Wram,
 };
 
-impl Cpu {
+impl<M: Model> Cpu<M> {
     pub fn internal_bus_read(
         &self,
         index: u16,
-        peripherals: PeripheralsRef<impl Mbc + ?Sized, impl Model>,
+        peripherals: PeripheralsRef<impl Mbc + ?Sized, M>,
         cycles: u64,
     ) -> u8 {
         match index {

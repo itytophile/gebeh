@@ -1,6 +1,6 @@
 // https://gbdev.io/pandocs/CGB_Registers.html#ff4d--key1spd-cgb-mode-only-prepare-speed-switch
 
-trait SpeedSwitchRegs {
+pub trait SpeedSwitchRegs: Default + Clone + Send + Sync {
     fn write_value(&mut self, value: u8);
     fn read_value(&self) -> u8;
 }

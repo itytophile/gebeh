@@ -3,7 +3,10 @@
 
 use crate::{
     apu::Apu,
-    cpu::{BOOTIX_BOOT_ROM, CGB_BOYTACEAN, Cpu},
+    cpu::{
+        BOOTIX_BOOT_ROM, CGB_BOYTACEAN, Cpu,
+        speed_switch::{SpeedSwitch, SpeedSwitchRegs},
+    },
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
     mbc::Mbc,
@@ -84,6 +87,7 @@ pub trait Model: Clone + 'static {
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Wram;
     type HdmaRegs: HdmaRegs;
+    type SpeedSwitchRegs: SpeedSwitchRegs;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
     where
         Self: Sized;
@@ -100,6 +104,7 @@ impl Model for Dmg {
     type StatRegisterHandler = StatInterruptWriteQuirk;
     type Wram = DmgWram;
     type HdmaRegs = ();
+    type SpeedSwitchRegs = ();
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -124,6 +129,7 @@ impl Model for Cgb {
     type StatRegisterHandler = ();
     type Wram = CgbWram;
     type HdmaRegs = Hdma;
+    type SpeedSwitchRegs = SpeedSwitch;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -146,7 +152,7 @@ impl Model for Cgb {
 #[derive(Clone)]
 pub struct Emulator<M: Model> {
     ppu: Ppu<M>,
-    cpu: Cpu,
+    cpu: Cpu<M>,
     pub interrupts: Interrupts,
     timer: Timer,
     joypad: Joypad,
@@ -171,7 +177,7 @@ impl<M: Model> Emulator<M> {
     pub fn get_ppu(&self) -> &Ppu<M> {
         &self.ppu
     }
-    pub fn get_cpu(&self) -> &Cpu {
+    pub fn get_cpu(&self) -> &Cpu<M> {
         &self.cpu
     }
     // don't call this function multiple times in a cycle with different inputs
