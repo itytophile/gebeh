@@ -1,5 +1,6 @@
 mod bus;
 mod execute_instruction;
+pub mod speed_switch;
 pub mod instructions;
 
 use crate::{
