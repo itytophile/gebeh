@@ -1,7 +1,7 @@
 use crate::{
     Model, Peripherals, PeripheralsRef, Ram,
     addresses::*,
-    cpu::Cpu,
+    cpu::{Cpu, speed_switch::SpeedSwitchRegs},
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs, vram::VramRegs},
@@ -42,7 +42,7 @@ impl<M: Model> Cpu<M> {
             WY => peripherals.ppu.get_wy(),
             WX => peripherals.ppu.get_wx(),
             0xff4c => 0xff,
-            0xff4d => 0xff,
+            SPEED => self.speed_switch.read_value(),
             0xff4e => 0xff,
             VRAM_BANK => peripherals.ppu.get_vram().read_bank(),
             BOOT_ROM_MAPPING_CONTROL => 0xff,
@@ -109,7 +109,7 @@ impl<M: Model> Cpu<M> {
             WY => peripherals.ppu.set_wy(value),
             WX => peripherals.ppu.set_wx(value),
             0xff4c => {}
-            0xff4d => {}
+            SPEED => self.speed_switch.write_value(value),
             0xff4e => {}
             VRAM_BANK => peripherals.ppu.get_vram_mut().write_bank(value),
             BOOT_ROM_MAPPING_CONTROL => self.boot_rom_mapping_control |= value != 0,
