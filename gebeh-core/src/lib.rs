@@ -5,7 +5,7 @@ use crate::{
     apu::Apu,
     cpu::{
         BOOTIX_BOOT_ROM, CGB_BOYTACEAN, Cpu,
-        speed_switch::{SpeedSwitch, SpeedSwitchRegs},
+        speed_switch::{CgbSpeedSwitch, SpeedSwitch},
     },
     interrupts::Interrupts,
     joypad::{Joypad, JoypadInput},
@@ -87,7 +87,7 @@ pub trait Model: Clone + 'static {
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Wram;
     type HdmaRegs: HdmaRegs;
-    type SpeedSwitchRegs: SpeedSwitchRegs;
+    type SpeedSwitch: SpeedSwitch;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
     where
         Self: Sized;
@@ -104,7 +104,7 @@ impl Model for Dmg {
     type StatRegisterHandler = StatInterruptWriteQuirk;
     type Wram = DmgWram;
     type HdmaRegs = ();
-    type SpeedSwitchRegs = ();
+    type SpeedSwitch = ();
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -129,7 +129,7 @@ impl Model for Cgb {
     type StatRegisterHandler = ();
     type Wram = CgbWram;
     type HdmaRegs = Hdma;
-    type SpeedSwitchRegs = SpeedSwitch;
+    type SpeedSwitch = CgbSpeedSwitch;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }

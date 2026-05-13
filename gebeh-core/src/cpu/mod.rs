@@ -157,7 +157,7 @@ pub struct Cpu<M: Model> {
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
     pub boot_rom: &'static [u8],
-    pub speed_switch: M::SpeedSwitchRegs,
+    pub speed_switch: M::SpeedSwitch,
 }
 
 bitflags::bitflags! {

@@ -1,7 +1,7 @@
 use crate::{
     Model, Peripherals, PeripheralsRef, Ram,
     addresses::*,
-    cpu::{Cpu, speed_switch::SpeedSwitchRegs},
+    cpu::{Cpu, speed_switch::SpeedSwitch},
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs, vram::VramRegs},
