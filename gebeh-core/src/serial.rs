@@ -22,7 +22,7 @@ impl Default for SerialControlState {
 }
 
 #[derive(Clone)]
-pub struct Serial {
+pub struct DmgSerial {
     pub sb: u8,
     sc: SerialControlState,
     falling_edge: FallingEdge,
@@ -30,7 +30,7 @@ pub struct Serial {
     delay_int: bool,
 }
 
-impl Default for Serial {
+impl Default for DmgSerial {
     fn default() -> Self {
         Self {
             sb: Default::default(),
@@ -46,7 +46,7 @@ fn get_clock_16384_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool
     falling_edge.update(system_clock & (1 << 5) != 0)
 }
 
-impl Serial {
+impl DmgSerial {
     pub fn set_control(&mut self, sc: SerialControl) {
         match (
             sc.contains(SerialControl::CLOCK_SELECT),
