@@ -259,7 +259,10 @@ impl Emulator<Cgb> {
         let ppu_mode = self.ppu.get_ppu_mode();
         let hdma_has_performed =
             self.hdma
-                .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode);
+                .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode)
+                | self
+                    .hdma
+                    .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode);
 
         self.timer.execute(&mut self.interrupts, self.cycles);
         let master_serial_byte = self.serial.execute(
