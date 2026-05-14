@@ -167,9 +167,9 @@ impl Serial for DmgSerial {
 }
 
 #[derive(Clone, Default)]
-pub struct CgbSerial{
+pub struct CgbSerial {
     is_double_speed: bool,
-    state: SerialState
+    state: SerialState,
 }
 
 impl Serial for CgbSerial {
@@ -188,6 +188,7 @@ impl Serial for CgbSerial {
             }
             (false, true) => self.state.sc = SerialControlState::Slave,
         }
+        self.is_double_speed = sc.contains(SerialControl::CLOCK_SPEED);
     }
 
     fn write_sb(&mut self, value: u8) {
@@ -195,7 +196,7 @@ impl Serial for CgbSerial {
     }
 
     fn read_sc(&self) -> u8 {
-        match self.state.sc {
+        let mut sc = match self.state.sc {
             SerialControlState::NoTransfer { is_master } => {
                 let mut sc = SerialControl::empty();
                 sc.set(SerialControl::CLOCK_SELECT, is_master);
@@ -205,9 +206,9 @@ impl Serial for CgbSerial {
             SerialControlState::Master { .. } => {
                 SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT
             }
-        }
-        .bits()
-            | 0b01111110
+        };
+        sc.set(SerialControl::CLOCK_SPEED, self.is_double_speed);
+        sc.bits() | 0b0111_1100
     }
 
     fn read_sb(&self) -> u8 {
@@ -215,8 +216,11 @@ impl Serial for CgbSerial {
     }
 
     fn will_emit_byte(&self, next_system_clock: u16) -> bool {
-        if get_clock_16384_hz(&mut self.state.falling_edge.clone(), next_system_clock)
-            && let SerialControlState::Master { serial_count } = self.state.sc
+        if get_clock(
+            self.is_double_speed,
+            &mut self.state.falling_edge.clone(),
+            next_system_clock,
+        ) && let SerialControlState::Master { serial_count } = self.state.sc
             && serial_count == READY_COUNT - 1
         {
             true
@@ -230,8 +234,11 @@ impl Serial for CgbSerial {
             interrupts.insert(Interrupts::SERIAL);
             self.state.delay_int = false;
         }
-        if get_clock_16384_hz(&mut self.state.falling_edge, system_clock)
-            && let SerialControlState::Master { serial_count } = &mut self.state.sc
+        if get_clock(
+            self.is_double_speed,
+            &mut self.state.falling_edge,
+            system_clock,
+        ) && let SerialControlState::Master { serial_count } = &mut self.state.sc
             && *serial_count < READY_COUNT
         {
             *serial_count += 1;
@@ -267,4 +274,9 @@ impl Serial for CgbSerial {
     fn get_slave_byte(&self) -> u8 {
         self.state.slave_byte
     }
+}
+
+fn get_clock(is_double_speed: bool, falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
+    is_double_speed && get_clock_32768_hz(falling_edge, system_clock)
+        || !is_double_speed && get_clock_16384_hz(falling_edge, system_clock)
 }
