@@ -4,7 +4,7 @@
 use crate::{
     apu::Apu,
     cpu::{
-        BOOTIX_BOOT_ROM, CGB_BOYTACEAN, Cpu,
+        BOOTIX_BOOT_ROM, CGB_BOOT_ROM, Cpu,
         speed_switch::{CgbSpeedSwitch, SpeedSwitch},
     },
     interrupts::Interrupts,
@@ -139,7 +139,7 @@ impl Model for Cgb {
     fn get_emulator() -> Emulator<Self> {
         Emulator {
             ppu: Default::default(),
-            cpu: Cpu::new(&CGB_BOYTACEAN),
+            cpu: Cpu::new(CGB_BOOT_ROM),
             interrupts: Interrupts::default(),
             timer: Timer::default(),
             joypad: Joypad::default(),
