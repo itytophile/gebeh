@@ -168,7 +168,7 @@ impl Serial for DmgSerial {
 
 #[derive(Clone, Default)]
 pub struct CgbSerial {
-    is_double_speed: bool,
+    is_fast: bool,
     state: SerialState,
 }
 
@@ -188,7 +188,7 @@ impl Serial for CgbSerial {
             }
             (false, true) => self.state.sc = SerialControlState::Slave,
         }
-        self.is_double_speed = sc.contains(SerialControl::CLOCK_SPEED);
+        self.is_fast = sc.contains(SerialControl::CLOCK_SPEED);
     }
 
     fn write_sb(&mut self, value: u8) {
@@ -207,7 +207,7 @@ impl Serial for CgbSerial {
                 SerialControl::TRANSFER_ENABLE | SerialControl::CLOCK_SELECT
             }
         };
-        sc.set(SerialControl::CLOCK_SPEED, self.is_double_speed);
+        sc.set(SerialControl::CLOCK_SPEED, self.is_fast);
         sc.bits() | 0b0111_1100
     }
 
@@ -217,7 +217,7 @@ impl Serial for CgbSerial {
 
     fn will_emit_byte(&self, next_system_clock: u16) -> bool {
         if get_clock(
-            self.is_double_speed,
+            self.is_fast,
             &mut self.state.falling_edge.clone(),
             next_system_clock,
         ) && let SerialControlState::Master { serial_count } = self.state.sc
@@ -234,11 +234,8 @@ impl Serial for CgbSerial {
             interrupts.insert(Interrupts::SERIAL);
             self.state.delay_int = false;
         }
-        if get_clock(
-            self.is_double_speed,
-            &mut self.state.falling_edge,
-            system_clock,
-        ) && let SerialControlState::Master { serial_count } = &mut self.state.sc
+        if get_clock(self.is_fast, &mut self.state.falling_edge, system_clock)
+            && let SerialControlState::Master { serial_count } = &mut self.state.sc
             && *serial_count < READY_COUNT
         {
             *serial_count += 1;
