@@ -167,7 +167,10 @@ impl Serial for DmgSerial {
 }
 
 #[derive(Clone, Default)]
-pub struct CgbSerial(SerialState);
+pub struct CgbSerial{
+    is_double_speed: bool,
+    state: SerialState
+}
 
 impl Serial for CgbSerial {
     fn write_sc(&mut self, sc: SerialControl) {
@@ -176,23 +179,23 @@ impl Serial for CgbSerial {
             sc.contains(SerialControl::TRANSFER_ENABLE),
         ) {
             (true, true) => {
-                if !core::matches!(self.0.sc, SerialControlState::Master { .. }) {
-                    self.0.sc = SerialControlState::Master { serial_count: 0 };
+                if !core::matches!(self.state.sc, SerialControlState::Master { .. }) {
+                    self.state.sc = SerialControlState::Master { serial_count: 0 };
                 }
             }
             (is_master, false) => {
-                self.0.sc = SerialControlState::NoTransfer { is_master };
+                self.state.sc = SerialControlState::NoTransfer { is_master };
             }
-            (false, true) => self.0.sc = SerialControlState::Slave,
+            (false, true) => self.state.sc = SerialControlState::Slave,
         }
     }
 
     fn write_sb(&mut self, value: u8) {
-        self.0.sb = value;
+        self.state.sb = value;
     }
 
     fn read_sc(&self) -> u8 {
-        match self.0.sc {
+        match self.state.sc {
             SerialControlState::NoTransfer { is_master } => {
                 let mut sc = SerialControl::empty();
                 sc.set(SerialControl::CLOCK_SELECT, is_master);
@@ -208,12 +211,12 @@ impl Serial for CgbSerial {
     }
 
     fn read_sb(&self) -> u8 {
-        self.0.sb
+        self.state.sb
     }
 
     fn will_emit_byte(&self, next_system_clock: u16) -> bool {
-        if get_clock_16384_hz(&mut self.0.falling_edge.clone(), next_system_clock)
-            && let SerialControlState::Master { serial_count } = self.0.sc
+        if get_clock_16384_hz(&mut self.state.falling_edge.clone(), next_system_clock)
+            && let SerialControlState::Master { serial_count } = self.state.sc
             && serial_count == READY_COUNT - 1
         {
             true
@@ -223,21 +226,21 @@ impl Serial for CgbSerial {
     }
 
     fn execute(&mut self, system_clock: u16, interrupts: &mut Interrupts, _: u64) -> Option<u8> {
-        if self.0.delay_int {
+        if self.state.delay_int {
             interrupts.insert(Interrupts::SERIAL);
-            self.0.delay_int = false;
+            self.state.delay_int = false;
         }
-        if get_clock_16384_hz(&mut self.0.falling_edge, system_clock)
-            && let SerialControlState::Master { serial_count } = &mut self.0.sc
+        if get_clock_16384_hz(&mut self.state.falling_edge, system_clock)
+            && let SerialControlState::Master { serial_count } = &mut self.state.sc
             && *serial_count < READY_COUNT
         {
             *serial_count += 1;
 
             if *serial_count == READY_COUNT {
-                let response = self.0.sb;
-                self.0.sc = SerialControlState::NoTransfer { is_master: true };
-                self.0.delay_int = true;
-                self.0.sb = self.0.slave_byte;
+                let response = self.state.sb;
+                self.state.sc = SerialControlState::NoTransfer { is_master: true };
+                self.state.delay_int = true;
+                self.state.sb = self.state.slave_byte;
                 return Some(response);
             }
         }
@@ -246,22 +249,22 @@ impl Serial for CgbSerial {
     }
 
     fn set_msg_from_master(&mut self, byte: u8, interrupts: &mut Interrupts) -> u8 {
-        if !core::matches!(self.0.sc, SerialControlState::Slave) {
+        if !core::matches!(self.state.sc, SerialControlState::Slave) {
             return 0xff;
         }
 
-        let response = self.0.sb;
-        self.0.sc = SerialControlState::NoTransfer { is_master: false };
+        let response = self.state.sb;
+        self.state.sc = SerialControlState::NoTransfer { is_master: false };
         interrupts.insert(Interrupts::SERIAL);
-        self.0.sb = byte;
+        self.state.sb = byte;
         response
     }
 
     fn set_slave_byte(&mut self, value: u8) {
-        self.0.slave_byte = value;
+        self.state.slave_byte = value;
     }
 
     fn get_slave_byte(&self) -> u8 {
-        self.0.slave_byte
+        self.state.slave_byte
     }
 }
