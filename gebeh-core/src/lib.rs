@@ -277,7 +277,9 @@ impl Emulator<Cgb> {
             &mut self.interrupts,
             self.cycles,
         );
-        let must_increment_div_apu = self.apu.execute(self.timer.get_div());
+
+        // the apu is slowed down by dividing the div register by two
+        let must_increment_div_apu = self.apu.execute(self.timer.get_div() >> 1);
 
         let interrupts_from_previous_cycle = self.interrupts;
         for _ in 0..2 {
