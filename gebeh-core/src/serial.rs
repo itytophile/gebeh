@@ -50,8 +50,8 @@ fn get_clock_16384_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool
     falling_edge.update(system_clock & (1 << 5) != 0)
 }
 
-fn get_clock_32768_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
-    falling_edge.update(system_clock & (1 << 4) != 0)
+fn get_clock_524288_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
+    falling_edge.update(system_clock & 1 != 0)
 }
 
 const READY_COUNT: u8 = 16;
@@ -273,7 +273,10 @@ impl Serial for CgbSerial {
     }
 }
 
-fn get_clock(is_double_speed: bool, falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
-    is_double_speed && get_clock_32768_hz(falling_edge, system_clock)
-        || !is_double_speed && get_clock_16384_hz(falling_edge, system_clock)
+// remember that the falling edge will divide the clock by 2 so:
+// 16384 Hz -> 8192 Hz
+// 524288 Hz -> 262144 Hz
+fn get_clock(is_fast: bool, falling_edge: &mut FallingEdge, system_clock: u16) -> bool {
+    is_fast && get_clock_524288_hz(falling_edge, system_clock)
+        || !is_fast && get_clock_16384_hz(falling_edge, system_clock)
 }
