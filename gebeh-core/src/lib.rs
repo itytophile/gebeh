@@ -15,7 +15,7 @@ use crate::{
         hdma::{Hdma, HdmaRegs},
         renderer::{CgbRenderer, DmgRenderer, Renderer},
     },
-    serial::{DmgSerial, Serial},
+    serial::{CgbSerial, DmgSerial, Serial},
     timer::Timer,
     wram::{CgbWram, DmgWram, Wram},
 };
@@ -43,7 +43,7 @@ pub struct Peripherals<'a, M: Mbc + ?Sized, Mo: Model> {
     pub joypad: &'a mut Joypad,
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu<Mo>,
-    pub serial: &'a mut DmgSerial,
+    pub serial: &'a mut Mo::Serial,
     pub wram: &'a mut Mo::Wram,
     pub interrupts: &'a mut Interrupts,
     pub hdma: &'a mut Mo::HdmaRegs,
@@ -71,7 +71,7 @@ pub struct PeripheralsRef<'a, M: Mbc + ?Sized, Mo: Model> {
     pub joypad: &'a Joypad,
     pub apu: &'a Apu,
     pub ppu: &'a Ppu<Mo>,
-    pub serial: &'a DmgSerial,
+    pub serial: &'a Mo::Serial,
     pub wram: &'a Mo::Wram,
     pub interrupts: Interrupts,
     pub hdma: &'a Mo::HdmaRegs,
@@ -88,6 +88,7 @@ pub trait Model: Clone + 'static {
     type Wram: Wram;
     type HdmaRegs: HdmaRegs;
     type SpeedSwitch: SpeedSwitch;
+    type Serial: Serial;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
     where
         Self: Sized;
@@ -105,6 +106,7 @@ impl Model for Dmg {
     type Wram = DmgWram;
     type HdmaRegs = ();
     type SpeedSwitch = ();
+    type Serial = DmgSerial;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -130,6 +132,7 @@ impl Model for Cgb {
     type Wram = CgbWram;
     type HdmaRegs = Hdma;
     type SpeedSwitch = CgbSpeedSwitch;
+    type Serial = CgbSerial;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -141,7 +144,7 @@ impl Model for Cgb {
             timer: Timer::default(),
             joypad: Joypad::default(),
             apu: Apu::default(),
-            serial: DmgSerial::default(),
+            serial: Default::default(),
             wram: Default::default(),
             cycles: 0,
             hdma: Hdma::default(),
@@ -157,7 +160,7 @@ pub struct Emulator<M: Model> {
     timer: Timer,
     joypad: Joypad,
     apu: Apu,
-    pub serial: DmgSerial,
+    pub serial: M::Serial,
     wram: M::Wram,
     cycles: u64,
     hdma: M::HdmaRegs,

@@ -56,7 +56,7 @@ fn get_clock_32768_hz(falling_edge: &mut FallingEdge, system_clock: u16) -> bool
 
 const READY_COUNT: u8 = 16;
 
-pub trait Serial {
+pub trait Serial: Clone + Send + Sync {
     fn write_sc(&mut self, sc: SerialControl);
     fn read_sc(&self) -> u8;
     fn write_sb(&mut self, value: u8);
