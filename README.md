@@ -4,7 +4,7 @@
 
 Pronounced gebeh.
 
-gebeh is a browser based Game Boy (DMG) emulator with online multiplayer. You can try it here https://gebeh.ovh/
+gebeh is a browser based Game Boy (DMG/CGB) emulator with online multiplayer. You can try it here https://gebeh.ovh/
 
 On Android, gebeh runs better on Chrome.
 gebeh is "accurate" enough to pass 31 Mealybug Tearoom tests and the majority of the mooneye acceptance test suite.
