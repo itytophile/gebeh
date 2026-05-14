@@ -259,6 +259,10 @@ impl Emulator<Dmg> {
 
 impl Emulator<Cgb> {
     fn execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
+        if self.cpu.speed_switch.contains(CgbSpeedSwitch::DOUBLE_SPEED) {
+            return self.double_speed_execute(mbc);
+        }
+
         let ppu_mode = self.ppu.get_ppu_mode();
         let hdma_has_performed =
             self.hdma
@@ -310,6 +314,67 @@ impl Emulator<Cgb> {
         for _ in 2..4 {
             self.ppu.execute(&mut self.interrupts, self.cycles);
         }
+
+        if must_increment_div_apu {
+            self.apu.increment_div_apu();
+        }
+        self.timer.commit_tima_overflow();
+        self.cycles = self.cycles.wrapping_add(1);
+        master_serial_byte
+    }
+
+    // yea the emulation doesn't speed up. It's not trivial to adapt the network logic for double speed mode.
+    // TODO: what about ppu and cpu synchronization?
+    fn double_speed_execute<M: Mbc + ?Sized>(&mut self, mbc: &mut M) -> Option<u8> {
+        let ppu_mode = self.ppu.get_ppu_mode();
+
+        // hdma is executed only once in a "fast" m-cycle
+        let hdma_has_performed =
+            self.hdma
+                .execute(self.ppu.get_vram_mut(), mbc, &self.wram, ppu_mode);
+
+        self.timer.execute(&mut self.interrupts, self.cycles);
+        let master_serial_byte = self.serial.execute(
+            self.timer.get_system_counter(),
+            &mut self.interrupts,
+            self.cycles,
+        );
+        let must_increment_div_apu = self.apu.execute(self.timer.get_div());
+
+        let interrupts_from_previous_cycle = self.interrupts;
+
+        // ppu is executed only twice in a "fast" m-cycle
+        self.ppu.execute(&mut self.interrupts, self.cycles);
+        // I don't understand halt timings https://gekkio.fi/blog/2016/game-boy-research-status
+        let mut slowed_interrupts_in_halt_mode = None;
+        if self.cpu.is_halted {
+            slowed_interrupts_in_halt_mode = Some(self.interrupts);
+            self.interrupts = interrupts_from_previous_cycle;
+        }
+        if hdma_has_performed {
+            self.ppu.execute_dma(mbc, &self.wram, self.cycles);
+        } else {
+            self.cpu.execute(
+                Peripherals {
+                    mbc,
+                    timer: &mut self.timer,
+                    joypad: &mut self.joypad,
+                    apu: &mut self.apu,
+                    ppu: &mut self.ppu,
+                    serial: &mut self.serial,
+                    wram: &mut self.wram,
+                    interrupts: &mut self.interrupts,
+                    hdma: &mut self.hdma,
+                },
+                self.cycles,
+            );
+        }
+
+        if let Some(interrupt_flag) = slowed_interrupts_in_halt_mode {
+            self.interrupts = interrupt_flag;
+        }
+
+        self.ppu.execute(&mut self.interrupts, self.cycles);
 
         if must_increment_div_apu {
             self.apu.increment_div_apu();
