@@ -1,26 +1,30 @@
 mod background_fetcher;
 pub mod color;
+pub mod color_palettes;
 mod fifos;
-mod oam_dma;
-mod renderer;
-mod scanline;
+pub mod hdma;
+pub mod oam_dma;
+pub mod renderer;
+pub mod scanline;
+pub mod sprite;
 mod sprite_fetcher;
-
-use arrayvec::ArrayVec;
+pub mod vram;
 
 use crate::{
-    WIDTH, Wram,
-    addresses::{EXTERNAL_RAM, VIDEO_RAM},
+    Model, Ram, WIDTH,
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
         oam_dma::{BLOCKED_OAM, Oam, OamDma},
         renderer::Renderer,
+        scanline::ScanlineBuilder,
+        sprite::Sprite,
     },
 };
 
+use arrayvec::ArrayVec;
 pub use background_fetcher::get_bg_win_tile;
-pub use scanline::Scanline;
+pub use scanline::DmgScanline;
 pub use sprite_fetcher::get_line_from_tile;
 
 bitflags::bitflags! {
@@ -41,8 +45,25 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
+    pub struct TileAttributes: u8 {
+        const PRIORITY = 1 << 7;
+        const Y_FLIP = 1 << 6;
+        const X_FLIP = 1 << 5;
+        const DMG_PALETTE = 1 << 4;
+        const CGB_BANK = 1 << 3;
+    }
+}
+
+impl TileAttributes {
+    pub fn get_cgb_palette_index(&self) -> u8 {
+        self.bits() & 0x07
+    }
+}
+
 #[derive(Clone)]
-pub enum PpuStep {
+pub enum PpuStep<R: Renderer> {
     // only used on line 0 when the lcd has just turned on
     SkippedOamScan {
         dots_count: u8,
@@ -56,14 +77,14 @@ pub enum PpuStep {
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
-        renderer: Renderer,
+        renderer: R,
         ly: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
-        scanline: Scanline,
+        scanline: <<R as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline,
         ly: u8,
     }, // <= 204
     VerticalBlankScanline {
@@ -72,21 +93,37 @@ pub enum PpuStep {
     }, // <= 456
 }
 
-#[derive(Clone, Default)]
-pub struct Ppu {
-    pub step: PpuStep,
+#[derive(Clone)]
+pub struct Ppu<M: Model> {
+    pub step: PpuStep<M::Renderer>,
     stat_irq: bool,
-    state: PpuState,
+    state: PpuState<<M::Renderer as Renderer>::Vram>,
     previous_lyc: u8,
-    // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
-    queued_interrupt_part_lcd_status: Option<LcdStatus>,
+    stat_register_handler: M::StatRegisterHandler,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
     oam_dma: OamDma,
+    color_palettes: <M::Renderer as Renderer>::ColorPalettes,
 }
 
-#[derive(Clone)]
-struct PpuState {
+impl<M: Model> Default for Ppu<M> {
+    fn default() -> Self {
+        Self {
+            step: Default::default(),
+            stat_irq: false,
+            state: Default::default(),
+            previous_lyc: 0,
+            stat_register_handler: M::StatRegisterHandler::default(),
+            interrupt_part_lcd_status: LcdStatus::default(),
+            lyc: 0,
+            oam_dma: Default::default(),
+            color_palettes: Default::default(),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct PpuState<V> {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -98,34 +135,13 @@ struct PpuState {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
-    video_ram: [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize],
+    video_ram: V,
     obp0: u8,
     obp1: u8,
     wy: u8,
 }
 
-impl Default for PpuState {
-    fn default() -> Self {
-        Self {
-            lcd_control: Default::default(),
-            bgp: Default::default(),
-            old_bgp: Default::default(),
-            old_lcd_control: Default::default(),
-            old_old_lcd_control: Default::default(),
-            scy: Default::default(),
-            scx: Default::default(),
-            wx: Default::default(),
-            old_wx: Default::default(),
-            old_old_wx: Default::default(),
-            video_ram: [0; (EXTERNAL_RAM - VIDEO_RAM) as usize],
-            obp0: 0,
-            obp1: 0,
-            wy: 0,
-        }
-    }
-}
-
-impl PpuState {
+impl<V> PpuState<V> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }
@@ -204,7 +220,7 @@ const OAM_SCAN_DURATION: u8 = 79;
 const SCANLINE_DURATION: u16 = 456;
 const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
-impl Default for PpuStep {
+impl<R: Renderer> Default for PpuStep<R> {
     fn default() -> Self {
         Self::SkippedOamScan { dots_count: 2 }
     }
@@ -218,85 +234,60 @@ type TileVram = [u8; 0x1800];
 type TileVramObj = [u8; 0x1000];
 type Tile = [u8; 16];
 
-bitflags::bitflags! {
-    #[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
-    pub struct ObjectFlags: u8 {
-        const PRIORITY = 1 << 7;
-        const Y_FLIP = 1 << 6;
-        const X_FLIP = 1 << 5;
-        const DMG_PALETTE = 1 << 4;
+pub trait StatRegisterHandler: Default + Clone + Send + Sync {
+    fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus);
+    fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus);
+}
+
+#[derive(Default, Clone)]
+pub struct StatInterruptWriteQuirk {
+    // https://gbdev.io/pandocs/STAT#spurious-stat-interrupts
+    queued_interrupt_part_lcd_status: Option<LcdStatus>,
+}
+
+impl StatRegisterHandler for StatInterruptWriteQuirk {
+    fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus) {
+        // https://www.devrs.com/gb/files/faqs.html#GBBugs
+        // Citation: As far as has been figured out, the bug happens everytime
+        // ANYTHING (including 00) is written to the STAT register ($ff41) while
+        // the gameboy is either in HBLANK or VBLANK mode
+        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
+        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
+        *stat_reg = LcdStatus::from_bits_truncate(0xff)
     }
-}
 
-#[derive(Clone, Copy)]
-pub struct ObjectAttribute {
-    y: u8,
-    x: u8,
-    tile_index: u8,
-    flags: ObjectFlags,
-}
-
-impl From<[u8; 4]> for ObjectAttribute {
-    fn from([y, x, tile_index, flags]: [u8; 4]) -> Self {
-        Self {
-            y,
-            x,
-            tile_index,
-            flags: ObjectFlags::from_bits_retain(flags),
+    fn after_interrupt_handling(&mut self, stat_reg: &mut LcdStatus) {
+        if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
+            *stat_reg = value;
         }
     }
 }
 
-pub type Vram = [u8; (EXTERNAL_RAM - VIDEO_RAM) as usize];
-
-// TODO if the PPU’s access to VRAM is blocked then the tile data is read as $FF
-
-// D'après "The cycle accurate gameboy docs":
-// - Ly augmente de façon "indépendante". À la ligne 153, il ne vaut 153 que pendant le premier M-cycle ensuite il est tout de suite à 0.
-// - Pour LYC, la comparaison est toujours fausse pendant le premier M-cycle d'une ligne et le troisième M-cycle de la ligne 153.
-// - Le OAM scan commence seulement au deuxième M-cycle d'une ligne. En effet, les modes sont décalés par rapport à la ligne, le Hblank déborde
-//  à la fin et est exécuté au premier M-cycle de la ligne prochaine. Cela implique qu'un même Hblank peut connaître deux valeurs de LY différentes.
-
-// ce que veut mooneye: écart entre OAM_INT et STAT MODE HBLANK = 63 M-cycles ou 252 dots (80 + 172)
-// cependant d'après "The cycle accurate gameboy docs", l'interruption de OAM_INT arrive un cycle plus tôt
-
-// D'après un commentaire dans SameBoy: It seems that the STAT register's mode bits are always "late" by 4 T-cycles.
-// Donc les modes ne sont pas décalés en fin de compte ?
-// Supposons que les modes ne soient pas décalés mais que cela soit le STAT qui soit à la bourre.
-// Cela expliquerait pourquoi l'interruption du Mode 2 arrive un cycle avant Stat=2 (sauf ligne 0)
-// Or l'interruption vblank arrive toujours pile poil quand son stat passe à 1.
-// Mooneye veut aussi que l'écart en OAM_INT et HBLANK_INT = 63 M-cycles
-// Donc à partir de ces informations je peux conclure:
-// - le OAM scan (mode 2) commence bien au cycle 0
-// - son interruption est lancée cycle 0 (bien synchronisée) (cycle 1 à la ligne 0)
-// - son STAT est en retard d'un M-cycle
-// - Le Drawing (mode 3) commence bien au cycle 20, juste après OAM scan
-// - son STAT est en retard d'un M-cycle
-// - le Hblank (mode 0) commence après le Drawing de façon normale
-// - son interruption est lancée dès le premier cycle (bien synchronisée)
-// - son STAT n'est pas en retard, il est changé dès le premier cycle (bien synchronisé même cycle que l'interruption)
-// - VBLANK a un retard d'un cycle sur son STAT et sur son interruption (j'en peux plus)
-//
-// Nouvelle info de Mooneye, il veut un écart parfait entre l'interruption de OAM scan et le changement de STAT en mode 3 (drawing)
-// cependant actuellement le STAT du mode 3 est en retard, alors que l'interruption de OAM scan est parfait.
-// Tout ça me donne l'impression que si le PPU actionne une interruption alors le CPU a un délai d'un cycle avant de le traiter.
-// En effet, pour corriger ce timing Interruption Mode 2 => STAT Mode 3 il faudrait corriger le retard de STAT mode 3. Mais cela
-// serait en contradiction avec "The cycle accurate gameboy docs" qui dit bien que le STAT Mode 3 a le retard.
-// Donc on va tenter un délai d'un M-cycle pour le traitement d'une interruption de la part du CPU. Cela implique que le Hblank a
-// aussi son STAT en retard, comme indiqué par le commentaire de SameBoy.
-// De plus l'émulateur de mooneye a ce délai d'un M-cycle entre le PPU qui détecte une interruption et le traitement donc ça va dans ce sens.
+impl StatRegisterHandler for () {
+    fn set_interrupt_part_lcd_status(&mut self, value: u8, stat_reg: &mut LcdStatus) {
+        *stat_reg = LcdStatus::from_bits_truncate(value);
+    }
+    fn after_interrupt_handling(&mut self, _: &mut LcdStatus) {}
+}
 
 // one iteration = one dot = (1/4 M-cyle DMG)
-impl Ppu {
+impl<M: Model> Ppu<M> {
+    pub fn get_color_palettes(&self) -> &<M::Renderer as Renderer>::ColorPalettes {
+        &self.color_palettes
+    }
+    pub fn get_color_palettes_mut(&mut self) -> &mut <M::Renderer as Renderer>::ColorPalettes {
+        &mut self.color_palettes
+    }
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
     }
-    pub fn execute_dma<M: Mbc + ?Sized>(&mut self, mbc: &M, wram: &Wram, cycles: u64) {
+    pub fn execute_dma(&mut self, mbc: &(impl Mbc + ?Sized), wram: &impl Ram, cycles: u64) {
         self.oam_dma.execute(
             mbc,
-            VramReader {
-                vram: &self.state.video_ram,
-                mode: self.get_ppu_mode(),
+            if self.get_ppu_mode() != LcdStatus::DRAWING {
+                Some(&self.state.video_ram)
+            } else {
+                None
             },
             wram,
             cycles,
@@ -320,10 +311,11 @@ impl Ppu {
         }
         self.oam_dma.write_oam(index, value);
     }
-    pub fn get_vram_reader(&self) -> VramReader<'_> {
-        VramReader {
-            vram: &self.state.video_ram,
-            mode: self.get_ppu_mode(),
+    pub fn get_vram_if_available(&self) -> Option<&<M::Renderer as Renderer>::Vram> {
+        if self.get_ppu_mode() == LcdStatus::DRAWING {
+            None
+        } else {
+            Some(&self.state.video_ram)
         }
     }
     pub fn get_wy(&self) -> u8 {
@@ -344,23 +336,20 @@ impl Ppu {
     pub fn set_obp1(&mut self, value: u8) {
         self.state.obp1 = value
     }
-    pub fn get_vram(&self) -> &Vram {
+    pub fn get_vram(&self) -> &<M::Renderer as Renderer>::Vram {
         &self.state.video_ram
     }
-
+    pub fn get_vram_mut(&mut self) -> &mut <M::Renderer as Renderer>::Vram {
+        &mut self.state.video_ram
+    }
     pub fn write_vram(&mut self, index: u16, value: u8) {
         if self.get_ppu_mode() != LcdStatus::DRAWING {
-            self.state.video_ram[usize::from(index)] = value;
+            self.state.video_ram.write(index, value);
         }
     }
     pub fn set_interrupt_part_lcd_status(&mut self, value: u8) {
-        // https://www.devrs.com/gb/files/faqs.html#GBBugs
-        // Citation: As far as has been figured out, the bug happens everytime
-        // ANYTHING (including 00) is written to the STAT register ($ff41) while
-        // the gameboy is either in HBLANK or VBLANK mode
-        self.queued_interrupt_part_lcd_status = Some(LcdStatus::from_bits_truncate(value));
-        // Citation: It behaves as if $FF were written for one M-cycle, and then the written value were written the next M-cycle
-        self.interrupt_part_lcd_status = LcdStatus::from_bits_truncate(0xff)
+        self.stat_register_handler
+            .set_interrupt_part_lcd_status(value, &mut self.interrupt_part_lcd_status);
     }
 
     pub fn get_ly(&self) -> u8 {
@@ -386,7 +375,7 @@ impl Ppu {
         status
     }
 
-    fn get_ppu_mode(&self) -> LcdStatus {
+    pub fn get_ppu_mode(&self) -> LcdStatus {
         if !self.is_ppu_enabled() {
             // https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
             // Citation: Reports 0 instead when the PPU is disabled.
@@ -452,7 +441,9 @@ impl Ppu {
     }
 
     #[must_use]
-    pub fn get_scanline_if_ready(&self) -> Option<&Scanline> {
+    pub fn get_scanline_if_ready(
+        &self,
+    ) -> Option<&<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,
@@ -475,7 +466,7 @@ impl Ppu {
             } => {
                 self.step = PpuStep::Drawing {
                     dots_count: 0,
-                    renderer: Renderer::new(Default::default()),
+                    renderer: M::Renderer::new(Default::default()),
                     window_y: None,
                     ly: 0,
                 }
@@ -492,7 +483,7 @@ impl Ppu {
                     .0
                     .iter()
                     .copied()
-                    .map(ObjectAttribute::from)
+                    .map(Sprite::from)
                     .filter(|obj| {
                         let is_big = self.state.lcd_control.contains(LcdControl::OBJ_SIZE);
                         obj.y <= *ly + 16 && *ly + 16 < (obj.y + if is_big { 16 } else { 8 })
@@ -504,11 +495,12 @@ impl Ppu {
                 // Citation: the smaller the X coordinate, the higher the priority.
                 // When X coordinates are identical, the object located first in OAM has higher priority.
                 objects_to_sort.sort_unstable_by_key(|(index, obj)| (obj.x, *index));
-                let renderer = Renderer::new(
+
+                let renderer = M::Renderer::new(
                     objects_to_sort
                         .into_iter()
                         .rev() // because we will pop the objects
-                        .map(|(_, object)| object)
+                        .map(|(index, object)| (u8::try_from(index).unwrap(), object))
                         .collect(),
                 );
                 self.step = PpuStep::Drawing {
@@ -520,11 +512,11 @@ impl Ppu {
             }
             PpuStep::Drawing {
                 dots_count,
-                renderer: Renderer { scanline, .. },
+                renderer,
                 window_y,
                 ly,
                 ..
-            } if scanline.len() == WIDTH => {
+            } if renderer.get_scanline_builder().len() == WIDTH => {
                 self.step = PpuStep::HorizontalBlank {
                     remaining_dots: u8::try_from(
                         SCANLINE_DURATION - u16::from(OAM_SCAN_DURATION) - *dots_count,
@@ -532,7 +524,7 @@ impl Ppu {
                     .unwrap(),
                     window_y: *window_y,
                     dots_count: 0,
-                    scanline: *scanline.get_scanline(),
+                    scanline: *renderer.get_scanline_builder().get_scanline(),
                     ly: *ly,
                 }
             }
@@ -629,9 +621,8 @@ impl Ppu {
         self.switch_from_finished_mode(cycles);
         self.fire_interrupts(interrupts, cycles);
 
-        if let Some(value) = self.queued_interrupt_part_lcd_status.take() {
-            self.interrupt_part_lcd_status = value;
-        }
+        self.stat_register_handler
+            .after_interrupt_handling(&mut self.interrupt_part_lcd_status);
 
         // Pandocs says (https://gbdev.io/pandocs/Scrolling.html#window):
         // WY condition was triggered: i.e. at some point in this frame the value of WY was equal to LY (checked at the start of Mode 2 only)
@@ -664,7 +655,7 @@ impl Ppu {
                 ly,
                 ..
             } => {
-                renderer.execute(window_y, &self.state, *ly, cycles);
+                renderer.execute(window_y, &self.state, &self.color_palettes, *ly, cycles);
 
                 *dots_count += 1;
             }
@@ -675,25 +666,10 @@ impl Ppu {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct VramReader<'a> {
-    vram: &'a Vram,
-    mode: LcdStatus,
-}
-
-impl VramReader<'_> {
-    pub fn read_vram(self, index: u16) -> u8 {
-        if self.mode == LcdStatus::DRAWING {
-            0xff
-        } else {
-            self.vram[usize::from(index)]
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
+        Dmg,
         interrupts::Interrupts,
         ppu::{LcdControl, Ppu, PpuStep},
     };
@@ -702,7 +678,7 @@ mod tests {
 
     #[test]
     fn line_duration() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<Dmg>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -723,7 +699,7 @@ mod tests {
 
     #[test]
     fn frame_duration() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<Dmg>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         // to ignore SkippedOamScan when the ppu is turning on
@@ -757,7 +733,7 @@ mod tests {
 
     #[test]
     fn all_ly() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::<Dmg>::default();
         let mut interrupts = Interrupts::default();
         ppu.set_lcd_control(LcdControl::LCD_PPU_ENABLE);
         let mut lys: std::collections::HashSet<_> = (0..154).collect();

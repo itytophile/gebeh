@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use arrayvec::ArrayVec;
-use gebeh_core::Emulator;
+use gebeh_core::{Emulator, EmulatorExt, Model, serial::Serial};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
 
 use crate::{
@@ -12,9 +12,9 @@ use crate::{
 pub mod message;
 mod synchro_cycles;
 
-type Snapshots = VecDeque<Snapshot>;
+type Snapshots<M> = VecDeque<Snapshot<M>>;
 
-type Snapshot = (Emulator, EasyMbc);
+type Snapshot<M> = (Emulator<M>, EasyMbc);
 
 // 3 seconds
 const ROLLBACK_TRESHOLD: u64 = 4194304 * 3 / 4;
@@ -29,16 +29,16 @@ enum MiamMessage {
     FromSlave(u64, u8),
 }
 
-pub struct RollbackSerial {
-    master_snapshots: VecDeque<(Emulator, EasyMbc)>,
-    slave_snapshots: Snapshots,
+pub struct RollbackSerial<M: Model> {
+    master_snapshots: Snapshots<M>,
+    slave_snapshots: Snapshots<M>,
     synchro_cycles: Option<SynchroCycles>,
     last_correction: u8,
     messages_to_handle: VecDeque<MiamMessage>,
     force_snapshot: bool,
 }
 
-impl Default for RollbackSerial {
+impl<M: Model> Default for RollbackSerial<M> {
     fn default() -> Self {
         Self {
             master_snapshots: Default::default(),
@@ -51,7 +51,7 @@ impl Default for RollbackSerial {
     }
 }
 
-impl RollbackSerial {
+impl<M: Model> RollbackSerial<M> {
     pub fn add_messages(&mut self, msg: &[u8]) {
         let msg = SerialMessage::deserialize(msg);
         self.messages_to_handle.extend(
@@ -68,29 +68,16 @@ impl RollbackSerial {
         );
     }
 
-    fn add_snapshot(&mut self, snapshot: Snapshot) {
+    fn add_snapshot(&mut self, snapshot: Snapshot<M>) {
         if self.slave_snapshots.len() == MAX_SNAPSHOT {
             self.slave_snapshots.pop_front();
         }
         self.slave_snapshots.push_back(snapshot)
     }
 
-    pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<SerialMessage> {
-        let msg = SerialMessage::deserialize(msg);
-        msg.get()
-            .iter()
-            .find(|msg| msg.is_master && msg.prediction != 0xff)
-            .map(|msg| SerialMessage {
-                is_master: false,
-                prediction: 0xff,
-                value: 0xff,
-                cycle: msg.cycle.to_native(),
-            })
-    }
-
     // never try to "catch up" when there is a rollback, that's too hard for phone CPUs
 
-    pub fn rollback_if_necessary(&mut self, emulator: &mut Emulator, mbc: &mut EasyMbc) {
+    pub fn rollback_if_necessary(&mut self, emulator: &mut Emulator<M>, mbc: &mut EasyMbc) {
         let Some(msg) = self.messages_to_handle.front() else {
             return Default::default();
         };
@@ -110,7 +97,7 @@ impl RollbackSerial {
                 *emulator = snap_emulator;
                 *mbc = snap_mbc;
 
-                emulator.serial.slave_byte = *value;
+                emulator.serial.set_slave_byte(*value);
                 // to avoid the master to reemit a message already handled by the slave
                 emulator.execute(mbc.as_mut());
 
@@ -152,7 +139,7 @@ impl RollbackSerial {
     #[must_use]
     pub fn execute_and_take_snapshot(
         &mut self,
-        emulator: &mut Emulator,
+        emulator: &mut Emulator<M>,
         mbc: &mut dyn CloneMbc<'static>,
     ) -> ArrayVec<SerialMessage, 2> {
         if emulator
@@ -187,7 +174,8 @@ impl RollbackSerial {
                         self.force_snapshot = true;
                         if response != self.last_correction {
                             messages.push(
-                                cycle_to_sync.get_response(response, emulator.serial.slave_byte),
+                                cycle_to_sync
+                                    .get_response(response, emulator.serial.get_slave_byte()),
                             );
                             self.messages_to_handle.clear();
                             self.last_correction = response;
@@ -214,7 +202,7 @@ impl RollbackSerial {
                 is_master: true,
                 value: byte,
                 cycle: emulator_clone.get_cycles(),
-                prediction: emulator_clone.serial.slave_byte,
+                prediction: emulator_clone.serial.get_slave_byte(),
             });
             self.master_snapshots.push_back((emulator_clone, mbc_clone));
         } else {
@@ -223,4 +211,17 @@ impl RollbackSerial {
 
         messages
     }
+}
+
+pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<SerialMessage> {
+    let msg = SerialMessage::deserialize(msg);
+    msg.get()
+        .iter()
+        .find(|msg| msg.is_master && msg.prediction != 0xff)
+        .map(|msg| SerialMessage {
+            is_master: false,
+            prediction: 0xff,
+            value: 0xff,
+            cycle: msg.cycle.to_native(),
+        })
 }

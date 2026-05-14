@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader};
 
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, WIDTH, joypad::JoypadInput};
+use gebeh_core::{Dmg, Emulator, EmulatorExt, HEIGHT, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
 use gebeh_network::{RollbackSerial, message::SerialMessage};
 
@@ -9,7 +9,7 @@ fn home_made(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::default();
+    let mut emulator = Emulator::<Dmg>::default();
 
     loop {
         emulator.execute(mbc.as_mut());
@@ -33,7 +33,7 @@ fn home_made_ppu(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::default();
+    let mut emulator = Emulator::<Dmg>::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
     // let path = std::path::Path::new(r"prout.png");
@@ -77,9 +77,9 @@ fn serial_test(name: &str) {
         .unwrap()
         .leak();
     let (_, mut slave_mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut slave_emulator = Emulator::default();
+    let mut slave_emulator = Emulator::<Dmg>::default();
     let (_, mut master_mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut master_emulator = Emulator::default();
+    let mut master_emulator = Emulator::<Dmg>::default();
 
     let mut slave_rollback = RollbackSerial::default();
     let mut master_rollback = RollbackSerial::default();

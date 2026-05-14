@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader};
 
 use gebeh::InstantRtc;
-use gebeh_core::{Emulator, HEIGHT, WIDTH};
+use gebeh_core::{Dmg, Emulator, EmulatorExt, HEIGHT, WIDTH};
 use gebeh_front_helper::get_mbc;
 use png::BitDepth;
 
@@ -41,7 +41,7 @@ fn mealybug_inner(rom: &str, expected: &str) {
     let rom = std::fs::read(rom).unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::default();
+    let mut emulator = Emulator::<Dmg>::default();
     let mut previous_ly = None;
     let mut current_frame = [0u8; WIDTH as usize * HEIGHT as usize / 4];
     // let mut file = File::create(std::path::Path::new(r"prout.png")).unwrap();

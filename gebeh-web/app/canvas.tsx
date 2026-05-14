@@ -80,16 +80,16 @@ const initCanvas = (canvas: HTMLCanvasElement, port: MessagePort) => {
     switch (data.type) {
       case "frame": {
         const imageData = context.getImageData(0, 0, GB_WIDTH, GB_HEIGHT);
-        for (const [index, byte] of new Uint8Array(data.buffer).entries()) {
-          for (let index_2bits = 0; index_2bits < 4; ++index_2bits) {
-            const gray = (((byte >> (6 - 2 * index_2bits)) & 0b11) * 255) / 3;
-            const index_color = (index * 4 + index_2bits) * 4;
-            const data = imageData.data;
-            data[index_color] = gray;
-            data[index_color + 1] = gray;
-            data[index_color + 2] = gray;
-            data[index_color + 3] = 255;
-          }
+        const d = imageData.data;
+        for (const [index, byte] of data.buffer.entries()) {
+          const index_color = index * 4;
+          const r = byte & 0x1f;
+          const g = (byte >> 5) & 0x1f;
+          const b = (byte >> 10) & 0x1f;
+          d[index_color] = (r << 3) | (r >> 2);
+          d[index_color + 1] = (g << 3) | (g >> 2);
+          d[index_color + 2] = (b << 3) | (b >> 2);
+          d[index_color + 3] = 255;
         }
         context.putImageData(imageData, 0, 0);
         break;

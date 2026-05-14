@@ -2,9 +2,10 @@ use std::{cell::Cell, rc::Rc};
 
 use arrayvec::ArrayVec;
 use gebeh_core::{
-    Emulator, HEIGHT, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer, joypad::JoypadInput,
+    Cgb, Dmg, Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer,
+    joypad::JoypadInput, ppu::scanline::Scanline, serial::Serial,
 };
-use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom};
+use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom, is_cgb_compatible};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
@@ -17,27 +18,37 @@ use crate::rtc::AudioRtc;
 
 mod rtc;
 
-struct WebEmulatorInner {
-    emulator: Emulator,
+#[allow(clippy::large_enum_variant)]
+#[derive(Default)]
+enum Inner {
+    Dmg(WebEmulatorInner<Dmg>),
+    Cgb(WebEmulatorInner<Cgb>),
+    NetworkPreEnabled,
+    #[default]
+    None,
+}
+
+struct WebEmulatorInner<M: Model> {
+    emulator: Emulator<M>,
     sample_index: u32,
     mbc: EasyMbc,
     // to iterate SYSTEM_CLOCK_FREQUENCY / sample_rate on average even if the division is not round
     error: u32,
     is_save_enabled: bool,
     mixer: Mixer<Vec<u8>>,
-    current_frame: [u8; WIDTH as usize * HEIGHT as usize],
+    current_frame: [u16; WIDTH as usize * HEIGHT as usize],
     start_time: u64,
     seconds_since_epoch: Rc<Cell<u64>>,
+    network: Option<RollbackSerial<M>>,
 }
 
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct WebEmulator {
-    inner: Option<WebEmulatorInner>,
-    network: Option<RollbackSerial>,
+    inner: Inner,
 }
 
-impl WebEmulatorInner {
+impl<M: Model> WebEmulatorInner<M> {
     fn set_joypad(&mut self, joypad: JoypadInput) {
         if self.emulator.get_joypad() == &joypad {
             return;
@@ -53,6 +64,7 @@ impl WebEmulatorInner {
         sample_rate: f32,
         seconds_since_epoch: u32,
         audio_time: u32,
+        enable_network: bool,
     ) -> Option<Self> {
         console::log_1(&JsValue::from_str("Loading rom"));
         let start_time = seconds_since_epoch - audio_time;
@@ -87,6 +99,11 @@ impl WebEmulatorInner {
             current_frame: [0; _],
             start_time: u64::from(start_time),
             seconds_since_epoch,
+            network: if enable_network {
+                Some(Default::default())
+            } else {
+                None
+            },
         })
     }
 
@@ -99,7 +116,6 @@ impl WebEmulatorInner {
         sample_rate: u32,
         audio_time: u32,
         on_new_frame: &js_sys::Function,
-        mut serial_mode: Option<&mut RollbackSerial>,
     ) -> Box<[u8]> {
         let mut messages = ArrayVec::<SerialMessage, 4>::new();
         let base = SYSTEM_CLOCK_FREQUENCY / sample_rate;
@@ -117,12 +133,12 @@ impl WebEmulatorInner {
                 cycles += 1;
             }
 
-            if let Some(synchro) = serial_mode.as_mut() {
+            if let Some(synchro) = self.network.as_mut() {
                 synchro.rollback_if_necessary(&mut self.emulator, &mut self.mbc);
             }
 
             for _ in 0..cycles {
-                if let Some(synchro) = serial_mode.as_mut() {
+                if let Some(synchro) = self.network.as_mut() {
                     messages.extend(
                         synchro.execute_and_take_snapshot(&mut self.emulator, self.mbc.as_mut()),
                     );
@@ -153,13 +169,18 @@ impl WebEmulatorInner {
             return;
         };
 
-        self.current_frame.as_chunks_mut::<40>().0[usize::from(self.emulator.get_ppu().get_ly())] =
-            *scanline.raw();
+        for (input, color) in self.current_frame.as_chunks_mut::<160>().0
+            [usize::from(self.emulator.get_ppu().get_ly())]
+        .iter_mut()
+        .zip(scanline.iter_colors())
+        {
+            *input = color.into();
+        }
 
         if self.emulator.get_ppu().get_ly() == HEIGHT - 1
             && let Err(err) = on_new_frame.call1(
                 &JsValue::null(),
-                &js_sys::Uint8Array::new_from_slice(&self.current_frame),
+                &js_sys::Uint16Array::new_from_slice(&self.current_frame),
             )
         {
             console::error_1(&err);
@@ -204,14 +225,41 @@ impl WebEmulator {
         seconds_since_epoch: u32,
         audio_time: u32,
     ) {
-        self.inner = WebEmulatorInner::new(
-            rom,
-            save,
-            extra,
-            sample_rate,
-            seconds_since_epoch,
-            audio_time,
-        )
+        let network_enabled = match &self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.network.is_some(),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.network.is_some(),
+            Inner::NetworkPreEnabled => true,
+            Inner::None => false,
+        };
+
+        self.inner = if is_cgb_compatible(&rom) {
+            WebEmulatorInner::new(
+                rom,
+                save,
+                extra,
+                sample_rate,
+                seconds_since_epoch,
+                audio_time,
+                network_enabled,
+            )
+            .map(Inner::Cgb)
+        } else {
+            WebEmulatorInner::new(
+                rom,
+                save,
+                extra,
+                sample_rate,
+                seconds_since_epoch,
+                audio_time,
+                network_enabled,
+            )
+            .map(Inner::Dmg)
+        }
+        .unwrap_or(if network_enabled {
+            Inner::NetworkPreEnabled
+        } else {
+            Inner::None
+        });
     }
 
     // this function is executed every 128 (RENDER_QUANTUM_SIZE) frames
@@ -223,116 +271,209 @@ impl WebEmulator {
         audio_time: u32,
         on_new_frame: &js_sys::Function,
     ) -> Option<Box<[u8]>> {
-        self.inner.as_mut().map(|inner| {
-            inner.drive_and_sample(
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => Some(web_emulator_inner.drive_and_sample(
                 left,
                 right,
                 sample_rate,
                 audio_time,
                 on_new_frame,
-                self.network.as_mut(),
-            )
-        })
+            )),
+            Inner::Cgb(web_emulator_inner) => Some(web_emulator_inner.drive_and_sample(
+                left,
+                right,
+                sample_rate,
+                audio_time,
+                on_new_frame,
+            )),
+            Inner::NetworkPreEnabled => None,
+            Inner::None => None,
+        }
     }
 
     pub fn get_save(&self) -> Option<Save> {
-        self.inner.as_ref().and_then(WebEmulatorInner::get_save)
+        match &self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.get_save(),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.get_save(),
+            Inner::NetworkPreEnabled => None,
+            Inner::None => None,
+        }
     }
 
     pub fn set_a(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 a: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                a: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_b(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 b: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                b: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_start(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 start: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                start: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_select(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 select: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                select: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_left(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 left: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                left: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_right(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 right: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                right: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_down(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 down: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                down: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
     pub fn set_up(&mut self, value: bool) {
-        if let Some(inner) = &mut self.inner {
-            inner.set_joypad(JoypadInput {
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
                 up: value,
-                ..*inner.emulator.get_joypad()
-            });
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.set_joypad(JoypadInput {
+                up: value,
+                ..*web_emulator_inner.emulator.get_joypad()
+            }),
+            Inner::NetworkPreEnabled => {}
+            Inner::None => {}
         }
     }
 
     pub fn add_serial_message(&mut self, message: Box<[u8]>) -> Option<Box<[u8]>> {
-        let Some(synchro) = &mut self.network else {
-            panic!("No synchro");
-        };
-
-        if self.inner.is_some() {
-            synchro.add_messages(&message);
-            None
-        } else {
-            let msg = RollbackSerial::handle_msg_no_emulator(&message)?;
-            Some(SerialMessage::serialize(&[msg]))
+        match &mut self.inner {
+            Inner::Dmg(web_emulator_inner) => {
+                web_emulator_inner
+                    .network
+                    .as_mut()
+                    .expect("No synchro")
+                    .add_messages(&message);
+                None
+            }
+            Inner::Cgb(web_emulator_inner) => {
+                web_emulator_inner
+                    .network
+                    .as_mut()
+                    .expect("No synchro")
+                    .add_messages(&message);
+                None
+            }
+            Inner::NetworkPreEnabled => {
+                let msg = gebeh_network::handle_msg_no_emulator(&message)?;
+                Some(SerialMessage::serialize(&[msg]))
+            }
+            Inner::None => panic!("No synchro"),
         }
     }
 
     pub fn set_is_serial_connected(&mut self, is_connected: bool) {
         if is_connected {
-            self.network = Some(Default::default());
+            match &mut self.inner {
+                Inner::Dmg(web_emulator_inner) => {
+                    web_emulator_inner.network = Some(Default::default())
+                }
+                Inner::Cgb(web_emulator_inner) => {
+                    web_emulator_inner.network = Some(Default::default())
+                }
+                Inner::NetworkPreEnabled => {}
+                Inner::None => self.inner = Inner::NetworkPreEnabled,
+            }
         } else {
-            self.network = None;
-            if let Some(inner) = &mut self.inner {
-                inner.emulator.serial.slave_byte = 0xff;
+            match &mut self.inner {
+                Inner::Dmg(web_emulator_inner) => {
+                    web_emulator_inner.emulator.serial.set_slave_byte(0xff);
+                    web_emulator_inner.network = None
+                }
+                Inner::Cgb(web_emulator_inner) => {
+                    web_emulator_inner.emulator.serial.set_slave_byte(0xff);
+                    web_emulator_inner.network = None
+                }
+                Inner::NetworkPreEnabled => self.inner = Inner::None,
+                Inner::None => {}
             }
         }
     }
 
     pub fn get_cycles(&self) -> u64 {
-        self.inner
-            .as_ref()
-            .map_or(0, |inner| inner.emulator.get_cycles())
+        match &self.inner {
+            Inner::Dmg(web_emulator_inner) => web_emulator_inner.emulator.get_cycles(),
+            Inner::Cgb(web_emulator_inner) => web_emulator_inner.emulator.get_cycles(),
+            Inner::NetworkPreEnabled => 0,
+            Inner::None => 0,
+        }
     }
 }
 

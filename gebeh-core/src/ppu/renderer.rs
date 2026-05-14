@@ -3,28 +3,19 @@
 // https://gbdev.io/pandocs/pixel_fifo.html#fifo-pixel-fetcher
 // http://blog.kevtris.org/blogfiles/Nitty%20Gritty%20Gameboy%20VRAM%20Timing.txt
 // https://www.reddit.com/r/EmuDev/comments/s6cpis/gameboy_trying_to_understand_sprite_fifo_behavior/ <- spitting facts
-//
-// The ppu can't do two tile fetches at the same time, so if we fetch a sprite for an object
-// then we must pause the background/window tile fetch.
-// A sprite fetch is triggered only if the background fifo has pixels.
-// according to "Gameboy Emulator Development Guide", the background pixel fetcher is not only paused, but reset.
-// During the object sprite fetch, both the LCD AND the background FIFO are paused.
-// The Sprite FIFO has not the same behavior as the Background FIFO. The background pixel fetcher always wait for
-// the background fifo to be empty before refilling it. However the sprite pixel fetcher, is only replacing the "empty slots"
-// of the Sprite FIFO, to keep the pixels of the previous sprite.
-// We know from pandocs (https://gbdev.io/pandocs/OAM.html#drawing-priority) that if two sprites overlap, opaque colors are drawn over
-// the transparent ones (yes) so I assume the sprite pixel fetcher refills the sprite FIFO with an OR operation.
-// But what about the priority flag ? (https://gbdev.io/pandocs/OAM.html#byte-3--attributesflags) we will keep a fifo for that
-// and try to guess along the way.
 
 use arrayvec::ArrayVec;
 
 use crate::ppu::{
-    LcdControl, ObjectAttribute, PpuState, Scrolling,
-    background_fetcher::{BackgroundFetcher, BackgroundFetcherStep},
-    fifos::Fifos,
-    scanline::ScanlineBuilder,
-    sprite_fetcher::SpriteFetcher,
+    LcdControl, PpuState, Scrolling, Sprite,
+    background_fetcher::{
+        BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher, CgbBackgroundFetcherStep,
+    },
+    color_palettes::{ColorPalettes, ColorPalettesRegs},
+    fifos::{CgbFifos, DmgFifos},
+    scanline::{DmgScanlineBuilder, ScanlineBuilder},
+    sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
+    vram::{CgbVram, DmgVram, VramRegs},
 };
 
 #[derive(Clone)]
@@ -36,25 +27,43 @@ pub enum RendererStep {
     },
 }
 
+pub trait Renderer: Clone + Send + Sync {
+    type Vram: VramRegs;
+    type ColorPalettes: ColorPalettesRegs;
+    type ScanlineBuilder: ScanlineBuilder;
+    fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self;
+    fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<Self::Vram>,
+        extra: &Self::ColorPalettes,
+        ly: u8,
+        cycle: u64,
+    );
+    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder;
+}
+
 #[derive(Clone)]
-pub struct Renderer {
+pub struct DmgRenderer {
     background_pixel_fetcher: BackgroundFetcher,
     sprite_pixel_fetcher: SpriteFetcher,
     rendering_state: RenderingState,
-    pub objects: ArrayVec<ObjectAttribute, 10>,
-    pub scanline: ScanlineBuilder,
+    fifos: DmgFifos,
+    objects: ArrayVec<Sprite, 10>,
+    pub scanline: DmgScanlineBuilder,
     step: RendererStep,
 }
 
-impl Renderer {
-    pub fn new(objects: ArrayVec<ObjectAttribute, 10>) -> Self {
+impl DmgRenderer {
+    pub fn new(objects: ArrayVec<Sprite, 10>) -> Self {
         Self {
             background_pixel_fetcher: Default::default(),
             rendering_state: RenderingState {
                 is_shifting: true,
                 is_sprite_fetching_enable: false,
-                fifos: Default::default(),
             },
+            fifos: Default::default(),
+
             sprite_pixel_fetcher: Default::default(),
             scanline: Default::default(),
             objects,
@@ -62,26 +71,10 @@ impl Renderer {
         }
     }
 
-    pub fn is_sprite_on_cursor(&self) -> bool {
-        let RendererStep::AfterDummy {
-            first_pixels_to_skip,
-            ..
-        } = self.step
-        else {
-            return false;
-        };
-        let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
-            - i16::from(first_pixels_to_skip);
-        let Some(obj) = self.objects.last() else {
-            return false;
-        };
-        i16::from(obj.x) == cursor
-    }
-
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState,
+        ppu_state: &PpuState<DmgVram>,
         ly: u8,
         _: u64,
     ) {
@@ -92,7 +85,8 @@ impl Renderer {
         else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &ppu_state.video_ram,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -113,8 +107,7 @@ impl Renderer {
 
             return;
         };
-        let cursor = i16::from(self.rendering_state.fifos.get_shifted_count())
-            - i16::from(first_pixels_to_skip);
+        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
 
         // yes can be triggered multiple times if wx changes during the same scanline
         if ppu_state
@@ -134,13 +127,11 @@ impl Renderer {
                     step: Default::default(),
                     x: 1,
                 };
-                self.rendering_state.fifos.reset_background();
+                self.fifos.reset_background();
                 *window_y = window_y.wrapping_add(1);
-            } else if self.rendering_state.fifos.is_background_empty() {
+            } else if self.fifos.is_background_empty() {
                 // according to mealybug m3_wx_4_change
-                self.rendering_state
-                    .fifos
-                    .insert_window_reactivation_pixel();
+                self.fifos.insert_window_reactivation_pixel();
             }
 
             *saved_wx = Some(ppu_state.old_old_wx);
@@ -158,7 +149,8 @@ impl Renderer {
         {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &ppu_state.video_ram,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
                 ppu_state.get_window_tile_map_address(),
                 Scrolling::default(),
                 // - 1 because we increment it at window initialization
@@ -178,7 +170,8 @@ impl Renderer {
         } else {
             self.background_pixel_fetcher.execute(
                 &mut self.rendering_state,
-                &ppu_state.video_ram,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
                 ppu_state.get_bg_tile_map_address(),
                 ppu_state.get_scrolling(),
                 ly,
@@ -189,27 +182,242 @@ impl Renderer {
         self.sprite_pixel_fetcher.execute(
             cursor,
             &mut self.rendering_state,
+            &mut self.fifos,
             &mut self.objects,
-            ppu_state,
+            ppu_state.lcd_control,
+            ppu_state.video_ram.get_inner(),
             ly,
         );
 
-        if self.rendering_state.fifos.is_background_empty() || !self.rendering_state.is_shifting {
+        if self.fifos.is_background_empty() || !self.rendering_state.is_shifting {
             return;
         }
 
         if cursor >= 8 {
-            self.scanline
-                .push_pixel(self.rendering_state.fifos.render_pixel(
-                    ppu_state.get_effective_bgp(),
-                    ppu_state.obp0,
-                    ppu_state.obp1,
-                    ppu_state.is_background_enabled(),
-                    ppu_state.is_obj_enabled(),
-                ));
+            self.scanline.push_pixel(self.fifos.render_pixel(
+                ppu_state.get_effective_bgp(),
+                ppu_state.obp0,
+                ppu_state.obp1,
+                ppu_state.is_background_enabled(),
+                ppu_state.is_obj_enabled(),
+            ));
         }
 
-        self.rendering_state.fifos.shift();
+        self.fifos.shift();
+    }
+}
+
+impl Renderer for DmgRenderer {
+    type Vram = DmgVram;
+    type ColorPalettes = ();
+    type ScanlineBuilder = DmgScanlineBuilder;
+
+    fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
+        Self::new(objects.into_iter().map(|(_, obj)| obj).collect())
+    }
+
+    fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<Self::Vram>,
+        _: &Self::ColorPalettes,
+        ly: u8,
+        cycle: u64,
+    ) {
+        self.execute(window_y, ppu_state, ly, cycle);
+    }
+
+    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {
+        &self.scanline
+    }
+}
+
+// yea I'm copy pasting everything. The original rendering logic has specific Game Boy Pocket behavior.
+// So there is a lot of chance that in the future, the cgb rendering logic will be modified.
+
+#[derive(Clone)]
+pub struct CgbRenderer {
+    background_pixel_fetcher: CgbBackgroundFetcher,
+    sprite_pixel_fetcher: CgbSpriteFetcher,
+    rendering_state: RenderingState,
+    fifos: CgbFifos,
+    pub objects: ArrayVec<(u8, Sprite), 10>,
+    pub scanline: ArrayVec<u16, 160>,
+    step: RendererStep,
+}
+
+impl CgbRenderer {
+    pub fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
+        Self {
+            background_pixel_fetcher: Default::default(),
+            rendering_state: RenderingState {
+                is_shifting: true,
+                is_sprite_fetching_enable: false,
+            },
+            fifos: Default::default(),
+
+            sprite_pixel_fetcher: Default::default(),
+            scanline: Default::default(),
+            objects,
+            step: RendererStep::DummyFetch,
+        }
+    }
+
+    pub(super) fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<CgbVram>,
+        color_palettes: &ColorPalettes,
+        ly: u8,
+        _: u64,
+    ) {
+        let RendererStep::AfterDummy {
+            first_pixels_to_skip,
+            ref mut saved_wx,
+        } = self.step
+        else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ly,
+                ppu_state.is_signed_addressing(),
+            );
+
+            if let CgbBackgroundFetcherStep::Ready { .. } = self.background_pixel_fetcher.step {
+                self.step = RendererStep::AfterDummy {
+                    // https://gbdev.io/pandocs/Scrolling.html#scrolling
+                    // Citation: The scroll registers are re-read on each tile fetch, except for
+                    // the low 3 bits of SCX, which are only read at the beginning of the scanline
+                    //
+                    // And according to mealybug, it's read after the dummy fetch
+                    first_pixels_to_skip: ppu_state.scx % 8,
+                    saved_wx: None,
+                };
+            }
+
+            return;
+        };
+        let cursor = i16::from(self.fifos.get_shifted_count()) - i16::from(first_pixels_to_skip);
+
+        // yes can be triggered multiple times if wx changes during the same scanline
+        if ppu_state
+            .old_lcd_control
+            .contains(LcdControl::WINDOW_ENABLE)
+            && (cursor == i16::from(ppu_state.old_old_wx.saturating_add(1))
+                // strange race condition showed by mealybug and my Game Boy Pocket
+                || (cursor == i16::from(ppu_state.old_old_wx.saturating_add(2))
+                    && !ppu_state
+                        .old_old_lcd_control
+                        .contains(LcdControl::WINDOW_ENABLE)))
+            && let Some(window_y) = window_y
+            && Some(ppu_state.old_old_wx) != *saved_wx
+        {
+            if saved_wx.is_none() {
+                self.background_pixel_fetcher = CgbBackgroundFetcher {
+                    step: Default::default(),
+                    x: 1,
+                };
+                self.fifos.reset_background();
+                *window_y = window_y.wrapping_add(1);
+            }
+
+            *saved_wx = Some(ppu_state.old_old_wx);
+
+            // according to mealybug "due to window activating one T-cycle later when WX = 0 and SCX > 0"
+            if ppu_state.old_old_wx == 0 && first_pixels_to_skip > 0 {
+                return;
+            }
+        }
+
+        // those systems can run "concurrently"
+
+        if let Some(window_y) = window_y
+            && saved_wx.is_some()
+        {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
+                ppu_state.get_window_tile_map_address(),
+                Scrolling::default(),
+                // - 1 because we increment it at window initialization
+                window_y.wrapping_sub(1),
+                ppu_state.is_signed_addressing(),
+            );
+            // according to mealybug, when the window is disabled, we have to wait for the fetch to end
+            // before disabling the window for real
+            if matches!(
+                self.background_pixel_fetcher.step,
+                // yeah it works with this step, don't know why
+                CgbBackgroundFetcherStep::FetchingTileIndex { .. }
+            ) && !ppu_state.lcd_control.contains(LcdControl::WINDOW_ENABLE)
+            {
+                *saved_wx = None;
+            }
+        } else {
+            self.background_pixel_fetcher.execute(
+                &mut self.rendering_state,
+                &mut self.fifos,
+                ppu_state.video_ram.get_inner(),
+                ppu_state.get_bg_tile_map_address(),
+                ppu_state.get_scrolling(),
+                ly,
+                ppu_state.is_signed_addressing(),
+            );
+        }
+
+        self.sprite_pixel_fetcher.execute(
+            cursor,
+            &mut self.rendering_state,
+            &mut self.fifos,
+            &mut self.objects,
+            ppu_state.lcd_control,
+            ppu_state.video_ram.get_inner(),
+            ly,
+        );
+
+        if self.fifos.is_background_empty() || !self.rendering_state.is_shifting {
+            return;
+        }
+
+        if cursor >= 8 {
+            self.scanline.push(self.fifos.render_pixel(
+                ppu_state.is_background_enabled(),
+                ppu_state.is_obj_enabled(),
+                color_palettes,
+            ));
+        }
+
+        self.fifos.shift();
+    }
+}
+
+impl Renderer for CgbRenderer {
+    type Vram = CgbVram;
+    type ColorPalettes = ColorPalettes;
+    type ScanlineBuilder = ArrayVec<u16, 160>;
+
+    fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
+        Self::new(objects)
+    }
+
+    fn execute(
+        &mut self,
+        window_y: &mut Option<u8>,
+        ppu_state: &PpuState<Self::Vram>,
+        color_palettes: &Self::ColorPalettes,
+        ly: u8,
+        cycle: u64,
+    ) {
+        // we don't have to care about color palettes here since the render pixel function will just ignore them if it's not needed
+        self.execute(window_y, ppu_state, color_palettes, ly, cycle);
+    }
+
+    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {
+        &self.scanline
     }
 }
 
@@ -217,7 +425,6 @@ impl Renderer {
 pub struct RenderingState {
     pub is_shifting: bool,
     pub is_sprite_fetching_enable: bool,
-    pub fifos: Fifos,
 }
 
 #[cfg(test)]
@@ -226,7 +433,10 @@ mod tests {
 
     use crate::{
         WIDTH,
-        ppu::{LcdControl, ObjectAttribute, ObjectFlags, PpuState, renderer::Renderer},
+        ppu::{
+            LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer,
+            scanline::ScanlineBuilder, vram::DmgVram,
+        },
     };
 
     // all timings are +2 compared to pandocs timings
@@ -234,11 +444,11 @@ mod tests {
 
     fn get_timing(
         mut window_y: Option<u8>,
-        objects: ArrayVec<ObjectAttribute, 10>,
-        ppu_state: &PpuState,
+        objects: ArrayVec<Sprite, 10>,
+        ppu_state: &PpuState<DmgVram>,
         ly: u8,
     ) -> u16 {
-        let mut renderer = Renderer::new(objects);
+        let mut renderer = DmgRenderer::new(objects);
         let mut dots = 0;
         while renderer.scanline.len() < WIDTH {
             renderer.execute(&mut window_y, ppu_state, ly, 0);
@@ -300,8 +510,8 @@ mod tests {
 
     #[test]
     fn with_objects() {
-        let objects = ArrayVec::from_iter([ObjectAttribute {
-            flags: ObjectFlags::empty(),
+        let objects = ArrayVec::from_iter([Sprite {
+            attributes: TileAttributes::empty(),
             tile_index: 0,
             x: 0,
             y: 0,

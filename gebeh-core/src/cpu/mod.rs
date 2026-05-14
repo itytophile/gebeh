@@ -1,9 +1,10 @@
 mod bus;
 mod execute_instruction;
 pub mod instructions;
+pub mod speed_switch;
 
 use crate::{
-    Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
+    Model, Peripherals, PeripheralsRef, addresses::*, external_bus::external_bus_read,
     interrupts::Interrupts, mbc::Mbc,
 };
 use arrayvec::ArrayVec;
@@ -11,6 +12,8 @@ use instructions::{
     AfterReadInstruction, Instruction, InstructionsAndSetPc, NoReadInstruction, OpAfterRead,
     Prefetch, ReadAddress, Register8Bit, Register16Bit, SetPc, get_instructions, vec,
 };
+
+pub const CGB_BOOT_ROM: &[u8; 2304] = include_bytes!("../../../boot-rom/bootrom");
 
 // from https://github.com/Ashiepaws/Bootix
 pub const BOOTIX_BOOT_ROM: [u8; 256] = [
@@ -29,7 +32,7 @@ pub const BOOTIX_BOOT_ROM: [u8; 256] = [
 ];
 
 #[derive(Clone)]
-pub struct Cpu {
+pub struct Cpu<M: Model> {
     pub sp: u16,
     pub lsb: u8,
     pub msb: u8,
@@ -47,47 +50,14 @@ pub struct Cpu {
     pub ime: bool,
     old_ime: bool,
     pub is_halted: bool,
-    pub stop_mode: bool,
     // test purposes
     pub current_opcode: u8,
     pub is_dispatching_interrupt: bool,
     pub interrupt_enable: Interrupts,
     pub hram: [u8; 0x7f],
     pub boot_rom_mapping_control: bool,
-    pub boot_rom: &'static [u8; 256],
-}
-
-impl Default for Cpu {
-    fn default() -> Self {
-        Self {
-            sp: Default::default(),
-            lsb: Default::default(),
-            msb: Default::default(),
-            a: Default::default(),
-            b: Default::default(),
-            c: Default::default(),
-            d: Default::default(),
-            e: Default::default(),
-            h: Default::default(),
-            l: Default::default(),
-            f: Default::default(),
-            is_cb_mode: Default::default(),
-            pc: Default::default(),
-            // yes the cpu can fetch opcodes in parallel of the execution but for the first boost we must
-            // feed a nop or the cpu will fetch + execute the fist opcode in the same cycle
-            instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
-            ime: false,
-            old_ime: false,
-            is_halted: Default::default(),
-            stop_mode: Default::default(),
-            current_opcode: 0,
-            is_dispatching_interrupt: false,
-            interrupt_enable: Interrupts::empty(),
-            hram: [0; 0x7f],
-            boot_rom_mapping_control: false,
-            boot_rom: &BOOTIX_BOOT_ROM,
-        }
-    }
+    pub boot_rom: &'static [u8],
+    pub speed_switch: M::SpeedSwitch,
 }
 
 bitflags::bitflags! {
@@ -109,7 +79,37 @@ bitflags::bitflags! {
 // Pour l'instant, il semble que les écritures/lectures du CPU sont toujours traités à la fin d'un cycle.
 // Par exemple, il écrase les modif du timer pendant le cycle courant, et il a conscience des changements immédiats du ppu
 
-impl Cpu {
+impl<M: Model> Cpu<M> {
+    pub fn new(boot_rom: &'static [u8]) -> Self {
+        Self {
+            sp: Default::default(),
+            lsb: Default::default(),
+            msb: Default::default(),
+            a: Default::default(),
+            b: Default::default(),
+            c: Default::default(),
+            d: Default::default(),
+            e: Default::default(),
+            h: Default::default(),
+            l: Default::default(),
+            f: Default::default(),
+            is_cb_mode: Default::default(),
+            pc: Default::default(),
+            // yes the cpu can fetch opcodes in parallel of the execution but for the first boost we must
+            // feed a nop or the cpu will fetch + execute the fist opcode in the same cycle
+            instruction_register: (vec([NoReadInstruction::Nop.into()]), Default::default()),
+            ime: false,
+            old_ime: false,
+            is_halted: Default::default(),
+            current_opcode: 0,
+            is_dispatching_interrupt: false,
+            interrupt_enable: Interrupts::empty(),
+            hram: [0; 0x7f],
+            boot_rom_mapping_control: false,
+            boot_rom,
+            speed_switch: Default::default(),
+        }
+    }
     fn get_8bit_register(&self, register: Register8Bit) -> u8 {
         match register {
             Register8Bit::A => self.a,
@@ -171,36 +171,37 @@ impl Cpu {
         self.set_8bit_register(register.get_msb(), msb);
         self.set_8bit_register(register.get_lsb(), lsb);
     }
-}
 
-impl Cpu {
-    fn read<M: Mbc + ?Sized>(&self, index: u16, peripherals: PeripheralsRef<M>, cycles: u64) -> u8 {
+    fn read(
+        &self,
+        index: u16,
+        peripherals: PeripheralsRef<impl Mbc + ?Sized, M>,
+        cycles: u64,
+    ) -> u8 {
+        // https://gbdev.io/pandocs/Power_Up_Sequence.html#size
         match index {
-            ..0x100 if !self.boot_rom_mapping_control => self.boot_rom[usize::from(index)],
+            ..0x100 | 0x200..0x900 if !self.boot_rom_mapping_control => {
+                self.boot_rom[usize::from(index)]
+            }
             ..OAM => external_bus_read(
                 index,
                 peripherals.mbc,
-                peripherals.ppu.get_vram_reader(),
+                peripherals.ppu.get_vram_if_available(),
                 peripherals.wram,
             ),
             index => self.internal_bus_read(index, peripherals, cycles),
         }
     }
 
-    pub fn execute<M: Mbc + ?Sized>(&mut self, mut peripherals: Peripherals<M>, cycle_count: u64) {
+    pub fn execute(
+        &mut self,
+        mut peripherals: Peripherals<impl Mbc + ?Sized, M>,
+        cycle_count: u64,
+    ) {
         let interrupts_to_execute =
             Interrupts::from_bits_truncate(self.interrupt_enable.bits()) & *peripherals.interrupts;
         // Peripherals interrupts are not handled the same cycle they are triggered.
         // However, the new value can be read or written over the same cycle.
-
-        // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#nop-and-stop
-        if self.stop_mode {
-            // self.stop_mode = false;
-            // // quand on va sortir du stop mode on va exécuter un nop
-            // // et fetch le prochain opcode en parallèle
-            // self.instruction_register = (vec([NoReadInstruction::Nop.into()]), Default::default());
-            todo!("stop")
-        }
 
         // https://gbdev.io/pandocs/halt.html#halt
         if self.is_halted {

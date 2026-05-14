@@ -2,6 +2,8 @@ use super::instructions::{
     AfterReadInstruction, Condition, Flag, Instruction, NoReadInstruction, POP_SP, Prefetch,
     ReadInstruction, Register16Bit, SetPc, vec,
 };
+use crate::Model;
+use crate::cpu::speed_switch::SpeedSwitch;
 use crate::cpu::{Cpu, Flags};
 use crate::{Peripherals, interrupts::Interrupts, mbc::Mbc};
 
@@ -9,7 +11,7 @@ fn is_half_carry(a: u8, b: u8, result: u8) -> bool {
     (a ^ b ^ result) & 0x10 != 0
 }
 
-impl Cpu {
+impl<M: Model> Cpu<M> {
     fn adc(&mut self, x: u8) {
         let sum = u16::from(self.a) + u16::from(x) + self.f.contains(Flags::C) as u16;
 
@@ -128,12 +130,12 @@ impl Cpu {
         self.ime = true;
     }
 
-    pub(super) fn execute_instruction<M: Mbc + ?Sized>(
+    pub(super) fn execute_instruction(
         &mut self,
         inst: AfterReadInstruction,
         interrupts_to_execute: Interrupts,
         cycle_count: u64,
-        peripherals: &mut Peripherals<M>,
+        peripherals: &mut Peripherals<impl Mbc + ?Sized, impl Model>,
     ) {
         use AfterReadInstruction::*;
         use NoReadInstruction::*;
@@ -486,8 +488,8 @@ impl Cpu {
                 flags.set(Flags::C, carry == 1);
             }
             NoRead(Stop) => {
-                self.stop_mode = true;
-                todo!("reset sys clock");
+                // let's ignore the stop mode
+                self.speed_switch.trigger();
             }
             NoRead(WriteLsbSpToCachedAddressAndIncCachedAddress) => {
                 let [_, lsb] = self.sp.to_be_bytes();

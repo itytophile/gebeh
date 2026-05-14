@@ -2,9 +2,15 @@ use std::time::{Duration, Instant};
 
 use gebeh::InstantRtc;
 use gebeh_core::{
-    Emulator, HEIGHT, WIDTH,
+    Dmg, Emulator, EmulatorExt, HEIGHT, WIDTH,
     mbc::{CartridgeType, Mbc, get_factor_8_kib_ram, get_factor_32_kib_rom},
-    ppu::{LcdControl, PpuStep, Vram, color::ColorIndex, get_bg_win_tile, get_line_from_tile},
+    ppu::{
+        LcdControl, PpuStep,
+        color::ColorIndex,
+        get_bg_win_tile, get_line_from_tile,
+        scanline::{Scanline, ScanlineBuilder},
+        vram::DmgVram,
+    },
 };
 use gebeh_front_helper::get_mbc;
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
@@ -306,7 +312,7 @@ fn exit(elwt: &EventLoopWindowTarget<()>, title: &str, mbc: &dyn Mbc) {
 
 fn drive_emulator(
     mbc: &mut dyn Mbc,
-    emulator: &mut Emulator,
+    emulator: &mut Emulator<Dmg>,
     pixels: &mut [[u8; 4]],
     debug_mode: &mut DebugMode,
 ) {
@@ -362,8 +368,8 @@ fn drive_emulator(
     }
 }
 
-fn draw_tiles_debug(vram: &Vram, pixels: &mut [[u8; 4]]) {
-    let (tiles, _) = vram[..0x1800].as_chunks::<16>();
+fn draw_tiles_debug(vram: &DmgVram, pixels: &mut [[u8; 4]]) {
+    let (tiles, _) = vram.get_inner()[..0x1800].as_chunks::<16>();
     for (index, tile) in tiles.iter().enumerate() {
         // 0xe1 because pocket uses that. We shouldn't use the bgp register because it's not stable
         draw_tile(pixels, index, tile, DEBUG_TILE_COL_COUNT, 0xe1);
@@ -394,14 +400,16 @@ fn draw_tile(
     }
 }
 
-fn draw_tile_map_debug(emulator: &Emulator, pixels: &mut [[u8; 4]]) {
-    for (index, tile_index) in emulator.get_ppu().get_vram()[0x1800..]
+fn draw_tile_map_debug(emulator: &Emulator<Dmg>, pixels: &mut [[u8; 4]]) {
+    for (index, tile_index) in emulator.get_ppu().get_vram().get_inner()[0x1800..]
         .iter()
         .copied()
         .enumerate()
     {
         let tile = get_bg_win_tile(
-            emulator.get_ppu().get_vram()[..0x1800].try_into().unwrap(),
+            emulator.get_ppu().get_vram().get_inner()[..0x1800]
+                .try_into()
+                .unwrap(),
             tile_index,
             !emulator
                 .get_ppu()

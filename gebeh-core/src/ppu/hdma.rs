@@ -1,0 +1,180 @@
+// https://gbdev.io/pandocs/CGB_Registers.html?highlight=double#lcd-vram-dma-transfers
+
+use crate::{
+    Ram,
+    external_bus::external_bus_read,
+    mbc::Mbc,
+    ppu::{LcdStatus, vram::CgbVram},
+    wram::CgbWram,
+};
+
+#[derive(Clone, Default)]
+enum HblankState {
+    #[default]
+    WaitingForHBlank,
+    Copying,
+}
+
+#[derive(Clone)]
+struct CopyCursor {
+    src: u16,
+    dst: u16,
+}
+
+#[derive(Clone, Default)]
+enum HdmaState {
+    #[default]
+    Inactive,
+    GeneralPurpose(CopyCursor),
+    HBlank(CopyCursor, HblankState),
+}
+
+#[derive(Clone, Default)]
+pub struct Hdma {
+    source_address: u16,
+    destination_address: u16,
+    length: u16,
+    state: HdmaState,
+}
+
+impl Hdma {
+    // Citation: In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10 bytes.
+    // That is, 8 M-cycles in Normal Speed Mode, and 16 “fast” M-cycles in Double Speed Mode.
+    /// Returns true if HDMA has performed a transfer, false otherwise.
+    /// Performs only one copy (execute once in fast mode, twice in normal mode)
+    pub fn execute(
+        &mut self,
+        vram: &mut CgbVram,
+        mbc: &(impl Mbc + ?Sized),
+        wram: &CgbWram,
+        ppu_mode: LcdStatus,
+    ) -> bool {
+        let cursor = match &mut self.state {
+            HdmaState::Inactive => return false,
+            HdmaState::GeneralPurpose(copy_cursor) => copy_cursor,
+            HdmaState::HBlank(copy_cursor, hblank_state) => match hblank_state {
+                HblankState::WaitingForHBlank => {
+                    if ppu_mode == LcdStatus::HBLANK {
+                        *hblank_state = HblankState::Copying;
+                        copy_cursor
+                    } else {
+                        return false;
+                    }
+                }
+                HblankState::Copying => {
+                    if self.length.is_multiple_of(0x10) {
+                        if ppu_mode != LcdStatus::HBLANK {
+                            *hblank_state = HblankState::WaitingForHBlank;
+                        }
+                        return false;
+                    }
+                    copy_cursor
+                }
+            },
+        };
+
+        self.length = self.length.wrapping_sub(1);
+
+        if ppu_mode == LcdStatus::HBLANK || ppu_mode == LcdStatus::VBLANK {
+            vram.write(
+                cursor.dst,
+                external_bus_read(cursor.src, mbc, Option::<&CgbVram>::None, wram),
+            );
+        }
+        cursor.src = cursor.src.wrapping_add(1);
+        cursor.dst = cursor.dst.wrapping_add(1);
+
+        if self.length == 0 {
+            self.state = HdmaState::Inactive;
+        }
+
+        true
+    }
+}
+
+pub trait HdmaRegs: Default + Clone + Send + Sync {
+    fn write_source_address_low(&mut self, value: u8);
+    fn write_source_address_high(&mut self, value: u8);
+    fn write_destination_address_low(&mut self, value: u8);
+    fn write_destination_address_high(&mut self, value: u8);
+    fn write_length_mode_start(&mut self, value: u8);
+    fn read_mode_and_length(&self) -> u8;
+}
+
+impl HdmaRegs for Hdma {
+    fn write_source_address_low(&mut self, value: u8) {
+        let [high, _] = self.source_address.to_be_bytes();
+        self.source_address = u16::from_be_bytes([high, value]);
+    }
+
+    fn write_source_address_high(&mut self, value: u8) {
+        let [_, low] = self.source_address.to_be_bytes();
+        // Citation: The four lower bits of this address will be ignored and treated as 0.
+        self.source_address = u16::from_be_bytes([value, low & 0xf0]);
+    }
+
+    fn write_destination_address_low(&mut self, value: u8) {
+        let [high, _] = self.destination_address.to_be_bytes();
+        // Citation: the upper 3 bits are ignored either
+        self.destination_address = u16::from_be_bytes([high & 0x1f, value]);
+    }
+
+    fn write_destination_address_high(&mut self, value: u8) {
+        let [_, low] = self.destination_address.to_be_bytes();
+        // Citation: The four lower bits of this address will be ignored and treated as 0.
+        self.destination_address = u16::from_be_bytes([value, low & 0xf0]);
+    }
+
+    fn write_length_mode_start(&mut self, value: u8) {
+        // Citation: the lower 7 bits of which specify the Transfer Length (divided by $10, minus 1)
+        self.length = (u16::from(value & 0x7f) + 1) << 4;
+        match (&self.state, value >> 7) {
+            (HdmaState::Inactive, 0) => {
+                self.state = HdmaState::GeneralPurpose(CopyCursor {
+                    src: self.source_address,
+                    dst: self.destination_address,
+                })
+            }
+            (HdmaState::Inactive, 1) => {
+                self.state = HdmaState::HBlank(
+                    CopyCursor {
+                        src: self.source_address,
+                        dst: self.destination_address,
+                    },
+                    HblankState::WaitingForHBlank,
+                )
+            }
+            (HdmaState::GeneralPurpose(_), _) => panic!("The CPU is supposed to be halted"),
+            // Citation: It is also possible to terminate an active HBlank transfer by writing zero to Bit 7 of FF55
+            (HdmaState::HBlank(_, _), 0) => self.state = HdmaState::Inactive,
+            _ => {}
+        };
+    }
+
+    fn read_mode_and_length(&self) -> u8 {
+        // Citation: Reading Bit 7 of FF55 can be used to confirm if the DMA transfer is active (1=Not Active, 0=Active).
+        let last_bit = match self.state {
+            HdmaState::Inactive => 1,
+            HdmaState::GeneralPurpose(_) => panic!("The CPU is supposed to be halted"),
+            HdmaState::HBlank(_, _) => 0,
+        };
+
+        (u8::try_from((self.length >> 4).wrapping_sub(1)).unwrap() & 0x7f) | (last_bit << 7)
+    }
+}
+
+impl HdmaRegs for () {
+    fn write_source_address_low(&mut self, _: u8) {}
+
+    fn write_source_address_high(&mut self, _: u8) {}
+
+    fn write_destination_address_low(&mut self, _: u8) {}
+
+    fn write_destination_address_high(&mut self, _: u8) {}
+
+    fn write_length_mode_start(&mut self, _: u8) {}
+
+    fn read_mode_and_length(&self) -> u8 {
+        0xff
+    }
+}
