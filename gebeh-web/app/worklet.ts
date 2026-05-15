@@ -1,5 +1,5 @@
 import "../polyfill/TextEncoder";
-import { initSync, WebEmulator } from "../pkg/gebeh_web";
+import { initSync, Mode, WebEmulator } from "../pkg/gebeh_web";
 import { AUDIO_PROCESSOR_NAME, type FromMainMessage, type FromNodeMessage } from "./common";
 
 // https://github.com/microsoft/TypeScript-DOM-lib-generator/blob/0f96fae53f776b5d914c404ce611b4d16a921cb6/baselines/audioworklet.generated.d.ts
@@ -133,6 +133,19 @@ class WasmProcessor extends AudioWorkletProcessor implements AudioWorkletProcess
             );
           }
 
+          break;
+        }
+        case "compatibilityMode": {
+          if (!this.emulator) {
+            throw new Error("Emulator not ready for serial");
+          }
+          this.emulator.set_mode(
+            data.value === "always-cgb"
+              ? Mode.AlwaysCgb
+              : data.value === "cgb-when-explicit"
+                ? Mode.CgbWhenExplicit
+                : Mode.DmgWhenPossible,
+          );
           break;
         }
       }

@@ -6,7 +6,12 @@ export type FromNodeMessage =
   | { type: "wasm" }
   // 5 bits depth RGB image
   | { type: "frame"; buffer: Uint16Array }
-  | { type: "save"; buffer: Uint8Array; extra: Uint8Array | undefined; title: string }
+  | {
+      type: "save";
+      buffer: Uint8Array;
+      extra: Uint8Array | undefined;
+      title: string;
+    }
   | { type: "serial"; buffer: Uint8Array };
 export type GebehButton = "a" | "b" | "start" | "select" | "left" | "right" | "up" | "down";
 export type FromMainMessage =
@@ -30,6 +35,8 @@ export type FromMainMessage =
   | {
       type: "serial";
       buffer: Uint8Array;
-    };
+    }
+  | { type: "compatibilityMode"; value: CompatibilityMode };
 export const GB_WIDTH = 160;
 export const GB_HEIGHT = 144;
+export type CompatibilityMode = "cgb-when-explicit" | "dmg-when-possible" | "always-cgb";

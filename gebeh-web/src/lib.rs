@@ -20,8 +20,17 @@ use crate::rtc::AudioRtc;
 
 mod rtc;
 
-#[allow(clippy::large_enum_variant)]
+#[wasm_bindgen]
+#[derive(Default, Clone, Copy)]
+pub enum Mode {
+    #[default]
+    CgbWhenExplicit,
+    DmgWhenPossible,
+    AlwaysCgb,
+}
+
 #[derive(Default)]
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Dmg(WebEmulatorInner<Dmg>),
     Cgb(WebEmulatorInner<Cgb>),
@@ -48,6 +57,7 @@ struct WebEmulatorInner<M: Model> {
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Inner,
+    mode: Mode,
 }
 
 impl<M: Model> WebEmulatorInner<M> {
@@ -211,6 +221,10 @@ impl<M: Model> WebEmulatorInner<M> {
 
 #[wasm_bindgen]
 impl WebEmulator {
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -234,8 +248,9 @@ impl WebEmulator {
             Inner::None => false,
         };
 
-        self.inner = if get_compatibility(&rom) == Compatibility::Dmg {
-            WebEmulatorInner::new(
+        let inner = match (get_compatibility(&rom), self.mode) {
+            (Compatibility::Dmg, Mode::CgbWhenExplicit | Mode::DmgWhenPossible)
+            | (Compatibility::Both, Mode::DmgWhenPossible) => WebEmulatorInner::new(
                 rom,
                 save,
                 extra,
@@ -244,9 +259,10 @@ impl WebEmulator {
                 audio_time,
                 network_enabled,
             )
-            .map(Inner::Dmg)
-        } else {
-            WebEmulatorInner::new(
+            .map(Inner::Dmg),
+            (Compatibility::Cgb, _)
+            | (_, Mode::AlwaysCgb)
+            | (Compatibility::Both, Mode::CgbWhenExplicit) => WebEmulatorInner::new(
                 rom,
                 save,
                 extra,
@@ -255,9 +271,10 @@ impl WebEmulator {
                 audio_time,
                 network_enabled,
             )
-            .map(Inner::Cgb)
-        }
-        .unwrap_or(if network_enabled {
+            .map(Inner::Cgb),
+        };
+
+        self.inner = inner.unwrap_or(if network_enabled {
             Inner::NetworkPreEnabled
         } else {
             Inner::None

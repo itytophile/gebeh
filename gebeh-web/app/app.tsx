@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import style from "./style.module.css";
 import Canvas from "./canvas";
 import buttonA from "./assets/buttonA.svg";
@@ -13,6 +13,7 @@ import Button from "./bulma/button.tsx";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons/faArrowLeft";
 import SaveSettings from "./save-settings.tsx";
 import Room from "./multiplayer/room.tsx";
+import type { CompatibilityMode, FromMainMessage } from "./common.ts";
 
 type Page = "game" | "settings";
 
@@ -110,6 +111,12 @@ function Settings({
   isHidden: boolean;
   setPage: (page: Page) => void;
 }) {
+  const [mode, setMode] = useState<CompatibilityMode>("cgb-when-explicit");
+
+  useEffect(() => {
+    port.postMessage({ type: "compatibilityMode", value: mode } satisfies FromMainMessage, []);
+  }, [mode, port]);
+
   return (
     <section className="section" style={{ display: isHidden ? "none" : undefined }}>
       <div className="container">
@@ -129,6 +136,39 @@ function Settings({
             setPage("game");
           }}
         />
+        <h5 className="title is-5">Mode</h5>
+        <div className="control">
+          <label className="radio">
+            <input
+              type="radio"
+              checked={mode == "cgb-when-explicit"}
+              onChange={() => {
+                setMode("cgb-when-explicit");
+              }}
+            />
+            CGB when compatiblity is explicit
+          </label>
+          <label className="radio">
+            <input
+              type="radio"
+              checked={mode == "dmg-when-possible"}
+              onChange={() => {
+                setMode("dmg-when-possible");
+              }}
+            />
+            DMG when possible
+          </label>
+          <label className="radio">
+            <input
+              type="radio"
+              checked={mode == "always-cgb"}
+              onChange={() => {
+                setMode("always-cgb");
+              }}
+            />
+            Always CGB
+          </label>
+        </div>
         <h1 className="title">Save</h1>
         {/* to trash the component when hidden and refresh the internal state when mounted */}
         {!isHidden && <SaveSettings />}
