@@ -4,12 +4,12 @@ pub mod color_palettes;
 mod fifos;
 pub mod hdma;
 pub mod oam_dma;
+pub mod object_priority_mode;
 pub mod renderer;
 pub mod scanline;
 pub mod sprite;
 mod sprite_fetcher;
 pub mod vram;
-mod object_priority_mode;
 
 use crate::{
     Model, Ram, WIDTH,

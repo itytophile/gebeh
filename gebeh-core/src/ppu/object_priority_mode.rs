@@ -1,3 +1,5 @@
+// https://gbdev.io/pandocs/CGB_Registers.html#ff6c--opri-cgb-mode-only-object-priority-mode
+
 pub trait ObjectPriorityModeRegs {
     fn read(&self) -> u8;
     fn write(&mut self, value: u8);
