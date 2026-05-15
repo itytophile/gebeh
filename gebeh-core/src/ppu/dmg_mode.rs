@@ -41,7 +41,6 @@ impl DmgModeRegs for DmgMode {
     }
 
     fn write_compatibility_mode(&mut self, value: u8) {
-        // TODO lock after bootrom
         self.is_dmg_compatibility_mode = value & 0x04 != 0;
     }
 }

@@ -112,10 +112,14 @@ impl<M: Model> Cpu<M> {
             OBP1 => peripherals.ppu.set_obp1(value),
             WY => peripherals.ppu.set_wy(value),
             WX => peripherals.ppu.set_wx(value),
-            DMG_COMPATIBILITY_MODE => peripherals
-                .ppu
-                .get_dmg_mode_mut()
-                .write_compatibility_mode(value),
+            DMG_COMPATIBILITY_MODE => {
+                if !self.boot_rom_mapping_control {
+                    peripherals
+                        .ppu
+                        .get_dmg_mode_mut()
+                        .write_compatibility_mode(value)
+                }
+            }
             SPEED => self.speed_switch.write_value(value),
             0xff4e => {}
             VRAM_BANK => peripherals.ppu.get_vram_mut().write_bank(value),
