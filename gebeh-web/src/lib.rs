@@ -5,7 +5,9 @@ use gebeh_core::{
     Cgb, Dmg, Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer,
     joypad::JoypadInput, ppu::scanline::Scanline, serial::Serial,
 };
-use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom, is_cgb_compatible};
+use gebeh_front_helper::{
+    Compatibility, EasyMbc, get_compatibility, get_mbc, get_noise, get_title_from_rom,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
@@ -232,18 +234,7 @@ impl WebEmulator {
             Inner::None => false,
         };
 
-        self.inner = if is_cgb_compatible(&rom) {
-            WebEmulatorInner::new(
-                rom,
-                save,
-                extra,
-                sample_rate,
-                seconds_since_epoch,
-                audio_time,
-                network_enabled,
-            )
-            .map(Inner::Cgb)
-        } else {
+        self.inner = if get_compatibility(&rom) == Compatibility::Dmg {
             WebEmulatorInner::new(
                 rom,
                 save,
@@ -254,6 +245,17 @@ impl WebEmulator {
                 network_enabled,
             )
             .map(Inner::Dmg)
+        } else {
+            WebEmulatorInner::new(
+                rom,
+                save,
+                extra,
+                sample_rate,
+                seconds_since_epoch,
+                audio_time,
+                network_enabled,
+            )
+            .map(Inner::Cgb)
         }
         .unwrap_or(if network_enabled {
             Inner::NetworkPreEnabled

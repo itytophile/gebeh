@@ -168,6 +168,17 @@ pub fn get_title_from_rom(rom: &[u8]) -> &str {
 
 const CGB_FLAG: usize = 0x0143;
 
-pub fn is_cgb_compatible(rom: &[u8]) -> bool {
-    true
+#[derive(Debug, PartialEq)]
+pub enum Compatibility {
+    Dmg,
+    Both,
+    Cgb,
+}
+
+pub fn get_compatibility(rom: &[u8]) -> Compatibility {
+    match rom[CGB_FLAG] {
+        0x80 => Compatibility::Both,
+        0xc0 => Compatibility::Cgb,
+        _ => Compatibility::Dmg,
+    }
 }

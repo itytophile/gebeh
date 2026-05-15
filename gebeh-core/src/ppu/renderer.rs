@@ -9,7 +9,7 @@ use arrayvec::ArrayVec;
 use crate::{
     Cgb, Dmg, Model,
     ppu::{
-        self, LcdControl, PpuState, Scrolling, Sprite,
+        LcdControl, PpuState, Scrolling, Sprite,
         background_fetcher::{
             BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher,
             CgbBackgroundFetcherStep,

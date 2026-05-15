@@ -10,7 +10,7 @@ use gebeh_core::{
     mbc::{CartridgeType, get_factor_8_kib_ram, get_factor_32_kib_rom},
     ppu::scanline::{Scanline, ScanlineBuilder},
 };
-use gebeh_front_helper::{get_title_from_rom, is_cgb_compatible};
+use gebeh_front_helper::{Compatibility, get_compatibility, get_title_from_rom};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     dpi::LogicalSize,
@@ -42,14 +42,14 @@ fn main() {
     )
     .unwrap();
 
-    let is_cgb_compatible = is_cgb_compatible(&rom);
+    let compatibility = get_compatibility(&rom);
 
-    if is_cgb_compatible {
-        println!("Running in CGB mode");
-        execute::<Cgb>(rom);
-    } else {
+    if compatibility == Compatibility::Dmg {
         println!("Running in DMG mode");
         execute::<Dmg>(rom);
+    } else {
+        println!("Running in CGB mode");
+        execute::<Cgb>(rom);
     }
 }
 
