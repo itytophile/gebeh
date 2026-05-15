@@ -9,12 +9,12 @@ use arrayvec::ArrayVec;
 use crate::{
     Cgb, Dmg, Model,
     ppu::{
-        LcdControl, PpuState, Scrolling, Sprite,
+        self, LcdControl, PpuState, Scrolling, Sprite,
         background_fetcher::{
             BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher,
             CgbBackgroundFetcherStep,
         },
-        fifos::{CgbFifos, DmgFifos},
+        fifos::{CgbFifos, DmgFifos, DmgPalettes},
         scanline::DmgScanlineBuilder,
         sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
     },
@@ -373,6 +373,14 @@ impl CgbRenderer {
                 ppu_state.is_background_enabled(),
                 ppu_state.is_obj_enabled(),
                 &ppu_state.color_palettes,
+                if ppu_state.object_priority_mode.is_dmg_style() {
+                    Some(DmgPalettes {
+                        bgp: ppu_state.bgp,
+                        obp: [ppu_state.obp0, ppu_state.obp1],
+                    })
+                } else {
+                    None
+                },
             ));
         }
 
