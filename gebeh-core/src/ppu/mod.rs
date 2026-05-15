@@ -139,6 +139,7 @@ pub struct PpuState<M: Model> {
     obp1: u8,
     wy: u8,
     color_palettes: M::ColorPalettes,
+    object_priority_mode: M::ObjectPriorityMode,
 }
 
 impl<M: Model> Default for PpuState<M> {
@@ -159,6 +160,7 @@ impl<M: Model> Default for PpuState<M> {
             obp1: Default::default(),
             wy: Default::default(),
             color_palettes: Default::default(),
+            object_priority_mode: Default::default(),
         }
     }
 }
@@ -294,6 +296,12 @@ impl StatRegisterHandler for () {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl<M: Model> Ppu<M> {
+    pub fn get_object_priority_mode(&self) -> &M::ObjectPriorityMode {
+        &self.state.object_priority_mode
+    }
+    pub fn get_object_priority_mode_mut(&mut self) -> &mut M::ObjectPriorityMode {
+        &mut self.state.object_priority_mode
+    }
     pub fn get_color_palettes(&self) -> &M::ColorPalettes {
         &self.state.color_palettes
     }

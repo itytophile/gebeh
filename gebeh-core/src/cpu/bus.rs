@@ -4,7 +4,10 @@ use crate::{
     cpu::{Cpu, speed_switch::SpeedSwitch},
     interrupts::Interrupts,
     mbc::Mbc,
-    ppu::{LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs, vram::VramRegs},
+    ppu::{
+        LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs,
+        object_priority_mode::ObjectPriorityModeRegs, vram::VramRegs,
+    },
     serial::{Serial, SerialControl},
     wram::Wram,
 };
@@ -53,7 +56,8 @@ impl<M: Model> Cpu<M> {
             BCPD_BGPD => peripherals.ppu.get_color_palettes().read_background_data(),
             OCPS_OGPI => peripherals.ppu.get_color_palettes().read_obj_spec(),
             OCPD_OGPD => peripherals.ppu.get_color_palettes().read_obj_data(),
-            0xff6c..WRAM_BANK => 0xff,
+            OBJECT_PRIORITY_MODE => peripherals.ppu.get_object_priority_mode().read(),
+            0xff6d..WRAM_BANK => 0xff,
             WRAM_BANK => peripherals.wram.read_bank(),
             0xFF71..HRAM => 0xff,
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)],
@@ -135,7 +139,8 @@ impl<M: Model> Cpu<M> {
                 .ppu
                 .get_color_palettes_mut()
                 .write_obj_data(value),
-            0xff6c..WRAM_BANK => {}
+            OBJECT_PRIORITY_MODE => peripherals.ppu.get_object_priority_mode_mut().write(value),
+            0xff6d..WRAM_BANK => {}
             WRAM_BANK => peripherals.wram.write_bank(value),
             0xff71..HRAM => {}
             HRAM..INTERRUPT_ENABLE => self.hram[usize::from(index - HRAM)] = value,

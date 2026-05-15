@@ -60,6 +60,7 @@ pub const BCPS_BGPI: u16 = 0xff68;
 pub const BCPD_BGPD: u16 = 0xff69;
 pub const OCPS_OGPI: u16 = 0xff6a;
 pub const OCPD_OGPD: u16 = 0xff6b;
+pub const OBJECT_PRIORITY_MODE: u16 = 0xff6c;
 pub const WRAM_BANK: u16 = 0xff70;
 pub const HRAM: u16 = 0xff80;
 pub const INTERRUPT_ENABLE: u16 = 0xffff;
