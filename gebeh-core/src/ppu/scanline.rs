@@ -62,7 +62,7 @@ pub trait Scanline: Copy + Default + Send + Sync + 'static {
     fn iter_colors(&self) -> impl Iterator<Item = Self::Item>;
 }
 
-pub trait ScanlineBuilder: Send + Sync {
+pub trait ScanlineBuilder: Send + Sync + Clone {
     type Scanline: Scanline;
     fn len(&self) -> u8;
     fn is_empty(&self) -> bool {

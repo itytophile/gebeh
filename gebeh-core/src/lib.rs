@@ -1,6 +1,8 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+use arrayvec::ArrayVec;
+
 use crate::{
     apu::Apu,
     cpu::{
@@ -12,8 +14,11 @@ use crate::{
     mbc::Mbc,
     ppu::{
         Ppu, StatInterruptWriteQuirk, StatRegisterHandler,
+        color_palettes::{ColorPalettes, ColorPalettesRegs},
         hdma::{Hdma, HdmaRegs},
         renderer::{CgbRenderer, DmgRenderer, Renderer},
+        scanline::{DmgScanlineBuilder, ScanlineBuilder},
+        vram::{CgbVram, DmgVram, VramRegs},
     },
     serial::{CgbSerial, DmgSerial, Serial},
     timer::Timer,
@@ -83,12 +88,15 @@ pub const HEIGHT: u8 = 144;
 pub const SYSTEM_CLOCK_FREQUENCY: u32 = 4194304 / 4;
 
 pub trait Model: Clone + 'static {
-    type Renderer: Renderer;
+    type Renderer: Renderer<Self>;
     type StatRegisterHandler: StatRegisterHandler;
     type Wram: Wram;
     type HdmaRegs: HdmaRegs;
     type SpeedSwitch: SpeedSwitch;
     type Serial: Serial;
+    type Vram: VramRegs;
+    type ColorPalettes: ColorPalettesRegs;
+    type ScanlineBuilder: ScanlineBuilder;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
     where
         Self: Sized;
@@ -107,6 +115,9 @@ impl Model for Dmg {
     type HdmaRegs = ();
     type SpeedSwitch = ();
     type Serial = DmgSerial;
+    type Vram = DmgVram;
+    type ColorPalettes = ();
+    type ScanlineBuilder = DmgScanlineBuilder;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -133,6 +144,9 @@ impl Model for Cgb {
     type HdmaRegs = Hdma;
     type SpeedSwitch = CgbSpeedSwitch;
     type Serial = CgbSerial;
+    type Vram = CgbVram;
+    type ColorPalettes = ColorPalettes;
+    type ScanlineBuilder = ArrayVec<u16, 160>;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }

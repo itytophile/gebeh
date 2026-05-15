@@ -6,18 +6,14 @@ use cpal::{
 };
 use gebeh::{Frame, InstantRtc};
 use gebeh_core::{
-    Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY,
-    apu::Mixer,
-    joypad::JoypadInput,
-    ppu::{renderer::Renderer, scanline::ScanlineBuilder},
+    Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY, apu::Mixer, joypad::JoypadInput,
+    ppu::scanline::ScanlineBuilder,
 };
 use gebeh_front_helper::{get_mbc_send, get_noise};
 
 pub fn spawn_emulator<M: Model>(
     device: &cpal::Device,
-    shared_frame: SyncSender<
-        Frame<<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline>,
-    >,
+    shared_frame: SyncSender<Frame<<M::ScanlineBuilder as ScanlineBuilder>::Scanline>>,
     shared_joypad: Arc<RwLock<JoypadInput>>,
     rom: Vec<u8>,
 ) -> cpal::Stream {
@@ -69,9 +65,7 @@ pub fn spawn_emulator<M: Model>(
 fn create_stream<T, M: Model>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
-    shared_frame: SyncSender<
-        Frame<<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline>,
-    >,
+    shared_frame: SyncSender<Frame<<M::ScanlineBuilder as ScanlineBuilder>::Scanline>>,
     shared_joypad: Arc<RwLock<JoypadInput>>,
     rom: Vec<u8>,
 ) -> cpal::Stream
@@ -100,8 +94,7 @@ where
     let remainder = SYSTEM_CLOCK_FREQUENCY % sample_rate;
     let mut error = 0;
     let mut current_frame =
-        [<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline::default();
-            HEIGHT as usize];
+        [<M::ScanlineBuilder as ScanlineBuilder>::Scanline::default(); HEIGHT as usize];
     let mut mixer = Mixer::new(sample_rate as f32, noise, short_noise);
 
     device
