@@ -141,31 +141,31 @@ function Settings({
           <label className="radio">
             <input
               type="radio"
-              checked={mode == "cgb-when-explicit"}
+              checked={mode === "cgb-when-explicit"}
               onChange={() => {
                 setMode("cgb-when-explicit");
               }}
-            />
+            />{" "}
             CGB when compatiblity is explicit
-          </label>
+          </label>{" "}
           <label className="radio">
             <input
               type="radio"
-              checked={mode == "dmg-when-possible"}
+              checked={mode === "dmg-when-possible"}
               onChange={() => {
                 setMode("dmg-when-possible");
               }}
-            />
+            />{" "}
             DMG when possible
-          </label>
+          </label>{" "}
           <label className="radio">
             <input
               type="radio"
-              checked={mode == "always-cgb"}
+              checked={mode === "always-cgb"}
               onChange={() => {
                 setMode("always-cgb");
               }}
-            />
+            />{" "}
             Always CGB
           </label>
         </div>
