@@ -27,3 +27,9 @@ impl ObjectPriorityModeRegs for ObjectPriorityMode {
         self.is_dmg_style = value & 1 != 0;
     }
 }
+
+impl ObjectPriorityMode {
+    pub fn is_dmg_style(&self) -> bool {
+        self.is_dmg_style
+    }
+}

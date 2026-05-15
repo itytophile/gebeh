@@ -191,7 +191,13 @@ impl CgbFifos {
         self.shifted_count
     }
 
-    pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes, oam_index: u8) {
+    pub fn load_sprite(
+        &mut self,
+        tile: [u8; 2],
+        attributes: TileAttributes,
+        oam_index: u8,
+        is_dmg_style: bool,
+    ) {
         let mut new_sprite_pixels: ArrayVec<PixelInfo, 8> = tile_to_indexes(tile)
             .map(|color_index| {
                 PixelInfo::new()
@@ -202,24 +208,38 @@ impl CgbFifos {
             })
             .collect();
 
-        for (new, old) in new_sprite_pixels
-            .iter_mut()
-            .rev()
-            .zip(self.sprite_pixels.iter().rev().copied())
-        {
-            // Citation: In CGB mode, only the object’s location in OAM determines its priority.
-            // The earlier the object, the higher its priority.
-            *new = match (
-                old.oam_index() < new.oam_index(),
-                new.color_index() == 0,
-                old.color_index() == 0,
-            ) {
-                (true, true, _) => old,
-                (_, false, true) => *new,
-                (true, false, false) => old,
-                (false, true, true) => *new,
-                (false, true, false) => old,
-                (false, false, false) => *new,
+        if is_dmg_style {
+            for (new, old) in new_sprite_pixels
+                .iter_mut()
+                .rev()
+                .zip(self.sprite_pixels.iter().rev().copied())
+            {
+                *new = if old.color_index() == 0 && new.color_index() != 0 {
+                    *new
+                } else {
+                    old
+                };
+            }
+        } else {
+            for (new, old) in new_sprite_pixels
+                .iter_mut()
+                .rev()
+                .zip(self.sprite_pixels.iter().rev().copied())
+            {
+                // Citation: In CGB mode, only the object’s location in OAM determines its priority.
+                // The earlier the object, the higher its priority.
+                *new = match (
+                    old.oam_index() < new.oam_index(),
+                    new.color_index() == 0,
+                    old.color_index() == 0,
+                ) {
+                    (true, true, _) => old,
+                    (_, false, true) => *new,
+                    (true, false, false) => old,
+                    (false, true, true) => *new,
+                    (false, true, false) => old,
+                    (false, false, false) => *new,
+                }
             }
         }
 

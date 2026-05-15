@@ -360,8 +360,7 @@ impl CgbRenderer {
             &mut self.rendering_state,
             &mut self.fifos,
             &mut self.objects,
-            ppu_state.lcd_control,
-            ppu_state.video_ram.get_inner(),
+            ppu_state,
             ly,
         );
 
