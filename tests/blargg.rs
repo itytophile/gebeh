@@ -17,7 +17,7 @@ fn instr_timing() {
         std::fs::read("./downloads/gb-test-roms-master/instr_timing/instr_timing.gb").unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut machine = Emulator::default();
+    let mut machine = Emulator::<Dmg>::default();
 
     let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, mbc.as_mut())
         .take(LEN)
@@ -34,7 +34,7 @@ fn mem_timing() {
     let rom = std::fs::read("./downloads/gb-test-roms-master/mem_timing/mem_timing.gb").unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut machine = Emulator::default();
+    let mut machine = Emulator::<Dmg>::default();
 
     let buffer: ArrayVec<u8, LEN> = machine_to_serial_iter(&mut machine, mbc.as_mut())
         .take(LEN)

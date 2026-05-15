@@ -1,6 +1,6 @@
 use crate::common::machine_to_serial_iter;
 use gebeh::InstantRtc;
-use gebeh_core::Emulator;
+use gebeh_core::{Dmg, Emulator};
 use gebeh_front_helper::get_mbc;
 
 mod common;
@@ -15,7 +15,7 @@ fn cpu_instrs(name: &str) {
     .unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut machine = Emulator::default();
+    let mut machine = Emulator::<Dmg>::default();
 
     let buffer: Vec<_> = machine_to_serial_iter(&mut machine, mbc.as_mut())
         .take(len)
