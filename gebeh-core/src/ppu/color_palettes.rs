@@ -45,7 +45,7 @@ impl InnerColorPalettes {
     }
 
     pub fn get_palette(&self, index: u8) -> [u16; 4] {
-        let bytes = self.data.as_chunks::<8>().0[usize::from(index)];
+        let bytes = self.data.as_chunks::<8>().0[usize::from(index & 0x07)];
         // Citation:
         // Each color is stored as little-endian RGB555
         [

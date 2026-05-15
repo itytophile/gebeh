@@ -1,9 +1,10 @@
 use arrayvec::ArrayVec;
 
 use crate::{
+    Cgb,
     addresses::VIDEO_RAM,
     ppu::{
-        LcdControl, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj,
+        LcdControl, PpuState, Sprite, TILE_LENGTH, Tile, TileAttributes, TileVramObj,
         fifos::{CgbFifos, DmgFifos},
         renderer::RenderingState,
         vram::VRAM_BANK_SIZE,
@@ -136,8 +137,7 @@ impl CgbSpriteFetcher {
         rendering_state: &mut RenderingState,
         fifos: &mut CgbFifos,
         objects: &mut ArrayVec<(u8, Sprite), 10>,
-        lcd_control: LcdControl,
-        vram_banks: &[[u8; VRAM_BANK_SIZE]; 2],
+        ppu_state: &PpuState<Cgb>,
         ly: u8,
     ) {
         use CgbSpriteFetcher::*;
@@ -152,6 +152,8 @@ impl CgbSpriteFetcher {
                 },
                 obj.attributes,
                 oam_index,
+                ppu_state.dmg_mode.is_dmg_style(),
+                ppu_state.dmg_mode.is_dmg_compatible(),
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };
@@ -165,7 +167,7 @@ impl CgbSpriteFetcher {
             return;
         }
 
-        let is_obj_canceled = !lcd_control.contains(LcdControl::OBJ_ENABLE);
+        let is_obj_canceled = !ppu_state.lcd_control.contains(LcdControl::OBJ_ENABLE);
 
         rendering_state.is_shifting = is_obj_canceled;
 
@@ -186,12 +188,13 @@ impl CgbSpriteFetcher {
         // 4 -> fetch tile high
         // 5 -> fetch tile high (end)
 
-        let vram_bank = &vram_banks[usize::from(obj.attributes.contains(TileAttributes::CGB_BANK))];
+        let vram_bank = &ppu_state.video_ram.get_inner()
+            [usize::from(obj.attributes.contains(TileAttributes::CGB_BANK))];
 
         *self = match *self {
             FetchingTileLow { delay: 3 } => FetchingTileHigh {
                 one_dot_delay: false,
-                tile_low: get_object_tile_line(obj, lcd_control, vram_bank, ly)[0],
+                tile_low: get_object_tile_line(obj, ppu_state.lcd_control, vram_bank, ly)[0],
             },
             FetchingTileLow { delay } => FetchingTileLow { delay: delay + 1 },
             FetchingTileHigh {
@@ -209,7 +212,7 @@ impl CgbSpriteFetcher {
                 // can be changed between fetches (don't know if it works exactly like this)
                 Ready([
                     tile_low,
-                    get_object_tile_line(obj, lcd_control, vram_bank, ly)[1],
+                    get_object_tile_line(obj, ppu_state.lcd_control, vram_bank, ly)[1],
                 ])
             }
             Ready(_) => unreachable!(),

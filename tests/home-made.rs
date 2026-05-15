@@ -1,15 +1,15 @@
 use std::{fs::File, io::BufReader};
 
 use gebeh::InstantRtc;
-use gebeh_core::{Dmg, Emulator, EmulatorExt, HEIGHT, WIDTH, joypad::JoypadInput};
+use gebeh_core::{Cgb, Dmg, Emulator, EmulatorExt, HEIGHT, Model, WIDTH, joypad::JoypadInput};
 use gebeh_front_helper::get_mbc;
 use gebeh_network::{RollbackSerial, message::SerialMessage};
 
-fn home_made(name: &str) {
+fn home_made<M: Model>(name: &str) {
     let rom = std::fs::read(format!("./gebeh-test-roms/{name}.gb")).unwrap();
     let rom = rom.as_slice();
     let (_, mut mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut emulator = Emulator::<Dmg>::default();
+    let mut emulator = Emulator::<M>::default();
 
     loop {
         emulator.execute(mbc.as_mut());
@@ -68,7 +68,7 @@ fn home_made_ppu(name: &str) {
     }
 }
 
-fn serial_test(name: &str) {
+fn serial_test<M: Model>(name: &str) {
     env_logger::builder()
         .is_test(true)
         .filter_level(log::LevelFilter::Info)
@@ -77,9 +77,9 @@ fn serial_test(name: &str) {
         .unwrap()
         .leak();
     let (_, mut slave_mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut slave_emulator = Emulator::<Dmg>::default();
+    let mut slave_emulator = Emulator::<M>::default();
     let (_, mut master_mbc) = get_mbc(rom, InstantRtc::default()).unwrap();
-    let mut master_emulator = Emulator::<Dmg>::default();
+    let mut master_emulator = Emulator::<M>::default();
 
     let mut slave_rollback = RollbackSerial::default();
     let mut master_rollback = RollbackSerial::default();
@@ -87,12 +87,12 @@ fn serial_test(name: &str) {
     let mut messages_from_slave = Vec::new();
     let mut messages_from_master = Vec::new();
 
-    // wait for ld a, a
+    // wait for ld b, b
     loop {
         messages_from_slave.extend(
             slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
         );
-        if let 0x7f = slave_emulator.get_cpu().current_opcode {
+        if let 0x40 = slave_emulator.get_cpu().current_opcode {
             break;
         }
     }
@@ -100,7 +100,7 @@ fn serial_test(name: &str) {
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        if let 0x7f = master_emulator.get_cpu().current_opcode {
+        if let 0x40 = master_emulator.get_cpu().current_opcode {
             break;
         }
     }
@@ -160,26 +160,53 @@ fn halt_stat_mode_2_palette_screen_edges() {
 }
 
 #[test]
-fn serial_master_transfer_timing() {
-    home_made("serial_master_transfer_timing");
+fn serial_master_transfer_timing_dmg() {
+    home_made::<Dmg>("serial_master_transfer_timing");
 }
 
 #[test]
-fn serial_master_overclock() {
-    home_made("serial_master_overclock");
+fn serial_master_overclock_dmg() {
+    home_made::<Dmg>("serial_master_overclock");
 }
 
 #[test]
-fn serial_master_transfer_timing_int() {
-    home_made("serial_master_transfer_timing_int");
+fn serial_master_transfer_timing_int_dmg() {
+    home_made::<Dmg>("serial_master_transfer_timing_int");
 }
 
 #[test]
-fn serial_exchange() {
-    serial_test("serial");
+fn serial_exchange_dmg() {
+    serial_test::<Dmg>("serial");
 }
 
 #[test]
-fn big_serial() {
-    serial_test("big_serial");
+fn big_serial_dmg() {
+    serial_test::<Dmg>("big_serial");
+}
+
+// cgb
+
+#[test]
+fn serial_master_transfer_timing_cgb() {
+    home_made::<Cgb>("serial_master_transfer_timing");
+}
+
+#[test]
+fn serial_master_overclock_cgb() {
+    home_made::<Cgb>("serial_master_overclock");
+}
+
+#[test]
+fn serial_master_transfer_timing_int_cgb() {
+    home_made::<Cgb>("serial_master_transfer_timing_int");
+}
+
+#[test]
+fn serial_exchange_cgb() {
+    serial_test::<Cgb>("serial");
+}
+
+#[test]
+fn big_serial_cgb() {
+    serial_test::<Cgb>("big_serial");
 }

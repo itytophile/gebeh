@@ -5,7 +5,9 @@ use gebeh_core::{
     Cgb, Dmg, Emulator, EmulatorExt, HEIGHT, Model, SYSTEM_CLOCK_FREQUENCY, WIDTH, apu::Mixer,
     joypad::JoypadInput, ppu::scanline::Scanline, serial::Serial,
 };
-use gebeh_front_helper::{EasyMbc, get_mbc, get_noise, get_title_from_rom, is_cgb_compatible};
+use gebeh_front_helper::{
+    Compatibility, EasyMbc, get_compatibility, get_mbc, get_noise, get_title_from_rom,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::{
     console,
@@ -18,8 +20,17 @@ use crate::rtc::AudioRtc;
 
 mod rtc;
 
-#[allow(clippy::large_enum_variant)]
+#[wasm_bindgen]
+#[derive(Default, Clone, Copy)]
+pub enum Mode {
+    #[default]
+    CgbWhenExplicit,
+    DmgWhenPossible,
+    AlwaysCgb,
+}
+
 #[derive(Default)]
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Dmg(WebEmulatorInner<Dmg>),
     Cgb(WebEmulatorInner<Cgb>),
@@ -46,6 +57,7 @@ struct WebEmulatorInner<M: Model> {
 #[derive(Default)]
 pub struct WebEmulator {
     inner: Inner,
+    mode: Mode,
 }
 
 impl<M: Model> WebEmulatorInner<M> {
@@ -209,6 +221,10 @@ impl<M: Model> WebEmulatorInner<M> {
 
 #[wasm_bindgen]
 impl WebEmulator {
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -232,8 +248,9 @@ impl WebEmulator {
             Inner::None => false,
         };
 
-        self.inner = if is_cgb_compatible(&rom) {
-            WebEmulatorInner::new(
+        let inner = match (get_compatibility(&rom), self.mode) {
+            (Compatibility::Dmg, Mode::CgbWhenExplicit | Mode::DmgWhenPossible)
+            | (Compatibility::Both, Mode::DmgWhenPossible) => WebEmulatorInner::new(
                 rom,
                 save,
                 extra,
@@ -242,9 +259,10 @@ impl WebEmulator {
                 audio_time,
                 network_enabled,
             )
-            .map(Inner::Cgb)
-        } else {
-            WebEmulatorInner::new(
+            .map(Inner::Dmg),
+            (Compatibility::Cgb, _)
+            | (_, Mode::AlwaysCgb)
+            | (Compatibility::Both, Mode::CgbWhenExplicit) => WebEmulatorInner::new(
                 rom,
                 save,
                 extra,
@@ -253,9 +271,10 @@ impl WebEmulator {
                 audio_time,
                 network_enabled,
             )
-            .map(Inner::Dmg)
-        }
-        .unwrap_or(if network_enabled {
+            .map(Inner::Cgb),
+        };
+
+        self.inner = inner.unwrap_or(if network_enabled {
             Inner::NetworkPreEnabled
         } else {
             Inner::None

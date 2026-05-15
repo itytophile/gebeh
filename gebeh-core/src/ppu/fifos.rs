@@ -136,6 +136,11 @@ pub struct CgbFifos {
     shifted_count: u8,
 }
 
+pub struct DmgPalettes {
+    pub bgp: u8,
+    pub obp: [u8; 2],
+}
+
 impl CgbFifos {
     pub fn shift(&mut self) {
         self.bg0 <<= 1;
@@ -158,10 +163,13 @@ impl CgbFifos {
         master_background_priority: bool,
         is_obj_enabled: bool,
         color_palettes: &ColorPalettes,
+        dmg_palettes: Option<DmgPalettes>,
     ) -> u16 {
         let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
 
         let sprite_pixel = self.sprite_pixels.last().copied().unwrap_or_default();
+
+        let sp_color_index = sprite_pixel.color_index();
 
         let obj_over_bg = !master_background_priority
             || !self
@@ -170,16 +178,29 @@ impl CgbFifos {
                 && !sprite_pixel.priority();
 
         if is_obj_enabled
-            && (obj_over_bg && sprite_pixel.color_index() != 0
+            && (obj_over_bg && sp_color_index != 0
                 || !obj_over_bg && bg_color_index == ColorIndex::Zero)
         {
-            color_palettes.objects.get_palette(sprite_pixel.palette())
-                [usize::from(sprite_pixel.color_index())]
+            let sp_color_index = if let Some(dmg) = dmg_palettes {
+                // stolen from sameboy
+                (dmg.obp[usize::from(sprite_pixel.palette())] >> (sp_color_index << 1)) & 3
+            } else {
+                sp_color_index
+            };
+
+            color_palettes.objects.get_palette(sprite_pixel.palette())[usize::from(sp_color_index)]
         } else {
+            let bg_color_index = if let Some(dmg) = dmg_palettes {
+                // stolen from sameboy
+                (dmg.bgp >> (u8::from(bg_color_index) << 1)) & 3
+            } else {
+                u8::from(bg_color_index)
+            };
+
             color_palettes
                 .background
                 .get_palette(self.current_background_attributes.get_cgb_palette_index())
-                [usize::from(u8::from(bg_color_index))]
+                [usize::from(bg_color_index)]
         }
     }
 
@@ -191,35 +212,60 @@ impl CgbFifos {
         self.shifted_count
     }
 
-    pub fn load_sprite(&mut self, tile: [u8; 2], attributes: TileAttributes, oam_index: u8) {
+    pub fn load_sprite(
+        &mut self,
+        tile: [u8; 2],
+        attributes: TileAttributes,
+        oam_index: u8,
+        is_dmg_style: bool,
+        is_dmg_compatible: bool,
+    ) {
         let mut new_sprite_pixels: ArrayVec<PixelInfo, 8> = tile_to_indexes(tile)
             .map(|color_index| {
                 PixelInfo::new()
                     .with_color_index(color_index)
-                    .with_palette(attributes.get_cgb_palette_index())
+                    .with_palette(if is_dmg_compatible {
+                        attributes.contains(TileAttributes::DMG_PALETTE) as u8
+                    } else {
+                        attributes.get_cgb_palette_index()
+                    })
                     .with_priority(attributes.contains(TileAttributes::PRIORITY))
                     .with_oam_index(oam_index)
             })
             .collect();
 
-        for (new, old) in new_sprite_pixels
-            .iter_mut()
-            .rev()
-            .zip(self.sprite_pixels.iter().rev().copied())
-        {
-            // Citation: In CGB mode, only the object’s location in OAM determines its priority.
-            // The earlier the object, the higher its priority.
-            *new = match (
-                old.oam_index() < new.oam_index(),
-                new.color_index() == 0,
-                old.color_index() == 0,
-            ) {
-                (true, true, _) => old,
-                (_, false, true) => *new,
-                (true, false, false) => old,
-                (false, true, true) => *new,
-                (false, true, false) => old,
-                (false, false, false) => *new,
+        if is_dmg_style {
+            for (new, old) in new_sprite_pixels
+                .iter_mut()
+                .rev()
+                .zip(self.sprite_pixels.iter().rev().copied())
+            {
+                *new = if old.color_index() == 0 && new.color_index() != 0 {
+                    *new
+                } else {
+                    old
+                };
+            }
+        } else {
+            for (new, old) in new_sprite_pixels
+                .iter_mut()
+                .rev()
+                .zip(self.sprite_pixels.iter().rev().copied())
+            {
+                // Citation: In CGB mode, only the object’s location in OAM determines its priority.
+                // The earlier the object, the higher its priority.
+                *new = match (
+                    old.oam_index() < new.oam_index(),
+                    new.color_index() == 0,
+                    old.color_index() == 0,
+                ) {
+                    (true, true, _) => old,
+                    (_, false, true) => *new,
+                    (true, false, false) => old,
+                    (false, true, true) => *new,
+                    (false, true, false) => old,
+                    (false, false, false) => *new,
+                }
             }
         }
 

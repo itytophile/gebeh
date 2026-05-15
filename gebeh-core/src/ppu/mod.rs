@@ -1,6 +1,7 @@
 mod background_fetcher;
 pub mod color;
 pub mod color_palettes;
+pub mod dmg_mode;
 mod fifos;
 pub mod hdma;
 pub mod oam_dma;
@@ -63,7 +64,7 @@ impl TileAttributes {
 }
 
 #[derive(Clone)]
-pub enum PpuStep<R: Renderer> {
+pub enum PpuStep<M: Model> {
     // only used on line 0 when the lcd has just turned on
     SkippedOamScan {
         dots_count: u8,
@@ -77,14 +78,14 @@ pub enum PpuStep<R: Renderer> {
     Drawing {
         dots_count: u16,
         window_y: Option<u8>,
-        renderer: R,
+        renderer: M::Renderer,
         ly: u8,
     }, // <= 289
     HorizontalBlank {
         remaining_dots: u8,
         dots_count: u8,
         window_y: Option<u8>,
-        scanline: <<R as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline,
+        scanline: <M::ScanlineBuilder as ScanlineBuilder>::Scanline,
         ly: u8,
     }, // <= 204
     VerticalBlankScanline {
@@ -95,15 +96,14 @@ pub enum PpuStep<R: Renderer> {
 
 #[derive(Clone)]
 pub struct Ppu<M: Model> {
-    pub step: PpuStep<M::Renderer>,
+    pub step: PpuStep<M>,
     stat_irq: bool,
-    state: PpuState<<M::Renderer as Renderer>::Vram>,
+    state: PpuState<M>,
     previous_lyc: u8,
     stat_register_handler: M::StatRegisterHandler,
     interrupt_part_lcd_status: LcdStatus,
     pub lyc: u8,
     oam_dma: OamDma,
-    color_palettes: <M::Renderer as Renderer>::ColorPalettes,
 }
 
 impl<M: Model> Default for Ppu<M> {
@@ -117,13 +117,12 @@ impl<M: Model> Default for Ppu<M> {
             interrupt_part_lcd_status: LcdStatus::default(),
             lyc: 0,
             oam_dma: Default::default(),
-            color_palettes: Default::default(),
         }
     }
 }
 
-#[derive(Clone, Default)]
-pub struct PpuState<V> {
+#[derive(Clone)]
+pub struct PpuState<M: Model> {
     lcd_control: LcdControl,
     bgp: u8,
     // OR effect on bgp change
@@ -135,13 +134,38 @@ pub struct PpuState<V> {
     wx: u8,
     old_wx: u8,
     old_old_wx: u8,
-    video_ram: V,
+    video_ram: M::Vram,
     obp0: u8,
     obp1: u8,
     wy: u8,
+    color_palettes: M::ColorPalettes,
+    dmg_mode: M::DmgMode,
 }
 
-impl<V> PpuState<V> {
+impl<M: Model> Default for PpuState<M> {
+    fn default() -> Self {
+        Self {
+            lcd_control: Default::default(),
+            bgp: Default::default(),
+            old_bgp: Default::default(),
+            old_lcd_control: Default::default(),
+            old_old_lcd_control: Default::default(),
+            scy: Default::default(),
+            scx: Default::default(),
+            wx: Default::default(),
+            old_wx: Default::default(),
+            old_old_wx: Default::default(),
+            video_ram: Default::default(),
+            obp0: Default::default(),
+            obp1: Default::default(),
+            wy: Default::default(),
+            color_palettes: Default::default(),
+            dmg_mode: Default::default(),
+        }
+    }
+}
+
+impl<M: Model> PpuState<M> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }
@@ -220,7 +244,7 @@ const OAM_SCAN_DURATION: u8 = 79;
 const SCANLINE_DURATION: u16 = 456;
 const VERTICAL_BLANK_DURATION: u16 = SCANLINE_DURATION * 10;
 
-impl<R: Renderer> Default for PpuStep<R> {
+impl<M: Model> Default for PpuStep<M> {
     fn default() -> Self {
         Self::SkippedOamScan { dots_count: 2 }
     }
@@ -272,11 +296,17 @@ impl StatRegisterHandler for () {
 
 // one iteration = one dot = (1/4 M-cyle DMG)
 impl<M: Model> Ppu<M> {
-    pub fn get_color_palettes(&self) -> &<M::Renderer as Renderer>::ColorPalettes {
-        &self.color_palettes
+    pub fn get_dmg_mode(&self) -> &M::DmgMode {
+        &self.state.dmg_mode
     }
-    pub fn get_color_palettes_mut(&mut self) -> &mut <M::Renderer as Renderer>::ColorPalettes {
-        &mut self.color_palettes
+    pub fn get_dmg_mode_mut(&mut self) -> &mut M::DmgMode {
+        &mut self.state.dmg_mode
+    }
+    pub fn get_color_palettes(&self) -> &M::ColorPalettes {
+        &self.state.color_palettes
+    }
+    pub fn get_color_palettes_mut(&mut self) -> &mut M::ColorPalettes {
+        &mut self.state.color_palettes
     }
     pub fn trigger_dma(&mut self, value: u8) {
         self.oam_dma.trigger_dma(value);
@@ -311,7 +341,7 @@ impl<M: Model> Ppu<M> {
         }
         self.oam_dma.write_oam(index, value);
     }
-    pub fn get_vram_if_available(&self) -> Option<&<M::Renderer as Renderer>::Vram> {
+    pub fn get_vram_if_available(&self) -> Option<&M::Vram> {
         if self.get_ppu_mode() == LcdStatus::DRAWING {
             None
         } else {
@@ -336,10 +366,10 @@ impl<M: Model> Ppu<M> {
     pub fn set_obp1(&mut self, value: u8) {
         self.state.obp1 = value
     }
-    pub fn get_vram(&self) -> &<M::Renderer as Renderer>::Vram {
+    pub fn get_vram(&self) -> &M::Vram {
         &self.state.video_ram
     }
-    pub fn get_vram_mut(&mut self) -> &mut <M::Renderer as Renderer>::Vram {
+    pub fn get_vram_mut(&mut self) -> &mut M::Vram {
         &mut self.state.video_ram
     }
     pub fn write_vram(&mut self, index: u16, value: u8) {
@@ -443,7 +473,7 @@ impl<M: Model> Ppu<M> {
     #[must_use]
     pub fn get_scanline_if_ready(
         &self,
-    ) -> Option<&<<M::Renderer as Renderer>::ScanlineBuilder as ScanlineBuilder>::Scanline> {
+    ) -> Option<&<M::ScanlineBuilder as ScanlineBuilder>::Scanline> {
         match &self.step {
             PpuStep::HorizontalBlank {
                 dots_count,
@@ -655,7 +685,7 @@ impl<M: Model> Ppu<M> {
                 ly,
                 ..
             } => {
-                renderer.execute(window_y, &self.state, &self.color_palettes, *ly, cycles);
+                renderer.execute(window_y, &self.state, *ly, cycles);
 
                 *dots_count += 1;
             }

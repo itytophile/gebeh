@@ -6,16 +6,18 @@
 
 use arrayvec::ArrayVec;
 
-use crate::ppu::{
-    LcdControl, PpuState, Scrolling, Sprite,
-    background_fetcher::{
-        BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher, CgbBackgroundFetcherStep,
+use crate::{
+    Cgb, Dmg, Model,
+    ppu::{
+        LcdControl, PpuState, Scrolling, Sprite,
+        background_fetcher::{
+            BackgroundFetcher, BackgroundFetcherStep, CgbBackgroundFetcher,
+            CgbBackgroundFetcherStep,
+        },
+        fifos::{CgbFifos, DmgFifos, DmgPalettes},
+        scanline::DmgScanlineBuilder,
+        sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
     },
-    color_palettes::{ColorPalettes, ColorPalettesRegs},
-    fifos::{CgbFifos, DmgFifos},
-    scanline::{DmgScanlineBuilder, ScanlineBuilder},
-    sprite_fetcher::{CgbSpriteFetcher, SpriteFetcher},
-    vram::{CgbVram, DmgVram, VramRegs},
 };
 
 #[derive(Clone)]
@@ -27,20 +29,10 @@ pub enum RendererStep {
     },
 }
 
-pub trait Renderer: Clone + Send + Sync {
-    type Vram: VramRegs;
-    type ColorPalettes: ColorPalettesRegs;
-    type ScanlineBuilder: ScanlineBuilder;
+pub trait Renderer<M: Model>: Clone + Send + Sync {
     fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self;
-    fn execute(
-        &mut self,
-        window_y: &mut Option<u8>,
-        ppu_state: &PpuState<Self::Vram>,
-        extra: &Self::ColorPalettes,
-        ly: u8,
-        cycle: u64,
-    );
-    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder;
+    fn execute(&mut self, window_y: &mut Option<u8>, ppu_state: &PpuState<M>, ly: u8, cycle: u64);
+    fn get_scanline_builder(&self) -> &M::ScanlineBuilder;
 }
 
 #[derive(Clone)]
@@ -74,7 +66,7 @@ impl DmgRenderer {
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState<DmgVram>,
+        ppu_state: &PpuState<Dmg>,
         ly: u8,
         _: u64,
     ) {
@@ -207,11 +199,7 @@ impl DmgRenderer {
     }
 }
 
-impl Renderer for DmgRenderer {
-    type Vram = DmgVram;
-    type ColorPalettes = ();
-    type ScanlineBuilder = DmgScanlineBuilder;
-
+impl Renderer<Dmg> for DmgRenderer {
     fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
         Self::new(objects.into_iter().map(|(_, obj)| obj).collect())
     }
@@ -219,15 +207,14 @@ impl Renderer for DmgRenderer {
     fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState<Self::Vram>,
-        _: &Self::ColorPalettes,
+        ppu_state: &PpuState<Dmg>,
         ly: u8,
         cycle: u64,
     ) {
         self.execute(window_y, ppu_state, ly, cycle);
     }
 
-    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {
+    fn get_scanline_builder(&self) -> &DmgScanlineBuilder {
         &self.scanline
     }
 }
@@ -266,8 +253,7 @@ impl CgbRenderer {
     pub(super) fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState<CgbVram>,
-        color_palettes: &ColorPalettes,
+        ppu_state: &PpuState<Cgb>,
         ly: u8,
         _: u64,
     ) {
@@ -374,8 +360,7 @@ impl CgbRenderer {
             &mut self.rendering_state,
             &mut self.fifos,
             &mut self.objects,
-            ppu_state.lcd_control,
-            ppu_state.video_ram.get_inner(),
+            ppu_state,
             ly,
         );
 
@@ -387,7 +372,15 @@ impl CgbRenderer {
             self.scanline.push(self.fifos.render_pixel(
                 ppu_state.is_background_enabled(),
                 ppu_state.is_obj_enabled(),
-                color_palettes,
+                &ppu_state.color_palettes,
+                if ppu_state.dmg_mode.is_dmg_compatible() {
+                    Some(DmgPalettes {
+                        bgp: ppu_state.bgp,
+                        obp: [ppu_state.obp0, ppu_state.obp1],
+                    })
+                } else {
+                    None
+                },
             ));
         }
 
@@ -395,11 +388,7 @@ impl CgbRenderer {
     }
 }
 
-impl Renderer for CgbRenderer {
-    type Vram = CgbVram;
-    type ColorPalettes = ColorPalettes;
-    type ScanlineBuilder = ArrayVec<u16, 160>;
-
+impl Renderer<Cgb> for CgbRenderer {
     fn new(objects: ArrayVec<(u8, Sprite), 10>) -> Self {
         Self::new(objects)
     }
@@ -407,16 +396,15 @@ impl Renderer for CgbRenderer {
     fn execute(
         &mut self,
         window_y: &mut Option<u8>,
-        ppu_state: &PpuState<Self::Vram>,
-        color_palettes: &Self::ColorPalettes,
+        ppu_state: &PpuState<Cgb>,
         ly: u8,
         cycle: u64,
     ) {
         // we don't have to care about color palettes here since the render pixel function will just ignore them if it's not needed
-        self.execute(window_y, ppu_state, color_palettes, ly, cycle);
+        self.execute(window_y, ppu_state, ly, cycle);
     }
 
-    fn get_scanline_builder(&self) -> &Self::ScanlineBuilder {
+    fn get_scanline_builder(&self) -> &ArrayVec<u16, 160> {
         &self.scanline
     }
 }
@@ -432,10 +420,10 @@ mod tests {
     use arrayvec::ArrayVec;
 
     use crate::{
-        WIDTH,
+        Dmg, WIDTH,
         ppu::{
             LcdControl, PpuState, Sprite, TileAttributes, renderer::DmgRenderer,
-            scanline::ScanlineBuilder, vram::DmgVram,
+            scanline::ScanlineBuilder,
         },
     };
 
@@ -445,7 +433,7 @@ mod tests {
     fn get_timing(
         mut window_y: Option<u8>,
         objects: ArrayVec<Sprite, 10>,
-        ppu_state: &PpuState<DmgVram>,
+        ppu_state: &PpuState<Dmg>,
         ly: u8,
     ) -> u16 {
         let mut renderer = DmgRenderer::new(objects);
