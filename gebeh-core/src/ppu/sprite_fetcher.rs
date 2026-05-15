@@ -152,7 +152,8 @@ impl CgbSpriteFetcher {
                 },
                 obj.attributes,
                 oam_index,
-                ppu_state.object_priority_mode.is_dmg_style(),
+                ppu_state.dmg_mode.is_dmg_style(),
+                ppu_state.dmg_mode.is_dmg_compatible(),
             );
             rendering_state.is_shifting = true;
             *self = FetchingTileLow { delay: 0 };

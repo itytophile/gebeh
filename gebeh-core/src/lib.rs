@@ -15,8 +15,8 @@ use crate::{
     ppu::{
         Ppu, StatInterruptWriteQuirk, StatRegisterHandler,
         color_palettes::{ColorPalettes, ColorPalettesRegs},
+        dmg_mode::{DmgMode, DmgModeRegs},
         hdma::{Hdma, HdmaRegs},
-        object_priority_mode::{ObjectPriorityMode, ObjectPriorityModeRegs},
         renderer::{CgbRenderer, DmgRenderer, Renderer},
         scanline::{DmgScanlineBuilder, ScanlineBuilder},
         vram::{CgbVram, DmgVram, VramRegs},
@@ -98,7 +98,7 @@ pub trait Model: Clone + 'static {
     type Vram: VramRegs;
     type ColorPalettes: ColorPalettesRegs;
     type ScanlineBuilder: ScanlineBuilder;
-    type ObjectPriorityMode: ObjectPriorityModeRegs;
+    type DmgMode: DmgModeRegs;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8>
     where
         Self: Sized;
@@ -120,7 +120,7 @@ impl Model for Dmg {
     type Vram = DmgVram;
     type ColorPalettes = ();
     type ScanlineBuilder = DmgScanlineBuilder;
-    type ObjectPriorityMode = ();
+    type DmgMode = ();
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }
@@ -150,7 +150,7 @@ impl Model for Cgb {
     type Vram = CgbVram;
     type ColorPalettes = ColorPalettes;
     type ScanlineBuilder = ArrayVec<u16, 160>;
-    type ObjectPriorityMode = ObjectPriorityMode;
+    type DmgMode = DmgMode;
     fn execute<M: Mbc + ?Sized>(emulator: &mut Emulator<Self>, mbc: &mut M) -> Option<u8> {
         emulator.execute(mbc)
     }

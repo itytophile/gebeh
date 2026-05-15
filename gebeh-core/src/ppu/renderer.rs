@@ -373,7 +373,7 @@ impl CgbRenderer {
                 ppu_state.is_background_enabled(),
                 ppu_state.is_obj_enabled(),
                 &ppu_state.color_palettes,
-                if ppu_state.object_priority_mode.is_dmg_style() {
+                if ppu_state.dmg_mode.is_dmg_compatible() {
                     Some(DmgPalettes {
                         bgp: ppu_state.bgp,
                         obp: [ppu_state.obp0, ppu_state.obp1],

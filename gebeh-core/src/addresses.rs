@@ -48,6 +48,7 @@ pub const OBP0: u16 = 0xff48;
 pub const OBP1: u16 = 0xff49;
 pub const WY: u16 = 0xff4a;
 pub const WX: u16 = 0xff4b;
+pub const DMG_COMPATIBILITY_MODE: u16 = 0xff4c;
 pub const SPEED: u16 = 0xff4d;
 pub const VRAM_BANK: u16 = 0xff4f;
 pub const BOOT_ROM_MAPPING_CONTROL: u16 = 0xff50;

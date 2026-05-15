@@ -218,12 +218,13 @@ impl CgbFifos {
         attributes: TileAttributes,
         oam_index: u8,
         is_dmg_style: bool,
+        is_dmg_compatible: bool,
     ) {
         let mut new_sprite_pixels: ArrayVec<PixelInfo, 8> = tile_to_indexes(tile)
             .map(|color_index| {
                 PixelInfo::new()
                     .with_color_index(color_index)
-                    .with_palette(if is_dmg_style {
+                    .with_palette(if is_dmg_compatible {
                         attributes.contains(TileAttributes::DMG_PALETTE) as u8
                     } else {
                         attributes.get_cgb_palette_index()

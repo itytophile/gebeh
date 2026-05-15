@@ -5,8 +5,8 @@ use crate::{
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
-        LcdControl, color_palettes::ColorPalettesRegs, hdma::HdmaRegs,
-        object_priority_mode::ObjectPriorityModeRegs, vram::VramRegs,
+        LcdControl, color_palettes::ColorPalettesRegs, dmg_mode::DmgModeRegs, hdma::HdmaRegs,
+        vram::VramRegs,
     },
     serial::{Serial, SerialControl},
     wram::Wram,
@@ -44,7 +44,7 @@ impl<M: Model> Cpu<M> {
             OBP1 => peripherals.ppu.get_obp1(),
             WY => peripherals.ppu.get_wy(),
             WX => peripherals.ppu.get_wx(),
-            0xff4c => 0xff,
+            DMG_COMPATIBILITY_MODE => peripherals.ppu.get_dmg_mode().read_compatibility_mode(),
             SPEED => self.speed_switch.read_value(),
             0xff4e => 0xff,
             VRAM_BANK => peripherals.ppu.get_vram().read_bank(),
@@ -56,7 +56,7 @@ impl<M: Model> Cpu<M> {
             BCPD_BGPD => peripherals.ppu.get_color_palettes().read_background_data(),
             OCPS_OGPI => peripherals.ppu.get_color_palettes().read_obj_spec(),
             OCPD_OGPD => peripherals.ppu.get_color_palettes().read_obj_data(),
-            OBJECT_PRIORITY_MODE => peripherals.ppu.get_object_priority_mode().read(),
+            OBJECT_PRIORITY_MODE => peripherals.ppu.get_dmg_mode().read_priority_mode(),
             0xff6d..WRAM_BANK => 0xff,
             WRAM_BANK => peripherals.wram.read_bank(),
             0xFF71..HRAM => 0xff,
@@ -112,7 +112,10 @@ impl<M: Model> Cpu<M> {
             OBP1 => peripherals.ppu.set_obp1(value),
             WY => peripherals.ppu.set_wy(value),
             WX => peripherals.ppu.set_wx(value),
-            0xff4c => {}
+            DMG_COMPATIBILITY_MODE => peripherals
+                .ppu
+                .get_dmg_mode_mut()
+                .write_compatibility_mode(value),
             SPEED => self.speed_switch.write_value(value),
             0xff4e => {}
             VRAM_BANK => peripherals.ppu.get_vram_mut().write_bank(value),
@@ -139,7 +142,10 @@ impl<M: Model> Cpu<M> {
                 .ppu
                 .get_color_palettes_mut()
                 .write_obj_data(value),
-            OBJECT_PRIORITY_MODE => peripherals.ppu.get_object_priority_mode_mut().write(value),
+            OBJECT_PRIORITY_MODE => peripherals
+                .ppu
+                .get_dmg_mode_mut()
+                .write_priority_mode(value),
             0xff6d..WRAM_BANK => {}
             WRAM_BANK => peripherals.wram.write_bank(value),
             0xff71..HRAM => {}
