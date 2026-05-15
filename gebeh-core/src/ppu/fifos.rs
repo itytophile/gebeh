@@ -182,6 +182,7 @@ impl CgbFifos {
                 || !obj_over_bg && bg_color_index == ColorIndex::Zero)
         {
             let sp_color_index = if let Some(dmg) = dmg_palettes {
+                // stolen from sameboy
                 (dmg.obp[usize::from(sprite_pixel.palette())] >> (sp_color_index << 1)) & 3
             } else {
                 sp_color_index
@@ -190,6 +191,7 @@ impl CgbFifos {
             color_palettes.objects.get_palette(sprite_pixel.palette())[usize::from(sp_color_index)]
         } else {
             let bg_color_index = if let Some(dmg) = dmg_palettes {
+                // stolen from sameboy
                 (dmg.bgp >> (u8::from(bg_color_index) << 1)) & 3
             } else {
                 u8::from(bg_color_index)
