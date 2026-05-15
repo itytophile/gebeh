@@ -9,6 +9,7 @@ pub mod scanline;
 pub mod sprite;
 mod sprite_fetcher;
 pub mod vram;
+mod object_priority_mode;
 
 use crate::{
     Model, Ram, WIDTH,
