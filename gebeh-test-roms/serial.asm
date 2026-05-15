@@ -40,7 +40,7 @@ EntryPoint:
     ldh [rSC], a
     ei
     ; to tell the emulator that it can inject an input
-    ld a, a
+    ld b, b
     ; don't reti in case the interrupt is fired before the halt (problem happening if spamming buttons irl)
     halt
 master_mode:

@@ -87,12 +87,12 @@ fn serial_test<M: Model>(name: &str) {
     let mut messages_from_slave = Vec::new();
     let mut messages_from_master = Vec::new();
 
-    // wait for ld a, a
+    // wait for ld b, b
     loop {
         messages_from_slave.extend(
             slave_rollback.execute_and_take_snapshot(&mut slave_emulator, slave_mbc.as_mut()),
         );
-        if let 0x7f = slave_emulator.get_cpu().current_opcode {
+        if let 0x40 = slave_emulator.get_cpu().current_opcode {
             break;
         }
     }
@@ -100,7 +100,7 @@ fn serial_test<M: Model>(name: &str) {
         messages_from_master.extend(
             master_rollback.execute_and_take_snapshot(&mut master_emulator, master_mbc.as_mut()),
         );
-        if let 0x7f = master_emulator.get_cpu().current_opcode {
+        if let 0x40 = master_emulator.get_cpu().current_opcode {
             break;
         }
     }
@@ -160,27 +160,27 @@ fn halt_stat_mode_2_palette_screen_edges() {
 }
 
 #[test]
-fn serial_master_transfer_timing() {
+fn serial_master_transfer_timing_dmg() {
     home_made::<Dmg>("serial_master_transfer_timing");
 }
 
 #[test]
-fn serial_master_overclock() {
+fn serial_master_overclock_dmg() {
     home_made::<Dmg>("serial_master_overclock");
 }
 
 #[test]
-fn serial_master_transfer_timing_int() {
+fn serial_master_transfer_timing_int_dmg() {
     home_made::<Dmg>("serial_master_transfer_timing_int");
 }
 
 #[test]
-fn serial_exchange() {
+fn serial_exchange_dmg() {
     serial_test::<Dmg>("serial");
 }
 
 #[test]
-fn big_serial() {
+fn big_serial_dmg() {
     serial_test::<Dmg>("big_serial");
 }
 
