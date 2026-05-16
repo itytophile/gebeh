@@ -209,8 +209,8 @@ impl CgbFifos {
                 && !sprite_pixel.priority();
 
         if is_obj_enabled
-            && (obj_over_bg && sp_color_index != 0
-                || !obj_over_bg && bg_color_index == ColorIndex::Zero)
+            && sp_color_index != 0
+            && (obj_over_bg || bg_color_index == ColorIndex::Zero)
         {
             color_palettes.objects.get_palette(sprite_pixel.palette())[usize::from(sp_color_index)]
         } else {
