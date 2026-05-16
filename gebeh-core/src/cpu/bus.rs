@@ -113,12 +113,13 @@ impl<M: Model> Cpu<M> {
             WY => peripherals.ppu.set_wy(value),
             WX => peripherals.ppu.set_wx(value),
             DMG_COMPATIBILITY_MODE => {
-                if !self.boot_rom_mapping_control {
-                    peripherals
-                        .ppu
-                        .get_dmg_mode_mut()
-                        .write_compatibility_mode(value)
+                if self.boot_rom_mapping_control {
+                    return;
                 }
+                peripherals
+                    .ppu
+                    .get_dmg_mode_mut()
+                    .write_compatibility_mode(value)
             }
             SPEED => self.speed_switch.write_value(value),
             0xff4e => {}
@@ -130,26 +131,59 @@ impl<M: Model> Cpu<M> {
             HDMA_DESTINATION_LOW => peripherals.hdma.write_destination_address_low(value),
             HDMA_LENGTH_AND_MODE => peripherals.hdma.write_length_mode_start(value),
             0xff56..BCPS_BGPI => {}
-            BCPS_BGPI => peripherals
-                .ppu
-                .get_color_palettes_mut()
-                .write_background_spec(value),
-            BCPD_BGPD => peripherals
-                .ppu
-                .get_color_palettes_mut()
-                .write_background_data(value),
-            OCPS_OGPI => peripherals
-                .ppu
-                .get_color_palettes_mut()
-                .write_obj_spec(value),
-            OCPD_OGPD => peripherals
-                .ppu
-                .get_color_palettes_mut()
-                .write_obj_data(value),
-            OBJECT_PRIORITY_MODE => peripherals
-                .ppu
-                .get_dmg_mode_mut()
-                .write_priority_mode(value),
+            BCPS_BGPI => {
+                if peripherals.ppu.get_dmg_mode().is_dmg_compatible()
+                    && self.boot_rom_mapping_control
+                {
+                    return;
+                }
+                peripherals
+                    .ppu
+                    .get_color_palettes_mut()
+                    .write_background_spec(value)
+            }
+            BCPD_BGPD => {
+                if peripherals.ppu.get_dmg_mode().is_dmg_compatible()
+                    && self.boot_rom_mapping_control
+                {
+                    return;
+                }
+                peripherals
+                    .ppu
+                    .get_color_palettes_mut()
+                    .write_background_data(value)
+            }
+            OCPS_OGPI => {
+                if peripherals.ppu.get_dmg_mode().is_dmg_compatible()
+                    && self.boot_rom_mapping_control
+                {
+                    return;
+                }
+                peripherals
+                    .ppu
+                    .get_color_palettes_mut()
+                    .write_obj_spec(value)
+            }
+            OCPD_OGPD => {
+                if peripherals.ppu.get_dmg_mode().is_dmg_compatible()
+                    && self.boot_rom_mapping_control
+                {
+                    return;
+                }
+                peripherals
+                    .ppu
+                    .get_color_palettes_mut()
+                    .write_obj_data(value)
+            }
+            OBJECT_PRIORITY_MODE => {
+                if self.boot_rom_mapping_control {
+                    return;
+                }
+                peripherals
+                    .ppu
+                    .get_dmg_mode_mut()
+                    .write_priority_mode(value)
+            }
             0xff6d..WRAM_BANK => {}
             WRAM_BANK => peripherals.wram.write_bank(value),
             0xff71..HRAM => {}
