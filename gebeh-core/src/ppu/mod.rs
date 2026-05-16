@@ -12,7 +12,7 @@ mod sprite_fetcher;
 pub mod vram;
 
 use crate::{
-    Model, Ram, WIDTH,
+    Cgb, Dmg, Model, Ram, WIDTH,
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
@@ -165,23 +165,36 @@ impl<M: Model> Default for PpuState<M> {
     }
 }
 
-impl<M: Model> PpuState<M> {
+impl PpuState<Dmg> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
-    }
-
-    pub fn refresh_old(&mut self) {
-        self.old_bgp = self.bgp;
-        self.old_old_lcd_control = self.old_lcd_control;
-        self.old_lcd_control = self.lcd_control;
-        self.old_old_wx = self.old_wx;
-        self.old_wx = self.wx;
     }
 
     pub fn is_background_enabled(&self) -> bool {
         // there is a one dot delay when we disable the background
         // however, no delay when turning it back on
         (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
+    }
+}
+
+impl PpuState<Cgb> {
+    pub fn get_effective_bgp(&self) -> u8 {
+        self.old_bgp
+    }
+
+    pub fn is_background_enabled(&self) -> bool {
+        self.old_old_lcd_control
+            .contains(LcdControl::BG_AND_WINDOW_ENABLE)
+    }
+}
+
+impl<M: Model> PpuState<M> {
+    pub fn refresh_old(&mut self) {
+        self.old_bgp = self.bgp;
+        self.old_old_lcd_control = self.old_lcd_control;
+        self.old_lcd_control = self.lcd_control;
+        self.old_old_wx = self.old_wx;
+        self.old_wx = self.wx;
     }
 
     pub fn is_obj_enabled(&self) -> bool {

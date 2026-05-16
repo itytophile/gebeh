@@ -5,6 +5,9 @@ pub trait DmgModeRegs: Default + Clone + Send + Sync {
     fn write_priority_mode(&mut self, value: u8);
     fn read_compatibility_mode(&self) -> u8;
     fn write_compatibility_mode(&mut self, value: u8);
+    fn is_dmg_compatible(&self) -> bool {
+        self.read_compatibility_mode() & 0x04 != 0
+    }
 }
 
 impl DmgModeRegs for () {

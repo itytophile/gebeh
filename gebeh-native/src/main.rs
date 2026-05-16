@@ -31,25 +31,42 @@ fn get_pixels_from_window(window: &Window, width: u32, height: u32) -> Pixels<'_
         .unwrap()
 }
 
+pub enum Mode {
+    CgbWhenExplicit,
+    DmgWhenPossible,
+    AlwaysCgb,
+}
+
 fn main() {
     color_eyre::install().unwrap();
     env_logger::init();
 
+    let mut args = std::env::args();
+
     let rom = std::fs::read(
-        std::env::args()
-            .nth(1)
+        args.nth(1)
             .expect("Please provide a path as first argument"),
     )
     .unwrap();
 
-    let compatibility = get_compatibility(&rom);
+    let mode = match args.next().map(|mode| mode.to_lowercase()).as_deref() {
+        Some("cgb") => Mode::AlwaysCgb,
+        Some("dmg") => Mode::DmgWhenPossible,
+        _ => Mode::CgbWhenExplicit,
+    };
 
-    if compatibility == Compatibility::Dmg {
-        println!("Running in DMG mode");
-        execute::<Dmg>(rom);
-    } else {
-        println!("Running in CGB mode");
-        execute::<Cgb>(rom);
+    match (get_compatibility(&rom), mode) {
+        (Compatibility::Dmg, Mode::CgbWhenExplicit | Mode::DmgWhenPossible)
+        | (Compatibility::Both, Mode::DmgWhenPossible) => {
+            println!("Running in DMG mode");
+            execute::<Dmg>(rom);
+        }
+        (Compatibility::Cgb, _)
+        | (_, Mode::AlwaysCgb)
+        | (Compatibility::Both, Mode::CgbWhenExplicit) => {
+            println!("Running in CGB mode");
+            execute::<Cgb>(rom);
+        }
     }
 }
 

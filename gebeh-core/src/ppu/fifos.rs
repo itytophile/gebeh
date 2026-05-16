@@ -47,9 +47,7 @@ impl DmgFifos {
 
     pub fn render_pixel(
         &self,
-        bgp: u8,
-        obp0: u8,
-        obp1: u8,
+        dgm_palette: DmgPalettes,
         is_background_enabled: bool,
         is_obj_enabled: bool,
     ) -> DmgColor {
@@ -67,10 +65,10 @@ impl DmgFifos {
         if sp_color_index == ColorIndex::Zero
             || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero)
         {
-            return bg_color_index.get_color(bgp);
+            return bg_color_index.get_color(dgm_palette.bgp);
         }
 
-        sp_color_index.get_color(if self.palette & 0x80 != 0 { obp1 } else { obp0 })
+        sp_color_index.get_color(dgm_palette.obp[(self.palette & 0x80 != 0) as usize])
     }
 
     pub fn reset_background(&mut self) {
@@ -158,12 +156,45 @@ impl CgbFifos {
         self.current_background_attributes = attributes;
     }
 
+    pub fn render_pixel_dmg(
+        &self,
+        is_background_enabled: bool,
+        is_obj_enabled: bool,
+        color_palettes: &ColorPalettes,
+        dgm_palette: DmgPalettes,
+    ) -> u16 {
+        let bg_color_index = if is_background_enabled {
+            ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0)
+        } else {
+            ColorIndex::Zero
+        };
+        let sprite_pixel = self.sprite_pixels.last().copied().unwrap_or_default();
+
+        let sp_color_index = if is_obj_enabled {
+            sprite_pixel.color_index()
+        } else {
+            0
+        };
+
+        if sp_color_index == 0 || (sprite_pixel.priority() && bg_color_index != ColorIndex::Zero) {
+            let bg_color_index = (dgm_palette.bgp >> (u8::from(bg_color_index) << 1)) & 3;
+            return color_palettes
+                .background
+                .get_palette(self.current_background_attributes.get_cgb_palette_index())
+                [usize::from(bg_color_index)];
+        }
+
+        let sp_color_index =
+            (dgm_palette.obp[usize::from(sprite_pixel.palette())] >> (sp_color_index << 1)) & 3;
+
+        color_palettes.objects.get_palette(sprite_pixel.palette())[usize::from(sp_color_index)]
+    }
+
     pub fn render_pixel(
         &self,
         master_background_priority: bool,
         is_obj_enabled: bool,
         color_palettes: &ColorPalettes,
-        dmg_palettes: Option<DmgPalettes>,
     ) -> u16 {
         let bg_color_index = ColorIndex::new(self.bg0 & 0x80 != 0, self.bg1 & 0x80 != 0);
 
@@ -178,29 +209,15 @@ impl CgbFifos {
                 && !sprite_pixel.priority();
 
         if is_obj_enabled
-            && (obj_over_bg && sp_color_index != 0
-                || !obj_over_bg && bg_color_index == ColorIndex::Zero)
+            && sp_color_index != 0
+            && (obj_over_bg || bg_color_index == ColorIndex::Zero)
         {
-            let sp_color_index = if let Some(dmg) = dmg_palettes {
-                // stolen from sameboy
-                (dmg.obp[usize::from(sprite_pixel.palette())] >> (sp_color_index << 1)) & 3
-            } else {
-                sp_color_index
-            };
-
             color_palettes.objects.get_palette(sprite_pixel.palette())[usize::from(sp_color_index)]
         } else {
-            let bg_color_index = if let Some(dmg) = dmg_palettes {
-                // stolen from sameboy
-                (dmg.bgp >> (u8::from(bg_color_index) << 1)) & 3
-            } else {
-                u8::from(bg_color_index)
-            };
-
             color_palettes
                 .background
                 .get_palette(self.current_background_attributes.get_cgb_palette_index())
-                [usize::from(bg_color_index)]
+                [usize::from(u8::from(bg_color_index))]
         }
     }
 
@@ -259,12 +276,10 @@ impl CgbFifos {
                     new.color_index() == 0,
                     old.color_index() == 0,
                 ) {
-                    (true, true, _) => old,
+                    (_, true, false) => old,
                     (_, false, true) => *new,
-                    (true, false, false) => old,
-                    (false, true, true) => *new,
-                    (false, true, false) => old,
-                    (false, false, false) => *new,
+                    (true, _, _) => old,
+                    (false, _, _) => *new,
                 }
             }
         }

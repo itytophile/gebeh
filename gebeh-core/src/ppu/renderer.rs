@@ -187,9 +187,10 @@ impl DmgRenderer {
 
         if cursor >= 8 {
             self.scanline.push_pixel(self.fifos.render_pixel(
-                ppu_state.get_effective_bgp(),
-                ppu_state.obp0,
-                ppu_state.obp1,
+                DmgPalettes {
+                    bgp: ppu_state.get_effective_bgp(),
+                    obp: [ppu_state.obp0, ppu_state.obp1],
+                },
                 ppu_state.is_background_enabled(),
                 ppu_state.is_obj_enabled(),
             ));
@@ -369,19 +370,24 @@ impl CgbRenderer {
         }
 
         if cursor >= 8 {
-            self.scanline.push(self.fifos.render_pixel(
-                ppu_state.is_background_enabled(),
-                ppu_state.is_obj_enabled(),
-                &ppu_state.color_palettes,
-                if ppu_state.dmg_mode.is_dmg_compatible() {
-                    Some(DmgPalettes {
-                        bgp: ppu_state.bgp,
+            let pixel = if ppu_state.dmg_mode.is_dmg_compatible() {
+                self.fifos.render_pixel_dmg(
+                    ppu_state.is_background_enabled(),
+                    ppu_state.is_obj_enabled(),
+                    &ppu_state.color_palettes,
+                    DmgPalettes {
+                        bgp: ppu_state.get_effective_bgp(),
                         obp: [ppu_state.obp0, ppu_state.obp1],
-                    })
-                } else {
-                    None
-                },
-            ));
+                    },
+                )
+            } else {
+                self.fifos.render_pixel(
+                    ppu_state.is_background_enabled(),
+                    ppu_state.is_obj_enabled(),
+                    &ppu_state.color_palettes,
+                )
+            };
+            self.scanline.push(pixel);
         }
 
         self.fifos.shift();
