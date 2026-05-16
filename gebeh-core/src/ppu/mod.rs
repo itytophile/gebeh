@@ -12,7 +12,7 @@ mod sprite_fetcher;
 pub mod vram;
 
 use crate::{
-    Model, Ram, WIDTH,
+    Cgb, Dmg, Model, Ram, WIDTH,
     interrupts::Interrupts,
     mbc::Mbc,
     ppu::{
@@ -165,11 +165,19 @@ impl<M: Model> Default for PpuState<M> {
     }
 }
 
-impl<M: Model> PpuState<M> {
+impl PpuState<Dmg> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }
+}
 
+impl PpuState<Cgb> {
+    pub fn get_effective_bgp(&self) -> u8 {
+        self.old_bgp
+    }
+}
+
+impl<M: Model> PpuState<M> {
     pub fn refresh_old(&mut self) {
         self.old_bgp = self.bgp;
         self.old_old_lcd_control = self.old_lcd_control;
