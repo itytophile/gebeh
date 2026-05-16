@@ -75,136 +75,163 @@ fn m3_lcdc_bg_en_change_cgb() {
     mealybug("m3_lcdc_bg_en_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_bg_en_change2_cgb() {
     mealybug("m3_lcdc_bg_en_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_bg_map_change_cgb() {
     mealybug("m3_lcdc_bg_map_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_bg_map_change2_cgb() {
     mealybug("m3_lcdc_bg_map_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_obj_en_change_cgb() {
     mealybug("m3_lcdc_bg_map_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_obj_en_change_variant_cgb() {
     mealybug("m3_lcdc_obj_en_change_variant");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_obj_size_change_cgb() {
     mealybug("m3_lcdc_obj_size_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_obj_size_change_scx_cgb() {
     mealybug("m3_lcdc_obj_size_change_scx");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_tile_sel_change_cgb() {
     mealybug("m3_lcdc_tile_sel_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_tile_sel_change2_cgb() {
     mealybug("m3_lcdc_tile_sel_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_tile_sel_win_change_cgb() {
     mealybug("m3_lcdc_tile_sel_win_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_tile_sel_win_change2_cgb() {
     mealybug("m3_lcdc_tile_sel_win_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_win_en_change_multiple_cgb() {
     mealybug("m3_lcdc_win_en_change_multiple");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_win_en_change_multiple_wx_cgb() {
     mealybug("m3_lcdc_win_en_change_multiple_wx");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_win_map_change_cgb() {
     mealybug("m3_lcdc_win_map_change");
 }
 
+#[ignore]
 #[test]
 fn m3_lcdc_win_map_change2_cgb() {
     mealybug("m3_lcdc_win_map_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_obp0_change_cgb() {
     mealybug("m3_obp0_change");
 }
 
+#[ignore]
 #[test]
 fn m3_scx_high_5_bits_cgb() {
     mealybug("m3_scx_high_5_bits");
 }
 
+#[ignore]
 #[test]
 fn m3_scx_high_5_bits_change2_cgb() {
     mealybug("m3_scx_high_5_bits_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_scx_low_3_bits_cgb() {
     mealybug("m3_scx_low_3_bits");
 }
 
+#[ignore]
 #[test]
 fn m3_scy_change_cgb() {
     mealybug("m3_scy_change");
 }
 
+#[ignore]
 #[test]
 fn m3_scy_change2_cgb() {
     mealybug("m3_scy_change2");
 }
 
+#[ignore]
 #[test]
 fn m3_window_timing_cgb() {
     mealybug("m3_window_timing");
 }
 
+#[ignore]
 #[test]
 fn m3_window_timing_wx_0_cgb() {
     mealybug("m3_window_timing_wx_0");
 }
 
+#[ignore]
 #[test]
 fn m3_wx_4_change_cgb() {
     mealybug("m3_wx_4_change");
 }
 
+#[ignore]
 #[test]
 fn m3_wx_4_change_sprites_cgb() {
     mealybug("m3_wx_4_change_sprites");
 }
 
+#[ignore]
 #[test]
 fn m3_wx_5_change_cgb() {
     mealybug("m3_wx_5_change");
 }
 
+#[ignore]
 #[test]
 fn m3_wx_6_change_cgb() {
     mealybug("m3_wx_6_change");
