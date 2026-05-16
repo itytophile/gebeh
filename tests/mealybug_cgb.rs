@@ -72,20 +72,12 @@ fn m3_bgp_change_sprites_cgb() {
 
 #[test]
 fn m3_lcdc_bg_en_change_cgb() {
-    // Different output on gameboy pocket
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_bg_en_change.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_bg_en_change.png",
-    );
+    mealybug("m3_lcdc_bg_en_change");
 }
 
 #[test]
 fn m3_lcdc_bg_en_change2_cgb() {
-    // Different output on gameboy pocket
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_bg_en_change2.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_bg_en_change2.png",
-    );
+    mealybug("m3_lcdc_bg_en_change2");
 }
 
 #[test]
@@ -95,10 +87,7 @@ fn m3_lcdc_bg_map_change_cgb() {
 
 #[test]
 fn m3_lcdc_bg_map_change2_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_bg_map_change2.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_bg_map_change2.png",
-    );
+    mealybug("m3_lcdc_bg_map_change2");
 }
 
 #[test]
@@ -108,11 +97,7 @@ fn m3_lcdc_obj_en_change_cgb() {
 
 #[test]
 fn m3_lcdc_obj_en_change_variant_cgb() {
-    // Different output on gameboy pocket
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_obj_en_change_variant.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_obj_en_change_variant.png",
-    );
+    mealybug("m3_lcdc_obj_en_change_variant");
 }
 
 #[test]
@@ -132,10 +117,7 @@ fn m3_lcdc_tile_sel_change_cgb() {
 
 #[test]
 fn m3_lcdc_tile_sel_change2_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_tile_sel_change2.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_tile_sel_change2.png",
-    );
+    mealybug("m3_lcdc_tile_sel_change2");
 }
 
 #[test]
@@ -145,10 +127,7 @@ fn m3_lcdc_tile_sel_win_change_cgb() {
 
 #[test]
 fn m3_lcdc_tile_sel_win_change2_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_tile_sel_win_change2.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_tile_sel_win_change2.png",
-    );
+    mealybug("m3_lcdc_tile_sel_win_change2");
 }
 
 #[test]
@@ -158,10 +137,7 @@ fn m3_lcdc_win_en_change_multiple_cgb() {
 
 #[test]
 fn m3_lcdc_win_en_change_multiple_wx_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_win_en_change_multiple_wx.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_win_en_change_multiple_wx.png",
-    );
+    mealybug("m3_lcdc_win_en_change_multiple_wx");
 }
 
 #[test]
@@ -171,10 +147,7 @@ fn m3_lcdc_win_map_change_cgb() {
 
 #[test]
 fn m3_lcdc_win_map_change2_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_lcdc_win_map_change2.gb",
-        "tests/mealybug_pocket_expected/m3_lcdc_win_map_change2.png",
-    );
+    mealybug("m3_lcdc_win_map_change2");
 }
 
 #[test]
@@ -189,10 +162,7 @@ fn m3_scx_high_5_bits_cgb() {
 
 #[test]
 fn m3_scx_high_5_bits_change2_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_scx_high_5_bits_change2.gb",
-        "tests/mealybug_pocket_expected/m3_scx_high_5_bits_change2.png",
-    );
+    mealybug("m3_scx_high_5_bits_change2");
 }
 
 #[test]
@@ -207,10 +177,7 @@ fn m3_scy_change_cgb() {
 
 #[test]
 fn m3_scy_change2_cgb() {
-    mealybug_inner(
-        "downloads/mealybug-tearoom-tests-master/roms/m3_scy_change2.gb",
-        "tests/mealybug_pocket_expected/m3_scy_change2.png",
-    );
+    mealybug("m3_scy_change2");
 }
 
 #[test]
