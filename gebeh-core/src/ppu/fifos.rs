@@ -47,9 +47,7 @@ impl DmgFifos {
 
     pub fn render_pixel(
         &self,
-        bgp: u8,
-        obp0: u8,
-        obp1: u8,
+        dgm_palette: DmgPalettes,
         is_background_enabled: bool,
         is_obj_enabled: bool,
     ) -> DmgColor {
@@ -67,10 +65,10 @@ impl DmgFifos {
         if sp_color_index == ColorIndex::Zero
             || (self.mask & 0x80 != 0 && bg_color_index != ColorIndex::Zero)
         {
-            return bg_color_index.get_color(bgp);
+            return bg_color_index.get_color(dgm_palette.bgp);
         }
 
-        sp_color_index.get_color(if self.palette & 0x80 != 0 { obp1 } else { obp0 })
+        sp_color_index.get_color(dgm_palette.obp[(self.palette & 0x80 != 0) as usize])
     }
 
     pub fn reset_background(&mut self) {
