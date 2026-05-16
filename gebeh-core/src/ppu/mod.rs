@@ -169,11 +169,22 @@ impl PpuState<Dmg> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.bgp | self.old_bgp
     }
+
+    pub fn is_background_enabled(&self) -> bool {
+        // there is a one dot delay when we disable the background
+        // however, no delay when turning it back on
+        (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
+    }
 }
 
 impl PpuState<Cgb> {
     pub fn get_effective_bgp(&self) -> u8 {
         self.old_bgp
+    }
+
+    pub fn is_background_enabled(&self) -> bool {
+        self.old_old_lcd_control
+            .contains(LcdControl::BG_AND_WINDOW_ENABLE)
     }
 }
 
@@ -184,12 +195,6 @@ impl<M: Model> PpuState<M> {
         self.old_lcd_control = self.lcd_control;
         self.old_old_wx = self.old_wx;
         self.old_wx = self.wx;
-    }
-
-    pub fn is_background_enabled(&self) -> bool {
-        // there is a one dot delay when we disable the background
-        // however, no delay when turning it back on
-        (self.old_lcd_control | self.lcd_control).contains(LcdControl::BG_AND_WINDOW_ENABLE)
     }
 
     pub fn is_obj_enabled(&self) -> bool {
