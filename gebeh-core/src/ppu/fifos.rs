@@ -276,12 +276,10 @@ impl CgbFifos {
                     new.color_index() == 0,
                     old.color_index() == 0,
                 ) {
-                    (true, true, _) => old,
+                    (_, true, false) => old,
                     (_, false, true) => *new,
-                    (true, false, false) => old,
-                    (false, true, true) => *new,
-                    (false, true, false) => old,
-                    (false, false, false) => *new,
+                    (true, _, _) => old,
+                    (false, _, _) => *new,
                 }
             }
         }
