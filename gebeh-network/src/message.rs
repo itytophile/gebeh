@@ -1,5 +1,7 @@
 use rkyv::{Archive, Deserialize, Serialize, vec::ArchivedVec, with::AsVec};
 
+use crate::synchro_cycles::NetworkCycle;
+
 #[derive(Archive, Serialize, Deserialize, Debug)]
 pub struct SerialMessage {
     pub is_master: bool,
@@ -7,7 +9,7 @@ pub struct SerialMessage {
     // if there a bad prediction somewhere then we can easily delete obsolete slave messages
     pub prediction: u8,
     pub value: u8,
-    pub cycle: u64,
+    pub cycle: NetworkCycle,
 }
 
 pub struct DecompressedSerialMessage {

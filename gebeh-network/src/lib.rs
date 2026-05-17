@@ -3,10 +3,11 @@ use std::collections::VecDeque;
 use arrayvec::ArrayVec;
 use gebeh_core::{Emulator, EmulatorExt, Model, serial::Serial};
 use gebeh_front_helper::{CloneMbc, EasyMbc};
+use rkyv::{deserialize, rancor};
 
 use crate::{
     message::SerialMessage,
-    synchro_cycles::{CycleToSync, SynchroCycles},
+    synchro_cycles::{NetworkCycle, SynchroCycles},
 };
 
 pub mod message;
@@ -25,8 +26,8 @@ const MAX_SNAPSHOT: usize = (ROLLBACK_TRESHOLD / ROLLBACK_SNAPSHOT_PERIOD) as us
 const ROLLBACK_SNAPSHOT_PERIOD: u64 = 4194304 / 4 * 128 / 48000 / 2;
 
 enum MiamMessage {
-    FromMaster(CycleToSync, u8),
-    FromSlave(u64, u8),
+    FromMaster(NetworkCycle, u8),
+    FromSlave(NetworkCycle, u8),
 }
 
 pub struct RollbackSerial<M: Model> {
@@ -60,9 +61,15 @@ impl<M: Model> RollbackSerial<M> {
                 .filter(|msg| msg.prediction == self.last_correction)
                 .map(|msg| {
                     if msg.is_master {
-                        MiamMessage::FromMaster(CycleToSync::new(msg.cycle.to_native()), msg.value)
+                        MiamMessage::FromMaster(
+                            deserialize::<_, rancor::Error>(&msg.cycle).unwrap(),
+                            msg.value,
+                        )
                     } else {
-                        MiamMessage::FromSlave(msg.cycle.to_native(), msg.value)
+                        MiamMessage::FromSlave(
+                            deserialize::<_, rancor::Error>(&msg.cycle).unwrap(),
+                            msg.value,
+                        )
                     }
                 }),
         );
@@ -88,7 +95,7 @@ impl<M: Model> RollbackSerial<M> {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
                 let synchro_cycle = self.synchro_cycles.as_ref().unwrap();
-                let cycle = synchro_cycle.to_local_cycle(CycleToSync::new(*cycle));
+                let cycle = synchro_cycle.to_local_cycle(*cycle);
                 let (mut snap_emulator, snap_mbc) = self
                     .master_snapshots
                     .drain(..)
@@ -204,16 +211,12 @@ impl<M: Model> RollbackSerial<M> {
             self.master_snapshots.pop_front_if(|(snap, _)| {
                 emulator.get_cycles() - snap.get_cycles() > ROLLBACK_TRESHOLD
             });
-            let cycle_to_sync = CycleToSync::new(emulator_clone.get_cycles());
 
             // If the master is initializing its synchro cycle, then the synchro cycle will be equal to
             // 0 and that's good. It means that the "network" clock used by the slave and the master is equal to the
             // first master (in this session) clock.
-            let synchro_cycle = self.synchro_cycles.get_or_insert(SynchroCycles::new(
-                cycle_to_sync,
-                emulator_clone.get_cycles(),
-            ));
-            let synced_cycle = synchro_cycle.to_network_cycle(cycle_to_sync);
+            let synchro_cycle = self.synchro_cycles.get_or_insert(Default::default());
+            let synced_cycle = synchro_cycle.to_network_cycle(emulator_clone.get_cycles());
 
             messages.push(SerialMessage {
                 is_master: true,
@@ -239,6 +242,6 @@ pub fn handle_msg_no_emulator(msg: &[u8]) -> Option<SerialMessage> {
             is_master: false,
             prediction: 0xff,
             value: 0xff,
-            cycle: msg.cycle.to_native(),
+            cycle: deserialize::<_, rancor::Error>(&msg.cycle).unwrap(),
         })
 }
