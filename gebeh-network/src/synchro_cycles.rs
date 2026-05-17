@@ -40,4 +40,8 @@ impl SynchroCycles {
     pub fn get_slave_cycle_from_master_cycle(&self, cycle: CycleToSync) -> u64 {
         cycle.0.strict_add_signed(self.diff)
     }
+
+    pub fn get_master_cycle_from_master_cycle(&self, cycle: CycleToSync) -> u64 {
+        cycle.0.strict_sub_signed(self.diff)
+    }
 }

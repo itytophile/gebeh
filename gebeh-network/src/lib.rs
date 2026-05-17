@@ -228,11 +228,20 @@ impl<M: Model> RollbackSerial<M> {
             if self.synchro_cycles.is_none() {
                 log::info!("j'init synchro cyles avant l'envoie en tant que master");
             }
-            let synchro_cycle = self
-                .synchro_cycles
-                .get_or_insert(SynchroCycles::new(cycle_to_sync, emulator_clone.get_cycles()));
-            let synced_cycle = synchro_cycle.get_slave_cycle_from_master_cycle(cycle_to_sync);
-            log::info!("mon synchro cycle: {:?} {} -> {}", synchro_cycle, emulator_clone.get_cycles(), synced_cycle);
+            // If the master is initializing its synchro cycle, then the synchro cycle will be equal to
+            // 0 and that's good. It means that the "network" clock used by the slave and the master is equal to the
+            // first master (in this session) clock.
+            let synchro_cycle = self.synchro_cycles.get_or_insert(SynchroCycles::new(
+                cycle_to_sync,
+                emulator_clone.get_cycles(),
+            ));
+            let synced_cycle = synchro_cycle.get_master_cycle_from_master_cycle(cycle_to_sync);
+            log::info!(
+                "mon synchro cycle: {:?} {} -> {}",
+                synchro_cycle,
+                emulator_clone.get_cycles(),
+                synced_cycle
+            );
             messages.push(SerialMessage {
                 is_master: true,
                 value: byte,
