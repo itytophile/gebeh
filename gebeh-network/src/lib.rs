@@ -95,12 +95,22 @@ impl<M: Model> RollbackSerial<M> {
         let (cycle, byte) = match msg {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
+                let synchro_cycle = self
+                    .synchro_cycles.as_ref()
+                    .unwrap();
+                let cycle =
+                    synchro_cycle.get_slave_cycle_from_master_cycle(CycleToSync::new(*cycle));
                 log::info!("je rollback après msg du slave (g reçu 0x{value:02x})");
                 let (mut snap_emulator, snap_mbc) = self
                     .master_snapshots
                     .drain(..)
-                    .find(|(emulator, _)| emulator.get_cycles() == *cycle)
-                    .expect("desync too big");
+                    .find(|(emulator, _)| emulator.get_cycles() == cycle)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "desync too big, can't find cycle {cycle} (on cycle {})",
+                            emulator.get_cycles()
+                        )
+                    });
                 self.slave_snapshots.clear();
                 snap_emulator.set_joypad(*emulator.get_joypad());
                 *emulator = snap_emulator;
@@ -116,17 +126,13 @@ impl<M: Model> RollbackSerial<M> {
             }
         };
 
-        log::info!("rollback après réception du master? (0x{byte:02x})");
-
         let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
-            log::info!("Non car pas de syncro cycles");
             return;
         };
 
         let restore_cycle = synchro_cycles.get_slave_cycle_from_master_cycle(cycle);
 
         if restore_cycle >= current_cycle {
-            log::info!("Non car restore_cycle >= current_cycle");
             return;
         }
 
@@ -143,8 +149,6 @@ impl<M: Model> RollbackSerial<M> {
         } else {
             panic!("big delay");
         };
-
-        log::info!("rollback fait!");
 
         self.master_snapshots.clear();
 
