@@ -88,8 +88,7 @@ impl<M: Model> RollbackSerial<M> {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
                 let synchro_cycle = self.synchro_cycles.as_ref().unwrap();
-                let cycle =
-                    synchro_cycle.get_slave_cycle_from_master_cycle(CycleToSync::new(*cycle));
+                let cycle = synchro_cycle.to_local_cycle(CycleToSync::new(*cycle));
                 let (mut snap_emulator, snap_mbc) = self
                     .master_snapshots
                     .drain(..)
@@ -119,7 +118,7 @@ impl<M: Model> RollbackSerial<M> {
             return;
         };
 
-        let restore_cycle = synchro_cycles.get_slave_cycle_from_master_cycle(cycle);
+        let restore_cycle = synchro_cycles.to_local_cycle(cycle);
 
         if restore_cycle >= current_cycle {
             return;
@@ -167,8 +166,7 @@ impl<M: Model> RollbackSerial<M> {
                     let synchro_cycle = self
                         .synchro_cycles
                         .get_or_insert(SynchroCycles::new(*cycle_to_sync, emulator.get_cycles()));
-                    let synced_cycle =
-                        synchro_cycle.get_slave_cycle_from_master_cycle(*cycle_to_sync);
+                    let synced_cycle = synchro_cycle.to_local_cycle(*cycle_to_sync);
                     if synced_cycle < emulator.get_cycles() {
                         panic!(
                             "msg from master: cycle problem {synced_cycle} < {}",
@@ -215,7 +213,7 @@ impl<M: Model> RollbackSerial<M> {
                 cycle_to_sync,
                 emulator_clone.get_cycles(),
             ));
-            let synced_cycle = synchro_cycle.get_master_cycle_from_master_cycle(cycle_to_sync);
+            let synced_cycle = synchro_cycle.to_network_cycle(cycle_to_sync);
 
             messages.push(SerialMessage {
                 is_master: true,
