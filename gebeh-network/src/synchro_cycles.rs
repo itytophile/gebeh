@@ -25,6 +25,7 @@ impl CycleToSync {
     }
 }
 
+#[derive(Debug)]
 pub struct SynchroCycles {
     diff: i64,
 }

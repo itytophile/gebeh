@@ -76,14 +76,49 @@ impl Serial for DmgSerial {
             sc.contains(SerialControl::TRANSFER_ENABLE),
         ) {
             (true, true) => {
+                if !core::matches!(
+                    self.0.sc,
+                    SerialControlState::Master { .. }
+                        | SerialControlState::NoTransfer { is_master: true }
+                ) {
+                    log::info!("je deviens master ouaaai");
+                }
+
                 if !core::matches!(self.0.sc, SerialControlState::Master { .. }) {
                     self.0.sc = SerialControlState::Master { serial_count: 0 };
                 }
             }
             (is_master, false) => {
+                if is_master
+                    && !core::matches!(
+                        self.0.sc,
+                        SerialControlState::Master { .. }
+                            | SerialControlState::NoTransfer { is_master: true }
+                    )
+                {
+                    log::info!("je deviens master ouaaai");
+                }
+                if !is_master
+                    && core::matches!(
+                        self.0.sc,
+                        SerialControlState::Master { .. }
+                            | SerialControlState::NoTransfer { is_master: true }
+                    )
+                {
+                    log::info!("je deviens slave");
+                }
                 self.0.sc = SerialControlState::NoTransfer { is_master };
             }
-            (false, true) => self.0.sc = SerialControlState::Slave,
+            (false, true) => {
+                if core::matches!(
+                    self.0.sc,
+                    SerialControlState::Master { .. }
+                        | SerialControlState::NoTransfer { is_master: true }
+                ) {
+                    log::info!("je deviens slave");
+                }
+                self.0.sc = SerialControlState::Slave
+            }
         }
     }
 

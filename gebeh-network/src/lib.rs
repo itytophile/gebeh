@@ -57,7 +57,15 @@ impl<M: Model> RollbackSerial<M> {
         self.messages_to_handle.extend(
             msg.get()
                 .iter()
-                .filter(|msg| msg.prediction == self.last_correction)
+                .filter(|msg| {
+                    log::info!(
+                        "Filtrage de {:?} 0x{:02x} -> {}",
+                        (msg.is_master, msg.cycle, msg.prediction),
+                        msg.value,
+                        msg.prediction == self.last_correction
+                    );
+                    msg.prediction == self.last_correction
+                })
                 .map(|msg| {
                     if msg.is_master {
                         MiamMessage::FromMaster(CycleToSync::new(msg.cycle.to_native()), msg.value)
@@ -79,14 +87,15 @@ impl<M: Model> RollbackSerial<M> {
 
     pub fn rollback_if_necessary(&mut self, emulator: &mut Emulator<M>, mbc: &mut EasyMbc) {
         let Some(msg) = self.messages_to_handle.front() else {
-            return Default::default();
+            return;
         };
 
         let current_cycle = emulator.get_cycles();
 
-        let (cycle, _) = match msg {
+        let (cycle, byte) = match msg {
             MiamMessage::FromMaster(cycle, value) => (*cycle, *value),
             MiamMessage::FromSlave(cycle, value) => {
+                log::info!("je rollback après msg du slave (g reçu 0x{value:02x})");
                 let (mut snap_emulator, snap_mbc) = self
                     .master_snapshots
                     .drain(..)
@@ -101,19 +110,23 @@ impl<M: Model> RollbackSerial<M> {
                 // to avoid the master to reemit a message already handled by the slave
                 emulator.execute(mbc.as_mut());
 
-                self.messages_to_handle.clear();
+                self.messages_to_handle.pop_front();
 
                 return;
             }
         };
 
+        log::info!("rollback après réception du master? (0x{byte:02x})");
+
         let Some(synchro_cycles) = self.synchro_cycles.as_mut() else {
+            log::info!("Non car pas de syncro cycles");
             return;
         };
 
         let restore_cycle = synchro_cycles.get_slave_cycle_from_master_cycle(cycle);
 
         if restore_cycle >= current_cycle {
+            log::info!("Non car restore_cycle >= current_cycle");
             return;
         }
 
@@ -130,6 +143,8 @@ impl<M: Model> RollbackSerial<M> {
         } else {
             panic!("big delay");
         };
+
+        log::info!("rollback fait!");
 
         self.master_snapshots.clear();
 
@@ -156,6 +171,9 @@ impl<M: Model> RollbackSerial<M> {
         if let Some(msg) = self.messages_to_handle.front() {
             match msg {
                 MiamMessage::FromMaster(cycle_to_sync, value) => {
+                    if self.synchro_cycles.is_none() {
+                        log::info!("j'init synchro cycle");
+                    }
                     let synchro_cycle = self
                         .synchro_cycles
                         .get_or_insert(SynchroCycles::new(*cycle_to_sync, emulator.get_cycles()));
@@ -168,11 +186,18 @@ impl<M: Model> RollbackSerial<M> {
                         );
                     }
                     if synced_cycle == emulator.get_cycles() {
+                        log::info!("Je reçois 0x{value:02x} de la part du master");
                         let response = emulator
                             .serial
                             .set_msg_from_master(*value, &mut emulator.interrupts);
                         self.force_snapshot = true;
                         if response != self.last_correction {
+                            log::info!(
+                                "J'envoie une correction au master 0x{:02x} -> 0x{:02x} avec mon synchro cycle à {:?}",
+                                self.last_correction,
+                                response,
+                                synchro_cycle
+                            );
                             messages.push(
                                 cycle_to_sync
                                     .get_response(response, emulator.serial.get_slave_byte()),
@@ -198,10 +223,20 @@ impl<M: Model> RollbackSerial<M> {
             self.master_snapshots.pop_front_if(|(snap, _)| {
                 emulator.get_cycles() - snap.get_cycles() > ROLLBACK_TRESHOLD
             });
+            log::info!("Moi master, j'envoie 0x{byte:02x}");
+            let cycle_to_sync = CycleToSync::new(emulator_clone.get_cycles());
+            if self.synchro_cycles.is_none() {
+                log::info!("j'init synchro cyles avant l'envoie en tant que master");
+            }
+            let synchro_cycle = self
+                .synchro_cycles
+                .get_or_insert(SynchroCycles::new(cycle_to_sync, emulator_clone.get_cycles()));
+            let synced_cycle = synchro_cycle.get_slave_cycle_from_master_cycle(cycle_to_sync);
+            log::info!("mon synchro cycle: {:?} {} -> {}", synchro_cycle, emulator_clone.get_cycles(), synced_cycle);
             messages.push(SerialMessage {
                 is_master: true,
                 value: byte,
-                cycle: emulator_clone.get_cycles(),
+                cycle: synced_cycle,
                 prediction: emulator_clone.serial.get_slave_byte(),
             });
             self.master_snapshots.push_back((emulator_clone, mbc_clone));

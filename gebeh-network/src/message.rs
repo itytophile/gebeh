@@ -1,6 +1,6 @@
 use rkyv::{Archive, Deserialize, Serialize, vec::ArchivedVec, with::AsVec};
 
-#[derive(Archive, Serialize, Deserialize)]
+#[derive(Archive, Serialize, Deserialize, Debug)]
 pub struct SerialMessage {
     pub is_master: bool,
     // the prediction field is more used like a session id in the slave case
